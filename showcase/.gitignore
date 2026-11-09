@@ -1,0 +1,6 @@
+/showcase
+/logs/
+/run/
+*.pid
+*.log
+.DS_Store

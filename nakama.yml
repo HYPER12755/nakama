@@ -1,0 +1,35 @@
+name: nakama-local
+
+data_dir: /data/data/com.termux/files/home/nakama/data
+
+logger:
+  level: INFO
+  stdout: true
+
+session:
+  token_expiry_sec: 7200
+  refresh_token_expiry_sec: 604800
+
+socket:
+  server_key: defaultkey
+  port: 7350
+  address: 127.0.0.1
+  protocol: tcp4
+  outgoing_queue_size: 1024
+
+console:
+  port: 7351
+  address: 127.0.0.1
+  username: admin
+  password: a473e6bf26e7c40ff99d2c43
+  signing_key: b430b43ced34cea5b7e395189fecf3ad
+
+database:
+  address:
+    - nakama:nakama_local_pw@127.0.0.1:5432/nakama
+  max_open_conns: 20
+  max_idle_conns: 20
+
+runtime:
+  path: /data/data/com.termux/files/home/nakama/data/modules
+  http_key: showcase_http_key

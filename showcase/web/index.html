@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070a0f">
+  <title>Nakama Feature Showcase · :4001</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="toast-host" class="toast-host" aria-live="polite"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">N</div>
+      <div>
+        <div class="brand-title">NAKAMA <span>SHOWCASE</span></div>
+        <div class="brand-sub">one origin · port 4001 · Go + Nakama</div>
+      </div>
+    </div>
+
+    <div class="top-status">
+      <span id="conn-dot" class="dot"></span>
+      <span id="conn-text">booting…</span>
+      <span id="server-pill" class="pill">:4001</span>
+    </div>
+
+    <div class="identity">
+      <div id="avatar" class="avatar">?</div>
+      <div class="identity-meta">
+        <strong id="head-username">—</strong>
+        <span id="head-userid">—</span>
+      </div>
+      <button class="icon-btn" data-copy="head-userid" title="Copy user ID">copy</button>
+    </div>
+
+    <div class="top-actions">
+      <button id="btn-player2" class="btn ghost small" type="button">Open player 2</button>
+      <button id="btn-new-identity" class="btn ghost small" type="button">New identity</button>
+      <a class="btn ghost small" href="/console" target="_blank" rel="noreferrer">Console ↗</a>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="side-label">SHOWCASE</div>
+      <nav class="nav" aria-label="Showcase sections">
+        <a href="#overview" class="nav-link active">Overview</a>
+        <a href="#auth" class="nav-link">Auth &amp; account</a>
+        <a href="#social" class="nav-link">Social graph</a>
+        <a href="#chat" class="nav-link">Chat channels</a>
+        <a href="#realtime" class="nav-link">Realtime &amp; matches</a>
+        <a href="#game" class="nav-link">Reaction Duel</a>
+        <a href="#economy" class="nav-link">Economy &amp; competitions</a>
+        <a href="#storage" class="nav-link">Storage</a>
+        <a href="#ops" class="nav-link">Ops &amp; architecture</a>
+      </nav>
+      <div class="side-rule"></div>
+      <div class="side-stack">
+        <div><span>Runtime</span><strong>Go 1.27</strong></div>
+        <div><span>Platform</span><strong>Nakama main (3.x)</strong></div>
+        <div><span>Transport</span><strong>HTTP + WebSocket</strong></div>
+        <div><span>Node runtime</span><strong class="good">none</strong></div>
+      </div>
+      <div class="side-note">
+        Heavy gameplay and validation run in Go. Nakama owns identity, social,
+        chat, matchmaking, economy, storage, notifications and its own match handlers.
+      </div>
+    </aside>
+
+    <main class="main">
+      <section id="overview" class="section">
+        <div class="hero">
+          <div class="hero-kicker">EVERY FEATURE · ONE ORIGIN · LIVE</div>
+          <h1>One server.<br><span>Every Nakama feature.</span></h1>
+          <p class="hero-copy">
+            A playable feature tour of Nakama, served entirely through
+            <strong>http://127.0.0.1:4001</strong>. Authenticate, make friends, form groups,
+            chat, matchmake, play an authoritative reaction duel, write leaderboards,
+            join tournaments, spend wallet currency, save storage objects, receive
+            notifications, and inspect the realtime stream as it happens.
+          </p>
+          <div class="hero-actions">
+            <button id="hero-quick" class="btn primary" type="button">Quick match</button>
+            <button id="hero-bot" class="btn" type="button">Play vs bot</button>
+            <a class="btn ghost" href="#game">Open arena ↓</a>
+          </div>
+          <div class="hero-note">
+            <span class="pulse"></span>
+            Go authoritative game server · Nakama platform · no Node process
+          </div>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat"><span>Wallet</span><strong id="stat-wallet">—</strong><small>coins / gems</small></div>
+          <div class="stat"><span>Fastest</span><strong id="stat-best">—</strong><small>server-measured</small></div>
+          <div class="stat"><span>Friends</span><strong id="stat-friends">—</strong><small>social graph</small></div>
+          <div class="stat"><span>Groups</span><strong id="stat-groups">—</strong><small>memberships</small></div>
+          <div class="stat"><span>Go rooms</span><strong id="stat-rooms">—</strong><small>live now</small></div>
+        </div>
+
+        <div class="section-head">
+          <h2>Feature map</h2>
+          <span class="muted">Actions light these up as you use them. Click one to jump to it.</span>
+        </div>
+        <div id="feature-grid" class="feature-grid"></div>
+      </section>
+
+      <section id="auth" class="section">
+        <div class="section-head">
+          <h2>Auth, session &amp; account</h2>
+          <span id="auth-provider" class="pill">device</span>
+        </div>
+        <div class="grid two">
+          <div class="card">
+            <h3>Session</h3>
+            <p class="muted">Nakama device authentication creates a durable account per browser tab. Use custom or email authentication to demonstrate other providers.</p>
+            <div class="kv"><span>User ID</span><code id="session-userid">—</code></div>
+            <div class="kv"><span>Username</span><code id="session-username">—</code></div>
+            <div class="kv"><span>Expires</span><code id="session-expiry">—</code></div>
+            <div class="kv"><span>Token</span><code id="session-token">—</code></div>
+            <div class="row">
+              <button id="btn-refresh-session" class="btn" type="button">Refresh session</button>
+              <button id="btn-reconnect" class="btn ghost" type="button">Reconnect socket</button>
+              <button id="btn-copy-token" class="btn ghost" type="button">Copy token</button>
+              <button id="btn-logout" class="btn danger" type="button">Logout</button>
+            </div>
+            <details class="details">
+              <summary>Custom / email authentication</summary>
+              <div class="form-row">
+                <input id="custom-id" placeholder="custom id">
+                <input id="custom-name" placeholder="username (optional)">
+                <button id="btn-custom-auth" class="btn" type="button">Custom auth</button>
+              </div>
+              <div class="form-row">
+                <input id="email" placeholder="email">
+                <input id="password" type="password" placeholder="password">
+                <button id="btn-email-auth" class="btn" type="button">Email auth</button>
+              </div>
+              <p class="hint">Custom auth stores the custom ID in this tab and reloads. Email auth switches the in-memory session; local Nakama accepts it without an external provider.</p>
+            </details>
+          </div>
+
+          <div class="card">
+            <h3>Account update</h3>
+            <p class="muted">Read and update the Nakama account profile. Changes are immediately visible in the account JSON and console.</p>
+            <div class="form-grid">
+              <label>Display name<input id="acct-display-name" placeholder="Showcase Player"></label>
+              <label>Avatar URL<input id="acct-avatar" placeholder="https://…"></label>
+              <label>Language<input id="acct-lang" placeholder="en"></label>
+              <label>Location<input id="acct-location" placeholder="Termux"></label>
+              <label>Timezone<input id="acct-timezone" placeholder="UTC"></label>
+            </div>
+            <div class="row">
+              <button id="btn-save-account" class="btn primary" type="button">Save account</button>
+              <button id="btn-refresh-account" class="btn ghost" type="button">Refresh</button>
+            </div>
+            <pre id="account-json" class="out small">—</pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="social" class="section">
+        <div class="section-head">
+          <h2>Social graph</h2>
+          <span class="muted">friends · groups · parties · status</span>
+        </div>
+        <div class="grid three">
+          <div class="card">
+            <h3>Friends</h3>
+            <p class="muted">Add a second tab by username. Open <strong>player 2</strong>, click <strong>New identity</strong>, then add each other.</p>
+            <div class="form-row">
+              <input id="friend-username" placeholder="username">
+              <button id="btn-add-friend" class="btn" type="button">Add friend</button>
+            </div>
+            <div class="row">
+              <button id="btn-list-friends" class="btn ghost" type="button">Refresh friends</button>
+              <button id="btn-copy-username" class="btn ghost" type="button">Copy my username</button>
+            </div>
+            <div id="friend-list" class="list"></div>
+          </div>
+
+          <div class="card">
+            <h3>Groups</h3>
+            <p class="muted">Join the shared <strong>Showcase Lounge</strong>, create your own group, or join by ID. Group membership unlocks a group chat channel.</p>
+            <div class="row">
+              <button id="btn-demo-group" class="btn" type="button">Join Showcase Lounge</button>
+              <button id="btn-my-groups" class="btn ghost" type="button">My groups</button>
+            </div>
+            <div class="form-row">
+              <input id="group-name" placeholder="new group name">
+              <button id="btn-create-group" class="btn" type="button">Create</button>
+            </div>
+            <div class="form-row">
+              <input id="group-join-id" placeholder="group id">
+              <button id="btn-join-group" class="btn ghost" type="button">Join by ID</button>
+            </div>
+            <div id="group-list" class="list"></div>
+            <pre id="group-users" class="out tiny">—</pre>
+          </div>
+
+          <div class="card">
+            <h3>Parties</h3>
+            <p class="muted">Realtime party state, join requests, presence and party data over the Nakama socket.</p>
+            <div class="row">
+              <button id="btn-create-party" class="btn" type="button">Create party</button>
+              <button id="btn-leave-party" class="btn ghost" type="button">Leave</button>
+            </div>
+            <div class="form-row">
+              <input id="party-join-id" placeholder="party id">
+              <button id="btn-join-party" class="btn ghost" type="button">Join party</button>
+            </div>
+            <div class="form-row">
+              <input id="party-text" placeholder="party data">
+              <button id="btn-send-party" class="btn ghost" type="button">Send data</button>
+            </div>
+            <pre id="party-out" class="out small">—</pre>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Status &amp; presence</h3>
+          <p class="muted">Set your own status, follow a friend, and watch <code>status_presence</code> events arrive on the socket.</p>
+          <div class="form-row">
+            <input id="status-text" placeholder="In the Nakama showcase">
+            <button id="btn-set-status" class="btn" type="button">Update status</button>
+            <input id="follow-user-id" placeholder="friend user ID">
+            <button id="btn-follow" class="btn ghost" type="button">Follow</button>
+            <button id="btn-unfollow" class="btn ghost" type="button">Unfollow</button>
+          </div>
+          <pre id="status-out" class="out small">—</pre>
+        </div>
+      </section>
+
+      <section id="chat" class="section">
+        <div class="section-head">
+          <h2>Chat channels</h2>
+          <span class="pill">global · group · direct</span>
+        </div>
+        <div class="grid two">
+          <div class="card chat-card">
+            <h3>Global room <span id="global-channel-id" class="pill">not joined</span></h3>
+            <div id="global-messages" class="messages"></div>
+            <div class="form-row">
+              <input id="global-input" placeholder="Say something to everyone">
+              <button id="send-global" class="btn primary" type="button">Send</button>
+              <button id="history-global" class="btn ghost" type="button">History</button>
+            </div>
+          </div>
+          <div class="card chat-card">
+            <h3>Direct message <span id="dm-channel-id" class="pill">not joined</span></h3>
+            <div class="form-row">
+              <input id="dm-target" placeholder="friend user ID">
+              <button id="join-dm" class="btn" type="button">Join DM</button>
+            </div>
+            <div id="dm-messages" class="messages"></div>
+            <div class="form-row">
+              <input id="dm-input" placeholder="Message">
+              <button id="send-dm" class="btn primary" type="button">Send</button>
+              <button id="history-dm" class="btn ghost" type="button">History</button>
+            </div>
+          </div>
+        </div>
+        <div class="grid two">
+          <div class="card chat-card">
+            <h3>Group channel <span id="group-channel-id" class="pill">not joined</span></h3>
+            <div class="form-row">
+              <input id="group-chat-id" placeholder="group id">
+              <button id="join-group-chat" class="btn" type="button">Join group chat</button>
+            </div>
+            <div id="group-messages" class="messages"></div>
+            <div class="form-row">
+              <input id="group-input" placeholder="Group message">
+              <button id="send-group" class="btn primary" type="button">Send</button>
+              <button id="history-group" class="btn ghost" type="button">History</button>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Presence &amp; receipts</h3>
+            <p class="muted">Channel joins, leaves, and message receipts are written here.</p>
+            <pre id="chat-presence" class="out small">—</pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="realtime" class="section">
+        <div class="section-head">
+          <h2>Realtime &amp; matches</h2>
+          <span class="muted">relay · matchmaker · Nakama authoritative handler</span>
+        </div>
+        <div class="grid three">
+          <div class="card">
+            <h3>Relayed match</h3>
+            <p class="muted">Create a client-relayed match, join it from a second tab, and exchange opcode-tagged messages through Nakama.</p>
+            <div class="row">
+              <button id="relay-create" class="btn" type="button">Create relay room</button>
+              <button id="relay-leave" class="btn ghost" type="button">Leave</button>
+            </div>
+            <div class="form-row">
+              <input id="relay-id" placeholder="match id">
+              <button id="relay-join" class="btn ghost" type="button">Join</button>
+            </div>
+            <div class="form-row">
+              <input id="relay-text" placeholder="relay message">
+              <button id="relay-send" class="btn" type="button">Send</button>
+            </div>
+            <pre id="relay-log" class="out small">—</pre>
+          </div>
+
+          <div class="card">
+            <h3>Matchmaker</h3>
+            <p class="muted">Nakama matchmaker tickets, properties, matched events, and cancellation. The matched users are handed to the Go game server.</p>
+            <div class="row">
+              <button id="mm-find" class="btn primary" type="button">Find opponent</button>
+              <button id="mm-cancel" class="btn ghost" type="button">Cancel</button>
+            </div>
+            <div class="kv"><span>Ticket</span><code id="mm-ticket">—</code></div>
+            <div id="mm-users" class="list"></div>
+            <pre id="mm-log" class="out small">—</pre>
+          </div>
+
+          <div class="card">
+            <h3>Nakama authoritative arena</h3>
+            <p class="muted">A Lua match handler on Nakama: tick broadcasts, join/leave presence, and echoed match data. The main duel uses Go instead.</p>
+            <div class="row">
+              <button id="arena-create" class="btn" type="button">Create &amp; join arena</button>
+              <button id="arena-leave" class="btn ghost" type="button">Leave</button>
+            </div>
+            <div class="form-row">
+              <input id="arena-id" placeholder="arena match id">
+              <button id="arena-join" class="btn ghost" type="button">Join arena</button>
+            </div>
+            <div class="form-row">
+              <input id="arena-text" placeholder="echo message">
+              <button id="arena-send" class="btn" type="button">Send</button>
+            </div>
+            <pre id="arena-log" class="out small">—</pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="game" class="section">
+        <div class="section-head">
+          <h2>Reaction Duel</h2>
+          <span class="pill">Go authoritative · server-measured</span>
+        </div>
+        <div class="game-shell">
+          <div class="game-top">
+            <div class="player-card" id="game-self">
+              <div class="player-tag">YOU</div>
+              <strong id="game-self-name">not connected</strong>
+              <span id="game-self-id">—</span>
+            </div>
+            <div class="game-center">
+              <div id="game-state" class="game-state">Choose a mode</div>
+              <button id="tap-btn" class="tap-btn" type="button" disabled>
+                <span>TAP</span>
+                <small>wait for GO</small>
+              </button>
+              <div id="game-timer" class="game-timer">—</div>
+            </div>
+            <div class="player-card opponent" id="game-opponent">
+              <div class="player-tag">OPPONENT</div>
+              <strong id="game-opponent-name">waiting</strong>
+              <span id="game-opponent-id">—</span>
+            </div>
+          </div>
+
+          <div class="game-controls">
+            <button id="game-bot" class="btn primary" type="button">Play vs bot</button>
+            <button id="game-private" class="btn" type="button">Create private room</button>
+            <div class="form-row compact">
+              <input id="private-code" placeholder="room code">
+              <button id="game-join" class="btn ghost" type="button">Join room</button>
+            </div>
+            <button id="game-quick" class="btn" type="button">Quick match via Nakama</button>
+            <button id="game-rematch" class="btn ghost" type="button" disabled>Rematch</button>
+            <button id="game-leave" class="btn danger" type="button">Leave</button>
+          </div>
+
+          <div class="game-info">
+            <span id="game-room">room —</span>
+            <span id="game-latency">socket —</span>
+            <span id="game-best">best —</span>
+          </div>
+          <pre id="game-log" class="out small">Reaction Duel opens a raw WebSocket to the Go game server at /go/ws. The Go server validates your Nakama session, measures taps, and submits the verified result to Nakama.</pre>
+        </div>
+      </section>
+
+      <section id="economy" class="section">
+        <div class="section-head">
+          <h2>Economy &amp; competitions</h2>
+          <span class="muted">wallet · leaderboards · tournaments · notifications</span>
+        </div>
+        <div class="grid three">
+          <div class="card">
+            <h3>Wallet</h3>
+            <div id="wallet-display" class="wallet-display">—</div>
+            <p class="muted">Wallet updates happen in Lua RPCs with ledger entries. The Go game server triggers rewards after verified matches.</p>
+            <div class="row">
+              <button id="btn-daily" class="btn primary" type="button">Daily bonus</button>
+              <button id="btn-purchase" class="btn" type="button">Buy neon skin · 50</button>
+              <button id="btn-notify" class="btn ghost" type="button">Send notification</button>
+            </div>
+            <pre id="economy-out" class="out small">—</pre>
+          </div>
+
+          <div class="card">
+            <h3>Leaderboards</h3>
+            <div class="form-row">
+              <select id="leaderboard-select">
+                <option value="showcase_reaction_ms">Fastest reaction (ms)</option>
+                <option value="showcase_reaction_wins">Reaction wins</option>
+              </select>
+              <button id="btn-lb-refresh" class="btn ghost" type="button">Refresh</button>
+            </div>
+            <div class="row">
+              <button id="btn-lb-demo" class="btn" type="button">Submit demo score</button>
+            </div>
+            <div id="leaderboard-list" class="list"></div>
+          </div>
+
+          <div class="card">
+            <h3>Daily tournament</h3>
+            <div id="tournament-list" class="list"></div>
+            <div class="row">
+              <button id="btn-tournament-join" class="btn" type="button">Join selected</button>
+              <button id="btn-tournament-submit" class="btn" type="button">Submit demo score</button>
+              <button id="btn-tournament-records" class="btn ghost" type="button">Records</button>
+              <button id="btn-tournament-claim" class="btn primary" type="button">Claim reward</button>
+            </div>
+            <div id="tournament-records" class="list"></div>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <div class="card">
+            <h3>Notifications</h3>
+            <div class="row">
+              <button id="btn-notifications-refresh" class="btn ghost" type="button">Refresh</button>
+              <button id="btn-notifications-delete" class="btn danger" type="button">Delete all</button>
+            </div>
+            <div id="notification-list" class="list"></div>
+          </div>
+          <div class="card">
+            <h3>Reward path</h3>
+            <p class="muted">The Go server calls the privileged <code>showcase_result</code> RPC with a server-only secret. Nakama writes the leaderboard, wins, tournament, wallet ledger, storage audit and persistent notification.</p>
+            <div class="flow">
+              <span>Go match</span><i>→</i><span>verified result</span><i>→</i><span>Nakama RPC</span><i>→</i><span>leaderboard + wallet + notification</span>
+            </div>
+            <p class="hint">IAP receipt validation and social OAuth require external provider credentials; this local build demonstrates the Nakama APIs and marks those integrations as configuration-gated.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="storage" class="section">
+        <div class="section-head">
+          <h2>Storage</h2>
+          <span class="muted">private objects · public config · inventory</span>
+        </div>
+        <div class="grid two">
+          <div class="card">
+            <h3>Object editor</h3>
+            <p class="muted">Write a JSON object into the current user's storage, read it back, list the collection, or delete it.</p>
+            <div class="form-row">
+              <input id="storage-collection" value="showcase_player" placeholder="collection">
+              <input id="storage-key" value="loadout" placeholder="key">
+            </div>
+            <textarea id="storage-value" class="textarea" rows="6">{"skin":"neon","loadout":"reaction","level":1}</textarea>
+            <div class="row">
+              <button id="btn-storage-write" class="btn primary" type="button">Write</button>
+              <button id="btn-storage-read" class="btn" type="button">Read</button>
+              <button id="btn-storage-list" class="btn ghost" type="button">List</button>
+              <button id="btn-storage-delete" class="btn danger" type="button">Delete</button>
+            </div>
+            <pre id="storage-out" class="out small">—</pre>
+          </div>
+          <div class="card">
+            <h3>Public config &amp; inventory</h3>
+            <p class="muted">The seeded <code>showcase/config</code> object has public read permission. Purchases write a private inventory object.</p>
+            <div class="row">
+              <button id="btn-public-config" class="btn" type="button">Read public config</button>
+              <button id="btn-inventory" class="btn ghost" type="button">Load inventory</button>
+            </div>
+            <pre id="public-config" class="out small">—</pre>
+            <pre id="inventory-out" class="out small">—</pre>
+          </div>
+          <div class="card">
+            <h3>Custom RPC</h3>
+            <p class="muted">Call <code>showcase_info</code> through Nakama's RPC API and see the account, wallet, competition resources and authority split reported by the Lua module.</p>
+            <div class="row">
+              <button id="btn-rpc-info" class="btn primary" type="button">Call showcase_info</button>
+            </div>
+            <pre id="rpc-out" class="out small">—</pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="ops" class="section">
+        <div class="section-head">
+          <h2>Ops &amp; architecture</h2>
+          <span class="pill">same-origin gateway</span>
+        </div>
+        <div class="grid three">
+          <div class="card">
+            <h3>Health</h3>
+            <div id="health-out" class="health-grid">—</div>
+            <div class="row">
+              <button id="btn-health" class="btn ghost" type="button">Refresh health</button>
+              <button id="btn-rooms" class="btn ghost" type="button">List Go rooms</button>
+            </div>
+            <pre id="rooms-out" class="out small">—</pre>
+          </div>
+          <div class="card">
+            <h3>Session details</h3>
+            <div class="kv"><span>Provider</span><code id="ops-provider">—</code></div>
+            <div class="kv"><span>User ID</span><code id="ops-userid">—</code></div>
+            <div class="kv"><span>Username</span><code id="ops-username">—</code></div>
+            <div class="kv"><span>Socket</span><code id="ops-socket">—</code></div>
+            <div class="row">
+              <button class="btn ghost" data-copy="ops-userid" type="button">Copy user ID</button>
+              <button class="btn ghost" data-copy="ops-username" type="button">Copy username</button>
+              <a class="btn ghost" href="/healthcheck" target="_blank" rel="noreferrer">Nakama health ↗</a>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Architecture</h3>
+            <p class="muted">Port 4001 is a Go gateway. It serves the web client, reverse-proxies Nakama HTTP and WebSocket traffic, and hosts the authoritative game server.</p>
+            <div class="arch">
+              <div><b>Browser / WebView</b><span>HTML5 + nakama-js</span></div>
+              <div><b>Go :4001</b><span>static + proxy + game server</span></div>
+              <div><b>Nakama :7350</b><span>auth · social · economy · matches</span></div>
+              <div><b>PostgreSQL :5432</b><span>Nakama persistence</span></div>
+            </div>
+            <p class="hint">Nakama's console runs at port 7351. Local demo login: <code>admin</code> / <code>a473e6bf26e7c40ff99d2c43</code>. The console SPA keeps its own origin, so <code>/console</code> redirects there.</p>
+            <a class="btn ghost" href="/console" target="_blank" rel="noreferrer">Open Nakama console ↗</a>
+          </div>
+        </div>
+        <div class="card">
+          <h3>API boundaries — what is deliberately not faked</h3>
+          <div class="stack">
+            <p class="hint"><code>configure</code> <strong>IAP receipt validation</strong> — needs Apple/Google credentials and a validation endpoint. The store purchase demonstrates Nakama's wallet ledger, not a real receipt.</p>
+            <p class="hint"><code>configure</code> <strong>Social provider auth</strong> — Apple, Google and Facebook login need provider client IDs/secrets. Device, custom and email auth are live.</p>
+            <p class="hint"><code>not in this build</code> <strong>Achievements / stats APIs</strong> — not present in this Nakama version. The showcase does not invent a fake endpoint; storage + RPC patterns cover similar needs.</p>
+            <p class="hint"><code>separate origin</code> <strong>Nakama console</strong> — its SPA expects port 7351. Use the redirect above; it is not embedded under 4001.</p>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Event stream</h3>
+          <div class="row"><button id="btn-clear-ops-log" class="btn ghost" type="button">Clear</button></div>
+          <pre id="ops-log" class="out log">—</pre>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span>Nakama Feature Showcase</span>
+        <span>Go gateway + authoritative game server · Nakama platform · port 4001</span>
+      </footer>
+    </main>
+
+    <aside class="rail">
+      <div class="rail-card">
+        <div class="rail-head"><span>LIVE EVENTS</span><button id="clear-log" class="rail-btn" type="button">clear</button></div>
+        <pre id="event-log" class="event-log">booting…</pre>
+      </div>
+      <div class="rail-card">
+        <div class="rail-head"><span>FEATURE COVERAGE</span><span id="coverage-text">0%</span></div>
+        <div class="progress"><div id="coverage-bar"></div></div>
+        <div id="coverage-list" class="coverage-list"></div>
+      </div>
+      <div class="rail-card help">
+        <strong>Try two players</strong>
+        <p>Open <b>player 2</b>, click <b>New identity</b>, then use matchmaker or a private room code. The second tab is a completely separate Nakama account.</p>
+        <p class="hint">No WebView or native plugin install is required for this demo.</p>
+      </div>
+    </aside>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
