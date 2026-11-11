@@ -5,6 +5,7 @@
   "description": "Portable MoonGames game packages sharing one Nakama backend.",
   "packageManager": "pnpm@12.19.0",
   "scripts": {
+    "stack": "node tools/stack.mjs",
     "dev:chess": "pnpm --filter @moongames/chess-web dev",
     "build:chess": "pnpm --filter @moongames/chess-web build",
     "preview:chess": "pnpm --filter @moongames/chess-web preview",

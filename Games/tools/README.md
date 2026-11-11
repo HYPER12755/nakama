@@ -2,6 +2,58 @@
 
 Build, sign, serve, and verify portable MoonGames bundles.
 
+## Manage the local full stack
+
+`tools/stack.mjs` is the single entry point for the local PostgreSQL, Nakama,
+launcher, and signed-release services.
+
+```bash
+cd Games
+
+pnpm stack doctor
+pnpm stack start
+pnpm stack status
+pnpm stack urls
+pnpm stack credentials
+pnpm stack logs nakama --lines 100
+pnpm stack logs web --follow
+pnpm stack sync
+pnpm stack restart
+pnpm stack stop
+pnpm stack stop --keep-db
+```
+
+Use `pnpm stack <command> [services...]` to operate on only part of the stack:
+
+```bash
+pnpm stack start nakama
+pnpm stack restart web
+pnpm stack stop releases
+```
+
+Services are `postgres` (`db`), `nakama` (`api`), `web` (`launcher`), and
+`releases`. Starting `nakama` automatically starts PostgreSQL first. Starting
+the launcher builds the web bundle automatically when it is missing; pass
+`--build` to force a rebuild or `--no-build` to fail instead.
+
+State, PID records, and logs are written to `runtime/stack/`, which is ignored
+by git. The manager stores one `state.json` and one log per service. `stop`
+stops PostgreSQL only when the stack started it; an already-running external
+server is left alone unless you pass `--all`. Use `--keep-db` to keep a managed
+server running.
+
+The manager discovers the Nakama config from `MOONGAMES_NAKAMA_CONFIG`,
+`~/nakama/nakama.yml`, `~/nakama/local.yml`, the repository root
+`nakama.yml`/`local.yml`, or `Games/runtime/nakama.yml`. It discovers the binary
+from `MOONGAMES_NAKAMA_BIN`, the repository root, `~/nakama/nakama`, or `PATH`.
+If the configured database role cannot connect, it tries the local `postgres`
+and current-user roles before starting Nakama. Run `pnpm stack help` for all
+path, port, host, and credential environment variables.
+
+`pnpm stack status --json` emits machine-readable health and process data.
+`pnpm stack logs` shows all service logs; add a service name and `--follow` to
+stream one log.
+
 ## Package a game
 
 ```bash
@@ -125,5 +177,5 @@ pnpm test:tools
 
 The tool tests cover deterministic ZIP output, traversal rejection, signing
 payload stability, signature/tamper detection, semver ordering, release
-manifest selection, and catalog generation/sorting. `unzip -t` is used when
-available to validate archives.
+manifest selection, catalog generation/sorting, and stack config/service
+parsing. `unzip -t` is used when available to validate archives.

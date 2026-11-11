@@ -61,8 +61,11 @@ From the repository:
 
 ```bash
 cd Games
-pnpm serve:releases
+pnpm stack start
 ```
+
+This starts PostgreSQL, Nakama, the launcher, and the release server together.
+To run only the release server, use `pnpm serve:releases`.
 
 The tool serves `releases/` on `0.0.0.0:8099` with CORS enabled for local
 development. Use `node tools/serve-releases.mjs --port 8099 --root releases`

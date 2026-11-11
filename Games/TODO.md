@@ -95,6 +95,7 @@
 - [ ] Add email verification and password reset when operator SMTP is configured.
 - [x] Replace Chess and launcher emoji/font-glyph icons with inline SVG icons.
 - [x] Add a versioned `games.json` catalog contract to the shared SDK.
+- [x] Add a one-command local stack manager for PostgreSQL, Nakama, launcher, releases, health, logs, and URLs.
 - [x] Generate the catalog from game manifests, planned titles, and release data.
 - [x] Expose Flutter and React Native catalog clients for custom native game panels.
 - [x] Add a responsive browser launcher with search, filters, featured game, and coming-soon titles.

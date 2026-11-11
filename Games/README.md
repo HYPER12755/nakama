@@ -152,7 +152,20 @@ examples, and [launcher/README.md](launcher/README.md) for deployment.
 cd Games
 pnpm install
 
-# Local chess UI
+# One-command local full stack: PostgreSQL, Nakama, launcher, and releases.
+pnpm stack doctor          # check local tools, paths, and build state
+pnpm stack start           # start everything; build the web bundle if needed
+pnpm stack status          # health, PIDs, and URLs
+pnpm stack urls            # local and LAN URLs
+pnpm stack credentials     # Nakama console login and server keys
+pnpm stack logs nakama --follow
+pnpm stack sync            # copy Lua modules and restart Nakama
+pnpm stack restart         # restart the managed stack
+pnpm stack stop            # stop managed services, including PostgreSQL
+pnpm stack stop --keep-db  # leave PostgreSQL running
+pnpm stack stop --all      # also stop PostgreSQL if it was started elsewhere
+
+# Focused development servers
 pnpm dev:chess
 
 # Local multi-game web menu.
@@ -201,6 +214,16 @@ pnpm smoke:online
 # Email/password account flow against local Nakama
 pnpm smoke:auth
 ```
+
+`pnpm stack start` is the normal local development entry point. It syncs the
+Lua modules, starts PostgreSQL and Nakama, serves the assembled launcher at
+`http://localhost:4174/`, and serves signed releases at
+`http://127.0.0.1:8099/`. Managed PIDs, logs, and state live under
+`runtime/stack/`, which is ignored by git. The script locates the Nakama config
+at `~/nakama/nakama.yml`, `~/nakama/local.yml`, the repository root
+`nakama.yml`/`local.yml`, or `Games/runtime/nakama.yml`, and locates the binary
+at the repository root, `~/nakama/nakama`, or `PATH`. Override paths and ports
+with the `MOONGAMES_*` variables listed by `pnpm stack help`.
 
 `pnpm package:chess` builds Chess, creates a deterministic ZIP, signs its
 descriptor, and writes `releases/chess/<version>/`. `pnpm release:manifest`
@@ -324,7 +347,7 @@ build/QA validation:
   records.
 
 Current local automation: 22 core + 26 web + 8 host-core + 11 launcher
-TypeScript tests, 8 tool tests, and 60 Lua tests (135 passing tests total,
+TypeScript tests, 11 tool tests, and 60 Lua tests (138 passing tests total,
 excluding the Flutter tests that require the Flutter SDK). Manual browser QA of
 the catalog menu, AI, spectator, invite, replay, fullscreen board, chat,
 account, and online/profile flows, plus Android Chrome/Flutter/React Native
