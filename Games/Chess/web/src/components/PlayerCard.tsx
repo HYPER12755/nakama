@@ -1,6 +1,6 @@
 import type { Color } from "@moongames/chess-core";
 import { formatClock } from "../lib/onlineProtocol";
-import { glyphFor } from "../lib/pieces";
+import { PieceArtwork } from "./Piece";
 
 export interface PlayerCardProps {
   color: Color;
@@ -46,7 +46,7 @@ export function PlayerCard({
         className={`player-avatar player-avatar--${color}`}
         aria-hidden="true"
       >
-        {glyphFor("k")}
+        <PieceArtwork type="k" color={color} />
       </div>
       <div className="player-meta">
         <span className="player-name">{label}</span>

@@ -18,6 +18,9 @@ local LOBBY_TIMEOUT_MS = 900000
 local FINISHED_LINGER_MS = 300000
 local DRAW_OFFER_TTL_MS = 60000
 local CLOCK_BROADCAST_INTERVAL_MS = 1000
+local CHAT_MAX_MESSAGES = 40
+local CHAT_MAX_LENGTH = 240
+local CHAT_RATE_LIMIT_MS = 700
 
 local function encode(value)
   if type(value) == "string" then
@@ -258,6 +261,7 @@ local function state_payload(context, state, now)
     clock = clock_payload(state, now),
     result = state.result,
     drawOffer = draw_offer_payload(state),
+    chat = state.chat_messages or {},
     serverTime = now,
   }
 end
@@ -298,6 +302,10 @@ local function set_result(context, dispatcher, state, result, now)
   state.result_at = now
   state.clock.running_since = nil
   state.open = false
+  -- Match chat is intentionally ephemeral. Clear it before broadcasting the
+  -- result so no message survives in state, storage, or a late join snapshot.
+  state.chat_messages = {}
+  state.chat_last_at = {}
 
   -- Persist progression before announcing the result. Clients refresh their
   -- profile as soon as GAME_OVER arrives, so the storage write must be visible.
@@ -483,6 +491,63 @@ local function handle_draw_decline(context, dispatcher, state, player, now)
   })
 end
 
+local function handle_chat(dispatcher, state, sender, payload, now)
+  if state.result then
+    send_error(dispatcher, sender.presence, "The match is already over")
+    return
+  end
+
+  -- Tolerate matches created by an older runtime module during a rolling
+  -- module reload, when the chat fields may not exist yet.
+  state.chat_messages = state.chat_messages or {}
+  state.chat_last_at = state.chat_last_at or {}
+  state.chat_seq = state.chat_seq or 0
+
+  local text = payload.text
+  if type(text) ~= "string" then
+    send_error(dispatcher, sender.presence, "Chat message text is required")
+    return
+  end
+
+  text = text:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+  if #text == 0 then
+    send_error(dispatcher, sender.presence, "Chat message cannot be empty")
+    return
+  end
+  if #text > CHAT_MAX_LENGTH then
+    send_error(
+      dispatcher,
+      sender.presence,
+      "Chat messages must be " .. tostring(CHAT_MAX_LENGTH) .. " characters or fewer"
+    )
+    return
+  end
+
+  local last_sent = state.chat_last_at[sender.user_id]
+  if last_sent and now - last_sent < CHAT_RATE_LIMIT_MS then
+    send_error(dispatcher, sender.presence, "Please wait before sending another message")
+    return
+  end
+
+  state.chat_last_at[sender.user_id] = now
+  state.chat_seq = state.chat_seq + 1
+  local chat_message = {
+    id = tostring(now) .. "-" .. tostring(state.chat_seq),
+    userId = sender.user_id,
+    username = sender.username or "Player",
+    color = sender.color,
+    spectator = sender.color == nil,
+    text = text,
+    sentAt = now,
+  }
+  state.chat_messages[#state.chat_messages + 1] = chat_message
+  if #state.chat_messages > CHAT_MAX_MESSAGES then
+    table.remove(state.chat_messages, 1)
+  end
+
+  broadcast(dispatcher, OP.CHAT, chat_message)
+end
+
 local function handle_message(context, dispatcher, state, message, now)
   local player = state.players[message.sender.user_id]
 
@@ -502,6 +567,16 @@ local function handle_message(context, dispatcher, state, message, now)
 
   if message.op_code == OP.REQUEST_STATE then
     broadcast_state(context, dispatcher, state, { message.sender })
+    return
+  end
+
+  if message.op_code == OP.CHAT_SEND then
+    local sender = player or state.spectators[message.sender.user_id]
+    if not sender then
+      send_error(dispatcher, message.sender, "You are not in this match")
+      return
+    end
+    handle_chat(dispatcher, state, sender, payload, now)
     return
   end
 
@@ -671,6 +746,9 @@ local function match_init(context, params)
     result = nil,
     result_at = nil,
     draw_offer = nil,
+    chat_messages = {},
+    chat_last_at = {},
+    chat_seq = 0,
     last_activity = now,
     last_clock_broadcast = 0,
     open = expected_count == 0,

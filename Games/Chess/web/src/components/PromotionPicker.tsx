@@ -1,5 +1,5 @@
 import type { Color, PromotionPiece } from "@moongames/chess-core";
-import { glyphFor } from "../lib/pieces";
+import { PieceArtwork } from "./Piece";
 
 const OPTIONS: Array<{ value: PromotionPiece; label: string }> = [
   { value: "q", label: "Queen" },
@@ -37,7 +37,7 @@ export function PromotionPicker({
               onClick={() => onSelect(option.value)}
             >
               <span className={`piece piece--${color}`} aria-hidden="true">
-                {glyphFor(option.value)}
+                <PieceArtwork type={option.value} color={color} />
               </span>
               <span>{option.label}</span>
             </button>

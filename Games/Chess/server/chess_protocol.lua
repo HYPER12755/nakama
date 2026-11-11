@@ -20,6 +20,7 @@ protocol.OP = {
   PONG = 11,
   SPECTATOR_JOINED = 12,
   SPECTATOR_LEFT = 13,
+  CHAT = 14,
 
   -- Client -> server
   MOVE_REQUEST = 101,
@@ -29,6 +30,7 @@ protocol.OP = {
   DRAW_DECLINE = 105,
   REQUEST_STATE = 106,
   PING = 107,
+  CHAT_SEND = 108,
 }
 
 protocol.DEFAULT_TIME_CONTROL = {

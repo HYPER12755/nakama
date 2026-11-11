@@ -77,7 +77,9 @@ export function ChessBoard({
                 {square[1]}
               </span>
             )}
-            {piece !== undefined && <Piece piece={piece} />}
+            {piece !== undefined && (
+              <Piece piece={piece} justMoved={lastMove?.to === square} />
+            )}
             {isTarget && (
               <span
                 className={`move-hint ${

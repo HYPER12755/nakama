@@ -65,7 +65,9 @@
 - [x] Spectator support (read-only match join, state/clock/result updates).
 - [x] Private-match invite links for players and spectators.
 - [x] Replay/PGN export from stored history.
-- [ ] Optional chat/quick messages. Deferred until after host wrappers.
+- [x] Temporary server-relayed match chat for players and spectators.
+- [x] Fullscreen board toggle with browser and WebView fallbacks.
+- [ ] Optional quick messages (preset table reactions). Deferred until after host wrappers.
 
 ## Phase 7 — Host wrappers and delivery
 

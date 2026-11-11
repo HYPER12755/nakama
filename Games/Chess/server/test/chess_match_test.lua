@@ -707,6 +707,140 @@ test("spectators can join a finished match during the result linger", function()
   assert_truthy(state_message.data.result)
 end)
 
+test("players and spectators share temporary match chat", function()
+  local state, dispatcher = new_match()
+  state = join(state, dispatcher, "u1", "Alice")
+  state = join(state, dispatcher, "u2", "Bob")
+  advance(1000)
+  state = join_as_spectator(state, dispatcher, "u3", "Carol")
+  advance(1000)
+
+  state = loop(state, dispatcher, {
+    {
+      sender = presence("u3", "Carol"),
+      op_code = OP.CHAT_SEND,
+      data = { text = "  hello   table  " },
+    },
+  })
+
+  assert_equal(#state.chat_messages, 1)
+  local spectator_message = last_message(dispatcher, OP.CHAT)
+  assert_truthy(spectator_message)
+  assert_equal(spectator_message.data.text, "hello table")
+  assert_equal(spectator_message.data.spectator, true)
+  assert_equal(spectator_message.data.username, "Carol")
+
+  state = loop(state, dispatcher, {
+    {
+      sender = presence("u3", "Carol"),
+      op_code = OP.REQUEST_STATE,
+      data = {},
+    },
+  })
+  local requested = last_message(dispatcher, OP.STATE)
+  assert_truthy(requested)
+  assert_equal(#requested.data.chat, 1)
+  assert_equal(requested.data.chat[1].text, "hello table")
+
+  advance(1000)
+  state = loop(state, dispatcher, {
+    {
+      sender = presence("u1", "Alice"),
+      op_code = OP.CHAT_SEND,
+      data = { text = "Good luck" },
+    },
+  })
+  assert_equal(#state.chat_messages, 2)
+  local player_message = last_message(dispatcher, OP.CHAT)
+  assert_equal(player_message.data.spectator, false)
+  assert_equal(player_message.data.color, "w")
+  assert_equal(#state.game:history_san(), 0)
+end)
+
+test("chat rejects empty, oversized, and rapid messages", function()
+  local state, dispatcher = new_match()
+  state = join(state, dispatcher, "u1", "Alice")
+  state = join(state, dispatcher, "u2", "Bob")
+  advance(1000)
+
+  state = loop(state, dispatcher, {
+    {
+      sender = presence("u1", "Alice"),
+      op_code = OP.CHAT_SEND,
+      data = { text = "first" },
+    },
+  })
+  assert_equal(#state.chat_messages, 1)
+
+  state = loop(state, dispatcher, {
+    {
+      sender = presence("u1", "Alice"),
+      op_code = OP.CHAT_SEND,
+      data = { text = "too soon" },
+    },
+  })
+  local rapid = last_message(dispatcher, OP.ERROR)
+  assert_truthy(rapid)
+  assert_equal(rapid.data.message, "Please wait before sending another message")
+
+  advance(701)
+  state = loop(state, dispatcher, {
+    {
+      sender = presence("u1", "Alice"),
+      op_code = OP.CHAT_SEND,
+      data = { text = "   " },
+    },
+  })
+  local empty = last_message(dispatcher, OP.ERROR)
+  assert_truthy(empty)
+  assert_equal(empty.data.message, "Chat message cannot be empty")
+
+  state = loop(state, dispatcher, {
+    {
+      sender = presence("u1", "Alice"),
+      op_code = OP.CHAT_SEND,
+      data = { text = string.rep("x", 241) },
+    },
+  })
+  local oversized = last_message(dispatcher, OP.ERROR)
+  assert_truthy(oversized)
+  assert_equal(
+    oversized.data.message,
+    "Chat messages must be 240 characters or fewer"
+  )
+  assert_equal(#state.chat_messages, 1)
+end)
+
+test("chat is cleared when the match ends", function()
+  local state, dispatcher = new_match()
+  state = join(state, dispatcher, "u1", "Alice")
+  state = join(state, dispatcher, "u2", "Bob")
+  advance(1000)
+
+  state = loop(state, dispatcher, {
+    {
+      sender = presence("u1", "Alice"),
+      op_code = OP.CHAT_SEND,
+      data = { text = "good game" },
+    },
+  })
+  assert_equal(#state.chat_messages, 1)
+
+  state = loop(state, dispatcher, {
+    {
+      sender = presence("u2", "Bob"),
+      op_code = OP.RESIGN,
+      data = {},
+    },
+  })
+
+  assert_truthy(state.result)
+  assert_equal(#state.chat_messages, 0)
+  local game_over = last_message(dispatcher, OP.GAME_OVER)
+  assert_truthy(game_over)
+  assert_equal(#game_over.data.chat, 0)
+end)
+
 test("quick match RPC reuses an open match", function()
   fake_nk.match_list_result = {
     { match_id = "existing-match" },

@@ -21,6 +21,7 @@ import {
   normalizedOnlineState,
   parseServerAddress,
   pgnFromHistory,
+  type OnlineChatMessage,
   type OnlineClock,
   type OnlineConnectionStatus,
   type OnlineDrawOffer,
@@ -64,6 +65,7 @@ export interface OnlineChessController {
   spectating: boolean;
   displayClock: { whiteMs: number; blackMs: number } | null;
   drawOffer: OnlineDrawOffer | null;
+  chatMessages: OnlineChatMessage[];
   selected: Square | null;
   legalTargets: Square[];
   checkSquare: Square | null;
@@ -97,6 +99,7 @@ export interface OnlineChessController {
   acceptDraw: () => void;
   declineDraw: () => void;
   requestState: () => void;
+  sendChat: (text: string) => void;
   pgn: () => string;
 }
 
@@ -406,6 +409,29 @@ export function useOnlineChess(
         }
         case ONLINE_OP.DRAW_DECLINED: {
           setDrawOffer(null);
+          break;
+        }
+        case ONLINE_OP.CHAT: {
+          const message = payload as OnlineChatMessage;
+          if (
+            typeof message.id !== "string" ||
+            typeof message.text !== "string"
+          ) {
+            break;
+          }
+          setServerState((current) => {
+            if (current === null || current.result !== null) {
+              return current;
+            }
+            const chat = current.chat ?? [];
+            if (chat.some((entry) => entry.id === message.id)) {
+              return current;
+            }
+            return {
+              ...current,
+              chat: [...chat, message].slice(-40),
+            };
+          });
           break;
         }
         case ONLINE_OP.ERROR: {
@@ -1157,6 +1183,20 @@ export function useOnlineChess(
     sendMatchState(ONLINE_OP.REQUEST_STATE, {});
   }, [sendMatchState]);
 
+  const sendChat = useCallback(
+    (text: string) => {
+      if (serverState?.result != null) {
+        return;
+      }
+      const normalized = text.replace(/\s+/g, " ").trim().slice(0, 240);
+      if (normalized.length === 0) {
+        return;
+      }
+      sendMatchState(ONLINE_OP.CHAT_SEND, { text: normalized });
+    },
+    [sendMatchState, serverState?.result],
+  );
+
   const legalTargets = useMemo(() => {
     if (selected === null || serverState === null) {
       return [];
@@ -1217,6 +1257,7 @@ export function useOnlineChess(
     spectating,
     displayClock,
     drawOffer,
+    chatMessages: serverState?.chat ?? [],
     selected,
     legalTargets,
     checkSquare,
@@ -1247,6 +1288,7 @@ export function useOnlineChess(
     acceptDraw,
     declineDraw,
     requestState,
+    sendChat,
     pgn,
   };
 }

@@ -49,8 +49,8 @@ The package requires Flutter 3.27 or newer.
 Copy the current signed files into the Flutter app:
 
 ```text
-assets/moongames/chess-0.3.0.bundle.json
-assets/moongames/chess-0.3.0.zip
+assets/moongames/chess-0.4.0.bundle.json
+assets/moongames/chess-0.4.0.zip
 ```
 
 Declare them in `pubspec.yaml`:
@@ -58,12 +58,12 @@ Declare them in `pubspec.yaml`:
 ```yaml
 flutter:
   assets:
-    - assets/moongames/chess-0.3.0.bundle.json
-    - assets/moongames/chess-0.3.0.zip
+    - assets/moongames/chess-0.4.0.bundle.json
+    - assets/moongames/chess-0.4.0.zip
 ```
 
 The JSON descriptor is the `.bundle.json` file from
-`Games/releases/chess/0.3.0/`. Do not create or edit it by hand.
+`Games/releases/chess/0.4.0/`. Do not create or edit it by hand.
 
 ## 3. Map the app session
 
@@ -146,8 +146,8 @@ class _ChessScreenState extends State<ChessScreen> {
           },
 
           bundledDescriptorAsset:
-              'assets/moongames/chess-0.3.0.bundle.json',
-          bundledZipAsset: 'assets/moongames/chess-0.3.0.zip',
+              'assets/moongames/chess-0.4.0.bundle.json',
+          bundledZipAsset: 'assets/moongames/chess-0.4.0.zip',
 
           locale: Localizations.localeOf(context).toLanguageTag(),
 

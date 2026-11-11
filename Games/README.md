@@ -191,8 +191,8 @@ pnpm test:all
 pnpm package:chess
 pnpm release:manifest
 pnpm verify:bundle \
-  releases/chess/0.3.0/chess-0.3.0.bundle.json \
-  releases/chess/0.3.0/chess-0.3.0.zip \
+  releases/chess/0.4.0/chess-0.4.0.bundle.json \
+  releases/chess/0.4.0/chess-0.4.0.zip \
   --key "dev-1=<base64-public-key>"
 
 # End-to-end online smoke test (requires local Nakama)
@@ -215,15 +215,14 @@ is the public Nakama game-server key.
 
 ## Current status
 
-Phases 1–7.5 are code-complete except optional chat/quick messages, the
-remaining browser platform-service fallbacks, and real-device build/QA
-validation:
+Phases 1–7.5 are code-complete except optional quick messages, the remaining
+browser platform-service fallbacks, and real-device build/QA validation:
 
 - The TypeScript chess core is implemented and covered by 22 passing tests.
-- The portable web client has 19 passing tests for invite links, native launch
-  contexts, Lua empty-array normalization, history replay, tagged PGN export,
-  bundle/manifest contracts, browser host-preview messaging/session redaction,
-  and clipboard fallback.
+- The portable web client has 20 passing tests for invite links, native launch
+  contexts, Lua empty-array normalization, temporary-chat cleanup, history
+  replay, tagged PGN export, bundle/manifest contracts, browser host-preview
+  messaging/session redaction, and clipboard fallback.
 - The local web UI is playable at `http://localhost:5173/` while the Vite dev
   server is running.
 - The local UI includes an on-device AI opponent with Easy/Medium/Hard levels and
@@ -235,8 +234,8 @@ validation:
   covered by 21 passing tests, including shared vectors, perft, SAN, castling,
   en passant, promotion, draws, undo, and JSON-safe state serialization.
 - The authoritative Nakama match handler, protocol, RPCs, matchmaker hook, and
-  progression module are covered by 36 additional Lua tests (8 protocol,
-  20 match, 8 progression), for 57 Lua tests in total.
+  progression module are covered by 39 additional Lua tests (8 protocol,
+  23 match, 8 progression), for 60 Lua tests in total.
 - Online Chess is wired into the web UI with quick match, private match IDs,
   device sign-in, host-supplied sessions, connection status, authoritative
   clocks, reconnect, resign, draw offers, and server results.
@@ -257,6 +256,14 @@ validation:
   the `chess_rating` leaderboard are rendered in the web sidebar.
 - Recent games can be replayed ply-by-ply from profile history, with board
   flipping, PGN copy, and PGN download.
+- The board uses a responsive framed layout with inline SVG pieces, restrained
+  move/selection/check animations, and a fullscreen toggle. Fullscreen uses the
+  browser API when available and falls back to a fixed viewport layer in
+  embedded WebViews, so clocks and the board stay visible at any size.
+- Online matches include a floating temporary chat panel for players and
+  spectators. The authoritative server rate-limits, normalizes, and broadcasts
+  messages, includes recent messages in reconnect snapshots, and clears chat
+  before the final result is broadcast. Nothing is written to history.
 - The browser supports a host-mode preview at `?hostPreview=1`: it sends the
   same init/theme/session/lifecycle messages as a native host, supports optional
   host session token injection, logs outgoing bridge events with tokens
@@ -288,15 +295,17 @@ validation:
   platform API stubs. The Flutter SDK is not installed here, so
   `flutter analyze/test` and an app build remain outstanding.
 - `pnpm smoke:online` runs real WebSocket clients against Nakama and verifies
-  private seating, spectator join/read-only behavior/result delivery, moves,
-  clock broadcasts, reconnect, state snapshots, resignation, matchmaker pairing,
-  delayed quick-table fallback, draw agreement, casual/rated persistence, Elo
-  changes, history, and leaderboard records.
+  private seating, spectator join/read-only behavior/result delivery,
+  player/spectator chat, moves, clock broadcasts, reconnect, state snapshots,
+  resignation, matchmaker pairing, delayed quick-table fallback, draw
+  agreement, casual/rated persistence, Elo changes, history, and leaderboard
+  records.
 
-Current local automation: 22 core + 19 web + 8 host-core + 8 launcher
-TypeScript tests, 8 tool tests, and 57 Lua tests (122 passing tests total,
+Current local automation: 22 core + 20 web + 8 host-core + 8 launcher
+TypeScript tests, 8 tool tests, and 60 Lua tests (126 passing tests total,
 excluding the Flutter tests that require the Flutter SDK). Manual browser QA of
-the catalog menu, AI, spectator, invite, replay, and online/profile flows, plus
-Android Chrome/Flutter/React Native device testing, is still required.
+the catalog menu, AI, spectator, invite, replay, fullscreen board, chat, and
+online/profile flows, plus Android Chrome/Flutter/React Native device testing,
+is still required.
 
-Optional chat/quick messages are tracked in `TODO.md`.
+Optional quick messages are tracked in `TODO.md`.

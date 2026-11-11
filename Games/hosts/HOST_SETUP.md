@@ -38,9 +38,9 @@ Games/releases/
 ├── release-manifest.json
 ├── games.json                 # optional custom-menu catalog
 ├── chess/
-│   └── 0.3.0/
-│       ├── chess-0.3.0.bundle.json
-│       └── chess-0.3.0.zip
+│   └── 0.4.0/
+│       ├── chess-0.4.0.bundle.json
+│       └── chess-0.4.0.zip
 └── ...
 ```
 
@@ -48,7 +48,7 @@ Upload the contents of `Games/releases/` to a static host or CDN, for example:
 
 ```text
 https://games.example.com/moongames/release-manifest.json
-https://games.example.com/moongames/chess/0.3.0/chess-0.3.0.zip
+https://games.example.com/moongames/chess/0.4.0/chess-0.4.0.zip
 ```
 
 The manifest stores a relative ZIP URL, so the whole `releases/` directory can
@@ -148,8 +148,8 @@ node tools/release-manifest.mjs \
   --key 'prod-1=<public-key-from-the-generation-step>'
 
 node tools/verify-bundle.mjs \
-  releases/chess/0.3.0/chess-0.3.0.bundle.json \
-  releases/chess/0.3.0/chess-0.3.0.zip \
+  releases/chess/0.4.0/chess-0.4.0.bundle.json \
+  releases/chess/0.4.0/chess-0.4.0.zip \
   --key 'prod-1=<public-key-from-the-generation-step>'
 ```
 
@@ -168,8 +168,8 @@ Both hosts require an app-bundled descriptor and ZIP for:
 Copy these two files from the signed release into the native app:
 
 ```text
-chess-0.3.0.bundle.json
-chess-0.3.0.zip
+chess-0.4.0.bundle.json
+chess-0.4.0.zip
 ```
 
 Never construct the descriptor or ZIP by hand, and never load an unsigned
@@ -274,8 +274,8 @@ Before wiring the app, verify the artifact:
 cd Games
 
 node tools/verify-bundle.mjs \
-  releases/chess/0.3.0/chess-0.3.0.bundle.json \
-  releases/chess/0.3.0/chess-0.3.0.zip \
+  releases/chess/0.4.0/chess-0.4.0.bundle.json \
+  releases/chess/0.4.0/chess-0.4.0.zip \
   --key 'dev-1=yBxRYs6iBo79VGJX3V2lcyShDL9GuhEG/m3V72RaHIs='
 ```
 
@@ -283,8 +283,8 @@ The current release should report:
 
 ```text
 key:    dev-1
-sha256: acc60583d99df496c476f0fa83f74ec39ae2bc8961e29f7e515e3f364c704d9b
-size:   122556 bytes
+sha256: bd2f45753fdb6d37030f0bbb5336ae76b3b52bec01291fd0e5589e6df83f6750
+size:   127830 bytes
 ```
 
 If the artifact is re-packaged, update any app-bundled fallback and do not reuse

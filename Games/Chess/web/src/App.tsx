@@ -15,6 +15,7 @@ import { ChessBoard } from "./components/ChessBoard";
 import { GameStatus } from "./components/GameStatus";
 import { GameToolbar } from "./components/GameToolbar";
 import { ModeSwitch, type GameMode } from "./components/ModeSwitch";
+import { MatchChat } from "./components/MatchChat";
 import { MoveList } from "./components/MoveList";
 import { OnlineGameToolbar } from "./components/OnlineGameToolbar";
 import { OnlinePanel } from "./components/OnlinePanel";
@@ -56,6 +57,23 @@ function resolveGameTheme(theme: GameTheme): Theme {
   return "dark";
 }
 
+function FullscreenIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      className="board-hud__icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {active ? (
+        <path d="M5 16h3v3h2v-5H5v2Zm3-8H5v2h5V5H8v3Zm6 11h2v-3h3v-2h-5v5Zm2-11V5h-2v5h5V8h-3Z" />
+      ) : (
+        <path d="M7 14H5v5h5v-2H7v-3Zm-2-4h2V7h3V5H5v5Zm12 7h-3v2h5v-5h-2v3ZM14 5v2h3v3h2V5h-5Z" />
+      )}
+    </svg>
+  );
+}
+
 export default function App({ bridge }: AppProps) {
   const [idleState] = useState<ChessState>(() => new ChessEngine().getState());
   const [invite, setInvite] = useState(() =>
@@ -70,7 +88,9 @@ export default function App({ bridge }: AppProps) {
   const online = useOnlineChess(hostConfig);
   const [theme, setTheme] = useState<Theme>("dark");
   const [flipped, setFlipped] = useState(false);
+  const [boardFullscreen, setBoardFullscreen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const boardPanelRef = useRef<HTMLElement>(null);
   const inviteConnectRef = useRef(false);
   const inviteHandledRef = useRef(false);
   const hostLaunchHandledRef = useRef(false);
@@ -245,6 +265,77 @@ export default function App({ bridge }: AppProps) {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    document.body.classList.toggle(
+      "board-fullscreen-active",
+      boardFullscreen,
+    );
+    return () => document.body.classList.remove("board-fullscreen-active");
+  }, [boardFullscreen]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (document.fullscreenElement === null) {
+        setBoardFullscreen(false);
+      }
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () =>
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    if (!boardFullscreen) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) {
+        return;
+      }
+      setBoardFullscreen(false);
+      if (
+        document.fullscreenElement !== null &&
+        typeof document.exitFullscreen === "function"
+      ) {
+        void document.exitFullscreen().catch(() => {
+          // The browser may already be leaving fullscreen.
+        });
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [boardFullscreen]);
+
+  const toggleBoardFullscreen = () => {
+    if (boardFullscreen) {
+      setBoardFullscreen(false);
+      if (
+        document.fullscreenElement !== null &&
+        typeof document.exitFullscreen === "function"
+      ) {
+        void document.exitFullscreen().catch(() => {
+          // The CSS fullscreen layer is already closing.
+        });
+      }
+      return;
+    }
+
+    setBoardFullscreen(true);
+    const element = boardPanelRef.current;
+    if (
+      element !== null &&
+      document.fullscreenElement === null &&
+      typeof element.requestFullscreen === "function"
+    ) {
+      void element
+        .requestFullscreen({ navigationUI: "hide" })
+        .catch(() => {
+          // Embedded WebViews often block the Fullscreen API. The fixed
+          // board layer below still gives the same in-app behavior.
+        });
+    }
+  };
 
   useEffect(() => {
     if (toast === null) {
@@ -468,13 +559,40 @@ export default function App({ bridge }: AppProps) {
       </header>
 
       <main className="game-layout">
-        <section className="board-panel" aria-label="Chess game">
+        <section
+          className={`board-panel${boardFullscreen ? " board-panel--fullscreen" : ""}`}
+          aria-label="Chess game"
+          ref={boardPanelRef}
+        >
           <PlayerCard
             color={topColor}
             active={topActive}
             finished={finished}
             {...topOnline}
           />
+
+          <div className="board-hud">
+            <span className="board-hud__label">
+              {onlineMode ? "Online table" : aiMode ? "Practice table" : "Local table"}
+            </span>
+            <button
+              type="button"
+              className="board-hud__fullscreen"
+              onClick={toggleBoardFullscreen}
+              aria-pressed={boardFullscreen}
+              aria-label={
+                boardFullscreen ? "Exit fullscreen board" : "Open fullscreen board"
+              }
+              title={
+                boardFullscreen ? "Exit fullscreen board" : "Fullscreen board"
+              }
+            >
+              <FullscreenIcon active={boardFullscreen} />
+              <span className="board-hud__fullscreen-label">
+                {boardFullscreen ? "Exit" : "Fullscreen"}
+              </span>
+            </button>
+          </div>
 
           <div className="board-wrap">
             <ChessBoard
@@ -576,6 +694,17 @@ export default function App({ bridge }: AppProps) {
           )}
         </aside>
       </main>
+
+      {onlineMode &&
+        online.serverState !== null &&
+        online.serverState.result === null && (
+          <MatchChat
+            matchId={online.matchId}
+            messages={online.chatMessages}
+            selfUserId={online.session?.userId ?? null}
+            onSend={online.sendChat}
+          />
+        )}
 
       {activeError !== null && (
         <div className="error-banner" role="alert">

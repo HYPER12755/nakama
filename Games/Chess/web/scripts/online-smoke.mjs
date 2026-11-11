@@ -27,6 +27,7 @@ const OP = {
   PONG: 11,
   SPECTATOR_JOINED: 12,
   SPECTATOR_LEFT: 13,
+  CHAT: 14,
   MOVE_REQUEST: 101,
   RESIGN: 102,
   DRAW_OFFER_REQUEST: 103,
@@ -34,6 +35,7 @@ const OP = {
   DRAW_DECLINE: 105,
   REQUEST_STATE: 106,
   PING: 107,
+  CHAT_SEND: 108,
 };
 
 const decoder = new TextDecoder();
@@ -267,6 +269,49 @@ async function main() {
 
     await alice.socket.sendMatchState(
       privateMatch.matchId,
+      OP.CHAT_SEND,
+      JSON.stringify({ text: "  hello   table  " }),
+    );
+    const aliceChat = await aliceEvents.waitFor(
+      (message) => message.op === OP.CHAT,
+      "alice chat broadcast",
+    );
+    const bobChat = await bobEvents.waitFor(
+      (message) => message.op === OP.CHAT,
+      "bob chat broadcast",
+    );
+    const eveChat = await eveEvents.waitFor(
+      (message) => message.op === OP.CHAT,
+      "spectator chat broadcast",
+    );
+    assert(aliceChat.data.text === "hello table", "chat text is normalized");
+    assert(
+      bobChat.data.userId === alice.session.user_id,
+      "bob sees the sender id",
+    );
+    assert(
+      typeof bobChat.data.username === "string" &&
+        bobChat.data.username.length > 0,
+      "bob sees a sender name",
+    );
+    assert(eveChat.data.spectator === false, "player chat is not spectator chat");
+
+    await eve.socket.sendMatchState(
+      privateMatch.matchId,
+      OP.CHAT_SEND,
+      JSON.stringify({ text: "watching this one" }),
+    );
+    const spectatorChat = await aliceEvents.waitFor(
+      (message) =>
+        message.op === OP.CHAT &&
+        message.data.text === "watching this one",
+      "spectator chat broadcast",
+    );
+    assert(spectatorChat.data.spectator === true, "spectator chat is labelled");
+    console.log("[ok] temporary chat is broadcast to players and spectators");
+
+    await alice.socket.sendMatchState(
+      privateMatch.matchId,
       OP.MOVE_REQUEST,
       JSON.stringify({ from: "e2", to: "e4" }),
     );
@@ -395,8 +440,16 @@ async function main() {
       eveGameOver.data.result.winnerColor === "b",
       "spectator sees the same result",
     );
+    const gameOverChat = aliceGameOver.data.chat;
+    assert(
+      gameOverChat == null ||
+        (Array.isArray(gameOverChat) && gameOverChat.length === 0) ||
+        (typeof gameOverChat === "object" &&
+          Object.keys(gameOverChat).length === 0),
+      "temporary chat is cleared at game over",
+    );
     await eve.socket.leaveMatch(privateMatch.matchId);
-    console.log("[ok] resignation ends the match for players and spectators");
+    console.log("[ok] resignation ends the match and clears chat");
 
     const aliceProfile = await fetchProfile(alice, "alice");
     const bobProfile = await fetchProfile(bob, "bob");

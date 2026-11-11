@@ -58,9 +58,10 @@ checkmate, stalemate, threefold repetition, the fifty-move rule, insufficient
 material, undo, FEN round-trips, PGN, and JSON-safe state/action serialization.
 The protocol and match suites cover time control parsing, opcodes, seating,
 moves, clocks, resign/draw/timeout/disconnect results, reconnect, spectator
-join/read-only/result behavior, finished-match viewing, state snapshots, RPCs,
-and the matchmaker hook using a fake Nakama dispatcher. The progression suite
-covers Elo math, rated/casual/abandoned results, profile statistics, history
+join/read-only/result behavior, temporary chat, finished-match viewing, state
+snapshots, RPCs, and the matchmaker hook using a fake Nakama dispatcher. The
+progression suite covers Elo math, rated/casual/abandoned results, profile
+statistics, history
 ordering, replay SANs, leaderboard writes/reads, versioned storage updates, and
 idempotent repeated finalization.
 
@@ -74,8 +75,9 @@ pnpm smoke:online
 
 The script authenticates seven device accounts and uses real WebSocket
 connections. It verifies a private match (including creator-white reservation),
-spectator join/read-only behavior and result delivery, authoritative moves and
-clock broadcasts, reconnect within the grace window, draw-offer state snapshots,
+spectator join/read-only behavior and result delivery, temporary player and
+spectator chat, authoritative moves and clock broadcasts, reconnect within the
+grace window, draw-offer state snapshots,
 resignation, atomic matchmaker pairing, the delayed quick-table fallback, draw
 agreement, casual/rated persistence, Elo changes, profile history with SANs, and
 leaderboard records. The web client uses the matchmaker first, then calls the
@@ -88,6 +90,16 @@ exposes join metadata to `match_join_attempt`, the handler records the choice in
 `state.pending_joins` until `match_join` runs. Spectators are tracked separately
 from the two seated players, capped at 24, and can view a finished match during
 the result linger. They cannot move, resign, or offer/accept draws.
+
+## Temporary match chat
+
+Both seated players and spectators can send `CHAT_SEND` (`108`) while a match is
+waiting or live. The server trims and normalizes the text, caps it at 240 bytes,
+rate-limits each user to one message every 700ms, keeps only the newest 40
+messages in memory, and broadcasts each accepted message as `CHAT` (`14`).
+Snapshots include the current chat so reconnecting clients and new spectators
+catch up. The chat lives only in match state: `set_result` clears it before
+`GAME_OVER` is broadcast, and it is never written to storage or history.
 
 ## Persistence and ratings
 
@@ -130,15 +142,15 @@ player receives a client, but the server owns the match.
 
 ## Status
 
-Phase 6 is complete except for the optional chat/quick-message feature. The pure
-Lua rules pass 21 local tests and expose JSON-friendly moves, actions, statuses,
-and full match state using the same field names as the TypeScript `ChessState`
-contract. The protocol, match, and progression suites add 36 passing tests, for
-57 Lua tests in total. Spectator support is authoritative and read-only; finished
-matches remain watchable during the result linger. History records now include
-the SAN list needed for robust client replay in addition to PGN and final FEN.
+Phase 6 is complete. The pure Lua rules pass 21 local tests and expose
+JSON-friendly moves, actions, statuses, and full match state using the same
+field names as the TypeScript `ChessState` contract. The protocol, match, and
+progression suites add 39 passing tests, for 60 Lua tests in total. Spectator
+support is authoritative and read-only; temporary chat is shared by players and
+spectators and is cleared at game over. Finished matches remain watchable during
+the result linger. History records include the SAN list needed for robust client
+replay in addition to PGN and final FEN.
 
 The real multi-client smoke test passes against the local Nakama server,
-including spectator behavior, rated/casual persistence, Elo changes, history,
-and leaderboard records. The next backend work is optional chat/quick messages
-when the host wrappers and delivery pipeline are ready.
+including spectator behavior, player/spectator chat, rated/casual persistence,
+Elo changes, history, and leaderboard records.

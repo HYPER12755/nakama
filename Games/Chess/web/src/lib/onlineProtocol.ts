@@ -19,6 +19,7 @@ export const ONLINE_OP = {
   PONG: 11,
   SPECTATOR_JOINED: 12,
   SPECTATOR_LEFT: 13,
+  CHAT: 14,
   MOVE_REQUEST: 101,
   RESIGN: 102,
   DRAW_OFFER_REQUEST: 103,
@@ -26,6 +27,7 @@ export const ONLINE_OP = {
   DRAW_DECLINE: 105,
   REQUEST_STATE: 106,
   PING: 107,
+  CHAT_SEND: 108,
 } as const;
 
 export type OnlineConnectionStatus =
@@ -83,6 +85,16 @@ export interface OnlineDrawOffer {
   expiresAt: number;
 }
 
+export interface OnlineChatMessage {
+  id: string;
+  userId: string;
+  username: string;
+  color?: Color | null;
+  spectator?: boolean;
+  text: string;
+  sentAt: number;
+}
+
 export interface OnlineStatePayload {
   state: ChessState;
   match: OnlineMatchInfo;
@@ -91,6 +103,7 @@ export interface OnlineStatePayload {
   clock: OnlineClock;
   result?: OnlineResult | null;
   drawOffer?: OnlineDrawOffer | null;
+  chat?: OnlineChatMessage[];
   serverTime: number;
   move?: MoveRecord;
 }
@@ -264,16 +277,40 @@ export function normalizeChessState(
   };
 }
 
+function normalizeChatMessages(value: unknown): OnlineChatMessage[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((message): message is OnlineChatMessage => {
+    if (typeof message !== "object" || message === null) {
+      return false;
+    }
+    const candidate = message as Partial<OnlineChatMessage>;
+    return (
+      typeof candidate.id === "string" &&
+      typeof candidate.userId === "string" &&
+      typeof candidate.username === "string" &&
+      typeof candidate.text === "string" &&
+      typeof candidate.sentAt === "number"
+    );
+  });
+}
+
 export function normalizedOnlineState(
   payload: OnlineStatePayload,
 ): OnlineStatePayload {
+  const result = payload.result ?? null;
   return {
     ...payload,
     state: normalizeChessState(payload.state),
     players: Array.isArray(payload.players) ? payload.players : [],
     spectators: Array.isArray(payload.spectators) ? payload.spectators : [],
     drawOffer: payload.drawOffer ?? null,
-    result: payload.result ?? null,
+    result,
+    // Chat is never retained once a result exists. The server clears its copy
+    // too, so this also protects against stale state payloads.
+    chat: result === null ? normalizeChatMessages(payload.chat) : [],
   };
 }
 

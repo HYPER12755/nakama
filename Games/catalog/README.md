@@ -14,7 +14,7 @@ Publish `games.json` beside the release manifest:
 ```text
 https://games.example.com/moongames/games.json
 https://games.example.com/moongames/release-manifest.json
-https://games.example.com/moongames/chess/0.3.0/chess-0.3.0.zip
+https://games.example.com/moongames/chess/0.4.0/chess-0.4.0.zip
 ```
 
 Both files are generated in `Games/releases/` and can be uploaded together. Use
@@ -109,7 +109,7 @@ The React Native host re-exports the catalog types and helpers from
       "tagline": "Classic chess. Local, AI, or rated online.",
       "description": "Standard chess with local, AI, online, ...",
       "status": "available",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "minPlayers": 2,
       "maxPlayers": 2,
       "capabilities": ["local", "ai", "online"],
@@ -121,11 +121,11 @@ The React Native host re-exports the catalog types and helpers from
       "sortOrder": 10,
       "webPath": "chess/",
       "release": {
-        "version": "0.3.0",
+        "version": "0.4.0",
         "minHostProtocol": 1,
-        "publishedAt": "2026-11-11T06:52:01.783Z",
-        "sha256": "acc60583d99df496c476f0fa83f74ec39ae2bc8961e29f7e515e3f364c704d9b",
-        "size": 122556,
+        "publishedAt": "2026-11-11T13:49:54.224Z",
+        "sha256": "bd2f45753fdb6d37030f0bbb5336ae76b3b52bec01291fd0e5589e6df83f6750",
+        "size": 127830,
         "keyId": "dev-1"
       }
     }

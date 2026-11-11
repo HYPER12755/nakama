@@ -130,12 +130,66 @@ describe("state normalization", () => {
       clock: { whiteMs: 300000, blackMs: 300000, turn: "w" },
       result: null,
       drawOffer: null,
+      chat: {},
     } as unknown as OnlineStatePayload;
 
     const normalized = normalizedOnlineState(payload);
     expect(normalized.state.history).toEqual([]);
     expect(normalized.players).toEqual([]);
     expect(normalized.spectators).toEqual([]);
+    expect(normalized.chat).toEqual([]);
+  });
+
+  it("keeps live chat and drops it after the match ends", () => {
+    const message = {
+      id: "chat-1",
+      userId: "user-1",
+      username: "Alice",
+      text: "good luck",
+      sentAt: 1_700_000_000_000,
+    };
+    const payload = {
+      state: {
+        fen: "",
+        turn: "w",
+        status: "active",
+        winner: null,
+        inCheck: false,
+        moveNumber: 1,
+        history: [],
+        lastMove: null,
+        board: [],
+        legalMoves: {},
+      },
+      match: {
+        id: "match-1",
+        mode: "quick",
+        rated: true,
+        started: true,
+        open: false,
+        timeControl: { initialMs: 300000, incrementMs: 0 },
+      },
+      players: [],
+      spectators: [],
+      clock: { whiteMs: 300000, blackMs: 300000, turn: "w" },
+      result: null,
+      drawOffer: null,
+      chat: [message],
+      serverTime: 1_700_000_000_000,
+    } as OnlineStatePayload;
+
+    expect(normalizedOnlineState(payload).chat).toEqual([message]);
+
+    const finished = normalizedOnlineState({
+      ...payload,
+      result: {
+        status: "resign",
+        winnerColor: "b",
+        reason: "resign",
+        endedAt: 1_700_000_100_000,
+      },
+    });
+    expect(finished.chat).toEqual([]);
   });
 });
 
