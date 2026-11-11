@@ -12,6 +12,7 @@ import {
 } from "@moongames/game-sdk";
 import { FeaturedGame } from "./components/FeaturedGame";
 import { GameCard } from "./components/GameCard";
+import { Icon, gameIconName } from "./components/Icon";
 import {
   defaultCatalogUrl,
   featuredGame,
@@ -42,10 +43,10 @@ const filters: Array<{ id: CatalogFilter; label: string }> = [
 ];
 
 const fallbackOrbit = [
-  { id: "chess", icon: "♞", accent: "#e5b85c" },
-  { id: "cards", icon: "♠", accent: "#ff6b6b" },
-  { id: "ludo", icon: "◈", accent: "#9b8cff" },
-  { id: "carrom", icon: "◎", accent: "#48c9b0" },
+  { id: "chess", icon: "chess", accent: "#e5b85c" },
+  { id: "cards", icon: "cards", accent: "#ff6b6b" },
+  { id: "ludo", icon: "ludo", accent: "#9b8cff" },
+  { id: "carrom", icon: "carrom", accent: "#48c9b0" },
 ];
 
 function formatUpdatedAt(value: string): string {
@@ -148,7 +149,7 @@ function App() {
       <header className="topbar">
         <a className="brand" href="#top" aria-label="MoonGames home">
           <span className="brand__mark" aria-hidden="true">
-            ☾
+            <Icon name="moon" size={27} strokeWidth={1.7} />
           </span>
           <span className="brand__copy">
             <strong>MoonGames</strong>
@@ -165,7 +166,11 @@ function App() {
           aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
-          <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
+          <Icon
+            name={theme === "dark" ? "sun" : "moon"}
+            size={16}
+            strokeWidth={1.9}
+          />
           <span>{theme === "dark" ? "Light" : "Dark"}</span>
         </button>
       </header>
@@ -188,7 +193,8 @@ function App() {
             </p>
             <div className="hero__actions">
               <a className="button button--primary" href="#library">
-                Browse the library <span aria-hidden="true">↓</span>
+                Browse the library{" "}
+                <Icon name="arrow-down" size={15} strokeWidth={2} />
               </a>
               <span className="hero__note">
                 <span className="status-dot" aria-hidden="true" />
@@ -226,11 +232,17 @@ function App() {
                   style={{ "--accent": game.accent } as CSSProperties}
                   key={game.id}
                 >
-                  {game.icon}
+                  <Icon
+                    name={gameIconName(game.icon)}
+                    size={34}
+                    strokeWidth={1.45}
+                  />
                 </span>
               ))}
               <span className="orbit-center">
-                <span className="orbit-center__moon">☾</span>
+                <span className="orbit-center__moon">
+                  <Icon name="moon" size={38} strokeWidth={1.55} />
+                </span>
                 <small>MOON<br />GAMES</small>
               </span>
             </div>
@@ -251,9 +263,7 @@ function App() {
               </p>
             </div>
             <label className="search">
-              <span className="search__icon" aria-hidden="true">
-                ⌕
-              </span>
+              <Icon name="search" size={18} className="search__icon" />
               <span className="visually-hidden">Search games</span>
               <input
                 type="search"
@@ -292,7 +302,7 @@ function App() {
           {state.phase === "error" ? (
             <div className="empty-panel" role="alert">
               <span className="empty-panel__icon" aria-hidden="true">
-                ☾
+                <Icon name="moon" size={24} />
               </span>
               <h3>The library is taking a moment.</h3>
               <p>{state.message}</p>
@@ -334,7 +344,7 @@ function App() {
               {visibleGames.length === 0 ? (
                 <div className="empty-panel">
                   <span className="empty-panel__icon" aria-hidden="true">
-                    ⌕
+                    <Icon name="search" size={24} />
                   </span>
                   <h3>No tables match that search.</h3>
                   <p>
@@ -364,7 +374,7 @@ function App() {
           <div className="feature-grid">
             <article className="feature-card">
               <span className="feature-card__icon" aria-hidden="true">
-                ◇
+                <Icon name="user" size={21} />
               </span>
               <h3>One identity</h3>
               <p>
@@ -374,7 +384,7 @@ function App() {
             </article>
             <article className="feature-card">
               <span className="feature-card__icon" aria-hidden="true">
-                ⚡
+                <Icon name="shield-check" size={21} />
               </span>
               <h3>Signed updates</h3>
               <p>
@@ -384,7 +394,7 @@ function App() {
             </article>
             <article className="feature-card">
               <span className="feature-card__icon" aria-hidden="true">
-                ◎
+                <Icon name="link" size={21} />
               </span>
               <h3>One invite</h3>
               <p>
@@ -398,7 +408,7 @@ function App() {
 
       <footer className="footer">
         <span className="footer__brand">
-          <span aria-hidden="true">☾</span> MoonGames
+          <Icon name="moon" size={14} strokeWidth={1.9} /> MoonGames
         </span>
         <span>
           {catalog === null

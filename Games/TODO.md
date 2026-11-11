@@ -7,7 +7,7 @@
 - [x] Chess local pass-and-play first, then online.
 - [x] Chess v1 target modes: local, online quick match, private match, AI, spectators.
 - [x] Clean MoonGames default visual style.
-- [x] Device auth for development; email/social later.
+- [x] Device guest auth plus email/password account upgrade and sign-in; social auth later.
 - [x] Local Nakama for development; VPS deployment later.
 - [x] Remote download on demand for game packages (with signed bundles and a bundled fallback).
 - [x] Original card-game branding for the Uno-style game; "Uno" is only an internal codename.
@@ -86,8 +86,14 @@
 - [ ] Build and run the React Native host with real native modules on a device.
 - [ ] End-to-end tests on Android Chrome, Flutter, and React Native, including remote update and bundled fallback.
 
-## Phase 7.5 — Games catalog and menus
+## Phase 7.5 — Accounts, catalog, and menus
 
+- [x] Add guest-to-email account upgrades that preserve rating, history, and player name.
+- [x] Add email/password sign-in with per-server session restore and sign-out isolation.
+- [x] Keep host-provided account sessions authoritative and non-managed by the game.
+- [x] Reject email credentials over public plaintext HTTP while allowing local development.
+- [ ] Add email verification and password reset when operator SMTP is configured.
+- [x] Replace Chess and launcher emoji/font-glyph icons with inline SVG icons.
 - [x] Add a versioned `games.json` catalog contract to the shared SDK.
 - [x] Generate the catalog from game manifests, planned titles, and release data.
 - [x] Expose Flutter and React Native catalog clients for custom native game panels.
@@ -104,7 +110,7 @@ hosts are file-backed and should load only the single-entry subset.
 - [ ] Add a generic platform asset-loader adapter for extracted bundles, with a secure local-origin fallback.
 - [x] Add a browser host-preview harness that sends host init/theme/session/lifecycle messages and logs outgoing bridge events.
 - [x] Keep the browser and native paths on the same built bundle and the same Nakama backend.
-- [ ] Add remaining web fallbacks for native capabilities: share, sound, haptics, URL opening, and lifecycle.
+- [x] Add remaining web fallbacks for native capabilities: share, sound, haptics, URL opening, and lifecycle.
 - [x] Add a clipboard fallback for browsers and WebViews without the Clipboard API.
 - [ ] Verify images/audio, ES modules, dynamic imports, Workers, and WASM on Android and iOS WebViews.
 - [ ] Gate asset-heavy bundles with a higher `minHostProtocol` and keep the previous compatible single-file build selectable.

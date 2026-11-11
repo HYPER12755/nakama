@@ -12,7 +12,7 @@
       "orientation": "any",
       "tags": ["cards", "social", "party"],
       "accent": "#ff6b6b",
-      "icon": "♠",
+      "icon": "cards",
       "featured": false,
       "sortOrder": 20
     },
@@ -28,7 +28,7 @@
       "orientation": "any",
       "tags": ["board", "family", "race"],
       "accent": "#9b8cff",
-      "icon": "◈",
+      "icon": "ludo",
       "featured": false,
       "sortOrder": 30
     },
@@ -44,7 +44,7 @@
       "orientation": "any",
       "tags": ["board", "precision", "classic"],
       "accent": "#48c9b0",
-      "icon": "◎",
+      "icon": "carrom",
       "featured": false,
       "sortOrder": 40
     }

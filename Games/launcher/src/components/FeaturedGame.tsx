@@ -7,6 +7,7 @@ import {
   statusLabel,
 } from "../lib/catalog";
 import { GameArt } from "./GameArt";
+import { Icon } from "./Icon";
 
 interface FeaturedGameProps {
   game: GameCatalogEntry;
@@ -46,7 +47,7 @@ export function FeaturedGame({
         <div className="featured-game__capabilities">
           {game.capabilities.map((capability) => (
             <span className="capability-chip" key={capability}>
-              <span aria-hidden="true">✦</span>
+              <Icon name="sparkle" size={11} strokeWidth={1.7} />
               {capabilityLabels[capability] ?? capability}
             </span>
           ))}
@@ -58,7 +59,8 @@ export function FeaturedGame({
               type="button"
               onClick={() => onPlay(game, url)}
             >
-              Play {game.name} <span aria-hidden="true">↗</span>
+              Play {game.name}{" "}
+              <Icon name="arrow-up-right" size={15} strokeWidth={2.2} />
             </button>
           ) : (
             <button className="button button--primary" type="button" disabled>

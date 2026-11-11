@@ -9,7 +9,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "smoke:online": "node scripts/online-smoke.mjs"
+    "smoke:online": "node scripts/online-smoke.mjs",
+    "smoke:auth": "node scripts/auth-smoke.mjs"
   },
   "dependencies": {
     "@heroiclabs/nakama-js": "^2.8.0",

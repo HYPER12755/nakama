@@ -6,6 +6,7 @@ import {
   statusLabel,
 } from "../lib/catalog";
 import { GameArt } from "./GameArt";
+import { Icon } from "./Icon";
 
 interface GameCardProps {
   game: GameCatalogEntry;
@@ -47,7 +48,11 @@ export function GameCard({
         </div>
         <div className="game-card__footer">
           <span className="game-card__players">
-            <span className="game-card__players-icon">◎</span>
+            <Icon
+              name="users"
+              size={13}
+              className="game-card__players-icon"
+            />
             {formatPlayers(game)}
           </span>
           {canLaunch ? (
@@ -56,7 +61,7 @@ export function GameCard({
               type="button"
               onClick={() => onPlay(game, url)}
             >
-              Play <span aria-hidden="true">↗</span>
+              Play <Icon name="arrow-up-right" size={13} strokeWidth={2.2} />
             </button>
           ) : (
             <span className="game-card__soon">

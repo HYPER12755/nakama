@@ -10,8 +10,10 @@ import {
   type ChessState,
   type Color,
 } from "@moongames/chess-core";
+import { AccountPanel } from "./components/AccountPanel";
 import { AiPanel } from "./components/AiPanel";
 import { ChessBoard } from "./components/ChessBoard";
+import { Icon } from "./components/Icon";
 import { GameStatus } from "./components/GameStatus";
 import { GameToolbar } from "./components/GameToolbar";
 import { ModeSwitch, type GameMode } from "./components/ModeSwitch";
@@ -527,13 +529,17 @@ export default function App({ bridge }: AppProps) {
     (online.serverState === null ||
       !online.serverState.match.started ||
       online.serverState.result !== null);
+  const showAccountPanel =
+    onlineMode &&
+    online.matchId === null &&
+    (online.connection !== "offline" || online.authBusy);
 
   return (
     <div className="app">
       <header className="app-header">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
-            ☾
+            <Icon name="moon" size={26} strokeWidth={1.7} />
           </div>
           <div>
             <p className="brand-kicker">MoonGames</p>
@@ -553,7 +559,7 @@ export default function App({ bridge }: AppProps) {
             aria-label="Toggle light and dark theme"
             title="Toggle theme"
           >
-            {theme === "dark" ? "☀" : "☾"}
+            <Icon name={theme === "dark" ? "sun" : "moon"} size={19} />
           </button>
         </div>
       </header>
@@ -636,6 +642,7 @@ export default function App({ bridge }: AppProps) {
         <aside className="sidebar">
           {onlineMode ? (
             <>
+              {showAccountPanel && <AccountPanel controller={online} />}
               <OnlinePanel controller={online} onNotify={setToast} />
               {online.serverState !== null &&
                 online.serverState.match.started && (

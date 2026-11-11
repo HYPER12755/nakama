@@ -16,6 +16,13 @@ declare module "react-native" {
   export const Linking: {
     openURL(url: string): Promise<void>;
   };
+  export const Share: {
+    share(content: {
+      title?: string;
+      message?: string;
+      url?: string;
+    }): Promise<{ action: string }>;
+  };
   export const AppState: {
     currentState: string;
     addEventListener(

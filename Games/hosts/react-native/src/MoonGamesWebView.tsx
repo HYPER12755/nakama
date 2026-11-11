@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   AppState,
   Linking,
+  Share,
   StyleSheet,
   Text,
   Vibration,
@@ -207,6 +208,22 @@ export function MoonGamesWebView({
           });
           onOpenUrl?.(parsed.url);
           break;
+        case "share": {
+          const message = [parsed.text, parsed.url]
+            .filter((part): part is string => typeof part === "string")
+            .map((part) => part.trim())
+            .filter((part) => part.length > 0)
+            .join("\n");
+          if (message.length > 0) {
+            void Share.share({
+              title: parsed.title,
+              message,
+            }).catch(() => {
+              // The user can dismiss or the OS can reject the share sheet.
+            });
+          }
+          break;
+        }
         case "analytics":
           onAnalytics?.(parsed.event, parsed.properties);
           break;

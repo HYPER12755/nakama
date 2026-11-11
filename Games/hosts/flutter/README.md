@@ -20,7 +20,7 @@ See the full [Flutter integration guide](INTEGRATION.md) and the shared
 - falls back to a ZIP and descriptor bundled in the app
 - loads the bundle in a file-backed `InAppWebView`
 - implements the shared host/game bridge, including init, launch queries,
-  theme, session, lifecycle, toast, haptic, sound, analytics, URL, and
+  theme, session, lifecycle, toast, haptic, sound, analytics, URL, share, and
   session-refresh events
 - exposes `fetchGamesCatalog` and typed catalog models so the app can render its
   own game list instead of using the web launcher
@@ -95,7 +95,8 @@ final games = catalog.availableGames();
 ```
 
 Use `GameCatalogEntry.name`, `tagline`, `description`, `icon`, `accent`, tags,
-capabilities, and player counts in your own cards. Pass the selected `id` to
+capabilities, and player counts in your own cards. `icon` is a stable key, not
+a font glyph: map it to your app's SVG or icon set. Pass the selected `id` to
 `MoonGamesHost`; keep using the signed fallback assets and release manifest for
 the actual bundle. See [the catalog guide](../../catalog/README.md).
 

@@ -49,8 +49,8 @@ The package requires Flutter 3.27 or newer.
 Copy the current signed files into the Flutter app:
 
 ```text
-assets/moongames/chess-0.4.0.bundle.json
-assets/moongames/chess-0.4.0.zip
+assets/moongames/chess-0.5.0.bundle.json
+assets/moongames/chess-0.5.0.zip
 ```
 
 Declare them in `pubspec.yaml`:
@@ -58,12 +58,12 @@ Declare them in `pubspec.yaml`:
 ```yaml
 flutter:
   assets:
-    - assets/moongames/chess-0.4.0.bundle.json
-    - assets/moongames/chess-0.4.0.zip
+    - assets/moongames/chess-0.5.0.bundle.json
+    - assets/moongames/chess-0.5.0.zip
 ```
 
 The JSON descriptor is the `.bundle.json` file from
-`Games/releases/chess/0.4.0/`. Do not create or edit it by hand.
+`Games/releases/chess/0.5.0/`. Do not create or edit it by hand.
 
 ## 3. Map the app session
 
@@ -146,8 +146,8 @@ class _ChessScreenState extends State<ChessScreen> {
           },
 
           bundledDescriptorAsset:
-              'assets/moongames/chess-0.4.0.bundle.json',
-          bundledZipAsset: 'assets/moongames/chess-0.4.0.zip',
+              'assets/moongames/chess-0.5.0.bundle.json',
+          bundledZipAsset: 'assets/moongames/chess-0.5.0.zip',
 
           locale: Localizations.localeOf(context).toLanguageTag(),
 
@@ -294,6 +294,7 @@ It also handles game-to-host events:
 | `haptic` | calls Flutter `HapticFeedback` |
 | `sound` | `onSound`; play it in the app |
 | `openUrl` | opens externally with `url_launcher` |
+| `share` | opens the platform share sheet with `share_plus` |
 | `analytics` | `onAnalytics` |
 | `requestSessionRefresh` | `onRequestSessionRefresh` |
 | `exit` | `onExit` |
@@ -336,7 +337,7 @@ Future<List<GameCatalogEntry>> loadGames() async {
 
 // Example item; wire onTap to the MoonGamesHost route from section 4.
 ListTile(
-  leading: Text(game.icon, style: const TextStyle(fontSize: 28)),
+  leading: Icon(Icons.sports_esports, size: 28), // map game.icon to your icon set
   title: Text(game.name),
   subtitle: Text(game.tagline),
   trailing: Text('${game.minPlayers}–${game.maxPlayers}'),
@@ -346,7 +347,8 @@ ListTile(
 
 `GameCatalogEntry` exposes `tagline`, `description`, `status`, `tags`,
 `capabilities`, `accent`, `icon`, `version`, `release`, `webPath`, and player
-counts. Use those fields for your own cards. Keep the signed fallback assets
+counts. `icon` is a stable key; map it to your app's SVG or icon set instead of
+rendering it as a font glyph. Use those fields for your own cards. Keep the signed fallback assets
 per game; the catalog only tells the app what to show.
 
 `openGameScreen` is the same `MoonGamesHost` route from section 4 with

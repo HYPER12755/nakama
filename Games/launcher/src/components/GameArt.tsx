@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { GameCatalogEntry } from "@moongames/game-sdk";
 import { gameCoverUrl } from "../lib/catalog";
+import { Icon, gameIconName } from "./Icon";
 
 interface GameArtProps {
   game: GameCatalogEntry;
@@ -32,7 +33,13 @@ export function GameArt({
           loading={variant === "featured" ? "eager" : "lazy"}
         />
       )}
-      <span className="game-art__glyph">{game.icon}</span>
+      <span className="game-art__glyph">
+        <Icon
+          name={gameIconName(game.icon)}
+          size={variant === "featured" ? 220 : 140}
+          strokeWidth={1.35}
+        />
+      </span>
       <span className="game-art__edge">{game.id.toUpperCase()}</span>
       {cover === null ? (
         <span className="game-art__ring" />

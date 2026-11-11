@@ -28,9 +28,9 @@ Outputs:
 ```text
 releases/
 ├── chess/
-│   └── 0.4.0/
-│       ├── chess-0.4.0.zip
-│       └── chess-0.4.0.bundle.json
+│   └── 0.5.0/
+│       ├── chess-0.5.0.zip
+│       └── chess-0.5.0.bundle.json
 └── release-manifest.json
 ```
 
@@ -108,8 +108,8 @@ emulator, or `127.0.0.1` from the iOS simulator.
 
 ```bash
 pnpm verify:bundle \
-  releases/chess/0.4.0/chess-0.4.0.bundle.json \
-  releases/chess/0.4.0/chess-0.4.0.zip \
+  releases/chess/0.5.0/chess-0.5.0.bundle.json \
+  releases/chess/0.5.0/chess-0.5.0.zip \
   --key "release-1=<base64 raw Ed25519 public key>"
 ```
 

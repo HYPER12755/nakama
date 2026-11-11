@@ -19,7 +19,7 @@ See the full [React Native integration guide](INTEGRATION.md) and the shared
 - falls back to a previously installed bundle, then to an app-bundled ZIP
 - hosts the game in `react-native-webview`
 - implements the init, launch query, theme, session, lifecycle, toast, haptic,
-  sound, URL, analytics, and session-refresh messages from `shared/sdk/`
+  sound, URL, share, analytics, and session-refresh messages from `shared/sdk/`
 - re-exports the shared games-catalog client and types for custom native game
   panels
 

@@ -1,7 +1,7 @@
 {
   "id": "chess",
   "name": "Chess",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "sdkVersion": "0.1.0",
   "entry": "index.html",
   "minPlayers": 2,
@@ -16,12 +16,12 @@
     "replay"
   ],
   "orientation": "any",
-  "description": "Standard chess with local, AI, online, private-match, spectator, invite-link, replay, fullscreen, and temporary match-chat support.",
+  "description": "Standard chess with local, AI, online, private-match, spectator, invite-link, replay, fullscreen, temporary match-chat, and email/password account support.",
   "tagline": "Classic chess. Local, AI, or rated online.",
   "status": "available",
   "tags": ["strategy", "1v1", "rated", "online", "chat"],
   "accent": "#e5b85c",
-  "icon": "♞",
+  "icon": "chess",
   "featured": true,
   "sortOrder": 10,
   "webPath": "chess/"

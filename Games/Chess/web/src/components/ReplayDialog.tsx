@@ -4,6 +4,7 @@ import type { OnlineHistoryEntry } from "../lib/onlineProtocol";
 import { exportPgn, replayFromHistory } from "../lib/replay";
 import { ChessBoard } from "./ChessBoard";
 import { GameStatus } from "./GameStatus";
+import { Icon } from "./Icon";
 
 export interface ReplayDialogProps {
   entry: OnlineHistoryEntry;
@@ -108,7 +109,7 @@ export function ReplayDialog({ entry, onClose }: ReplayDialogProps) {
             onClick={onClose}
             aria-label="Close replay"
           >
-            ×
+            <Icon name="close" size={18} />
           </button>
         </div>
 
@@ -142,7 +143,7 @@ export function ReplayDialog({ entry, onClose }: ReplayDialogProps) {
                   disabled={ply === 0}
                   aria-label="First position"
                 >
-                  |‹
+                  <Icon name="skip-back" size={15} />
                 </button>
                 <button
                   type="button"
@@ -154,7 +155,7 @@ export function ReplayDialog({ entry, onClose }: ReplayDialogProps) {
                   disabled={ply === 0}
                   aria-label="Previous move"
                 >
-                  ‹
+                  <Icon name="chevron-left" size={15} />
                 </button>
                 <button
                   type="button"
@@ -179,7 +180,7 @@ export function ReplayDialog({ entry, onClose }: ReplayDialogProps) {
                   disabled={ply === lastPly}
                   aria-label="Next move"
                 >
-                  ›
+                  <Icon name="chevron-right" size={15} />
                 </button>
                 <button
                   type="button"
@@ -191,7 +192,7 @@ export function ReplayDialog({ entry, onClose }: ReplayDialogProps) {
                   disabled={ply === lastPly}
                   aria-label="Final position"
                 >
-                  ›|
+                  <Icon name="skip-forward" size={15} />
                 </button>
               </div>
 

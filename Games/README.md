@@ -191,12 +191,15 @@ pnpm test:all
 pnpm package:chess
 pnpm release:manifest
 pnpm verify:bundle \
-  releases/chess/0.4.0/chess-0.4.0.bundle.json \
-  releases/chess/0.4.0/chess-0.4.0.zip \
+  releases/chess/0.5.0/chess-0.5.0.bundle.json \
+  releases/chess/0.5.0/chess-0.5.0.zip \
   --key "dev-1=<base64-public-key>"
 
 # End-to-end online smoke test (requires local Nakama)
 pnpm smoke:online
+
+# Email/password account flow against local Nakama
+pnpm smoke:auth
 ```
 
 `pnpm package:chess` builds Chess, creates a deterministic ZIP, signs its
@@ -206,23 +209,33 @@ CDN deployment, and pass `--key keyId=base64` to `release:manifest` and
 `verify:bundle` to pin production keys. The dev key is generated under `.keys/`
 and is ignored by git.
 
-Online development uses automatic device authentication. The browser defaults
-to Nakama at `http://<current-page-host>:7350`; the server address is editable in
-the Online panel. Production builds can set `VITE_NAKAMA_HOST`,
-`VITE_NAKAMA_PORT`, `VITE_NAKAMA_SSL`, and `VITE_NAKAMA_SERVER_KEY` at build
-time. The server key is not a secret in the same way as a database password; it
-is the public Nakama game-server key.
+Online development uses automatic guest authentication by default. The Account
+panel can create an email/password account that upgrades the current guest,
+keeping its rating and history, or sign in to an existing email account. Email
+sessions are stored per Nakama server, refreshed when the game loads, and
+cleared when they are no longer valid. Signing out returns to a fresh guest
+identity so the upgraded device does not re-enter the email account
+automatically. A host-supplied Nakama session takes precedence and is shown as
+an app-managed account. Email credentials are rejected over public plaintext
+HTTP; loopback and private-network HTTP remain available for local development.
+
+The browser defaults to Nakama at `http://<current-page-host>:7350`; the server
+address is editable in the Online panel. Production builds can set
+`VITE_NAKAMA_HOST`, `VITE_NAKAMA_PORT`, `VITE_NAKAMA_SSL`, and
+`VITE_NAKAMA_SERVER_KEY` at build time. The server key is not a secret in the
+same way as a database password; it is the public Nakama game-server key.
 
 ## Current status
 
-Phases 1–7.5 are code-complete except optional quick messages, the remaining
-browser platform-service fallbacks, and real-device build/QA validation:
+Phases 1–7.5 are code-complete except optional quick messages and real-device
+build/QA validation:
 
 - The TypeScript chess core is implemented and covered by 22 passing tests.
-- The portable web client has 20 passing tests for invite links, native launch
+- The portable web client has 26 passing tests for invite links, native launch
   contexts, Lua empty-array normalization, temporary-chat cleanup, history
   replay, tagged PGN export, bundle/manifest contracts, browser host-preview
-  messaging/session redaction, and clipboard fallback.
+  messaging/session redaction, clipboard fallback, and account validation/error
+  mapping.
 - The local web UI is playable at `http://localhost:5173/` while the Vite dev
   server is running.
 - The local UI includes an on-device AI opponent with Easy/Medium/Hard levels and
@@ -237,8 +250,10 @@ browser platform-service fallbacks, and real-device build/QA validation:
   progression module are covered by 39 additional Lua tests (8 protocol,
   23 match, 8 progression), for 60 Lua tests in total.
 - Online Chess is wired into the web UI with quick match, private match IDs,
-  device sign-in, host-supplied sessions, connection status, authoritative
-  clocks, reconnect, resign, draw offers, and server results.
+  guest sign-in, email/password accounts, host-supplied sessions, connection
+  status, authoritative clocks, reconnect, resign, draw offers, and server
+  results. Email accounts upgrade the current guest by default, preserving
+  rating and history, and use Nakama's built-in email authentication.
 - Quick match first uses Nakama's atomic matchmaker for players searching at
   the same time. If no partner appears within five seconds, it opens a
   persistent quick table so a player arriving later can join. The search UI
@@ -269,6 +284,13 @@ browser platform-service fallbacks, and real-device build/QA validation:
   host session token injection, logs outgoing bridge events with tokens
   redacted, and keeps online play on the browser device-auth fallback. PGN and
   invite copying use a Clipboard API + selection fallback for WebViews.
+- Browser fallbacks cover lifecycle pause/resume, haptics, sound events, safe
+  external URLs, and native/Web Share with a clipboard fallback. Flutter and
+  React Native hosts handle the same bridge events through their platform
+  services.
+- Chess and the launcher use inline SVG icons throughout instead of emoji or
+  font-glyph controls, with custom game artwork for Chess, cards, Ludo, and
+  Carrom.
 - Bundle tooling produces deterministic signed ZIPs, Ed25519 descriptors, and a
   release manifest. Tool tests cover ZIP determinism, traversal rejection,
   signing-payload stability, signature/tamper detection, semver ordering,
@@ -277,7 +299,7 @@ browser platform-service fallbacks, and real-device build/QA validation:
   fetches over HTTP, and gives Flutter/React Native typed models for custom game
   panels. It is covered by 3 host-core tests.
 - A responsive browser launcher reads the same catalog and renders search,
-  filters, a featured game, themed cards, and coming-soon titles. Its 8 tests
+  filters, a featured game, themed cards, and coming-soon titles. Its 11 tests
   cover catalog helpers and the native launch bridge, and it builds together
   with Chess as a deployable static web app.
 - `@moongames/host-core` verifies sizes, SHA-256 digests, and Ed25519 signatures
@@ -301,11 +323,11 @@ browser platform-service fallbacks, and real-device build/QA validation:
   agreement, casual/rated persistence, Elo changes, history, and leaderboard
   records.
 
-Current local automation: 22 core + 20 web + 8 host-core + 8 launcher
-TypeScript tests, 8 tool tests, and 60 Lua tests (126 passing tests total,
+Current local automation: 22 core + 26 web + 8 host-core + 11 launcher
+TypeScript tests, 8 tool tests, and 60 Lua tests (135 passing tests total,
 excluding the Flutter tests that require the Flutter SDK). Manual browser QA of
-the catalog menu, AI, spectator, invite, replay, fullscreen board, chat, and
-online/profile flows, plus Android Chrome/Flutter/React Native device testing,
-is still required.
+the catalog menu, AI, spectator, invite, replay, fullscreen board, chat,
+account, and online/profile flows, plus Android Chrome/Flutter/React Native
+device testing, is still required.
 
 Optional quick messages are tracked in `TODO.md`.

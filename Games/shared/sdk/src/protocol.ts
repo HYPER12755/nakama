@@ -10,13 +10,27 @@ export type HostToGameMessage =
   | { type: "theme"; theme: GameTheme }
   | { type: "session"; session: GameSession };
 
+export type HapticPattern =
+  | "light"
+  | "medium"
+  | "heavy"
+  | "success"
+  | "error";
+
+export interface GameSharePayload {
+  title?: string;
+  text?: string;
+  url?: string;
+}
+
 export type GameToHostMessage =
   | { type: "ready"; gameId: string; version: string }
   | { type: "exit"; reason?: string }
   | { type: "toast"; message: string; level?: "info" | "success" | "error" }
-  | { type: "haptic"; pattern: "light" | "medium" | "heavy" | "success" | "error" }
+  | { type: "haptic"; pattern: HapticPattern }
   | { type: "sound"; name: string }
   | { type: "openUrl"; url: string }
+  | ({ type: "share" } & GameSharePayload)
   | { type: "analytics"; event: string; properties?: Record<string, unknown> }
   | { type: "requestSessionRefresh" };
 

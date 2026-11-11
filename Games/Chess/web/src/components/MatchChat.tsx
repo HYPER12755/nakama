@@ -5,6 +5,7 @@ import {
   type FormEvent,
 } from "react";
 import type { OnlineChatMessage } from "../lib/onlineProtocol";
+import { Icon } from "./Icon";
 
 export interface MatchChatProps {
   matchId: string | null;
@@ -155,7 +156,7 @@ export function MatchChat({
               onClick={() => setOpen(false)}
               aria-label="Close match chat"
             >
-              ×
+              <Icon name="close" size={17} />
             </button>
           </header>
 
@@ -240,7 +241,7 @@ export function MatchChat({
         aria-label={open ? "Close match chat" : "Open match chat"}
         title={open ? "Close match chat" : "Match chat"}
       >
-        {open ? <span aria-hidden="true">×</span> : <ChatIcon />}
+        {open ? <Icon name="close" size={19} /> : <ChatIcon />}
         {unread > 0 && (
           <span className="chat-launcher__badge" aria-label={`${unread} unread messages`}>
             {unread > 9 ? "9+" : unread}

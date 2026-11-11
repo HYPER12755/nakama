@@ -14,7 +14,7 @@ Publish `games.json` beside the release manifest:
 ```text
 https://games.example.com/moongames/games.json
 https://games.example.com/moongames/release-manifest.json
-https://games.example.com/moongames/chess/0.4.0/chess-0.4.0.zip
+https://games.example.com/moongames/chess/0.5.0/chess-0.5.0.zip
 ```
 
 Both files are generated in `Games/releases/` and can be uploaded together. Use
@@ -65,7 +65,7 @@ ListView(
   children: [
     for (final game in catalog.availableGames())
       ListTile(
-        leading: Text(game.icon, style: const TextStyle(fontSize: 28)),
+        leading: Icon(Icons.sports_esports, size: 28), // map game.icon to your icon set
         title: Text(game.name),
         subtitle: Text(game.tagline),
         trailing: Text('${game.minPlayers}–${game.maxPlayers}'),
@@ -109,7 +109,7 @@ The React Native host re-exports the catalog types and helpers from
       "tagline": "Classic chess. Local, AI, or rated online.",
       "description": "Standard chess with local, AI, online, ...",
       "status": "available",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "minPlayers": 2,
       "maxPlayers": 2,
       "capabilities": ["local", "ai", "online"],
@@ -121,11 +121,11 @@ The React Native host re-exports the catalog types and helpers from
       "sortOrder": 10,
       "webPath": "chess/",
       "release": {
-        "version": "0.4.0",
+        "version": "0.5.0",
         "minHostProtocol": 1,
-        "publishedAt": "2026-11-11T13:49:54.224Z",
-        "sha256": "bd2f45753fdb6d37030f0bbb5336ae76b3b52bec01291fd0e5589e6df83f6750",
-        "size": 127830,
+        "publishedAt": "2026-11-11T14:41:25.211Z",
+        "sha256": "64882868dde92f962b5451779cc570e0998e098ecfc68cac317a5ee7f34fa77a",
+        "size": 133699,
         "keyId": "dev-1"
       }
     }
@@ -143,7 +143,7 @@ The React Native host re-exports the catalog types and helpers from
 | `minPlayers`, `maxPlayers` | Playable player-count range. |
 | `capabilities` | Shared capability names such as `local`, `ai`, `online`, `spectators`, `invite-links`, `replay`. |
 | `orientation` | `portrait`, `landscape`, or `any`. Hosts may ignore it until they support locking. |
-| `tags`, `accent`, `icon`, `featured`, `sortOrder` | Menu presentation hints. |
+| `tags`, `accent`, `icon`, `featured`, `sortOrder` | Menu presentation hints. `icon` is a stable key such as `chess`; map it to your app's SVG or icon set instead of rendering it as text. |
 | `webPath` | Browser-only path relative to the catalog URL. Do not use as a native bundle URL. |
 | `cover`, `screenshots` | Optional artwork paths/URLs for richer menus. Today these are empty unless a game manifest supplies them. |
 

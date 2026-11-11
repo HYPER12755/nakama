@@ -14,6 +14,21 @@ import type {
   Square,
 } from "@moongames/chess-core";
 import {
+  authErrorDetail,
+  authErrorMessage,
+  clearStoredEmailSession,
+  consumeGuestIdentityLinked,
+  emailAuthTransportSafe,
+  markGuestIdentityLinked,
+  normalizeEmail,
+  readStoredEmailSession,
+  storeEmailSession,
+  validateEmail,
+  validatePassword,
+  validateUsername,
+  type OnlineAuthAccount,
+} from "../lib/auth";
+import {
   ONLINE_OP,
   TIME_CONTROLS,
   clockForColor,
@@ -52,6 +67,18 @@ export interface PendingOnlinePromotion {
 export interface OnlineChessController {
   connection: OnlineConnectionStatus;
   session: OnlineSessionInfo | null;
+  account: OnlineAuthAccount | null;
+  authBusy: boolean;
+  authError: string | null;
+  authNotice: string | null;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    username?: string,
+  ) => Promise<void>;
+  signOut: () => Promise<void>;
+  clearAuthFeedback: () => void;
   serverAddress: string;
   setServerAddress: (value: string) => void;
   timeControlId: string;
@@ -162,6 +189,46 @@ function getDeviceId(): string {
   return created;
 }
 
+function rotateGuestDeviceId(): void {
+  try {
+    window.localStorage.removeItem(DEVICE_ID_KEY);
+  } catch {
+    // Storage can be unavailable.
+  }
+}
+
+async function resolveAccountIdentity(
+  client: Client,
+  activeSession: Session,
+  kind: OnlineAuthAccount["kind"],
+  email: string | null,
+): Promise<OnlineAuthAccount> {
+  let accountInfo: Awaited<ReturnType<Client["getAccount"]>> | null = null;
+  try {
+    accountInfo = await client.getAccount(activeSession);
+  } catch {
+    // The socket is already authenticated. A profile read failure must not
+    // reject an otherwise valid sign-in.
+  }
+
+  const accountEmail =
+    typeof accountInfo?.email === "string" && accountInfo.email.length > 0
+      ? accountInfo.email
+      : email;
+  const effectiveKind =
+    kind === "guest" && accountEmail !== null ? "email" : kind;
+
+  return {
+    kind: effectiveKind,
+    userId: activeSession.user_id ?? "",
+    username:
+      accountInfo?.user?.username ??
+      activeSession.username ??
+      (accountEmail ?? "Player"),
+    email: accountEmail,
+  };
+}
+
 function decodeMatchData(data: Uint8Array | string): unknown {
   if (typeof data === "string") {
     return JSON.parse(data);
@@ -218,6 +285,10 @@ export function useOnlineChess(
   const [connection, setConnection] =
     useState<OnlineConnectionStatus>("offline");
   const [session, setSession] = useState<OnlineSessionInfo | null>(null);
+  const [account, setAccount] = useState<OnlineAuthAccount | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [serverAddress, setServerAddressState] = useState<string>(() => {
     return readStorage(SERVER_ADDRESS_KEY) ?? defaultServerAddress();
   });
@@ -251,6 +322,10 @@ export function useOnlineChess(
   const hostConfigRef = useRef<GameHostConfig | null>(hostConfig ?? null);
   const serverAddressTouchedRef = useRef(false);
   const connectPromiseRef = useRef<Promise<void> | null>(null);
+  const pendingEmailAuthRef = useRef<{
+    email: string;
+    password: string;
+  } | null>(null);
   const matchmakerRef = useRef<PendingMatchmaker | null>(null);
   const matchmakingActiveRef = useRef(false);
   const matchmakingRunRef = useRef(0);
@@ -473,6 +548,10 @@ export function useOnlineChess(
     failPendingMatchmaker("Disconnected while searching for a match.");
     const socket = socketRef.current;
     if (socket !== null) {
+      socket.onmatchdata = () => undefined;
+      socket.onmatchmakermatched = () => undefined;
+      socket.onerror = () => undefined;
+      socket.ondisconnect = () => undefined;
       try {
         socket.disconnect(false);
       } catch {
@@ -485,6 +564,9 @@ export function useOnlineChess(
     sessionRef.current = null;
     setConnection("offline");
     setSession(null);
+    setAccount(null);
+    setAuthError(null);
+    setAuthNotice(null);
     setServerState(null);
     setMatchId(null);
     matchIdRef.current = null;
@@ -528,20 +610,83 @@ export function useOnlineChess(
           address.port,
           address.useSSL,
         );
-        const restored = hostSession(activeHost);
+        const storedEmail = readStoredEmailSession(address.label);
+        const pendingEmail = pendingEmailAuthRef.current;
+        pendingEmailAuthRef.current = null;
+        const restoredHost = hostSession(activeHost);
         let sessionResult: Session;
-        if (restored !== null) {
-          sessionResult = restored;
+        let authSource: OnlineAuthAccount["kind"];
+        let authEmail: string | null = null;
+
+        if (restoredHost !== null) {
+          sessionResult = restoredHost;
+          authSource = "host";
           const now = Date.now() / 1000;
           if (
-            restored.isexpired(now) &&
-            !restored.isrefreshexpired(now) &&
-            restored.refresh_token.length > 0
+            restoredHost.isexpired(now) &&
+            !restoredHost.isrefreshexpired(now) &&
+            restoredHost.refresh_token.length > 0
           ) {
-            sessionResult = await client.sessionRefresh(restored);
+            sessionResult = await client.sessionRefresh(restoredHost);
           }
+        } else if (pendingEmail !== null) {
+          sessionResult = await client.authenticateEmail(
+            pendingEmail.email,
+            pendingEmail.password,
+            false,
+          );
+          authSource = "email";
+          authEmail = pendingEmail.email;
         } else {
-          sessionResult = await client.authenticateDevice(getDeviceId(), true);
+          let restoredEmail: Session | null = null;
+          if (storedEmail !== null) {
+            try {
+              const candidate = Session.restore(
+                storedEmail.token,
+                storedEmail.refreshToken,
+              );
+              const now = Date.now() / 1000;
+              restoredEmail =
+                candidate.isexpired(now) &&
+                !candidate.isrefreshexpired(now) &&
+                candidate.refresh_token.length > 0
+                  ? await client.sessionRefresh(candidate)
+                  : candidate;
+              if (restoredEmail.isexpired(Date.now() / 1000)) {
+                throw new Error("The saved session has expired.");
+              }
+            } catch {
+              clearStoredEmailSession();
+              restoredEmail = null;
+            }
+          }
+
+          if (restoredEmail !== null) {
+            try {
+              await client.getAccount(restoredEmail);
+            } catch (cause) {
+              if (
+                typeof Response !== "undefined" &&
+                cause instanceof Response &&
+                (cause.status === 401 || cause.status === 403)
+              ) {
+                clearStoredEmailSession();
+                restoredEmail = null;
+              }
+            }
+          }
+
+          if (restoredEmail !== null) {
+            sessionResult = restoredEmail;
+            authSource = "email";
+            authEmail = storedEmail?.email ?? null;
+          } else {
+            sessionResult = await client.authenticateDevice(
+              getDeviceId(),
+              true,
+            );
+            authSource = "guest";
+          }
         }
         const socket = client.createSocket(address.useSSL, false);
 
@@ -569,6 +714,7 @@ export function useOnlineChess(
           clientRef.current = null;
           sessionRef.current = null;
           setConnection("offline");
+          setAccount(null);
           setProfileLoading(false);
           setError("Disconnected from the server. Reconnect to resume.");
         };
@@ -579,9 +725,26 @@ export function useOnlineChess(
         sessionRef.current = sessionResult;
         socketRef.current = socket;
 
+        const resolvedAccount = await resolveAccountIdentity(
+          client,
+          sessionResult,
+          authSource,
+          authEmail,
+        );
+        setAccount(resolvedAccount);
+        setAuthError(null);
+        if (authSource === "email" && resolvedAccount.email !== null) {
+          storeEmailSession({
+            server: address.label,
+            email: resolvedAccount.email,
+            token: sessionResult.token,
+            refreshToken: sessionResult.refresh_token,
+          });
+        }
+
         setSession({
-          userId: sessionResult.user_id ?? "",
-          username: sessionResult.username ?? "Player",
+          userId: resolvedAccount.userId,
+          username: resolvedAccount.username,
         });
         setConnection("connected");
 
@@ -644,6 +807,224 @@ export function useOnlineChess(
       }
     };
   }, []);
+
+  const clearAuthFeedback = useCallback(() => {
+    setAuthError(null);
+    setAuthNotice(null);
+  }, []);
+
+  const signIn = useCallback(
+    async (email: string, password: string): Promise<void> => {
+      setAuthError(null);
+      setAuthNotice(null);
+
+      if (hostSession(hostConfigRef.current) !== null) {
+        setAuthError("This account is managed by the MoonGames app.");
+        return;
+      }
+      if (matchIdRef.current !== null) {
+        setAuthError("Leave the current match before switching accounts.");
+        return;
+      }
+      const emailError = validateEmail(email);
+      if (emailError !== null) {
+        setAuthError(emailError);
+        return;
+      }
+      if (password.length === 0) {
+        setAuthError("Enter your password.");
+        return;
+      }
+
+      let address: ReturnType<typeof parseServerAddress>;
+      try {
+        address = parseServerAddress(
+          hostServerAddress(hostConfigRef.current) ?? serverAddress,
+        );
+      } catch {
+        setAuthError("Enter a valid server address.");
+        return;
+      }
+      if (!emailAuthTransportSafe(address.host, address.useSSL)) {
+        setAuthError(
+          "Email sign-in requires HTTPS. Use a secure server address.",
+        );
+        return;
+      }
+
+      setAuthBusy(true);
+      try {
+        if (socketRef.current !== null) {
+          disconnect();
+        }
+        pendingEmailAuthRef.current = {
+          email: normalizeEmail(email),
+          password,
+        };
+        await connect();
+        setAuthNotice("Signed in. Your rating and history are now synced.");
+      } catch (cause) {
+        pendingEmailAuthRef.current = null;
+        setAuthError(
+          authErrorMessage(await authErrorDetail(cause), "sign-in"),
+        );
+      } finally {
+        setAuthBusy(false);
+      }
+    },
+    [connect, disconnect, serverAddress],
+  );
+
+  const signUp = useCallback(
+    async (
+      email: string,
+      password: string,
+      username = "",
+    ): Promise<void> => {
+      setAuthError(null);
+      setAuthNotice(null);
+
+      if (hostSession(hostConfigRef.current) !== null) {
+        setAuthError("This account is managed by the MoonGames app.");
+        return;
+      }
+      if (matchIdRef.current !== null) {
+        setAuthError("Leave the current match before changing accounts.");
+        return;
+      }
+      const emailError = validateEmail(email);
+      if (emailError !== null) {
+        setAuthError(emailError);
+        return;
+      }
+      const passwordError = validatePassword(password);
+      if (passwordError !== null) {
+        setAuthError(passwordError);
+        return;
+      }
+      const trimmedUsername = username.trim();
+      const usernameError = validateUsername(trimmedUsername);
+      if (usernameError !== null) {
+        setAuthError(usernameError);
+        return;
+      }
+
+      let address: ReturnType<typeof parseServerAddress>;
+      try {
+        address = parseServerAddress(
+          hostServerAddress(hostConfigRef.current) ?? serverAddress,
+        );
+      } catch {
+        setAuthError("Enter a valid server address.");
+        return;
+      }
+      if (!emailAuthTransportSafe(address.host, address.useSSL)) {
+        setAuthError(
+          "Account creation requires HTTPS. Use a secure server address.",
+        );
+        return;
+      }
+
+      const normalizedEmail = normalizeEmail(email);
+      let linked = false;
+      let usernameWarning = false;
+      setAuthBusy(true);
+      try {
+        if (socketRef.current === null) {
+          await connect();
+        }
+        const client = clientRef.current;
+        const currentSession = sessionRef.current;
+        if (client === null || currentSession === null) {
+          throw new Error("Could not establish a guest session.");
+        }
+
+        const currentAccount = await client.getAccount(currentSession);
+        if (currentAccount.email) {
+          setAuthError("You are already signed in with an email account.");
+          return;
+        }
+
+        await client.linkEmail(currentSession, {
+          email: normalizedEmail,
+          password,
+        });
+        linked = true;
+        markGuestIdentityLinked();
+
+        if (trimmedUsername.length > 0) {
+          try {
+            await client.updateAccount(currentSession, {
+              username: trimmedUsername,
+            });
+          } catch {
+            // The account is still created; the generated name is used.
+            usernameWarning = true;
+          }
+        }
+
+        pendingEmailAuthRef.current = {
+          email: normalizedEmail,
+          password,
+        };
+        disconnect();
+        await connect();
+        if (consumeGuestIdentityLinked()) {
+          rotateGuestDeviceId();
+        }
+        setAuthNotice(
+          usernameWarning
+            ? "Account created. That player name was unavailable, so your existing account name was kept."
+            : "Account created. Your progress will follow you.",
+        );
+      } catch (cause) {
+        pendingEmailAuthRef.current = null;
+        setAuthError(
+          linked
+            ? "Your account was created, but sign-in did not finish. Try signing in with your email."
+            : authErrorMessage(await authErrorDetail(cause), "sign-up"),
+        );
+      } finally {
+        setAuthBusy(false);
+      }
+    },
+    [connect, disconnect, serverAddress],
+  );
+
+  const signOut = useCallback(async (): Promise<void> => {
+    setAuthError(null);
+    setAuthNotice(null);
+
+    if (account?.kind === "host") {
+      setAuthError("This account is managed by the MoonGames app.");
+      return;
+    }
+    if (account?.kind !== "email") {
+      setAuthError("You are already playing as a guest.");
+      return;
+    }
+    if (matchIdRef.current !== null) {
+      setAuthError("Leave the current match before signing out.");
+      return;
+    }
+
+    setAuthBusy(true);
+    try {
+      clearStoredEmailSession();
+      if (consumeGuestIdentityLinked()) {
+        rotateGuestDeviceId();
+      }
+      if (socketRef.current !== null) {
+        disconnect();
+      }
+      await connect();
+      setAuthNotice("Signed out. You are playing as a guest.");
+    } catch (cause) {
+      setAuthError(authErrorMessage(await authErrorDetail(cause), "sign-in"));
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [account?.kind, connect, disconnect]);
 
   useEffect(() => {
     if (connection !== "connected" || session === null) {
@@ -1244,6 +1625,14 @@ export function useOnlineChess(
   return {
     connection,
     session,
+    account,
+    authBusy,
+    authError,
+    authNotice,
+    signIn,
+    signUp,
+    signOut,
+    clearAuthFeedback,
     serverAddress,
     setServerAddress,
     timeControlId,

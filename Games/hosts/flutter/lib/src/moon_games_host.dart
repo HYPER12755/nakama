@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'bundle_manager.dart';
@@ -263,6 +264,9 @@ class _MoonGamesHostState extends State<MoonGamesHost>
           unawaited(_openUrl(url));
         }
         break;
+      case 'share':
+        unawaited(_share(message));
+        break;
       case 'analytics':
         final properties = message['properties'];
         widget.onAnalytics?.call(
@@ -309,6 +313,33 @@ class _MoonGamesHostState extends State<MoonGamesHost>
       case 'error':
         await HapticFeedback.heavyImpact();
         break;
+    }
+  }
+
+  Future<void> _share(Map<String, dynamic> message) async {
+    final text = [message['text'], message['url']]
+        .whereType<String>()
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .join('\n');
+    if (text.isEmpty) {
+      return;
+    }
+    final title = (message['title'] as String?)?.trim();
+    final box = context.findRenderObject();
+    final origin = box is RenderBox
+        ? box.localToGlobal(Offset.zero) & box.size
+        : null;
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          title: title == null || title.isEmpty ? null : title,
+          text: text,
+          sharePositionOrigin: origin,
+        ),
+      );
+    } catch (error) {
+      debugPrint('[MoonGames] Could not open the share sheet: $error');
     }
   }
 

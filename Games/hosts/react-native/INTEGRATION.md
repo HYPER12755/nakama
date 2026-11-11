@@ -88,18 +88,18 @@ Fast Refresh alone is not enough after adding these native modules.
 Place the signed ZIP at:
 
 ```text
-android/app/src/main/assets/moongames/chess-0.4.0.zip
+android/app/src/main/assets/moongames/chess-0.5.0.zip
 ```
 
 The path passed to `RNFS.readFileAssets` is relative to `assets/`:
 
 ```text
-moongames/chess-0.4.0.zip
+moongames/chess-0.5.0.zip
 ```
 
 ### iOS
 
-Add `chess-0.4.0.zip` to the Xcode target's **Copy Bundle Resources**. The
+Add `chess-0.5.0.zip` to the Xcode target's **Copy Bundle Resources**. The
 file will then be available under `RNFS.MainBundlePath`.
 
 ### Descriptor
@@ -107,7 +107,7 @@ file will then be available under `RNFS.MainBundlePath`.
 Put the descriptor JSON in the JS project:
 
 ```text
-src/assets/moongames/chess-0.4.0.bundle.json
+src/assets/moongames/chess-0.5.0.bundle.json
 ```
 
 When Metro/TypeScript supports JSON imports, import it directly. Otherwise use
@@ -122,11 +122,11 @@ validated descriptor object.
 import { Platform } from "react-native";
 import RNFS from "react-native-fs";
 import type { BundledFallback } from "@moongames/react-native-host";
-import descriptor from "../assets/moongames/chess-0.4.0.bundle.json";
+import descriptor from "../assets/moongames/chess-0.5.0.bundle.json";
 
 export async function prepareBundledFallback(): Promise<BundledFallback> {
   const directory = `${RNFS.DocumentDirectoryPath}/moongames-bundled`;
-  const zipPath = `${directory}/chess-0.4.0.zip`;
+  const zipPath = `${directory}/chess-0.5.0.zip`;
 
   if (!(await RNFS.exists(directory))) {
     await RNFS.mkdir(directory);
@@ -135,13 +135,13 @@ export async function prepareBundledFallback(): Promise<BundledFallback> {
   if (!(await RNFS.exists(zipPath))) {
     if (Platform.OS === "android") {
       const base64 = await RNFS.readFileAssets(
-        "moongames/chess-0.4.0.zip",
+        "moongames/chess-0.5.0.zip",
         "base64",
       );
       await RNFS.writeFile(zipPath, base64, "base64");
     } else {
       await RNFS.copyFile(
-        `${RNFS.MainBundlePath}/chess-0.4.0.zip`,
+        `${RNFS.MainBundlePath}/chess-0.5.0.zip`,
         zipPath,
       );
     }
@@ -406,10 +406,11 @@ use a debug-only ATS exception. Do not ship arbitrary `NSAllowsArbitraryLoads`.
 - manifest resolution, pinned-key verification, signature/SHA verification
 - remote install, cache, downgrade rejection, and bundled fallback
 - `init`, theme, session, and lifecycle messages
-- `ready`, `exit`, `toast`, `haptic`, `sound`, `openUrl`, analytics, and
-  session-refresh events
+- `ready`, `exit`, `toast`, `haptic`, `sound`, `openUrl`, `share`, analytics,
+  and session-refresh events
 - haptics through React Native `Vibration`
 - external URLs through `Linking.openURL`
+- share sheets through React Native `Share`
 - pause/resume through React Native `AppState`
 
 Your app provides the toast UI, sound playback, analytics sink, and refreshed

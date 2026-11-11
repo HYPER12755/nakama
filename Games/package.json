@@ -18,6 +18,7 @@
     "test:tools": "node --test tools/test/*.test.mjs",
     "test:all": "pnpm test && pnpm test:lua && pnpm test:tools",
     "smoke:online": "pnpm --filter @moongames/chess-web smoke:online",
+    "smoke:auth": "pnpm --filter @moongames/chess-web smoke:auth",
     "sync:server": "bash tools/sync-nakama-modules.sh",
     "package:chess": "node tools/package-game.mjs --game chess",
     "release:manifest": "node tools/release-manifest.mjs",
