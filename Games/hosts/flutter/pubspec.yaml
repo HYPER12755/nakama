@@ -1,0 +1,25 @@
+name: moongames_host
+description: Generic Flutter host for signed MoonGames web bundles.
+version: 0.1.0
+publish_to: "none"
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+  flutter: ">=3.27.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  archive: ^4.6.0
+  crypto: ^3.0.8
+  cryptography: ^2.9.0
+  flutter_inappwebview: ^6.1.5
+  http: ^1.6.0
+  path: ^1.9.1
+  path_provider: ^2.1.6
+  url_launcher: ^6.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

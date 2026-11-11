@@ -1,0 +1,9 @@
+packages:
+  - "shared/*"
+  - "Chess/*"
+  - "launcher"
+  - "hosts/*"
+
+allowBuilds:
+  '@scarf/scarf': false
+  esbuild: true

@@ -1,0 +1,52 @@
+{
+  "games": [
+    {
+      "id": "cards",
+      "name": "Card Game",
+      "tagline": "A fresh social card game built around color, numbers, and bold choices.",
+      "description": "An original MoonGames card game for quick online and local rounds. The final name, artwork, and rules will be announced when the game enters preview.",
+      "status": "coming-soon",
+      "minPlayers": 2,
+      "maxPlayers": 8,
+      "capabilities": [],
+      "orientation": "any",
+      "tags": ["cards", "social", "party"],
+      "accent": "#ff6b6b",
+      "icon": "♠",
+      "featured": false,
+      "sortOrder": 20
+    },
+    {
+      "id": "ludo",
+      "name": "Ludo",
+      "tagline": "Race, block, and roll your way home.",
+      "description": "The classic four-player race with a MoonGames table, private rooms, and relaxed online play. In development.",
+      "status": "coming-soon",
+      "minPlayers": 2,
+      "maxPlayers": 4,
+      "capabilities": [],
+      "orientation": "any",
+      "tags": ["board", "family", "race"],
+      "accent": "#9b8cff",
+      "icon": "◈",
+      "featured": false,
+      "sortOrder": 30
+    },
+    {
+      "id": "carrom",
+      "name": "Carrom",
+      "tagline": "A precision board game of angles, pockets, and clever shots.",
+      "description": "A tactile carrom table designed for touch and mouse play, with local and online matches planned. In development.",
+      "status": "coming-soon",
+      "minPlayers": 2,
+      "maxPlayers": 4,
+      "capabilities": [],
+      "orientation": "any",
+      "tags": ["board", "precision", "classic"],
+      "accent": "#48c9b0",
+      "icon": "◎",
+      "featured": false,
+      "sortOrder": 40
+    }
+  ]
+}

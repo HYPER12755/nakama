@@ -1,0 +1,31 @@
+{
+  "name": "moongames",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Portable MoonGames game packages sharing one Nakama backend.",
+  "packageManager": "pnpm@12.19.0",
+  "scripts": {
+    "dev:chess": "pnpm --filter @moongames/chess-web dev",
+    "build:chess": "pnpm --filter @moongames/chess-web build",
+    "preview:chess": "pnpm --filter @moongames/chess-web preview",
+    "dev:web": "pnpm catalog:generate && pnpm --filter @moongames/launcher dev",
+    "build:web": "pnpm build:chess && pnpm catalog:generate && pnpm --filter @moongames/launcher build && node tools/assemble-web.mjs",
+    "preview:web": "pnpm --filter @moongames/launcher preview",
+    "serve:releases": "node tools/serve-releases.mjs",
+    "catalog:generate": "node tools/generate-catalog.mjs --public launcher/public",
+    "test": "pnpm -r --if-present test",
+    "test:lua": "lua Chess/server/test/chess_rules_test.lua && lua Chess/server/test/chess_protocol_test.lua && lua Chess/server/test/chess_match_test.lua && lua Chess/server/test/chess_profile_test.lua",
+    "test:tools": "node --test tools/test/*.test.mjs",
+    "test:all": "pnpm test && pnpm test:lua && pnpm test:tools",
+    "smoke:online": "pnpm --filter @moongames/chess-web smoke:online",
+    "sync:server": "bash tools/sync-nakama-modules.sh",
+    "package:chess": "node tools/package-game.mjs --game chess",
+    "release:manifest": "node tools/release-manifest.mjs",
+    "verify:bundle": "node tools/verify-bundle.mjs",
+    "key:generate": "node tools/generate-signing-key.mjs",
+    "typecheck": "pnpm -r --if-present typecheck"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

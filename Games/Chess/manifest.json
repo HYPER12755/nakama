@@ -1,0 +1,28 @@
+{
+  "id": "chess",
+  "name": "Chess",
+  "version": "0.3.0",
+  "sdkVersion": "0.1.0",
+  "entry": "index.html",
+  "minPlayers": 2,
+  "maxPlayers": 2,
+  "capabilities": [
+    "local",
+    "ai",
+    "online",
+    "private-match",
+    "spectators",
+    "invite-links",
+    "replay"
+  ],
+  "orientation": "any",
+  "description": "Standard chess with local, AI, online, private-match, spectator, invite-link, and replay support.",
+  "tagline": "Classic chess. Local, AI, or rated online.",
+  "status": "available",
+  "tags": ["strategy", "1v1", "rated", "online"],
+  "accent": "#e5b85c",
+  "icon": "♞",
+  "featured": true,
+  "sortOrder": 10,
+  "webPath": "chess/"
+}

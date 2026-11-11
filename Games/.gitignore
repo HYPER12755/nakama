@@ -1,0 +1,14 @@
+node_modules/
+.vite/
+runtime/
+.keys/
+releases/
+Chess/dist/
+Chess/releases/
+launcher/dist/
+launcher/public/games.json
+.dart_tool/
+hosts/flutter/build/
+hosts/flutter/pubspec.lock
+*.log
+*.pid
