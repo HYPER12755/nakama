@@ -274,7 +274,11 @@ The browser defaults to Nakama at `http://<current-page-host>:7350`; the server
 address is editable in the Online panel. Production builds can set
 `VITE_NAKAMA_HOST`, `VITE_NAKAMA_PORT`, `VITE_NAKAMA_SSL`, and
 `VITE_NAKAMA_SERVER_KEY` at build time. The server key is not a secret in the
-same way as a database password; it is the public Nakama game-server key.
+same way as a database password; it is the public Nakama game-server key. The
+launcher build also accepts `VITE_MOONGAMES_TRUSTED_KEYS` (pinned
+`keyId=publicKey` pairs) and `VITE_RELEASE_MANIFEST_URL`; see
+[launcher/README.md](launcher/README.md). Replace the development signer before
+public deployment.
 
 ## Current status
 

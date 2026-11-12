@@ -40,11 +40,29 @@ VITE_GAMES_CATALOG_URL=https://games.example.com/moongames/games.json \
 
 ## Production build
 
+Set the production server and pinned release keys at build time:
+
 ```bash
 cd Games
-pnpm build:web
+VITE_MOONGAMES_TRUSTED_KEYS='release-1=<base64 raw Ed25519 public key>' \
+VITE_NAKAMA_HOST=nakama.example.com \
+VITE_NAKAMA_PORT=443 \
+VITE_NAKAMA_SSL=true \
+VITE_NAKAMA_SERVER_KEY=defaultkey \
+  pnpm build:web
 pnpm preview:web
 ```
+
+`VITE_MOONGAMES_TRUSTED_KEYS` accepts comma- or whitespace-separated
+`keyId=publicKey` pairs. Without it, the launcher falls back to the development
+key `dev-1`; replace that key before public deployment. The release manifest
+defaults to `release-manifest.json` beside the launcher page. Override it with
+`VITE_RELEASE_MANIFEST_URL` when the signed manifest is hosted elsewhere. If
+verification is unavailable, games still open with their independent auth and
+do not show the verified badge.
+
+The launcher account uses the same `VITE_NAKAMA_*` values as the games. Keep
+those builds on one Nakama server; an email identity is unique per server.
 
 `build:web`:
 
