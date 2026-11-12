@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from "react";
+import type { SocialFriend } from "@moongames/game-sdk";
 import type { OnlineChessController } from "../hooks/useOnlineChess";
 import { copyText } from "../lib/clipboard";
 import { buildMatchInviteUrl } from "../lib/invite";
 import { TIME_CONTROLS, formatClock } from "../lib/onlineProtocol";
+import { FriendInviteDialog } from "./FriendInviteDialog";
 
 export interface OnlinePanelProps {
   controller: OnlineChessController;
@@ -30,6 +32,11 @@ function resultText(controller: OnlineChessController): string {
 export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
   const [joinId, setJoinId] = useState("");
   const [joinAsSpectator, setJoinAsSpectator] = useState(false);
+  const [creatingPrivate, setCreatingPrivate] = useState(false);
+  const [inviteTarget, setInviteTarget] = useState<{
+    matchId: string;
+    spectate: boolean;
+  } | null>(null);
   const {
     connection,
     session,
@@ -46,7 +53,17 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
     drawOffer,
     matchmaking,
     matchmakingSeconds,
+    friends,
+    friendsLoading,
+    friendsError,
+    inviteSendingId,
+    inviteError,
+    inviteNotice,
+    loadFriends,
+    clearInviteFeedback,
+    inviteFriend,
     profile,
+    timeControl,
     connect,
     disconnect,
     quickMatch,
@@ -80,6 +97,50 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
       ? "Spectator link copied"
       : "Invite link copied";
     onNotify(copied ? successMessage : "Could not copy the invite link");
+  };
+
+  const openFriendInvite = (target: { matchId: string; spectate: boolean }) => {
+    clearInviteFeedback();
+    setInviteTarget(target);
+    void loadFriends();
+  };
+
+  const closeFriendInvite = () => {
+    setInviteTarget(null);
+    clearInviteFeedback();
+  };
+
+  const createAndInvite = async () => {
+    setCreatingPrivate(true);
+    try {
+      const createdMatchId = await createPrivateMatch();
+      if (createdMatchId !== null) {
+        openFriendInvite({ matchId: createdMatchId, spectate: false });
+      }
+    } finally {
+      setCreatingPrivate(false);
+    }
+  };
+
+  const sendFriendInvite = async (
+    friend: SocialFriend,
+  ): Promise<boolean> => {
+    if (inviteTarget === null) {
+      return false;
+    }
+    try {
+      await inviteFriend({
+        userId: friend.userId,
+        username: friend.username,
+        matchId: inviteTarget.matchId,
+        spectate: inviteTarget.spectate,
+        timeControl: serverState?.match.timeControl ?? timeControl,
+      });
+      onNotify(`Invite sent to ${friend.username}`);
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const submitJoin = async (event: FormEvent) => {
@@ -175,6 +236,26 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
               </button>
             </div>
             <div className="invite-actions">
+              {serverState.match.mode === "private" &&
+                serverState.result === null &&
+                matchId !== null && (
+                  <button
+                    type="button"
+                    className="mini-button mini-button--accent"
+                    onClick={() =>
+                      openFriendInvite({
+                        matchId,
+                        spectate:
+                          serverState.match.started ||
+                          !serverState.match.open,
+                      })
+                    }
+                  >
+                    {serverState.match.started || !serverState.match.open
+                      ? "Invite a friend to watch"
+                      : "Invite a friend"}
+                  </button>
+                )}
               <button
                 type="button"
                 className="mini-button"
@@ -236,7 +317,7 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
           {waitingForOpponent && (
             <p className="online-copy online-copy--compact">
               {serverState.match.mode === "private"
-                ? "Share the invite link or match ID with your opponent. White stays reserved for the match creator."
+                ? "Invite a MoonGames friend directly, or share the room link. White stays reserved for the match creator."
                 : "This quick table is open. Another player searching the same time control will join automatically, or share the invite link."}
             </p>
           )}
@@ -334,9 +415,17 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
             )}
             <button
               type="button"
+              className="action-button action-button--accent"
+              onClick={() => void createAndInvite()}
+              disabled={matchmaking || matchId !== null || creatingPrivate}
+            >
+              {creatingPrivate ? "Creating room…" : "Create & invite friend"}
+            </button>
+            <button
+              type="button"
               className="action-button"
               onClick={() => void createPrivateMatch()}
-              disabled={matchmaking || matchId !== null}
+              disabled={matchmaking || matchId !== null || creatingPrivate}
             >
               Create private match
             </button>
@@ -393,6 +482,35 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
             Disconnect
           </button>
         </div>
+      )}
+
+      {inviteTarget !== null && (
+        <FriendInviteDialog
+          open
+          matchId={inviteTarget.matchId}
+          spectate={inviteTarget.spectate}
+          friends={friends}
+          loading={friendsLoading}
+          loadError={friendsError}
+          sendingId={inviteSendingId}
+          inviteError={inviteError}
+          inviteNotice={inviteNotice}
+          onClose={closeFriendInvite}
+          onRetry={() => void loadFriends()}
+          onInvite={sendFriendInvite}
+          onCopyInvite={() =>
+            void copyText(
+              buildMatchInviteUrl(
+                inviteTarget.matchId,
+                inviteTarget.spectate,
+              ),
+            ).then((copied) => {
+              onNotify(
+                copied ? "Invite link copied" : "Could not copy the invite link",
+              );
+            })
+          }
+        />
       )}
     </section>
   );

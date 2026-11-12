@@ -873,6 +873,17 @@ button {
   background: linear-gradient(135deg, var(--accent-strong), #6d28d9);
 }
 
+.action-button--accent {
+  border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.action-button--accent:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 78%, var(--accent) 22%);
+}
+
 .action-button--danger {
   border-color: rgba(251, 113, 133, 0.28);
   color: var(--danger);
@@ -1544,6 +1555,280 @@ button {
   flex: 1;
 }
 
+.mini-button--accent {
+  border-color: color-mix(in srgb, var(--accent) 44%, transparent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.mini-button--accent:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 72%, var(--accent) 28%);
+}
+
+.mini-button--sent {
+  border-color: rgba(52, 211, 153, 0.34);
+  background: rgba(52, 211, 153, 0.1);
+  color: var(--success);
+}
+
+.friend-invite-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  background: rgba(4, 6, 12, 0.72);
+  backdrop-filter: blur(8px);
+  animation: fade-in 0.15s ease-out;
+}
+
+.friend-invite-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 100%);
+  max-height: min(86vh, 620px);
+  max-height: min(86dvh, 620px);
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  background: var(--panel-solid);
+  box-shadow: var(--shadow);
+}
+
+.friend-invite-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 11px;
+  padding: 17px 17px 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.friend-invite-heading-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.friend-invite-heading h3 {
+  margin: 1px 0 4px;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.friend-invite-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.friend-invite-close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: -3px -3px 0 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.friend-invite-close:hover {
+  background: var(--panel-raised);
+  color: var(--text);
+}
+
+.friend-invite-banner {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 12px 17px 0;
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.friend-invite-banner--success {
+  border: 1px solid rgba(52, 211, 153, 0.24);
+  background: rgba(52, 211, 153, 0.08);
+  color: var(--success);
+}
+
+.friend-invite-banner--error {
+  border: 1px solid rgba(251, 113, 133, 0.24);
+  background: rgba(251, 113, 133, 0.08);
+  color: var(--danger);
+}
+
+.friend-invite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 124px;
+  padding: 12px 17px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.friend-invite-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 11px;
+}
+
+.friend-invite-row:hover {
+  background: var(--panel-raised);
+}
+
+.friend-invite-avatar {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  overflow: hidden;
+  border-radius: 11px;
+  border: 1px solid var(--border-strong);
+  background: linear-gradient(145deg, var(--accent-soft), var(--panel-raised));
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+.friend-invite-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.friend-invite-name {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.friend-invite-name strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.friend-invite-name span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.friend-invite-empty {
+  display: flex;
+  min-height: 124px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.friend-invite-empty p {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.friend-invite-empty span {
+  max-width: 300px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.friend-invite-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--panel-raised);
+  color: var(--accent);
+}
+
+.friend-invite-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  animation: auth-spin 0.7s linear infinite;
+}
+
+.friend-invite-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 17px 14px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.friend-invite-footer .text-button {
+  width: auto;
+  padding: 0;
+  color: var(--accent);
+  font-size: 10px;
+  text-align: left;
+  text-transform: none;
+}
+
+@media (max-width: 620px) {
+  .friend-invite-dialog {
+    max-height: min(90vh, 640px);
+    max-height: min(90dvh, 640px);
+    border-radius: 17px;
+  }
+
+  .friend-invite-heading {
+    padding: 14px 14px 11px;
+  }
+
+  .friend-invite-list {
+    padding: 9px 12px;
+  }
+
+  .friend-invite-footer {
+    padding: 10px 14px 12px;
+  }
+}
+
 .spectator-toggle {
   display: flex;
   align-items: center;
@@ -1870,13 +2155,14 @@ body.board-fullscreen-active {
 }
 
 .board-panel--fullscreen .board-wrap {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   align-self: center;
   width: min(100%, calc(100vh - 188px));
   width: min(100%, calc(100dvh - 188px));
   max-width: 100%;
+  max-height: calc(100dvh - 188px);
   min-height: 0;
-  margin: 0 auto;
+  margin: auto;
   padding: clamp(6px, 1vmin, 10px);
 }
 

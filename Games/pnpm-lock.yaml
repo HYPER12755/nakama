@@ -203,6 +203,9 @@ importers:
       '@moongames/game-sdk':
         specifier: workspace:*
         version: link:../../shared/sdk
+      '@moongames/social':
+        specifier: workspace:*
+        version: link:../../shared/social
       react:
         specifier: 19.3.1
         version: 19.3.1

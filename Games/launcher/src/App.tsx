@@ -12,6 +12,7 @@ import {
   clearLauncherHandoff,
   fetchGamesCatalog,
   inviteTokenFromLink,
+  inviteWantsSpectator,
   writeLauncherHandoff,
   type GameCatalogEntry,
   type GameHostConfig,
@@ -327,6 +328,9 @@ function App() {
       const url = base === null ? null : new URL(base);
       if (url !== null) {
         url.searchParams.set("match", invite.matchId);
+        if (inviteWantsSpectator(invite)) {
+          url.searchParams.set("spectate", "1");
+        }
       }
       setDrawerOpen(false);
       await playGame(game, url?.toString() ?? null);

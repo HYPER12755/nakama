@@ -5,7 +5,7 @@ import type {
 } from "@moongames/chess-core";
 import { getDisplaySquares, isLightSquare } from "../lib/coordinates";
 import { pieceName } from "../lib/pieces";
-import { Piece } from "./Piece";
+import { Piece, type PieceMotion } from "./Piece";
 
 export interface ChessBoardProps {
   board: BoardPiece[];
@@ -15,6 +15,29 @@ export interface ChessBoardProps {
   checkSquare: Square | null;
   flipped: boolean;
   onSquareClick: (square: Square) => void;
+}
+
+function displayPosition(square: Square, flipped: boolean) {
+  const file = square.charCodeAt(0) - 97;
+  const rank = Number(square[1]) - 1;
+  return {
+    x: flipped ? 7 - file : file,
+    y: flipped ? rank : 7 - rank,
+  };
+}
+
+function motionBetween(
+  from: Square,
+  to: Square,
+  flipped: boolean,
+): PieceMotion {
+  const source = displayPosition(from, flipped);
+  const target = displayPosition(to, flipped);
+  return {
+    x: source.x - target.x,
+    y: source.y - target.y,
+    key: `${from}-${to}`,
+  };
 }
 
 export function ChessBoard({
@@ -28,11 +51,47 @@ export function ChessBoard({
 }: ChessBoardProps) {
   const pieces = new Map(board.map((piece) => [piece.square, piece]));
   const targets = new Set(legalTargets);
+  const motions = new Map<Square, PieceMotion>();
+
+  if (lastMove !== null && lastMove.from !== lastMove.to) {
+    motions.set(
+      lastMove.to,
+      motionBetween(lastMove.from, lastMove.to, flipped),
+    );
+
+    // Castling is one history entry. Animate the rook alongside the king.
+    const moved = pieces.get(lastMove.to);
+    if (moved?.type === "k") {
+      const fromFile = lastMove.from[0];
+      const toFile = lastMove.to[0];
+      const rank = lastMove.to[1];
+      let rookFrom: Square | null = null;
+      let rookTo: Square | null = null;
+      if (fromFile === "e" && toFile === "g") {
+        rookFrom = `h${rank}` as Square;
+        rookTo = `f${rank}` as Square;
+      } else if (fromFile === "e" && toFile === "c") {
+        rookFrom = `a${rank}` as Square;
+        rookTo = `d${rank}` as Square;
+      }
+      if (
+        rookFrom !== null &&
+        rookTo !== null &&
+        pieces.get(rookTo)?.type === "r"
+      ) {
+        motions.set(
+          rookTo,
+          motionBetween(rookFrom, rookTo, flipped),
+        );
+      }
+    }
+  }
 
   return (
     <div className="board" role="grid" aria-label="Chess board">
       {getDisplaySquares(flipped).map(({ square, showFile, showRank }) => {
         const piece = pieces.get(square);
+        const motion = motions.get(square) ?? null;
         const isSelected = selected === square;
         const isTarget = targets.has(square);
         const isLastMove =
@@ -63,6 +122,11 @@ export function ChessBoard({
             type="button"
             role="gridcell"
             className={classes.join(" ")}
+            style={
+              motion === null
+                ? undefined
+                : { overflow: "visible", zIndex: 8 }
+            }
             onClick={() => onSquareClick(square)}
             aria-label={label}
             aria-pressed={isSelected}
@@ -78,7 +142,11 @@ export function ChessBoard({
               </span>
             )}
             {piece !== undefined && (
-              <Piece piece={piece} justMoved={lastMove?.to === square} />
+              <Piece
+                piece={piece}
+                justMoved={lastMove?.to === square}
+                motion={motion}
+              />
             )}
             {isTarget && (
               <span

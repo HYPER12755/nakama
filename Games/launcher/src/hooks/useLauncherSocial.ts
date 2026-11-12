@@ -67,6 +67,10 @@ export type LauncherConnection =
   | "online"
   | "error";
 
+export type LauncherPlayerSearchResult = Awaited<
+  ReturnType<MoonGamesSocialClient["searchPlayers"]>
+>[number];
+
 export interface LauncherSocialController {
   connection: LauncherConnection;
   account: LauncherAccount | null;
@@ -112,6 +116,7 @@ export interface LauncherSocialController {
   signOut: () => Promise<void>;
   clearFeedback: () => void;
   addFriend: (username: string) => Promise<void>;
+  searchPlayers: (query: string) => Promise<LauncherPlayerSearchResult[]>;
   acceptFriend: (friend: LauncherFriend) => Promise<void>;
   removeFriend: (friend: LauncherFriend) => Promise<void>;
   refreshFriends: () => Promise<void>;
@@ -1647,6 +1652,17 @@ export function useLauncherSocial(): LauncherSocialController {
     signOut,
     clearFeedback,
     addFriend,
+    searchPlayers: async (query: string) => {
+      const value = query.trim().replace(/^@/, "");
+      if (value.length < 2) {
+        throw new Error("Enter at least 2 characters to search.");
+      }
+      const controller = socialRef.current;
+      if (controller === null) {
+        throw new Error("Connect to MoonGames before searching for players.");
+      }
+      return controller.searchPlayers(value);
+    },
     acceptFriend,
     removeFriend,
     refreshFriends,

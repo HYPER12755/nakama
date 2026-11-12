@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   inviteMessage,
   inviteTokenFromLink,
+  inviteWantsSpectator,
   insertEmojiAtSelection,
   normalizeInvite,
   parseInviteMessage,
@@ -207,6 +208,13 @@ describe("launcher social helpers", () => {
     expect(inviteTokenFromLink("/app/?invite=token-1")).toBe("token-1");
     expect(inviteTokenFromLink("?invite=token-1")).toBe("token-1");
     expect(inviteTokenFromLink("https://games.example/app/")).toBeNull();
+    expect(inviteWantsSpectator(sampleInvite)).toBe(false);
+    expect(
+      inviteWantsSpectator({
+        ...sampleInvite,
+        metadata: { spectate: "1" },
+      }),
+    ).toBe(true);
   });
 
   it("inserts emoji at the selection and keeps recent emoji unique", () => {

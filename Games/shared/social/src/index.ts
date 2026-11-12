@@ -11,10 +11,12 @@ import {
   mergeNotifications,
   normalizeInvite,
   normalizeNotification,
+  SOCIAL_FRIEND_STATE,
   SOCIAL_NOTIFICATION_PAGE_SIZE,
   type InviteCreateInput,
   type InviteResolveResult,
   type MoonGamesInvite,
+  type SocialFriend,
   type SocialNotification,
   type SocialPlayerSummary,
 } from "@moongames/game-sdk";
@@ -343,6 +345,77 @@ export class MoonGamesSocialClient {
       readIds: nextReadIds,
       readAt: typeof response.readAt === "number" ? response.readAt : Date.now(),
     };
+  }
+
+  /**
+   * Lists the caller's accepted friends. Games use this for their own
+   * invite pickers while the launcher remains the owner of friend requests.
+   */
+  async listFriends(
+    state: number = SOCIAL_FRIEND_STATE.mutual,
+  ): Promise<SocialFriend[]> {
+    const response = await this.client.listFriends(this.session, state, 100);
+    const friends: SocialFriend[] = [];
+    for (const friend of response.friends ?? []) {
+      const user = friend.user;
+      if (typeof user?.id !== "string" || user.id.length === 0) {
+        continue;
+      }
+      friends.push({
+        userId: user.id,
+        username: user.username?.trim() || "Player",
+        displayName: user.display_name?.trim() || null,
+        avatarUrl: user.avatar_url?.trim() || null,
+        state:
+          typeof friend.state === "number"
+            ? friend.state
+            : SOCIAL_FRIEND_STATE.mutual,
+      });
+    }
+    friends.sort((left, right) =>
+      left.username.localeCompare(right.username, undefined, {
+        sensitivity: "base",
+      }),
+    );
+    return friends;
+  }
+
+  async searchPlayers(
+    query: string,
+  ): Promise<Array<SocialPlayerSummary & { friendState: number | null }>> {
+    const response = await this.rpc<
+      SocialRpcResponse & { players?: unknown }
+    >("moongames_player_search", { query });
+    if (!Array.isArray(response.players)) {
+      return [];
+    }
+    const players: Array<SocialPlayerSummary & { friendState: number | null }> = [];
+    for (const value of response.players) {
+      const source = record(value);
+      if (
+        typeof source.userId !== "string" ||
+        typeof source.username !== "string"
+      ) {
+        continue;
+      }
+      players.push({
+        userId: source.userId,
+        username: source.username,
+        displayName:
+          typeof source.displayName === "string" &&
+          source.displayName.trim().length > 0
+            ? source.displayName.trim()
+            : null,
+        avatarUrl:
+          typeof source.avatarUrl === "string" &&
+          source.avatarUrl.trim().length > 0
+            ? source.avatarUrl.trim()
+            : null,
+        friendState:
+          typeof source.friendState === "number" ? source.friendState : null,
+      });
+    }
+    return players;
   }
 
   async requestFriend(input: {

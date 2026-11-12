@@ -20,7 +20,18 @@ local DRAW_OFFER_TTL_MS = 60000
 local CLOCK_BROADCAST_INTERVAL_MS = 1000
 local CHAT_MAX_MESSAGES = 40
 local CHAT_MAX_LENGTH = 240
+local CHAT_MAX_BYTES = CHAT_MAX_LENGTH * 4
 local CHAT_RATE_LIMIT_MS = 700
+
+local function chat_length(text)
+  if type(utf8) == "table" and type(utf8.len) == "function" then
+    local ok, length = pcall(utf8.len, text)
+    if ok and length then
+      return length
+    end
+  end
+  return #text
+end
 
 local function encode(value)
   if type(value) == "string" then
@@ -514,7 +525,7 @@ local function handle_chat(dispatcher, state, sender, payload, now)
     send_error(dispatcher, sender.presence, "Chat message cannot be empty")
     return
   end
-  if #text > CHAT_MAX_LENGTH then
+  if chat_length(text) > CHAT_MAX_LENGTH or #text > CHAT_MAX_BYTES then
     send_error(
       dispatcher,
       sender.presence,

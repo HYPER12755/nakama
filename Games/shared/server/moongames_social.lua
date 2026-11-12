@@ -200,9 +200,11 @@ local function is_recent_player(user_id, target_id)
   return false
 end
 
--- Game modules call this during module load. The handler receives
+-- Game modules call this during module load. `create_room` receives
 -- (context, params, recipient) and returns { matchId, gameTitle, previewUrl,
--- mode, metadata } after creating an authoritative private room.
+-- mode, metadata } after creating an authoritative private room. `attach_room`
+-- is optional and validates an invite into an existing room, returning the same
+-- shape plus an optional expiresAt.
 function social.register_game(game_id, handler)
   if type(game_id) ~= "string" or type(handler) ~= "table" then
     error("register_game requires a game id and handler table")
@@ -403,16 +405,55 @@ function social.create_invite(context, params)
     return nil, fail("missing_game", "A game id is required")
   end
   local handler = games[game_id]
-  if not handler or type(handler.create_room) ~= "function" then
+  if not handler then
     return nil, fail("game_unavailable", "That game cannot create invite rooms yet")
   end
 
-  local room_ok, room = pcall(handler.create_room, context, params, recipient)
-  if not room_ok or type(room) ~= "table" or not room.matchId then
-    return nil, fail("room_failed", "The game room could not be created")
+  local now = nk.time()
+  local requested_match_id = trim(params.matchId or params.match_id)
+  local room
+  local room_ok
+
+  if requested_match_id then
+    if type(handler.attach_room) ~= "function" then
+      return nil, fail(
+        "game_unavailable",
+        "That game cannot invite players into an existing room"
+      )
+    end
+    room_ok, room =
+      pcall(handler.attach_room, context, params, recipient)
+    if
+      not room_ok
+      or type(room) ~= "table"
+      or room.matchId ~= requested_match_id
+    then
+      return nil, fail(
+        "room_unavailable",
+        "That game room is no longer available for invites"
+      )
+    end
+  else
+    if type(handler.create_room) ~= "function" then
+      return nil, fail(
+        "game_unavailable",
+        "That game cannot create invite rooms yet"
+      )
+    end
+    room_ok, room = pcall(handler.create_room, context, params, recipient)
+    if not room_ok or type(room) ~= "table" or not room.matchId then
+      return nil, fail("room_failed", "The game room could not be created")
+    end
   end
 
-  local now = nk.time()
+  local expires_at = now + social.INVITE_TTL_MS
+  if type(room.expiresAt) == "number" then
+    expires_at = math.min(expires_at, room.expiresAt)
+  end
+  if expires_at <= now then
+    return nil, fail("room_expired", "That game room has expired")
+  end
+
   local token = nk.uuid_v4() .. nk.uuid_v4()
   local invite_id = nk.uuid_v4()
   local message = trim(params.message)
@@ -434,7 +475,7 @@ function social.create_invite(context, params)
     recipient = public_user(recipient),
     status = "pending",
     createdAt = now,
-    expiresAt = now + social.INVITE_TTL_MS,
+    expiresAt = expires_at,
     updatedAt = now,
     joinPath = "/invite/" .. invite_id,
     deepLink = "moongames://invite/" .. invite_id,
@@ -692,6 +733,11 @@ function social.request_friend(context, params)
   if state == 1 then
     return { status = "already_requested" }
   end
+  if state == 3 then
+    return nil, fail("blocked", "That player has blocked friend requests")
+  end
+  -- State 2 is an incoming request. Accepting it must reciprocate the
+  -- relationship in Nakama instead of only reporting success to the client.
   nk.friends_add(
     context.user_id,
     context.username,
@@ -703,6 +749,55 @@ function social.request_friend(context, params)
     return { status = "friends" }
   end
   return { status = "requested" }
+end
+
+function social.search_players(context, params)
+  local query = trim((params or {}).query or (params or {}).q)
+  if query then
+    query = query:gsub("^@", "")
+  end
+  local length = query and ((utf8 and utf8.len(query)) or #query) or 0
+  if length < 2 then
+    return nil, fail("query_too_short", "Enter at least 2 characters to search")
+  end
+  if length > 32 then
+    query = string.sub(query, 1, 32)
+  end
+
+  local rows = nil
+  local ok, result = pcall(
+    nk.sql_query,
+    [[SELECT id::text AS id, username, display_name, avatar_url
+       FROM users
+      WHERE username IS NOT NULL
+        AND POSITION(LOWER($1) IN LOWER(username)) = 1
+        AND id::text <> $2
+      ORDER BY LOWER(username) ASC, username ASC
+      LIMIT 20]],
+    { query, context.user_id }
+  )
+  if ok and type(result) == "table" then
+    rows = result
+  else
+    local exact = find_user_by_username(query)
+    rows = exact and { exact } or {}
+  end
+
+  local players = {}
+  for _, row in ipairs(rows) do
+    local user_id = row.user_id or row.id
+    local username = row.username
+    if user_id and username and user_id ~= context.user_id then
+      players[#players + 1] = {
+        userId = user_id,
+        username = username,
+        displayName = row.display_name or row.displayName,
+        avatarUrl = row.avatar_url or row.avatarUrl,
+        friendState = friend_state(context.user_id, user_id),
+      }
+    end
+  end
+  return { players = players }
 end
 
 function social.accept_friend(context, params)
@@ -962,6 +1057,17 @@ local function rpc_notifications_mark_read(context, payload)
   return ok(response)
 end
 nk.register_rpc(rpc_notifications_mark_read, "moongames_notifications_mark_read")
+
+local function rpc_player_search(context, payload)
+  local response, error_response = require_payload(context, payload, function(_, params)
+    return social.search_players(context, params)
+  end)
+  if not response then
+    return error_response
+  end
+  return ok(response)
+end
+nk.register_rpc(rpc_player_search, "moongames_player_search")
 
 local function rpc_friend_request(context, payload)
   local response, error_response = require_payload(context, payload, function(_, params)

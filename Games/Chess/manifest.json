@@ -1,7 +1,7 @@
 {
   "id": "chess",
   "name": "Chess",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "sdkVersion": "0.1.0",
   "entry": "index.html",
   "minPlayers": 2,

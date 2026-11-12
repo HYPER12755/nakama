@@ -5,7 +5,80 @@ local protocol = require("chess_protocol")
 local progression = require("chess_profile")
 local social = require("moongames_social")
 
+local PRIVATE_LOBBY_TIMEOUT_MS = social.INVITE_TTL_MS + 60000
+
+local function label_fields(label)
+  if type(label) ~= "string" then
+    return nil
+  end
+  local fields = {}
+  for part in label:gmatch("[^|]+") do
+    fields[#fields + 1] = part
+  end
+  if #fields < 5 or fields[1] ~= "chess" then
+    return nil
+  end
+  return fields
+end
+
+local function spectate_requested(params)
+  local metadata = params.metadata
+  local value = type(metadata) == "table" and metadata.spectate or nil
+  if value == nil then
+    value = params.spectate
+  end
+  return value == true or value == "true" or value == "1" or value == 1
+end
+
+local function attach_private_room(context, params)
+  local match_id = params.matchId or params.match_id
+  if type(match_id) ~= "string" or match_id == "" then
+    error("missing match id")
+  end
+
+  local ok, match = pcall(nk.match_get, match_id)
+  if not ok or type(match) ~= "table" then
+    error("match not found")
+  end
+
+  local fields = label_fields(match.label)
+  if not fields or fields[2] ~= "private" then
+    error("match is not a private chess room")
+  end
+
+  local status = fields[5]
+  if status == "finished" then
+    error("match has finished")
+  end
+
+  local spectate = spectate_requested(params)
+  if not spectate and status ~= "open" then
+    error("match is no longer accepting players")
+  end
+
+  local time_control = {
+    initial_ms = tonumber(fields[3]),
+    increment_ms = tonumber(fields[4]),
+  }
+  if not time_control.initial_ms or not time_control.increment_ms then
+    error("match time control is unavailable")
+  end
+
+  return {
+    matchId = match_id,
+    gameTitle = "Chess",
+    mode = "private",
+    metadata = {
+      timeControl = protocol.time_control_wire(time_control),
+      spectate = spectate,
+    },
+  }
+end
+
 social.register_game("chess", {
+  attach_room = function(context, params)
+    return attach_private_room(context, params)
+  end,
   create_room = function(context, params, recipient)
     local source = params.timeControl or params.time_control
     if source == nil then
@@ -38,7 +111,7 @@ social.register_game("chess", {
         initial_ms = time_control.initial_ms,
         increment_ms = time_control.increment_ms,
       },
-      lobby_timeout_ms = social.INVITE_TTL_MS + 60000,
+      lobby_timeout_ms = PRIVATE_LOBBY_TIMEOUT_MS,
     })
     return {
       matchId = match_id,
@@ -101,8 +174,15 @@ local function quick_match(context, payload)
   -- the atomic matchmaker has had a few seconds to pair concurrent players, so
   -- the table is normally visible to anyone arriving later.
   local label = protocol.label("quick", time_control, "open")
+  local excluded = params.excludeMatchId or params.exclude_match_id
   local matches = nk.match_list(10, true, label, 0, 1, nil)
-  local match_id = matches and matches[1] and matches[1].match_id or nil
+  local match_id = nil
+  for _, candidate in ipairs(matches or {}) do
+    if excluded == nil or candidate.match_id ~= excluded then
+      match_id = candidate.match_id
+      break
+    end
+  end
 
   if not match_id then
     match_id = nk.match_create("chess_match", {
@@ -146,6 +226,7 @@ local function create_private_match(context, payload)
       initial_ms = time_control.initial_ms,
       increment_ms = time_control.increment_ms,
     },
+    lobby_timeout_ms = PRIVATE_LOBBY_TIMEOUT_MS,
   })
 
   return nk.json_encode({

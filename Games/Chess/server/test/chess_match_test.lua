@@ -176,6 +176,14 @@ fake_nk = {
   match_list = function(limit, authoritative, label, min_size, max_size)
     return fake_nk.match_list_result
   end,
+  match_get = function(match_id)
+    local match = fake_nk.match_get_result[match_id]
+    if not match then
+      error("match not found")
+    end
+    return copy(match)
+  end,
+  match_get_result = {},
   match_create = function(module, params)
     fake_nk.match_creates[#fake_nk.match_creates + 1] = {
       module = module,
@@ -199,6 +207,7 @@ local rules = require("chess_rules")
 local protocol = require("chess_protocol")
 local match = assert(dofile(server_dir .. "/chess_match.lua"))
 dofile(server_dir .. "/chess_rpc.lua")
+local social = assert(require("moongames_social"))
 
 local OP = protocol.OP
 local BASE_TIME = 1700000000000
@@ -284,6 +293,9 @@ local function new_match(params)
   end
   for key in pairs(fake_nk.leaderboards) do
     fake_nk.leaderboards[key] = nil
+  end
+  for key in pairs(fake_nk.match_get_result) do
+    fake_nk.match_get_result[key] = nil
   end
   local state, tick_rate, label = match.match_init(context, params or {
     mode = "quick",
@@ -810,6 +822,18 @@ test("chat rejects empty, oversized, and rapid messages", function()
     "Chat messages must be 240 characters or fewer"
   )
   assert_equal(#state.chat_messages, 1)
+
+  advance(701)
+  local emoji = string.rep("🌙", 240)
+  state = loop(state, dispatcher, {
+    {
+      sender = presence("u1", "Alice"),
+      op_code = OP.CHAT_SEND,
+      data = { text = emoji },
+    },
+  })
+  assert_equal(#state.chat_messages, 2)
+  assert_equal(state.chat_messages[2].text, emoji)
 end)
 
 test("chat is cleared when the match ends", function()
@@ -892,6 +916,90 @@ test("private match RPC records the creator", function()
   assert_equal(fake_nk.match_creates[1].params.mode, "private")
   assert_equal(fake_nk.match_creates[1].params.creator, "u1")
   assert_nil(fake_nk.match_creates[1].params.rated)
+  assert_equal(
+    fake_nk.match_creates[1].params.lobby_timeout_ms,
+    social.INVITE_TTL_MS + 60000
+  )
+end)
+
+test("quick match can exclude a full room and open a new one", function()
+  fake_nk.match_creates = {}
+  fake_nk.next_match_id = "fresh-quick-match"
+  fake_nk.match_list_result = {
+    { match_id = "busy-quick-match" },
+  }
+
+  local response = fake_nk.rpcs["chess_quick_match"]({
+    user_id = "u1",
+  }, {
+    timeControl = { initialMs = 300000, incrementMs = 0 },
+    excludeMatchId = "busy-quick-match",
+  })
+
+  assert_equal(response.ok, true)
+  assert_equal(response.matchId, "fresh-quick-match")
+  assert_equal(#fake_nk.match_creates, 1)
+end)
+
+test("private room attach validates seat availability", function()
+  fake_nk.match_get_result["private-room"] = {
+    match_id = "private-room",
+    label = "chess|private|300000|2000|open",
+  }
+  local handler = assert(social.game_handler("chess"))
+
+  local room = handler.attach_room({ user_id = "u1" }, {
+    matchId = "private-room",
+  })
+  assert_equal(room.matchId, "private-room")
+  assert_equal(room.mode, "private")
+  assert_equal(room.metadata.spectate, false)
+  assert_equal(room.metadata.timeControl.initialMs, 300000)
+  assert_equal(room.metadata.timeControl.incrementMs, 2000)
+
+  fake_nk.match_get_result["private-room"].label =
+    "chess|private|300000|2000|full"
+  local player_ok, player_error = pcall(handler.attach_room, {
+    user_id = "u1",
+  }, {
+    matchId = "private-room",
+  })
+  assert_equal(player_ok, false)
+  assert_truthy(tostring(player_error):find("accepting players", 1, true))
+
+  local spectator_room = handler.attach_room({ user_id = "u1" }, {
+    matchId = "private-room",
+    metadata = { spectate = true },
+  })
+  assert_equal(spectator_room.metadata.spectate, true)
+end)
+
+test("private room attach rejects finished and non-private rooms", function()
+  local handler = assert(social.game_handler("chess"))
+
+  fake_nk.match_get_result["finished-room"] = {
+    match_id = "finished-room",
+    label = "chess|private|300000|0|finished",
+  }
+  local finished_ok = pcall(handler.attach_room, { user_id = "u1" }, {
+    matchId = "finished-room",
+    metadata = { spectate = true },
+  })
+  assert_equal(finished_ok, false)
+
+  fake_nk.match_get_result["quick-room"] = {
+    match_id = "quick-room",
+    label = "chess|quick|300000|0|open",
+  }
+  local quick_ok = pcall(handler.attach_room, { user_id = "u1" }, {
+    matchId = "quick-room",
+  })
+  assert_equal(quick_ok, false)
+
+  local missing_ok = pcall(handler.attach_room, { user_id = "u1" }, {
+    matchId = "missing-room",
+  })
+  assert_equal(missing_ok, false)
 end)
 
 test("invalid RPC time control is rejected", function()

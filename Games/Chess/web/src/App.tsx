@@ -338,7 +338,10 @@ export default function App({ bridge }: AppProps) {
     }
 
     setBoardFullscreen(true);
-    const element = boardPanelRef.current;
+    // Fullscreen the app root, not the board panel. The board panel is still
+    // the visible layer, but match chat and other fixed overlays live outside
+    // that panel and must enter the browser's fullscreen top layer with it.
+    const element = document.documentElement;
     if (
       element !== null &&
       document.fullscreenElement === null &&

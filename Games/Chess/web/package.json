@@ -16,6 +16,7 @@
     "@heroiclabs/nakama-js": "^2.8.0",
     "@moongames/chess-core": "workspace:*",
     "@moongames/game-sdk": "workspace:*",
+    "@moongames/social": "workspace:*",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

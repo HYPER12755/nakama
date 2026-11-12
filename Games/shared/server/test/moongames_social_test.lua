@@ -239,6 +239,18 @@ social.register_game("chess", {
       metadata = { timeControl = "5+0" },
     }
   end,
+  attach_room = function(context, params, recipient)
+    if params.matchId == "expired-room" then
+      error("room expired")
+    end
+    return {
+      matchId = params.matchId,
+      gameTitle = "Chess",
+      mode = "private",
+      expiresAt = fake_time + 60000,
+      metadata = { timeControl = "5+0", spectate = true },
+    }
+  end,
 })
 
 local tests = {}
@@ -341,6 +353,35 @@ test("recent players can be invited without a friendship", function()
   })
   assert_truthy(invite, error_value and error_value.error and error_value.error.message)
   assert_equal(invite.recipient.userId, "user-b")
+end)
+
+test("invite into an existing room uses the game's attach handler", function()
+  reset()
+  set_friend_state("user-a", "user-b", 0)
+  set_friend_state("user-b", "user-a", 0)
+  local invite, error_value = social.create_invite(context("user-a", "alice"), {
+    gameId = "chess",
+    recipientId = "user-b",
+    matchId = "match-live",
+    metadata = { spectate = true },
+  })
+  assert_truthy(invite, error_value and error_value.error and error_value.error.message)
+  assert_equal(invite.matchId, "match-live")
+  assert_equal(invite.metadata.spectate, true)
+  assert_equal(invite.expiresAt, fake_time + 60000)
+end)
+
+test("invite into an unavailable room fails without creating a replacement", function()
+  reset()
+  set_friend_state("user-a", "user-b", 0)
+  set_friend_state("user-b", "user-a", 0)
+  local invite, error_value = social.create_invite(context("user-a", "alice"), {
+    gameId = "chess",
+    recipientId = "user-b",
+    matchId = "expired-room",
+  })
+  assert_equal(invite, nil)
+  assert_equal(error_value.error.code, "room_unavailable")
 end)
 
 test("recipient can accept and sender is notified", function()
@@ -474,6 +515,20 @@ test("friend request, decline, cancel, and remove notify the other side", functi
   social.cancel_friend(context("user-a", "alice"), { username = "bob" })
   assert_equal(#(notifications["user-b"] or {}), 3)
   assert_equal(notifications["user-b"][3].code, social.CODES.friend_cancelled)
+end)
+
+test("replying to an incoming friend request creates a mutual friendship", function()
+  reset()
+  set_friend_state("user-a", "user-b", 1)
+  set_friend_state("user-b", "user-a", 2)
+
+  local status = social.request_friend(context("user-b", "bob"), {
+    username = "alice",
+  })
+
+  assert_equal(status.status, "friends")
+  assert_equal(get_friend_state("user-a", "user-b"), 0)
+  assert_equal(get_friend_state("user-b", "user-a"), 0)
 end)
 
 test("recent players are recorded per user and exclude self", function()

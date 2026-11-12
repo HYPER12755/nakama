@@ -23,6 +23,7 @@ const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 
 const names = {
   alpha: `mgi${suffix}`.slice(0, 20),
   beta: `mgj${suffix}`.slice(0, 20),
+  gamma: `mgk${suffix}`.slice(0, 20),
 };
 
 function fail(message) {
@@ -116,10 +117,12 @@ async function main() {
   console.log(`Nakama invite smoke test → ${serverUrl}`);
   const alpha = await connect(names.alpha, `invite-smoke-a-${suffix}`);
   const beta = await connect(names.beta, `invite-smoke-b-${suffix}`);
+  const gamma = await connect(names.gamma, `invite-smoke-c-${suffix}`);
 
   try {
-    await client.addFriends(alpha.session, undefined, [beta.name]);
+    await client.addFriends(alpha.session, undefined, [beta.name, gamma.name]);
     await client.addFriends(beta.session, [alpha.session.user_id]);
+    await client.addFriends(gamma.session, [alpha.session.user_id]);
     await delay(250);
 
     const acceptedInvite = await createInvite(alpha.session, beta.session.user_id);
@@ -274,6 +277,126 @@ async function main() {
       fail("The persisted invite card leaked the creator token.");
     }
     console.log("Persisted direct-chat invite card verified.");
+
+    // An in-game invite must attach to the already-created authoritative room
+    // rather than creating a second room.
+    try {
+      await alpha.socket.leaveMatch(acceptedInvite.matchId);
+    } catch {
+      // The previous smoke room may already have ended.
+    }
+    try {
+      await beta.socket.leaveMatch(acceptedInvite.matchId);
+    } catch {
+      // The previous smoke room may already have ended.
+    }
+    const privateRoom = await rpc(
+      alpha.session,
+      "chess_create_private_match",
+      { timeControl: { initialMs: 300000, incrementMs: 0 } },
+    );
+    if (!privateRoom.matchId) {
+      fail("The private Chess room was not created.");
+    }
+    const alphaWaiting = waitForMatchOp(alpha.socket, 1);
+    await alpha.socket.joinMatch(privateRoom.matchId);
+    await alphaWaiting;
+
+    const existingRoomInvite = await rpc(
+      alpha.session,
+      "moongames_invite_create",
+      {
+        gameId: "chess",
+        mode: "private",
+        recipientId: beta.session.user_id,
+        matchId: privateRoom.matchId,
+        metadata: { spectate: false },
+        message: `Play in my room ${suffix}`,
+      },
+    );
+    if (
+      existingRoomInvite.invite?.matchId !== privateRoom.matchId ||
+      existingRoomInvite.invite?.inviteId === undefined
+    ) {
+      fail("The in-game invite did not attach to the existing room.");
+    }
+    await waitForNotification(
+      beta.session,
+      (notification) =>
+        notification.code === 2101 &&
+        notificationInvite(notification)?.inviteId ===
+          existingRoomInvite.invite.inviteId,
+    );
+    await rpc(beta.session, "moongames_invite_accept", {
+      inviteId: existingRoomInvite.invite.inviteId,
+    });
+    const joinedExisting = await rpc(
+      beta.session,
+      "moongames_invite_resolve",
+      { inviteId: existingRoomInvite.invite.inviteId },
+    );
+    if (
+      joinedExisting.invite?.matchId !== privateRoom.matchId ||
+      joinedExisting.canJoin !== true
+    ) {
+      fail("The accepted in-game invite was not joinable.");
+    }
+    const alphaExistingStart = waitForMatchOp(alpha.socket, 10);
+    const betaExistingStart = waitForMatchOp(beta.socket, 10);
+    await beta.socket.joinMatch(privateRoom.matchId);
+    const [alphaExistingState, betaExistingState] = await Promise.all([
+      alphaExistingStart,
+      betaExistingStart,
+    ]);
+    if (
+      alphaExistingState.match?.id !== privateRoom.matchId ||
+      betaExistingState.match?.id !== privateRoom.matchId ||
+      alphaExistingState.players?.length !== 2 ||
+      betaExistingState.players?.length !== 2
+    ) {
+      fail("The friend did not join the existing authoritative room.");
+    }
+    console.log("In-game invite into an existing Chess room verified.");
+
+    const spectatorInvite = await rpc(
+      alpha.session,
+      "moongames_invite_create",
+      {
+        gameId: "chess",
+        mode: "private",
+        recipientId: gamma.session.user_id,
+        matchId: privateRoom.matchId,
+        metadata: { spectate: true },
+      },
+    );
+    if (spectatorInvite.invite?.metadata?.spectate !== true) {
+      fail("The in-game spectator invite did not preserve its join mode.");
+    }
+    await waitForNotification(
+      gamma.session,
+      (notification) =>
+        notification.code === 2101 &&
+        notificationInvite(notification)?.inviteId ===
+          spectatorInvite.invite.inviteId,
+    );
+    await rpc(gamma.session, "moongames_invite_accept", {
+      inviteId: spectatorInvite.invite.inviteId,
+    });
+    const gammaStatePromise = waitForMatchOp(gamma.socket, 1);
+    await gamma.socket.joinMatch(privateRoom.matchId, undefined, {
+      spectate: "1",
+    });
+    const gammaState = await gammaStatePromise;
+    if (
+      gammaState.match?.id !== privateRoom.matchId ||
+      gammaState.players?.length !== 2 ||
+      !gammaState.spectators?.some(
+        (spectator) => spectator.userId === gamma.session.user_id,
+      )
+    ) {
+      fail("The invited friend did not join the live room as a spectator.");
+    }
+    console.log("In-game spectator invite to a live room verified.");
     console.log("Invite smoke test passed.");
   } finally {
     alpha.socket.disconnect(false);

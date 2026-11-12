@@ -6,7 +6,12 @@ import {
   type MatchmakerMatched,
   type Socket,
 } from "@heroiclabs/nakama-js";
-import type { GameHostConfig } from "@moongames/game-sdk";
+import { MoonGamesSocialClient } from "@moongames/social";
+import type {
+  GameHostConfig,
+  MoonGamesInvite,
+  SocialFriend,
+} from "@moongames/game-sdk";
 import type {
   ChessState,
   Color,
@@ -64,6 +69,14 @@ export interface PendingOnlinePromotion {
   color: Color;
 }
 
+export interface FriendInviteInput {
+  userId: string;
+  username: string;
+  matchId?: string;
+  spectate?: boolean;
+  timeControl?: OnlineTimeControl;
+}
+
 export interface OnlineChessController {
   connection: OnlineConnectionStatus;
   session: OnlineSessionInfo | null;
@@ -101,6 +114,15 @@ export interface OnlineChessController {
   canAct: boolean;
   matchmaking: boolean;
   matchmakingSeconds: number;
+  friends: SocialFriend[];
+  friendsLoading: boolean;
+  friendsError: string | null;
+  inviteSendingId: string | null;
+  inviteError: string | null;
+  inviteNotice: string | null;
+  loadFriends: () => Promise<void>;
+  clearInviteFeedback: () => void;
+  inviteFriend: (input: FriendInviteInput) => Promise<MoonGamesInvite>;
   profile: OnlineProfile | null;
   history: OnlineHistoryEntry[];
   leaderboard: OnlineLeaderboardEntry[];
@@ -112,7 +134,7 @@ export interface OnlineChessController {
   disconnect: () => void;
   quickMatch: () => Promise<void>;
   cancelQuickMatch: () => void;
-  createPrivateMatch: () => Promise<void>;
+  createPrivateMatch: () => Promise<string | null>;
   joinMatch: (
     matchId: string,
     options?: { spectator?: boolean },
@@ -305,6 +327,12 @@ export function useOnlineChess(
   const [error, setError] = useState<string | null>(null);
   const [matchmaking, setMatchmaking] = useState(false);
   const [matchmakingSeconds, setMatchmakingSeconds] = useState(0);
+  const [friends, setFriends] = useState<SocialFriend[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState(false);
+  const [friendsError, setFriendsError] = useState<string | null>(null);
+  const [inviteSendingId, setInviteSendingId] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [profile, setProfile] = useState<OnlineProfile | null>(null);
   const [history, setHistory] = useState<OnlineHistoryEntry[]>([]);
@@ -330,6 +358,7 @@ export function useOnlineChess(
   const matchmakingActiveRef = useRef(false);
   const matchmakingRunRef = useRef(0);
   const clockOffsetRef = useRef(0);
+  const friendsPromiseRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     if (!matchmaking) {
@@ -575,6 +604,13 @@ export function useOnlineChess(
     setDrawOffer(null);
     setSelected(null);
     setPendingPromotion(null);
+    setFriends([]);
+    setFriendsError(null);
+    setFriendsLoading(false);
+    setInviteError(null);
+    setInviteNotice(null);
+    setInviteSendingId(null);
+    friendsPromiseRef.current = null;
     matchmakingActiveRef.current = false;
     setMatchmaking(false);
     setError(null);
@@ -707,16 +743,47 @@ export function useOnlineChess(
           setError("The realtime connection reported an error.");
         };
         socket.ondisconnect = () => {
+          if (socketRef.current !== socket) {
+            return;
+          }
           failPendingMatchmaker(
             "Disconnected while searching for a match.",
           );
           socketRef.current = null;
           clientRef.current = null;
           sessionRef.current = null;
-          setConnection("offline");
-          setAccount(null);
+          setConnection("connecting");
           setProfileLoading(false);
-          setError("Disconnected from the server. Reconnect to resume.");
+          setFriendsError(null);
+          setFriendsLoading(false);
+          setInviteError(null);
+          setInviteNotice(null);
+          setInviteSendingId(null);
+          friendsPromiseRef.current = null;
+          setError("Connection lost. Reconnecting to the table…");
+
+          // Nakama keeps the authoritative match alive through a short
+          // disconnect grace period. Reconnect and rejoin automatically so a
+          // mobile network blip does not strand players outside the room.
+          let attempt = 0;
+          const retry = () => {
+            if (socketRef.current !== null) {
+              return;
+            }
+            const delay = Math.min(15000, 1000 * 2 ** attempt);
+            attempt += 1;
+            window.setTimeout(() => {
+              if (socketRef.current !== null) {
+                return;
+              }
+              void connect().catch(() => {
+                if (attempt < 6) {
+                  retry();
+                }
+              });
+            }, delay);
+          };
+          retry();
         };
 
         await socket.connect(sessionResult, true);
@@ -1131,6 +1198,91 @@ export function useOnlineChess(
     [],
   );
 
+  const loadFriends = useCallback(async (): Promise<void> => {
+    if (friendsPromiseRef.current !== null) {
+      return friendsPromiseRef.current;
+    }
+
+    const client = clientRef.current;
+    const currentSession = sessionRef.current;
+    if (client === null || currentSession === null) {
+      setFriendsError("Connect to the game server to load your friends.");
+      return;
+    }
+
+    setFriendsLoading(true);
+    setFriendsError(null);
+    const request = (async () => {
+      try {
+        const social = new MoonGamesSocialClient({
+          client,
+          session: currentSession,
+        });
+        setFriends(await social.listFriends());
+      } catch (cause) {
+        setFriendsError(
+          errorMessage(cause, "Could not load your MoonGames friends."),
+        );
+      } finally {
+        setFriendsLoading(false);
+        friendsPromiseRef.current = null;
+      }
+    })();
+    friendsPromiseRef.current = request;
+    await request;
+  }, []);
+
+  const clearInviteFeedback = useCallback(() => {
+    setInviteError(null);
+    setInviteNotice(null);
+  }, []);
+
+  const inviteFriend = useCallback(
+    async (input: FriendInviteInput): Promise<MoonGamesInvite> => {
+      const targetMatchId = (input.matchId ?? matchIdRef.current ?? "").trim();
+      if (targetMatchId.length === 0) {
+        throw new Error("Create or join a private match first.");
+      }
+
+      const client = clientRef.current;
+      const currentSession = sessionRef.current;
+      if (client === null || currentSession === null) {
+        throw new Error("Connect to the game server before inviting a friend.");
+      }
+
+      setInviteSendingId(input.userId);
+      setInviteError(null);
+      setInviteNotice(null);
+      try {
+        const social = new MoonGamesSocialClient({
+          client,
+          session: currentSession,
+        });
+        const invite = await social.createInvite({
+          gameId: "chess",
+          mode: "private",
+          matchId: targetMatchId,
+          recipientId: input.userId,
+          recipientUsername: input.username,
+          metadata: {
+            spectate: input.spectate === true,
+            timeControl: input.timeControl ?? timeControl,
+          },
+        });
+        setInviteNotice(`Invite sent to ${input.username}.`);
+        return invite;
+      } catch (cause) {
+        setInviteError(
+          errorMessage(cause, "Could not send that friend invitation."),
+        );
+        throw cause;
+      } finally {
+        setInviteSendingId(null);
+      }
+    },
+    [timeControl],
+  );
+
   const joinMatch = useCallback(
     async (rawMatchId: string, options: { spectator?: boolean } = {}) => {
       const nextMatchId = rawMatchId.trim();
@@ -1140,6 +1292,14 @@ export function useOnlineChess(
 
       const socket = await requireSocket();
       const currentMatchId = matchIdRef.current;
+      if (currentMatchId === nextMatchId) {
+        // Opening an invite for the room we are already in (common when the
+        // owner taps the accepted-invite notification) must be idempotent.
+        rememberMatchId(nextMatchId);
+        rememberSpectating(options.spectator === true);
+        setError(null);
+        return;
+      }
       if (currentMatchId !== null && currentMatchId !== nextMatchId) {
         try {
           await socket.leaveMatch(currentMatchId);
@@ -1254,16 +1414,23 @@ export function useOnlineChess(
           if (matchmakerRef.current !== pending) {
             return;
           }
-          matchmakerRef.current = null;
           window.clearTimeout(pending.timer);
-          if (pending.ticket !== null) {
-            void activeSocket
-              .removeMatchmaker(pending.ticket)
-              .catch(() => {
-                // The ticket may already be gone.
-              });
-          }
-          pending.resolve(null);
+          // Keep the pending matchmaker alive until the ticket is actually
+          // removed. A pairing can land while removal is in flight, and that
+          // match must not be silently discarded.
+          const removal =
+            pending.ticket === null
+              ? Promise.resolve()
+              : activeSocket.removeMatchmaker(pending.ticket).catch(() => {
+                  // The ticket may already be gone or matched.
+                });
+          void removal.finally(() => {
+            if (matchmakerRef.current !== pending) {
+              return;
+            }
+            matchmakerRef.current = null;
+            pending.resolve(null);
+          });
         }, QUICK_MATCH_FALLBACK_MS);
       }
 
@@ -1289,16 +1456,40 @@ export function useOnlineChess(
         return;
       }
 
-      const result = await callRpc("chess_quick_match", { timeControl });
-      if (run !== matchmakingRunRef.current) {
+      const openQuickRoom = async (excludeMatchId?: string) => {
+        const result = await callRpc("chess_quick_match", {
+          timeControl,
+          ...(excludeMatchId === undefined ? {} : { excludeMatchId }),
+        });
+        if (run !== matchmakingRunRef.current) {
+          return null;
+        }
+        if (!result.ok || !result.matchId) {
+          throw new Error(
+            result.error?.message ?? "Could not open a quick match.",
+          );
+        }
+        return result.matchId;
+      };
+
+      const quickMatchId = await openQuickRoom();
+      if (quickMatchId === null) {
         return;
       }
-      if (!result.ok || !result.matchId) {
-        throw new Error(
-          result.error?.message ?? "Could not open a quick match.",
-        );
+      try {
+        await joinMatch(quickMatchId);
+      } catch (cause) {
+        // The open-table fallback can race with another player taking the
+        // last seat. Ask the backend to ignore that room and try once more.
+        if (!/full/i.test(errorMessage(cause, ""))) {
+          throw cause;
+        }
+        const replacement = await openQuickRoom(quickMatchId);
+        if (replacement === null) {
+          return;
+        }
+        await joinMatch(replacement);
       }
-      await joinMatch(result.matchId);
     } catch (cause) {
       if (run !== matchmakingRunRef.current) {
         return;
@@ -1355,7 +1546,7 @@ export function useOnlineChess(
     pending.reject(new Error("Matchmaking cancelled."));
   }, []);
 
-  const createPrivateMatch = useCallback(async () => {
+  const createPrivateMatch = useCallback(async (): Promise<string | null> => {
     try {
       await requireSocket();
       setError(null);
@@ -1368,8 +1559,10 @@ export function useOnlineChess(
         );
       }
       await joinMatch(result.matchId);
+      return result.matchId;
     } catch (cause) {
       setError(errorMessage(cause, "Could not create a private match."));
+      return null;
     }
   }, [callRpc, joinMatch, requireSocket, timeControl]);
 
@@ -1411,6 +1604,9 @@ export function useOnlineChess(
     setDrawOffer(null);
     setSelected(null);
     setPendingPromotion(null);
+    setInviteError(null);
+    setInviteNotice(null);
+    setInviteSendingId(null);
     setError(null);
   }, []);
 
@@ -1569,7 +1765,9 @@ export function useOnlineChess(
       if (serverState?.result != null) {
         return;
       }
-      const normalized = text.replace(/\s+/g, " ").trim().slice(0, 240);
+      const normalized = Array.from(text.replace(/\s+/g, " ").trim())
+        .slice(0, 240)
+        .join("");
       if (normalized.length === 0) {
         return;
       }
@@ -1655,6 +1853,15 @@ export function useOnlineChess(
     canAct,
     matchmaking,
     matchmakingSeconds,
+    friends,
+    friendsLoading,
+    friendsError,
+    inviteSendingId,
+    inviteError,
+    inviteNotice,
+    loadFriends,
+    clearInviteFeedback,
+    inviteFriend,
     profile,
     history,
     leaderboard,

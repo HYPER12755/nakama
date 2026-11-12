@@ -96,12 +96,25 @@ export interface SocialNotification {
 export interface InviteCreateInput {
   gameId: string;
   mode?: string;
+  /** Invite into an existing authoritative room instead of creating a new one. */
+  matchId?: string;
   recipientId?: string;
   recipientUsername?: string;
   message?: string;
   timeControl?: string;
   metadata?: Record<string, unknown>;
 }
+
+export interface SocialFriend extends SocialPlayerSummary {
+  state: number;
+}
+
+export const SOCIAL_FRIEND_STATE = {
+  mutual: 0,
+  outgoing: 1,
+  incoming: 2,
+  blocked: 3,
+} as const;
 
 export interface InviteResolveResult {
   invite: MoonGamesInvite;
@@ -290,6 +303,12 @@ export function isInviteJoinable(
     invite.matchId !== null &&
     invite.matchId.length > 0
   );
+}
+
+/** True when an invite should open the room as a spectator, not a player. */
+export function inviteWantsSpectator(invite: MoonGamesInvite): boolean {
+  const value = invite.metadata?.spectate;
+  return value === true || value === 1 || value === "1" || value === "true";
 }
 
 export function inviteIsExpired(

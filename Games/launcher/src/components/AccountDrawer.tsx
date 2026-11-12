@@ -15,7 +15,10 @@ import {
   type MoonGamesInvite,
   type SocialNotification,
 } from "@moongames/game-sdk";
-import type { LauncherSocialController } from "../hooks/useLauncherSocial";
+import type {
+  LauncherPlayerSearchResult,
+  LauncherSocialController,
+} from "../hooks/useLauncherSocial";
 import { copyText } from "../lib/clipboard";
 import {
   acceptedFriends,
@@ -471,49 +474,138 @@ function FriendsTab({
   onInvitePlayer: (target: InviteTarget) => void;
 }) {
   const [username, setUsername] = useState("");
+  const [results, setResults] = useState<LauncherPlayerSearchResult[] | null>(
+    null,
+  );
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const accepted = useMemo(() => acceptedFriends(social.friends), [social.friends]);
+
+  const search = async () => {
+    setSearchError(null);
+    setSearchBusy(true);
+    try {
+      setResults(await social.searchPlayers(username));
+    } catch (cause) {
+      setResults([]);
+      setSearchError(
+        cause instanceof Error ? cause.message : "Could not search for players.",
+      );
+    } finally {
+      setSearchBusy(false);
+    }
+  };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (social.friendBusy !== null) {
+    if (searchBusy || social.friendBusy !== null) {
       return;
     }
-    void social.addFriend(username);
+    void search();
+  };
+
+  const addResult = async (player: LauncherPlayerSearchResult) => {
+    await social.addFriend(player.username);
+    if (username.trim().length >= 2) {
+      try {
+        setResults(await social.searchPlayers(username));
+      } catch {
+        // Keep the current results; the feedback above explains any failure.
+      }
+    }
   };
 
   return (
     <div className="drawer-stack">
       <form className="add-friend" onSubmit={submit}>
         <div className="account-field">
-          <label htmlFor="friend-username">Add a friend by player name</label>
+          <label htmlFor="friend-username">Find a MoonGames player</label>
           <span className="account-field__input">
-            <Icon name="users" size={16} />
+            <Icon name="search" size={16} />
             <input
               id="friend-username"
-              type="text"
+              type="search"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
-              placeholder="Player name"
+              placeholder="Search player names"
               maxLength={20}
-              disabled={social.connection !== "online" || social.friendBusy !== null}
+              disabled={social.connection !== "online" || searchBusy}
             />
             <button
               className="button button--primary button--compact add-friend__button"
               type="submit"
               disabled={
                 social.connection !== "online" ||
+                searchBusy ||
                 social.friendBusy !== null ||
-                username.trim().length === 0
+                username.trim().length < 2
               }
             >
-              <Icon name="plus" size={15} />
-              {social.friendBusy === "add" ? "Sending…" : "Add"}
+              <Icon name="search" size={15} />
+              {searchBusy ? "Searching…" : "Search"}
             </button>
           </span>
         </div>
       </form>
 
-      <Feedback error={social.friendError} notice={social.friendNotice} />
+      <Feedback
+        error={searchError ?? social.friendError}
+        notice={social.friendNotice}
+      />
+
+      {results !== null ? (
+        <section className="friend-section">
+          <div className="friend-section__heading">
+            <h3>Search results</h3>
+            <span>{results.length}</span>
+          </div>
+          {results.length === 0 ? (
+            <p className="drawer-note">
+              No players found. Check the spelling or try a shorter name.
+            </p>
+          ) : (
+            <div className="friend-list">
+              {results.map((player) => {
+                const state = player.friendState;
+                const label =
+                  state === 0
+                    ? "Friend"
+                    : state === 1
+                      ? "Request sent"
+                      : state === 2
+                        ? "Accept"
+                        : state === 3
+                          ? "Blocked"
+                          : "Add";
+                const disabled =
+                  state === 0 ||
+                  state === 1 ||
+                  state === 3 ||
+                  social.friendBusy !== null;
+                return (
+                  <article className="friend-row" key={player.userId}>
+                    <span className="friend-avatar" aria-hidden="true">
+                      {avatarInitial(player.displayName ?? player.username)}
+                    </span>
+                    <div className="friend-row__copy">
+                      <strong>{player.displayName ?? player.username}</strong>
+                      <span>@{player.username}</span>
+                    </div>
+                    <button
+                      className="mini-button"
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => void addResult(player)}
+                    >
+                      {label}
+                    </button>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      ) : null}
 
       {social.connection !== "online" ? (
         <DrawerEmpty
