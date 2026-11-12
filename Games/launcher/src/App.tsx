@@ -6,10 +6,19 @@ import {
   type CSSProperties,
 } from "react";
 import {
+  GAME_PROTOCOL_VERSION,
+  clearAllLauncherHandoffs,
+  clearLauncherHandoff,
   fetchGamesCatalog,
+  writeLauncherHandoff,
   type GameCatalogEntry,
+  type GameHostConfig,
   type GamesCatalog,
 } from "@moongames/game-sdk";
+import {
+  AccountDrawer,
+  type AccountDrawerTab,
+} from "./components/AccountDrawer";
 import { FeaturedGame } from "./components/FeaturedGame";
 import { GameCard } from "./components/GameCard";
 import { Icon, gameIconName } from "./components/Icon";
@@ -24,6 +33,8 @@ import {
   hasLauncherBridge,
   launchCatalogGame,
 } from "./lib/host";
+import { useLauncherSocial } from "./hooks/useLauncherSocial";
+import { useOfficialRegistry } from "./hooks/useOfficialRegistry";
 import { applyTheme, initialTheme, type ThemeChoice } from "./lib/theme";
 
 type LoadState =
@@ -67,10 +78,30 @@ function App() {
   const [filter, setFilter] = useState<CatalogFilter>("all");
   const [query, setQuery] = useState("");
   const [theme, setTheme] = useState<ThemeChoice>(() => initialTheme());
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState<AccountDrawerTab>("account");
+  const [launchingId, setLaunchingId] = useState<string | null>(null);
+  const [launchNotice, setLaunchNotice] = useState<string | null>(null);
+  const social = useLauncherSocial();
 
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    // The menu is the account authority. A game reload keeps its own scoped
+    // identity; returning to the menu invalidates any token the tab no longer
+    // needs before an independent game can inspect storage.
+    clearAllLauncherHandoffs();
+  }, []);
+
+  useEffect(() => {
+    if (launchNotice === null) {
+      return;
+    }
+    const timer = window.setTimeout(() => setLaunchNotice(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [launchNotice]);
 
   useEffect(() => {
     let active = true;
@@ -98,6 +129,8 @@ function App() {
   }, [reloadKey]);
 
   const catalog = state.phase === "ready" ? state.catalog : null;
+  const { registry: officialRegistry, loading: officialLoading } =
+    useOfficialRegistry(catalog);
   const games = catalog?.games ?? [];
   const visibleGames = useMemo(
     () => filterCatalog(games, filter, query),
@@ -133,10 +166,106 @@ function App() {
   );
 
   const playGame = useCallback(
-    (game: GameCatalogEntry, url: string | null) => {
-      launchCatalogGame(game.id, url, currentLauncherWindow());
+    async (game: GameCatalogEntry, url: string | null) => {
+      if (launchingId !== null) {
+        return;
+      }
+      if (officialLoading) {
+        setLaunchNotice("Verifying this release before opening it…");
+        return;
+      }
+
+      const windowLike = currentLauncherWindow();
+      const official = officialRegistry.games.get(game.id);
+      if (official === undefined) {
+        // Independent games never receive the launcher session.
+        clearAllLauncherHandoffs();
+        launchCatalogGame(game.id, url, windowLike, {
+          accountMode: "per-game",
+        });
+        return;
+      }
+
+      if (social.connection !== "online" || social.nakama === null) {
+        setDrawerTab("account");
+        setDrawerOpen(true);
+        setLaunchNotice(
+          "Connect your MoonGames account before opening a verified game.",
+        );
+        return;
+      }
+
+      setLaunchingId(game.id);
+      setLaunchNotice(null);
+      try {
+        const session = await social.prepareSession();
+        const config: GameHostConfig = {
+          protocol: GAME_PROTOCOL_VERSION,
+          gameId: game.id,
+          locale: navigator.language || "en",
+          theme: { mode: theme, accent: game.accent },
+          session,
+          nakama: social.nakama,
+          accountMode: "shared",
+          official: true,
+          release: {
+            version: official.version,
+            sha256: official.descriptor.sha256,
+            keyId: official.descriptor.keyId,
+          },
+        };
+        const handoffStored = writeLauncherHandoff({
+          format: 1,
+          gameId: game.id,
+          accountMode: "shared",
+          issuedAt: Date.now(),
+          config,
+          proof: {
+            gameId: official.gameId,
+            version: official.version,
+            sha256: official.descriptor.sha256,
+            size: official.descriptor.size,
+            keyId: official.descriptor.keyId,
+            publicKey: official.descriptor.publicKey,
+            signature: official.descriptor.signature,
+          },
+        });
+        if (!handoffStored && !nativeLaunch) {
+          throw new Error(
+            "This browser could not hand off your shared account safely.",
+          );
+        }
+        const result = launchCatalogGame(game.id, url, windowLike, {
+          accountMode: "shared",
+          session,
+          nakama: social.nakama,
+        });
+        if (result === "unavailable") {
+          throw new Error("This game could not be opened in this browser.");
+        }
+      } catch (cause) {
+        clearLauncherHandoff(game.id);
+        setDrawerTab("account");
+        setDrawerOpen(true);
+        setLaunchNotice(
+          cause instanceof Error
+            ? cause.message
+            : "The shared account could not be prepared.",
+        );
+      } finally {
+        setLaunchingId(null);
+      }
     },
-    [],
+    [
+      launchingId,
+      nativeLaunch,
+      officialLoading,
+      officialRegistry.games,
+      social.connection,
+      social.nakama,
+      social.prepareSession,
+      theme,
+    ],
   );
 
   const clearFilters = () => {
@@ -160,19 +289,69 @@ function App() {
           <a href="#library">Library</a>
           <a href="#how-it-works">How it works</a>
         </nav>
-        <button
-          className="theme-toggle"
-          type="button"
-          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-        >
-          <Icon
-            name={theme === "dark" ? "sun" : "moon"}
-            size={16}
-            strokeWidth={1.9}
-          />
-          <span>{theme === "dark" ? "Light" : "Dark"}</span>
-        </button>
+        <div className="topbar__actions">
+          <button
+            className="social-toggle"
+            type="button"
+            aria-label="Open friends and messages"
+            onClick={() => {
+              setDrawerTab("friends");
+              setDrawerOpen(true);
+            }}
+          >
+            <Icon name="users" size={16} />
+            <span>Friends</span>
+            {social.incoming.length + social.unreadTotal > 0 ? (
+              <span className="social-toggle__badge">
+                {social.incoming.length + social.unreadTotal}
+              </span>
+            ) : null}
+          </button>
+          <button
+            className="account-toggle"
+            type="button"
+            aria-label="Open account"
+            onClick={() => {
+              setDrawerTab("account");
+              setDrawerOpen(true);
+            }}
+          >
+            <span className="account-toggle__avatar" aria-hidden="true">
+              {(social.account?.username ?? "M").trim().charAt(0).toUpperCase()}
+              <span
+                className={`account-toggle__presence${social.connection === "online" ? " account-toggle__presence--online" : ""}`}
+              />
+            </span>
+            <span className="account-toggle__copy">
+              <strong>
+                {social.account?.username ??
+                  (social.connection === "connecting"
+                    ? "Connecting…"
+                    : "MoonGames")}
+              </strong>
+              <small>
+                {social.account?.kind === "email"
+                  ? "Shared account"
+                  : social.connection === "online"
+                    ? "Guest profile"
+                    : "Offline"}
+              </small>
+            </span>
+          </button>
+          <button
+            className="theme-toggle"
+            type="button"
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            <Icon
+              name={theme === "dark" ? "sun" : "moon"}
+              size={16}
+              strokeWidth={1.9}
+            />
+            <span>{theme === "dark" ? "Light" : "Dark"}</span>
+          </button>
+        </div>
       </header>
 
       <main>
@@ -323,6 +502,8 @@ function App() {
                   game={featured}
                   catalogUrl={catalogUrl}
                   nativeLaunch={nativeLaunch}
+                  official={officialRegistry.games.has(featured.id)}
+                  launching={launchingId === featured.id}
                   onPlay={playGame}
                 />
               )}
@@ -335,6 +516,8 @@ function App() {
                       game={game}
                       catalogUrl={catalogUrl}
                       nativeLaunch={nativeLaunch}
+                      official={officialRegistry.games.has(game.id)}
+                      launching={launchingId === game.id}
                       onPlay={playGame}
                     />
                   ))}
@@ -417,6 +600,21 @@ function App() {
         </span>
         <span>Web · Flutter · React Native</span>
       </footer>
+
+      {launchNotice === null ? null : (
+        <div className="launcher-toast" role="status">
+          <Icon name="shield-check" size={17} />
+          <span>{launchNotice}</span>
+        </div>
+      )}
+
+      <AccountDrawer
+        open={drawerOpen}
+        tab={drawerTab}
+        onTabChange={setDrawerTab}
+        onClose={() => setDrawerOpen(false)}
+        social={social}
+      />
     </div>
   );
 }

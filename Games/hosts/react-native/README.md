@@ -71,6 +71,14 @@ const trustedKeys = {
   launchQuery={deepLinkSearch.replace(/^\?/, "")}
   theme={{ mode: "dark" }}
   session={session}
+  // Set these only after this app verified the signed release.
+  accountMode="shared"
+  official
+  release={{
+    version: "0.6.0",
+    sha256: "281b794297e43c10f1d45658f1eb776f8e34801a7e7f714d3a31aea8f6da4724",
+    keyId: "dev-1",
+  }}
   nakama={{
     host: "nakama.example.com",
     port: "443",

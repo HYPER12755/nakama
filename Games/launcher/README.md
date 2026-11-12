@@ -9,8 +9,11 @@ instead of embedding this menu. The launcher is the ready-made option.
 
 ## Development
 
-The launcher proxies `/chess/` to the Chess Vite dev server on port `5173`.
-Run the two processes in separate terminals:
+The launcher proxies `/chess/` to the Chess Vite dev server on port `5173` and
+proxies `/release-manifest.json` to the local release server on port `8099` for
+official-proof testing. Run the release server once with `pnpm stack start` (or
+`pnpm serve:releases`), then run the two frontend processes in separate
+terminals:
 
 ```bash
 cd Games
@@ -50,7 +53,12 @@ pnpm preview:web
 3. builds the launcher
 4. copies every available game's `dist/` into the launcher output at its
    `webPath` (currently `/chess/`)
-5. copies `games.json` beside the launcher
+5. copies `games.json` and the signed `release-manifest.json` beside the
+   launcher
+
+Keep `games.json`, `release-manifest.json`, and the release ZIP paths under the
+same public base URL. The launcher resolves the manifest relative to its own
+page URL.
 
 The deployable directory is `launcher/dist/`:
 
@@ -58,6 +66,7 @@ The deployable directory is `launcher/dist/`:
 launcher/dist/
 ├── index.html
 ├── games.json
+├── release-manifest.json
 ├── assets/
 └── chess/
     └── index.html
@@ -96,10 +105,37 @@ Supported bridges, checked in this order:
 | Android custom WebView | `window.MoonGamesAndroid.launchGame(JSON)` |
 
 If no bridge exists, Play navigates to the normal web game and the menu remains a
-first-class browser app. See the native integration guides for a minimal
-embedding example:
+first-class browser app. For a verified official game, the browser handoff also
+writes a one-game, session-scoped launcher identity into
+`sessionStorage` before navigation. Native launch requests include
+`accountMode: "shared"`, the launcher session, and the Nakama connection; the
+native host must pass the same values through the normal game bridge. See the
+native integration guides for a minimal embedding example:
 [Flutter](../hosts/flutter/INTEGRATION.md) and
 [React Native](../hosts/react-native/INTEGRATION.md).
+
+## Account and social model
+
+- Guest or email identity is created once in the launcher. Every verified
+  official game shares it. There is no per-game account choice for official
+  games.
+- The verified badge and shared handoff require a valid signed descriptor whose
+  version, SHA-256, size, and key id match the catalog. A missing or invalid
+  proof leaves Play available with the game's independent auth.
+- Friends use Nakama `addFriends`, `listFriends`, and `deleteFriends`.
+- Personal chats use persisted direct channels (`type: 2`) through
+  `joinChat`, `writeChatMessage`, and `listChannelMessages`. The launcher does
+  not add a custom chat database.
+- Direct channels are resolved by joining the other user's id. Both players
+  receive the same `4.<sorted-user-ids>.` channel.
+- Match chat is not shown here; it stays temporary inside each game.
+
+Run the real-backend checks after starting the stack:
+
+```bash
+pnpm --filter @moongames/launcher smoke:account
+pnpm --filter @moongames/launcher smoke:social
+```
 
 ## Adding a web game
 

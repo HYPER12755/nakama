@@ -81,6 +81,42 @@ class MoonGamesSession {
       Object.hash(token, refreshToken, userId, username, expiresAt);
 }
 
+enum MoonGamesAccountMode {
+  shared('shared'),
+  perGame('per-game');
+
+  const MoonGamesAccountMode(this.wireName);
+
+  final String wireName;
+}
+
+class MoonGamesReleaseIdentity {
+  const MoonGamesReleaseIdentity({
+    required this.version,
+    required this.sha256,
+    required this.keyId,
+  });
+
+  final String version;
+  final String sha256;
+  final String keyId;
+
+  Map<String, dynamic> toJson() {
+    return {'version': version, 'sha256': sha256, 'keyId': keyId};
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is MoonGamesReleaseIdentity &&
+        other.version == version &&
+        other.sha256 == sha256 &&
+        other.keyId == keyId;
+  }
+
+  @override
+  int get hashCode => Object.hash(version, sha256, keyId);
+}
+
 class MoonGamesNakamaConfig {
   const MoonGamesNakamaConfig({
     required this.host,

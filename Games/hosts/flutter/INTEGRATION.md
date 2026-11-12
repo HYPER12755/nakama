@@ -49,8 +49,8 @@ The package requires Flutter 3.27 or newer.
 Copy the current signed files into the Flutter app:
 
 ```text
-assets/moongames/chess-0.5.0.bundle.json
-assets/moongames/chess-0.5.0.zip
+assets/moongames/chess-0.6.0.bundle.json
+assets/moongames/chess-0.6.0.zip
 ```
 
 Declare them in `pubspec.yaml`:
@@ -58,12 +58,12 @@ Declare them in `pubspec.yaml`:
 ```yaml
 flutter:
   assets:
-    - assets/moongames/chess-0.5.0.bundle.json
-    - assets/moongames/chess-0.5.0.zip
+    - assets/moongames/chess-0.6.0.bundle.json
+    - assets/moongames/chess-0.6.0.zip
 ```
 
 The JSON descriptor is the `.bundle.json` file from
-`Games/releases/chess/0.5.0/`. Do not create or edit it by hand.
+`Games/releases/chess/0.6.0/`. Do not create or edit it by hand.
 
 ## 3. Map the app session
 
@@ -146,8 +146,8 @@ class _ChessScreenState extends State<ChessScreen> {
           },
 
           bundledDescriptorAsset:
-              'assets/moongames/chess-0.5.0.bundle.json',
-          bundledZipAsset: 'assets/moongames/chess-0.5.0.zip',
+              'assets/moongames/chess-0.6.0.bundle.json',
+          bundledZipAsset: 'assets/moongames/chess-0.6.0.zip',
 
           locale: Localizations.localeOf(context).toLanguageTag(),
 
@@ -158,6 +158,15 @@ class _ChessScreenState extends State<ChessScreen> {
           ),
 
           session: _session,
+
+          // Set these only after this app verified the signed release.
+          accountMode: MoonGamesAccountMode.shared,
+          official: true,
+          release: const MoonGamesReleaseIdentity(
+            version: '0.6.0',
+            sha256: '281b794297e43c10f1d45658f1eb776f8e34801a7e7f714d3a31aea8f6da4724',
+            keyId: 'dev-1',
+          ),
 
           // Use the same Nakama server as the rest of the app.
           nakama: const MoonGamesNakamaConfig(

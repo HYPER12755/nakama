@@ -27,6 +27,9 @@ class MoonGamesHost extends StatefulWidget {
     this.theme = const MoonGamesTheme(),
     this.session,
     this.nakama,
+    this.accountMode,
+    this.official = false,
+    this.release,
     this.onReady,
     this.onExit,
     this.onToast,
@@ -50,6 +53,16 @@ class MoonGamesHost extends StatefulWidget {
   final MoonGamesTheme theme;
   final MoonGamesSession? session;
   final MoonGamesNakamaConfig? nakama;
+
+  /// `shared` when the launcher's verified account owns this game session.
+  final MoonGamesAccountMode? accountMode;
+
+  /// True only after the native launcher verified the signed release.
+  final bool official;
+
+  /// Verified signed release forwarded to the game.
+  final MoonGamesReleaseIdentity? release;
+
   final void Function(BundleLaunch launch)? onReady;
   final void Function(String? reason)? onExit;
   final void Function(String message, String? level)? onToast;
@@ -200,6 +213,10 @@ class _MoonGamesHostState extends State<MoonGamesHost>
         'theme': widget.theme.toJson(),
         if (widget.session != null) 'session': widget.session!.toJson(),
         if (widget.nakama != null) 'nakama': widget.nakama!.toJson(),
+        if (widget.accountMode != null)
+          'accountMode': widget.accountMode!.wireName,
+        if (widget.official) 'official': true,
+        if (widget.release != null) 'release': widget.release!.toJson(),
         if (launch != null) 'launch': launch.toJson(),
       },
     });

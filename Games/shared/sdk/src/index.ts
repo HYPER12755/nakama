@@ -1,5 +1,6 @@
 export * from "./manifest";
 export * from "./launch";
+export * from "./handoff";
 export * from "./catalog";
 export * from "./protocol";
 export * from "./platform";

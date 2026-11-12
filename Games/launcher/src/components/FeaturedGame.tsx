@@ -13,6 +13,8 @@ interface FeaturedGameProps {
   game: GameCatalogEntry;
   catalogUrl: string;
   nativeLaunch: boolean;
+  official: boolean;
+  launching: boolean;
   onPlay: (game: GameCatalogEntry, url: string | null) => void;
 }
 
@@ -20,6 +22,8 @@ export function FeaturedGame({
   game,
   catalogUrl,
   nativeLaunch,
+  official,
+  launching,
   onPlay,
 }: FeaturedGameProps) {
   const url = gameWebUrl(game, catalogUrl);
@@ -39,6 +43,12 @@ export function FeaturedGame({
           {game.version === undefined ? null : (
             <span className="version-pill">v{game.version}</span>
           )}
+          {official ? (
+            <span className="official-chip official-chip--featured">
+              <Icon name="shield-check" size={12} strokeWidth={1.9} />
+              Verified release
+            </span>
+          ) : null}
           <span className="featured-game__players">{formatPlayers(game)}</span>
         </div>
         <h2>{game.name}</h2>
@@ -57,10 +67,17 @@ export function FeaturedGame({
             <button
               className="button button--primary"
               type="button"
+              disabled={launching}
               onClick={() => onPlay(game, url)}
             >
-              Play {game.name}{" "}
-              <Icon name="arrow-up-right" size={15} strokeWidth={2.2} />
+              {launching ? (
+                "Preparing shared account…"
+              ) : (
+                <>
+                  Play {game.name}{" "}
+                  <Icon name="arrow-up-right" size={15} strokeWidth={2.2} />
+                </>
+              )}
             </button>
           ) : (
             <button className="button button--primary" type="button" disabled>
@@ -68,7 +85,7 @@ export function FeaturedGame({
             </button>
           )}
           <span className="featured-game__hint">
-            Opens in this browser. Your account works across every game.
+            Opens in this browser. Your account is shared by every verified game.
           </span>
         </div>
       </div>

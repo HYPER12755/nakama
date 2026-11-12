@@ -1,4 +1,16 @@
-export interface CatalogLaunchRequest {
+import type {
+  GameAccountMode,
+  GameSession,
+  NakamaConnection,
+} from "@moongames/game-sdk";
+
+export interface CatalogLaunchOptions {
+  accountMode?: GameAccountMode;
+  session?: GameSession;
+  nakama?: NakamaConnection;
+}
+
+export interface CatalogLaunchRequest extends CatalogLaunchOptions {
   type: "moongames.launch-game";
   gameId: string;
   webUrl: string | null;
@@ -45,11 +57,13 @@ export function launchCatalogGame(
   gameId: string,
   webUrl: string | null,
   windowLike: LauncherWindow,
+  options: CatalogLaunchOptions = {},
 ): LaunchResult {
   const request: CatalogLaunchRequest = {
     type: "moongames.launch-game",
     gameId,
     webUrl,
+    ...options,
   };
 
   if (typeof windowLike.MoonGamesLauncher?.launchGame === "function") {

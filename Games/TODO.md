@@ -8,6 +8,7 @@
 - [x] Chess v1 target modes: local, online quick match, private match, AI, spectators.
 - [x] Clean MoonGames default visual style.
 - [x] Device guest auth plus email/password account upgrade and sign-in; social auth later.
+- [x] Share one launcher identity across all verified official games; no per-game account choice for official titles. Independent games keep their own auth.
 - [x] Local Nakama for development; VPS deployment later.
 - [x] Remote download on demand for game packages (with signed bundles and a bundled fallback).
 - [x] Original card-game branding for the Uno-style game; "Uno" is only an internal codename.
@@ -89,9 +90,19 @@
 ## Phase 7.5 — Accounts, catalog, and menus
 
 - [x] Add guest-to-email account upgrades that preserve rating, history, and player name.
+- [x] Add the shared launcher guest/email account used by every verified official game.
 - [x] Add email/password sign-in with per-server session restore and sign-out isolation.
 - [x] Keep host-provided account sessions authoritative and non-managed by the game.
 - [x] Reject email credentials over public plaintext HTTP while allowing local development.
+- [x] Verify signed release descriptors and catalog release fields before showing official status or enabling shared auth.
+- [x] Write the official launcher session into a game-scoped browser handoff and consume it in Chess.
+- [x] Pass the shared session, account mode, and Nakama connection through native launch requests.
+- [x] Add optional shared-account, official, and release-identity fields to the Flutter and React Native host wrappers.
+- [ ] Add a native launcher shell that reads the launch request, selects the verified bundle, and device-tests the shared handoff.
+- [x] Add persistent friends using Nakama's built-in friend graph.
+- [x] Add persisted personal chats using Nakama direct channels, with live delivery and history.
+- [x] Keep friends and personal chats in the launcher account drawer with SVG-only controls.
+- [x] Add real-backend launcher account and social smoke tests.
 - [ ] Add email verification and password reset when operator SMTP is configured.
 - [x] Replace Chess and launcher emoji/font-glyph icons with inline SVG icons.
 - [x] Add a versioned `games.json` catalog contract to the shared SDK.

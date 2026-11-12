@@ -2,20 +2,34 @@ import type { CSSProperties } from "react";
 
 export type LauncherIconName =
   | "arrow-down"
+  | "arrow-left"
   | "arrow-up-right"
   | "carrom"
   | "cards"
+  | "chat"
+  | "check"
   | "chess"
+  | "chevron-right"
+  | "eye"
+  | "eye-off"
   | "gamepad"
   | "link"
+  | "lock"
+  | "log-in"
+  | "log-out"
   | "ludo"
+  | "mail"
   | "moon"
+  | "plus"
+  | "refresh"
   | "search"
+  | "send"
   | "shield-check"
   | "sparkle"
   | "sun"
   | "user"
-  | "users";
+  | "users"
+  | "x";
 
 interface IconProps {
   name: LauncherIconName;
@@ -170,6 +184,85 @@ export function Icon({
           <circle cx="15.5" cy="8.4" r="1.15" fill="currentColor" stroke="none" />
           <circle cx="15.2" cy="15.6" r="1.15" fill="currentColor" stroke="none" />
           <path d="m4.9 17.1 1.9 1.9" />
+        </>
+      )}
+      {name === "arrow-left" && (
+        <>
+          <path d="M19 12H5" />
+          <path d="m11 6-6 6 6 6" />
+        </>
+      )}
+      {name === "chat" && (
+        <>
+          <path d="M20.5 11.4a8.1 8.1 0 0 1-8.6 8.1 8.8 8.8 0 0 1-3.4-.9L4 20l1.5-4.2a7.8 7.8 0 0 1-1.1-4.1A8.1 8.1 0 0 1 13 3.4a8.3 8.3 0 0 1 7.5 8Z" />
+          <path d="M8.5 11.5h.01M12.2 11.5h.01M15.9 11.5h.01" strokeWidth="2.4" />
+        </>
+      )}
+      {name === "check" && <path d="m5 12.5 4.4 4.4L19 7.3" />}
+      {name === "chevron-right" && <path d="m9 5 7 7-7 7" />}
+      {name === "x" && (
+        <>
+          <path d="m6 6 12 12" />
+          <path d="m18 6-12 12" />
+        </>
+      )}
+      {name === "plus" && (
+        <>
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </>
+      )}
+      {name === "send" && (
+        <>
+          <path d="m4 4 17 8-17 8 3.2-8Z" />
+          <path d="M7.2 12H21" />
+        </>
+      )}
+      {name === "refresh" && (
+        <>
+          <path d="M20 7v5h-5" />
+          <path d="M4 17v-5h5" />
+          <path d="M6.1 9A7 7 0 0 1 18.7 7.2L20 12M4 12l1.3 4.8A7 7 0 0 0 17.9 15" />
+        </>
+      )}
+      {name === "log-in" && (
+        <>
+          <path d="M14 5h4.5A1.5 1.5 0 0 1 20 6.5v11a1.5 1.5 0 0 1-1.5 1.5H14" />
+          <path d="m10 8-4 4 4 4" />
+          <path d="M6 12h9" />
+        </>
+      )}
+      {name === "log-out" && (
+        <>
+          <path d="M10 5H5.5A1.5 1.5 0 0 0 4 6.5v11A1.5 1.5 0 0 0 5.5 19H10" />
+          <path d="M14 8l4 4-4 4" />
+          <path d="M18 12H9" />
+        </>
+      )}
+      {name === "mail" && (
+        <>
+          <rect x="3" y="5" width="18" height="14" rx="2.5" />
+          <path d="m4 7 8 6 8-6" />
+        </>
+      )}
+      {name === "lock" && (
+        <>
+          <rect x="4" y="10" width="16" height="10.5" rx="2.4" />
+          <path d="M8 10V7.5a4 4 0 0 1 8 0V10" />
+          <path d="M12 14v2.5" />
+        </>
+      )}
+      {name === "eye" && (
+        <>
+          <path d="M2.8 12s3.3-6 9.2-6 9.2 6 9.2 6-3.3 6-9.2 6-9.2-6-9.2-6Z" />
+          <circle cx="12" cy="12" r="2.6" />
+        </>
+      )}
+      {name === "eye-off" && (
+        <>
+          <path d="M4 4 20 20" />
+          <path d="M9.9 6.3A8.8 8.8 0 0 1 12 6c5.9 0 9.2 6 9.2 6a15.4 15.4 0 0 1-2.3 3M6.2 7.7A16 16 0 0 0 2.8 12S6.1 18 12 18a8.5 8.5 0 0 0 3.3-.7" />
+          <path d="M10.2 10.2a2.6 2.6 0 0 0 3.6 3.6" />
         </>
       )}
       {name === "gamepad" && (

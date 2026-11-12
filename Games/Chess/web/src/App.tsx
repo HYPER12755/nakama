@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   GAME_PROTOCOL_VERSION,
+  readLauncherHandoff,
   type GameBridge,
   type GameHostConfig,
   type GameTheme,
@@ -37,6 +38,13 @@ import {
 } from "./lib/invite";
 
 type Theme = "dark" | "light";
+
+/**
+ * Read once at module scope. sessionStorage survives a tab reload, so a
+ * verified game launched from the web menu keeps the launcher account without
+ * putting a token in the URL or history.
+ */
+const launcherHandoff = readLauncherHandoff(__MOONGAMES_GAME_ID__);
 
 export interface AppProps {
   bridge: GameBridge;
@@ -82,13 +90,19 @@ export default function App({ bridge }: AppProps) {
     parseMatchInvite(window.location.search),
   );
   const [mode, setMode] = useState<GameMode>(invite === null ? "local" : "online");
-  const [hostConfig, setHostConfig] = useState<GameHostConfig | null>(null);
-  const [hostInitReceived, setHostInitReceived] = useState(false);
+  const [hostConfig, setHostConfig] = useState<GameHostConfig | null>(
+    launcherHandoff,
+  );
+  const [hostInitReceived, setHostInitReceived] = useState(
+    launcherHandoff !== null,
+  );
   const [hostInitTimedOut, setHostInitTimedOut] = useState(false);
   const localGame = useChessGame({ active: mode === "local" });
   const aiGame = useChessGame({ ai: true, active: mode === "ai" });
   const online = useOnlineChess(hostConfig);
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>(() =>
+    launcherHandoff === null ? "dark" : resolveGameTheme(launcherHandoff.theme),
+  );
   const [flipped, setFlipped] = useState(false);
   const [boardFullscreen, setBoardFullscreen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);

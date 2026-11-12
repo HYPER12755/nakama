@@ -80,9 +80,9 @@ Outputs:
 ```text
 releases/
 ├── chess/
-│   └── 0.5.0/
-│       ├── chess-0.5.0.zip
-│       └── chess-0.5.0.bundle.json
+│   └── 0.6.0/
+│       ├── chess-0.6.0.zip
+│       └── chess-0.6.0.bundle.json
 └── release-manifest.json
 ```
 
@@ -140,8 +140,10 @@ pnpm build:web
 ```
 
 This builds Chess, regenerates the catalog, builds the launcher, and copies every
-available game's `dist/` into `launcher/dist/` at its `webPath`. The resulting
-`launcher/dist/` directory is ready for static hosting. See
+available game's `dist/` into `launcher/dist/` at its `webPath`. It also copies
+`games.json` and the signed `release-manifest.json` beside the launcher, so
+verified-release badges and shared-account proof checks work in the assembled
+app. The resulting `launcher/dist/` directory is ready for static hosting. See
 [launcher/README.md](../launcher/README.md).
 
 ## Serve releases locally
@@ -160,8 +162,8 @@ emulator, or `127.0.0.1` from the iOS simulator.
 
 ```bash
 pnpm verify:bundle \
-  releases/chess/0.5.0/chess-0.5.0.bundle.json \
-  releases/chess/0.5.0/chess-0.5.0.zip \
+  releases/chess/0.6.0/chess-0.6.0.bundle.json \
+  releases/chess/0.6.0/chess-0.6.0.zip \
   --key "release-1=<base64 raw Ed25519 public key>"
 ```
 
@@ -179,3 +181,14 @@ The tool tests cover deterministic ZIP output, traversal rejection, signing
 payload stability, signature/tamper detection, semver ordering, release
 manifest selection, catalog generation/sorting, and stack config/service
 parsing. `unzip -t` is used when available to validate archives.
+
+With the local stack running, the launcher also has real-backend account and
+social checks:
+
+```bash
+pnpm --filter @moongames/launcher smoke:account
+pnpm --filter @moongames/launcher smoke:social
+```
+
+These cover guest-to-email upgrade/restore and Nakama friend requests, direct
+channel discovery, live message delivery, and persisted history.

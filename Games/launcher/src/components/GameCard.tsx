@@ -12,6 +12,8 @@ interface GameCardProps {
   game: GameCatalogEntry;
   catalogUrl: string;
   nativeLaunch: boolean;
+  official: boolean;
+  launching: boolean;
   onPlay: (game: GameCatalogEntry, url: string | null) => void;
 }
 
@@ -19,6 +21,8 @@ export function GameCard({
   game,
   catalogUrl,
   nativeLaunch,
+  official,
+  launching,
   onPlay,
 }: GameCardProps) {
   const url = gameWebUrl(game, catalogUrl);
@@ -40,6 +44,12 @@ export function GameCard({
         </div>
         <p className="game-card__tagline">{game.tagline}</p>
         <div className="game-card__tags" aria-label="Game tags">
+          {official ? (
+            <span className="official-chip">
+              <Icon name="shield-check" size={11} strokeWidth={1.9} />
+              Verified
+            </span>
+          ) : null}
           {game.tags.slice(0, 3).map((tag) => (
             <span className="tag" key={tag}>
               {tag}
@@ -59,9 +69,17 @@ export function GameCard({
             <button
               className="button button--play"
               type="button"
+              disabled={launching}
               onClick={() => onPlay(game, url)}
             >
-              Play <Icon name="arrow-up-right" size={13} strokeWidth={2.2} />
+              {launching ? (
+                "Opening…"
+              ) : (
+                <>
+                  Play{" "}
+                  <Icon name="arrow-up-right" size={13} strokeWidth={2.2} />
+                </>
+              )}
             </button>
           ) : (
             <span className="game-card__soon">

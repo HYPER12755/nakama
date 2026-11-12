@@ -12,6 +12,10 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/chess/, "/"),
       },
+      "/release-manifest.json": {
+        target: "http://127.0.0.1:8099",
+        changeOrigin: true,
+      },
     },
   },
   preview: {

@@ -23,6 +23,41 @@ describe("launcher host bridge", () => {
     });
   });
 
+  it("forwards a verified shared session to the native bridge", () => {
+    const launchGame = vi.fn<(request: CatalogLaunchRequest) => void>();
+    const windowLike: LauncherWindow = {
+      MoonGamesLauncher: { launchGame },
+    };
+    const session = {
+      token: "token",
+      refreshToken: "refresh",
+      userId: "user-1",
+      username: "player",
+      expiresAt: 123,
+    };
+    const nakama = {
+      host: "127.0.0.1",
+      port: "7350",
+      serverKey: "defaultkey",
+      useSSL: false,
+    };
+    expect(
+      launchCatalogGame("chess", null, windowLike, {
+        accountMode: "shared",
+        session,
+        nakama,
+      }),
+    ).toBe("bridge");
+    expect(launchGame).toHaveBeenCalledWith({
+      type: "moongames.launch-game",
+      gameId: "chess",
+      webUrl: null,
+      accountMode: "shared",
+      session,
+      nakama,
+    });
+  });
+
   it("posts a launch request to React Native WebView", () => {
     const postMessage = vi.fn<(message: string) => void>();
     const windowLike: LauncherWindow = {

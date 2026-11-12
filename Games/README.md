@@ -136,6 +136,19 @@ does not want a custom game list, it can embed or link to this web menu instead.
 The menu exposes a small native launch bridge: when embedded, selecting a game
 reports its `id` to the app, which then opens the normal verified host screen.
 
+The launcher is also the account and social home. A guest or email account is
+created once, then every **verified official game** receives that same Nakama
+identity through a signed handoff. There is no per-game account choice for
+official games. The launcher verifies the release descriptor against pinned
+Ed25519 keys and checks the catalog version, SHA-256, size, and key id before it
+shows the verified badge or enables shared auth. If verification fails, the
+game still opens with its own independent account.
+
+Friends are stored with Nakama's built-in friend graph. Personal chats use
+persisted direct-chat channels (`type: 2`), so message history is stored by
+Nakama and is not duplicated in a custom database. Match chat remains temporary
+and is never written to history.
+
 ```text
 https://games.example.com/moongames/games.json
 ```
@@ -204,8 +217,8 @@ pnpm test:all
 pnpm package:chess
 pnpm release:manifest
 pnpm verify:bundle \
-  releases/chess/0.5.0/chess-0.5.0.bundle.json \
-  releases/chess/0.5.0/chess-0.5.0.zip \
+  releases/chess/0.6.0/chess-0.6.0.bundle.json \
+  releases/chess/0.6.0/chess-0.6.0.zip \
   --key "dev-1=<base64-public-key>"
 
 # End-to-end online smoke test (requires local Nakama)
@@ -213,6 +226,12 @@ pnpm smoke:online
 
 # Email/password account flow against local Nakama
 pnpm smoke:auth
+
+# Launcher account upgrade and restore against local Nakama
+pnpm --filter @moongames/launcher smoke:account
+
+# Friends, direct chat, live delivery, and persisted history against local Nakama
+pnpm --filter @moongames/launcher smoke:social
 ```
 
 `pnpm stack start` is the normal local development entry point. It syncs the
@@ -232,15 +251,24 @@ CDN deployment, and pass `--key keyId=base64` to `release:manifest` and
 `verify:bundle` to pin production keys. The dev key is generated under `.keys/`
 and is ignored by git.
 
-Online development uses automatic guest authentication by default. The Account
-panel can create an email/password account that upgrades the current guest,
-keeping its rating and history, or sign in to an existing email account. Email
-sessions are stored per Nakama server, refreshed when the game loads, and
-cleared when they are no longer valid. Signing out returns to a fresh guest
-identity so the upgraded device does not re-enter the email account
-automatically. A host-supplied Nakama session takes precedence and is shown as
-an app-managed account. Email credentials are rejected over public plaintext
-HTTP; loopback and private-network HTTP remain available for local development.
+Online development uses automatic guest authentication by default. The launcher
+account drawer can create an email/password account that upgrades the current
+guest, keeping its rating and history, or sign in to an existing email account.
+The same account is shared by every verified official game; independent games
+keep their own auth. Email sessions are stored per Nakama server, refreshed when
+the launcher loads, and cleared when they are no longer valid. Signing out
+returns to a fresh guest identity so the upgraded device does not re-enter the
+email account automatically. A host-supplied Nakama session takes precedence and
+is shown as a shared app account. Email credentials are rejected over public
+plaintext HTTP; loopback and private-network HTTP remain available for local
+development.
+
+Friends and personal chats live in the launcher's account drawer. Friend
+requests use Nakama's friend graph, and personal messages use persisted direct
+channels. Direct channels are resolved by joining the other player's user id;
+both participants receive the same `4.<sorted-user-ids>.` channel. Chat history
+is loaded from Nakama, so it survives reloads and devices. Match chat in Chess is
+separate, rate-limited, temporary, and cleared at game end.
 
 The browser defaults to Nakama at `http://<current-page-host>:7350`; the server
 address is editable in the Online panel. Production builds can set
@@ -322,9 +350,11 @@ build/QA validation:
   fetches over HTTP, and gives Flutter/React Native typed models for custom game
   panels. It is covered by 3 host-core tests.
 - A responsive browser launcher reads the same catalog and renders search,
-  filters, a featured game, themed cards, and coming-soon titles. Its 11 tests
-  cover catalog helpers and the native launch bridge, and it builds together
-  with Chess as a deployable static web app.
+  filters, a featured game, themed cards, and coming-soon titles. It includes a
+  shared launcher account, verified-release badges, friends, personal chats,
+  and the native launch bridge. Its 28 tests cover account validation, release
+  proofs, the signed web handoff, social helpers, catalog helpers, and native
+  launch options. It builds together with Chess as a deployable static web app.
 - `@moongames/host-core` verifies sizes, SHA-256 digests, and Ed25519 signatures
   with the same payload contract on web/native JavaScript runtimes; its 8 tests
   include a cross-check against Node-generated signatures, catalog behavior, and
@@ -346,11 +376,12 @@ build/QA validation:
   agreement, casual/rated persistence, Elo changes, history, and leaderboard
   records.
 
-Current local automation: 22 core + 26 web + 8 host-core + 11 launcher
-TypeScript tests, 11 tool tests, and 60 Lua tests (138 passing tests total,
-excluding the Flutter tests that require the Flutter SDK). Manual browser QA of
-the catalog menu, AI, spectator, invite, replay, fullscreen board, chat,
-account, and online/profile flows, plus Android Chrome/Flutter/React Native
-device testing, is still required.
+Current local automation: 22 core + 26 web + 8 host-core + 28 launcher
+TypeScript tests, 11 tool tests, and 60 Lua tests (155 passing tests total,
+excluding the Flutter tests that require the Flutter SDK). The launcher account
+and social smoke scripts also run against real local Nakama. Manual browser QA
+of the catalog menu, account/social drawer, verified launch flow, AI, spectator,
+invite, replay, fullscreen board, chat, and online/profile flows, plus Android
+Chrome/Flutter/React Native device testing, is still required.
 
 Optional quick messages are tracked in `TODO.md`.

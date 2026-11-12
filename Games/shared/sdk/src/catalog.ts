@@ -34,7 +34,7 @@ export interface GameCatalogEntry {
   tags: string[];
   /** Accent color in #rrggbb form. */
   accent: string;
-  /** Short Unicode glyph or text mark for local/fallback artwork. */
+  /** Stable icon key, for example `chess`; hosts map it to their SVG set. */
   icon: string;
   featured: boolean;
   sortOrder: number;

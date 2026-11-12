@@ -12,6 +12,12 @@ export type GameCapability =
 export type GameOrientation = "portrait" | "landscape" | "any";
 export type GameAvailability = "available" | "coming-soon" | "hidden";
 export type ThemeMode = "light" | "dark" | "system";
+/**
+ * How the game's player identity is chosen. `shared` uses the launcher's
+ * authenticated Nakama account; `per-game` leaves account ownership to the
+ * game itself.
+ */
+export type GameAccountMode = "shared" | "per-game";
 
 export interface GameManifest {
   id: string;
@@ -61,6 +67,12 @@ export interface NakamaConnection {
   useSSL: boolean;
 }
 
+export interface GameReleaseIdentity {
+  version: string;
+  sha256: string;
+  keyId: string;
+}
+
 export interface GameHostConfig {
   protocol: number;
   gameId: string;
@@ -68,6 +80,16 @@ export interface GameHostConfig {
   theme: GameTheme;
   session?: GameSession;
   nakama?: NakamaConnection;
+  /**
+   * Present when the host selected the identity model explicitly. `shared`
+   * means `session` is managed by the launcher and must not be replaced by the
+   * game. `per-game` means the game owns its account flow.
+   */
+  accountMode?: GameAccountMode;
+  /** True only when the host verified a signed official release descriptor. */
+  official?: boolean;
+  /** Verified signed release identity for official bundles. */
+  release?: GameReleaseIdentity;
   /** Query parameters from a native launch/deep link. */
   launch?: GameLaunchContext;
 }

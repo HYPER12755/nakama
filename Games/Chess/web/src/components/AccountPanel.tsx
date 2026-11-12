@@ -102,7 +102,7 @@ export function AccountPanel({ controller }: AccountPanelProps) {
             {account?.kind === "email"
               ? "Synced"
               : account?.kind === "host"
-                ? "App account"
+                ? "Shared"
                 : account?.kind === "guest"
                   ? "Guest"
                   : "Offline"}
@@ -122,7 +122,7 @@ export function AccountPanel({ controller }: AccountPanelProps) {
               {account?.kind === "email"
                 ? account.email
                 : account?.kind === "host"
-                  ? "Managed by the MoonGames app"
+                  ? "MoonGames account shared by verified games"
                   : account?.kind === "guest"
                     ? "Progress is saved on this device only"
                     : "Connect to manage your account"}

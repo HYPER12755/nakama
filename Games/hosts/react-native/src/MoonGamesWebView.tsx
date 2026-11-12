@@ -19,7 +19,9 @@ import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import {
   GAME_PROTOCOL_VERSION,
   createGameLaunchContext,
+  type GameAccountMode,
   type GameHostConfig,
+  type GameReleaseIdentity,
   type GameSession,
   type GameTheme,
   type GameToHostMessage,
@@ -45,6 +47,12 @@ export interface MoonGamesWebViewProps {
   theme?: GameTheme;
   session?: GameSession;
   nakama?: NakamaConnection;
+  /** `shared` for a verified launcher identity; `per-game` otherwise. */
+  accountMode?: GameAccountMode;
+  /** Set only after the native launcher verified the signed release. */
+  official?: boolean;
+  /** Verified release identity forwarded to the game. */
+  release?: GameReleaseIdentity;
   style?: unknown;
   onReady?: (bundle: ResolvedBundle) => void;
   onExit?: (reason?: string) => void;
@@ -88,6 +96,9 @@ export function MoonGamesWebView({
   theme = DEFAULT_THEME,
   session,
   nakama,
+  accountMode,
+  official = false,
+  release,
   style,
   onReady,
   onExit,
@@ -161,6 +172,9 @@ export function MoonGamesWebView({
       theme,
       session,
       nakama,
+      accountMode,
+      official,
+      release,
       launch,
     };
     postToGame({
@@ -168,7 +182,18 @@ export function MoonGamesWebView({
       protocol: GAME_PROTOCOL_VERSION,
       config,
     });
-  }, [gameId, launch, locale, nakama, postToGame, session, theme]);
+  }, [
+    accountMode,
+    gameId,
+    launch,
+    locale,
+    nakama,
+    official,
+    postToGame,
+    release,
+    session,
+    theme,
+  ]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {

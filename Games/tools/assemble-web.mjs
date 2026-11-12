@@ -120,6 +120,22 @@ async function main() {
     catalogPath,
     path.join(launcherDist, "games.json"),
   );
+  const releaseManifestPath = path.join(
+    GAMES_ROOT,
+    "releases",
+    "release-manifest.json",
+  );
+  if (await exists(releaseManifestPath)) {
+    await copyFile(
+      releaseManifestPath,
+      path.join(launcherDist, "release-manifest.json"),
+    );
+    console.log("Copied the signed release manifest beside the catalog.");
+  } else {
+    console.warn(
+      "warning: releases/release-manifest.json is missing. Official release proofs will be unavailable.",
+    );
+  }
   if (assembled === 0) {
     console.warn(
       "warning: no available web game builds were assembled. The menu will still load, but Play links may be unavailable.",

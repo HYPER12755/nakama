@@ -8,10 +8,14 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "smoke:account": "node scripts/account-smoke.mjs",
+    "smoke:social": "node scripts/social-smoke.mjs"
   },
   "dependencies": {
+    "@heroiclabs/nakama-js": "^2.8.0",
     "@moongames/game-sdk": "workspace:*",
+    "@moongames/host-core": "workspace:*",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

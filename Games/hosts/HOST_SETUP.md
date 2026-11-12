@@ -26,6 +26,38 @@ The game bundle and Nakama remain responsible for:
 - authoritative moves, clocks, results, ratings, and history
 - browser/native parity
 
+## Shared launcher account and official proof
+
+Verified official games share the launcher's Nakama identity. This is not a
+per-game account choice. The web launcher verifies the signed release descriptor
+against app-pinned keys and checks the catalog version, SHA-256, size, and key id
+before showing the verified badge or enabling shared auth. If verification
+fails, Play still opens the game with its independent auth.
+
+For browser navigation, the launcher writes a one-game, session-scoped handoff
+under `moongames.launcher.handoff.v1.<gameId>`. It contains the verified proof,
+the host config, the launcher session, and the Nakama connection. The game reads
+it once on load; an in-tab reload keeps the same identity. Independent games
+never receive launcher credentials.
+
+Native launchers can use the same policy through the launch request:
+
+```json
+{
+  "type": "moongames.launch-game",
+  "gameId": "chess",
+  "accountMode": "shared",
+  "session": { "token": "...", "refreshToken": "...", "userId": "...", "username": "...", "expiresAt": 0 },
+  "nakama": { "host": "games.example.com", "port": "443", "serverKey": "...", "useSSL": true }
+}
+```
+
+The native host must pass those values through the normal game `init` config,
+along with `official: true` and the verified release identity. It must not use
+the web catalog `webPath` as a native bundle URL. The same manifest selection,
+pinned-key check, descriptor signature, ZIP size/SHA-256, and bundled fallback
+rules still apply.
+
 ## 1. Host the release manifest
 
 The host reads a `release-manifest.json` and installs one signed game ZIP from
@@ -38,9 +70,9 @@ Games/releases/
 ├── release-manifest.json
 ├── games.json                 # optional custom-menu catalog
 ├── chess/
-│   └── 0.5.0/
-│       ├── chess-0.5.0.bundle.json
-│       └── chess-0.5.0.zip
+│   └── 0.6.0/
+│       ├── chess-0.6.0.bundle.json
+│       └── chess-0.6.0.zip
 └── ...
 ```
 
@@ -48,7 +80,7 @@ Upload the contents of `Games/releases/` to a static host or CDN, for example:
 
 ```text
 https://games.example.com/moongames/release-manifest.json
-https://games.example.com/moongames/chess/0.5.0/chess-0.5.0.zip
+https://games.example.com/moongames/chess/0.6.0/chess-0.6.0.zip
 ```
 
 The manifest stores a relative ZIP URL, so the whole `releases/` directory can
@@ -151,8 +183,8 @@ node tools/release-manifest.mjs \
   --key 'prod-1=<public-key-from-the-generation-step>'
 
 node tools/verify-bundle.mjs \
-  releases/chess/0.5.0/chess-0.5.0.bundle.json \
-  releases/chess/0.5.0/chess-0.5.0.zip \
+  releases/chess/0.6.0/chess-0.6.0.bundle.json \
+  releases/chess/0.6.0/chess-0.6.0.zip \
   --key 'prod-1=<public-key-from-the-generation-step>'
 ```
 
@@ -171,8 +203,8 @@ Both hosts require an app-bundled descriptor and ZIP for:
 Copy these two files from the signed release into the native app:
 
 ```text
-chess-0.5.0.bundle.json
-chess-0.5.0.zip
+chess-0.6.0.bundle.json
+chess-0.6.0.zip
 ```
 
 Never construct the descriptor or ZIP by hand, and never load an unsigned
@@ -285,8 +317,8 @@ Before wiring the app, verify the artifact:
 cd Games
 
 node tools/verify-bundle.mjs \
-  releases/chess/0.5.0/chess-0.5.0.bundle.json \
-  releases/chess/0.5.0/chess-0.5.0.zip \
+  releases/chess/0.6.0/chess-0.6.0.bundle.json \
+  releases/chess/0.6.0/chess-0.6.0.zip \
   --key 'dev-1=yBxRYs6iBo79VGJX3V2lcyShDL9GuhEG/m3V72RaHIs='
 ```
 
@@ -294,8 +326,8 @@ The current release should report:
 
 ```text
 key:    dev-1
-sha256: 64882868dde92f962b5451779cc570e0998e098ecfc68cac317a5ee7f34fa77a
-size:   133699 bytes
+sha256: 281b794297e43c10f1d45658f1eb776f8e34801a7e7f714d3a31aea8f6da4724
+size:   134254 bytes
 ```
 
 If the artifact is re-packaged, update any app-bundled fallback and do not reuse
