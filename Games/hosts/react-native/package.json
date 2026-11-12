@@ -6,7 +6,8 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./launcher": "./src/launcher.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -19,6 +20,7 @@
     "react": ">=19",
     "react-native": ">=0.81",
     "react-native-fs": ">=2.20",
+    "react-native-svg": ">=15",
     "react-native-webview": ">=13",
     "react-native-zip-archive": ">=7"
   },
@@ -26,6 +28,7 @@
     "react": { "optional": true },
     "react-native": { "optional": true },
     "react-native-fs": { "optional": true },
+    "react-native-svg": { "optional": true },
     "react-native-webview": { "optional": true },
     "react-native-zip-archive": { "optional": true }
   },

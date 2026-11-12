@@ -24,7 +24,7 @@ function game(
     orientation: "any",
     tags: ["strategy", "rated"],
     accent: "#e5b85c",
-    icon: "♞",
+    icon: "chess",
     featured: true,
     sortOrder: 10,
     webPath: "chess/",

@@ -114,10 +114,13 @@ describe("official release proofs", () => {
       })),
     ).rejects.toThrow(/No trusted public key/);
 
+    const incompatible = descriptor({
+      minHostProtocol: GAME_PROTOCOL_VERSION + 1,
+    });
     await expect(
       verifyOfficialGame(
-        entry(),
-        manifest(descriptor({ minHostProtocol: GAME_PROTOCOL_VERSION + 1 })),
+        entry(incompatible),
+        manifest(incompatible),
         trusted,
         async () => ({ ok: true }),
       ),

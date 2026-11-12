@@ -98,7 +98,9 @@
 - [x] Write the official launcher session into a game-scoped browser handoff and consume it in Chess.
 - [x] Pass the shared session, account mode, and Nakama connection through native launch requests.
 - [x] Add optional shared-account, official, and release-identity fields to the Flutter and React Native host wrappers.
-- [ ] Add a native launcher shell that reads the launch request, selects the verified bundle, and device-tests the shared handoff.
+- [x] Add a React Native launcher shell with a native catalog, signed-release verification, deep-link requests, and shared-account game launch.
+- [ ] Add an equivalent Flutter launcher shell on top of the catalog client and `MoonGamesHost`.
+- [ ] Device-test native shared handoff, deep links, and session refresh on Android and iOS.
 - [x] Add persistent friends using Nakama's built-in friend graph.
 - [x] Add persisted personal chats using Nakama direct channels, with live delivery and history.
 - [x] Keep friends and personal chats in the launcher account drawer with SVG-only controls.

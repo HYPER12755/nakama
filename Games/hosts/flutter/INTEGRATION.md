@@ -346,7 +346,8 @@ Future<List<GameCatalogEntry>> loadGames() async {
 
 // Example item; wire onTap to the MoonGamesHost route from section 4.
 ListTile(
-  leading: Icon(Icons.sports_esports, size: 28), // map game.icon to your icon set
+  // Map game.icon (for example "chess") to your own SVG icon set.
+  leading: MyGameIcon(game.icon, size: 28),
   title: Text(game.name),
   subtitle: Text(game.tagline),
   trailing: Text('${game.minPlayers}–${game.maxPlayers}'),

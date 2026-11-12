@@ -43,6 +43,7 @@ From `Games/apps/rn/package.json`:
     "react": ">=19",
     "react-native": ">=0.81",
     "react-native-fs": ">=2.20",
+    "react-native-svg": ">=15",
     "react-native-webview": ">=13",
     "react-native-zip-archive": ">=7"
   }
@@ -67,7 +68,7 @@ The host package's native modules are peer dependencies and require native
 linking:
 
 ```bash
-pnpm add react-native-webview react-native-fs react-native-zip-archive
+pnpm add react-native-webview react-native-fs react-native-svg react-native-zip-archive
 ```
 
 Rebuild the app after installation:
@@ -317,6 +318,88 @@ match, or watches when `spectate=1`, using the same flow as browser invite
 links. Add a `launchQuery` prop to your screen if a link can arrive while the
 app is already running. Registering the URL scheme or universal link remains
 the app's responsibility.
+
+### Native catalog shell
+
+Instead of building one game screen per title, render the native launcher:
+
+```tsx
+import {
+  MoonGamesLauncher,
+  type BundledFallback,
+  type NativeLaunchRequest,
+} from "@moongames/react-native-host/launcher";
+import type {
+  GameSession,
+  NakamaConnection,
+} from "@moongames/game-sdk";
+
+type Props = {
+  session?: GameSession;
+  nakama: NakamaConnection;
+  deepLink: NativeLaunchRequest | null;
+  onClearDeepLink: () => void;
+  onOpenAccount: () => void;
+  onRefreshSession: () => Promise<GameSession>;
+  fallbacks: Record<string, BundledFallback>;
+};
+
+export function GameLibrary({
+  session,
+  nakama,
+  deepLink,
+  onClearDeepLink,
+  onOpenAccount,
+  onRefreshSession,
+  fallbacks,
+}: Props) {
+  return (
+    <MoonGamesLauncher
+      catalogUrl="https://games.example.com/moongames/games.json"
+      manifestUrl="https://games.example.com/moongames/release-manifest.json"
+      trustedKeys={{
+        "release-1": "<base64 raw Ed25519 public key>",
+      }}
+      bundledFallbacks={fallbacks}
+      session={session}
+      nakama={nakama}
+      accountLabel={session?.username}
+      launchRequest={deepLink}
+      onLaunchRequestHandled={onClearDeepLink}
+      onOpenAccount={onOpenAccount}
+      onRequestSignIn={onOpenAccount}
+      onRequestSessionRefresh={async () => {
+        await onRefreshSession();
+      }}
+      onGameClosed={() => {
+        // Return to the host app's navigation state if needed.
+      }}
+      onError={(error) => console.warn("MoonGames:", error.message)}
+      theme={{ mode: "dark" }}
+    />
+  );
+}
+```
+
+The shell fetches the catalog and signed manifest, verifies each release, and
+renders its own native search, filters, featured card, verified badges, and
+coming-soon list. It builds the game init config through
+`buildLauncherHostConfig`:
+
+- verified game: `accountMode="shared"`, `official=true`, the release identity,
+  the launcher session, and the Nakama connection
+- unverified game: `accountMode="per-game"`, no launcher session
+- verified game without a launcher session: calls `onRequestSignIn` and does not
+  open
+
+`launchRequest` accepts `{ gameId, query?, requestId? }` for deep links. The same
+request id is handled once. A request that needs sign-in is retried
+automatically when a new session prop arrives.
+
+The shell owns no authentication UI. The app supplies its existing Nakama
+session, or opens its account screen from `onRequestSignIn`/`onOpenAccount`.
+The deep-link query is passed in the game init config exactly like the
+`launchQuery` path above.
 
 ## 6. Local run
 

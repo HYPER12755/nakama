@@ -6,9 +6,21 @@ declare module "react-native" {
 
   export const View: React.ComponentType<any>;
   export const Text: React.ComponentType<any>;
+  export const TextInput: React.ComponentType<any>;
+  export const Pressable: React.ComponentType<any>;
+  export const ScrollView: React.ComponentType<any>;
+  export const SafeAreaView: React.ComponentType<any>;
   export const ActivityIndicator: React.ComponentType<any>;
   export const StyleSheet: {
     create<T extends Record<string, unknown>>(styles: T): T;
+    flatten(style: unknown): Record<string, unknown>;
+  };
+  export function useColorScheme(): "light" | "dark" | null;
+  export const BackHandler: {
+    addEventListener(
+      type: "hardwareBackPress",
+      listener: () => boolean,
+    ): { remove(): void };
   };
   export const Vibration: {
     vibrate(pattern?: number | number[]): void;
@@ -30,6 +42,16 @@ declare module "react-native" {
       listener: (state: string) => void,
     ): { remove(): void };
   };
+}
+
+declare module "react-native-svg" {
+  import type * as React from "react";
+
+  const Svg: React.ComponentType<any>;
+  export default Svg;
+  export const Circle: React.ComponentType<any>;
+  export const Path: React.ComponentType<any>;
+  export const Rect: React.ComponentType<any>;
 }
 
 declare module "react-native-webview" {

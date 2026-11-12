@@ -53,6 +53,11 @@ export interface MoonGamesWebViewProps {
   official?: boolean;
   /** Verified release identity forwarded to the game. */
   release?: GameReleaseIdentity;
+  /**
+   * Complete config from a native launcher shell. When present it replaces the
+   * individual host fields for the initial `init` message.
+   */
+  hostConfig?: GameHostConfig;
   style?: unknown;
   onReady?: (bundle: ResolvedBundle) => void;
   onExit?: (reason?: string) => void;
@@ -99,6 +104,7 @@ export function MoonGamesWebView({
   accountMode,
   official = false,
   release,
+  hostConfig,
   style,
   onReady,
   onExit,
@@ -165,18 +171,19 @@ export function MoonGamesWebView({
   }, []);
 
   const sendInit = useCallback(() => {
-    const config: GameHostConfig = {
-      protocol: GAME_PROTOCOL_VERSION,
-      gameId,
-      locale,
-      theme,
-      session,
-      nakama,
-      accountMode,
-      official,
-      release,
-      launch,
-    };
+    const config: GameHostConfig =
+      hostConfig ?? {
+        protocol: GAME_PROTOCOL_VERSION,
+        gameId,
+        locale,
+        theme,
+        session,
+        nakama,
+        accountMode,
+        official,
+        release,
+        launch,
+      };
     postToGame({
       type: "init",
       protocol: GAME_PROTOCOL_VERSION,
@@ -185,6 +192,7 @@ export function MoonGamesWebView({
   }, [
     accountMode,
     gameId,
+    hostConfig,
     launch,
     locale,
     nakama,

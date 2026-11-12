@@ -360,12 +360,15 @@ build/QA validation:
   proofs, the signed web handoff, social helpers, catalog helpers, and native
   launch options. It builds together with Chess as a deployable static web app.
 - `@moongames/host-core` verifies sizes, SHA-256 digests, and Ed25519 signatures
-  with the same payload contract on web/native JavaScript runtimes; its 8 tests
-  include a cross-check against Node-generated signatures, catalog behavior, and
-  native launch-query parsing.
+  with the same payload contract on web/native JavaScript runtimes; its 13
+  tests include a cross-check against Node-generated signatures, catalog
+  behavior, native launch-query parsing, catalog release proofs, and
+  shared-account launch-config construction.
 - The React Native host package implements remote/cache/bundled resolution,
   pinned keys, downgrade rejection, the full WebView bridge, and native launch
-  queries. It typechecks against local native-module shims.
+  queries. It also ships a native `MoonGamesLauncher` catalog with SVG controls,
+  signed-release badges, deep-link handling, and the verified shared-account
+  gate. It typechecks against local native-module shims.
 - The Flutter host package implements the same resolution, bridge, and launch
   query contract.
   Dart 3.13 formatting and a pure-Dart harness validated the descriptor,
@@ -380,8 +383,8 @@ build/QA validation:
   agreement, casual/rated persistence, Elo changes, history, and leaderboard
   records.
 
-Current local automation: 22 core + 26 web + 8 host-core + 28 launcher
-TypeScript tests, 11 tool tests, and 60 Lua tests (155 passing tests total,
+Current local automation: 22 core + 26 web + 13 host-core + 28 launcher
+TypeScript tests, 11 tool tests, and 60 Lua tests (160 passing tests total,
 excluding the Flutter tests that require the Flutter SDK). The launcher account
 and social smoke scripts also run against real local Nakama. Manual browser QA
 of the catalog menu, account/social drawer, verified launch flow, AI, spectator,

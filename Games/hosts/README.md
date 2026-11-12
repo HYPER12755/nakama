@@ -31,6 +31,13 @@ Both wrappers implement the same contract from `shared/sdk/`:
   and session-refresh messages
 - keep the game code sandboxed in a file-backed WebView
 
+The React Native package also ships `MoonGamesLauncher`, a native catalog/menu
+with no dependency on the web launcher. It reads the operator catalog, verifies
+signed releases through `hosts/core`, and constructs the shared-account launch
+config for verified games. The equivalent Flutter launcher shell is still
+planned; Flutter apps can build one from the catalog client and
+`MoonGamesHost`.
+
 The current Chess bundle is a single self-contained `index.html` with inline
 JavaScript and CSS. Hosts therefore do not depend on `file://` ES-module or
 relative-asset loading, which is inconsistent across WebView engines.

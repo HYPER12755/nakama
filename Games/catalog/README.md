@@ -65,7 +65,8 @@ ListView(
   children: [
     for (final game in catalog.availableGames())
       ListTile(
-        leading: Icon(Icons.sports_esports, size: 28), // map game.icon to your icon set
+        // Map game.icon (for example "chess") to your own SVG icon set.
+        leading: MyGameIcon(game.icon, size: 28),
         title: Text(game.name),
         subtitle: Text(game.tagline),
         trailing: Text('${game.minPlayers}–${game.maxPlayers}'),
@@ -80,17 +81,28 @@ game's signed fallback descriptor/ZIP and the shared `manifestUrl`.
 
 ### React Native
 
+For a complete native menu, use the ready-made launcher from
+`@moongames/react-native-host/launcher`. It reads the catalog, verifies signed
+releases, renders SVG controls and artwork, and opens the selected game with the
+shared account gate.
+
 ```tsx
-import { fetchGamesCatalog } from "@moongames/react-native-host";
+import { MoonGamesLauncher } from "@moongames/react-native-host/launcher";
 
-const catalog = await fetchGamesCatalog(
-  "https://games.example.com/moongames/games.json",
-);
-const available = catalog.games.filter((game) => game.status === "available");
-
-// Render `available` with your own cards, then pass `game.id` to
-// MoonGamesWebView along with that game's verified bundled fallback.
+<MoonGamesLauncher
+  catalogUrl="https://games.example.com/moongames/games.json"
+  manifestUrl="https://games.example.com/moongames/release-manifest.json"
+  trustedKeys={trustedKeys}
+  session={session}
+  nakama={nakama}
+/>;
 ```
+
+If you render your own cards instead, import `fetchGamesCatalog` from
+`@moongames/react-native-host`, map each stable `game.icon` key to your SVG set,
+and pass `game.id` to `MoonGamesWebView` with that game's verified bundled
+fallback. Use the launcher package's `buildLauncherHostConfig` and
+`fetchVerifiedCatalog` helpers for the shared-account gate.
 
 The React Native host re-exports the catalog types and helpers from
 `@moongames/game-sdk`. Flutter exposes the same JSON contract through
@@ -116,7 +128,7 @@ The React Native host re-exports the catalog types and helpers from
       "orientation": "any",
       "tags": ["strategy", "1v1", "rated"],
       "accent": "#e5b85c",
-      "icon": "♞",
+      "icon": "chess",
       "featured": true,
       "sortOrder": 10,
       "webPath": "chess/",

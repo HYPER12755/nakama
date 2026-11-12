@@ -1,12 +1,20 @@
 import { verifyAsync } from "@noble/ed25519";
 import { sha256 } from "@noble/hashes/sha2.js";
 import {
+  GAME_PROTOCOL_VERSION,
   assertBundleDescriptor,
   bundleSigningPayload,
   checkPinnedSigner,
   parseReleaseManifest,
   selectLatestBundle,
   type GameBundleDescriptor,
+  type GameCatalogEntry,
+  type GameHostConfig,
+  type GameLaunchContext,
+  type GameSession,
+  type GameTheme,
+  type GamesCatalog,
+  type NakamaConnection,
   type ReleaseManifest,
   type TrustedBundleKeys,
 } from "@moongames/game-sdk";
@@ -210,4 +218,216 @@ export function selectBundleForHost(
     }
   }
   return { manifest, descriptor };
+}
+
+export interface VerifiedCatalogRelease {
+  gameId: string;
+  version: string;
+  descriptor: GameBundleDescriptor;
+  verifiedAt: number;
+}
+
+export interface VerifiedCatalogRegistry {
+  manifestUrl: string;
+  games: Map<string, VerifiedCatalogRelease>;
+  errors: Map<string, string>;
+  error: string | null;
+}
+
+export type CatalogBundleVerifier = (
+  descriptor: GameBundleDescriptor,
+  trustedKeys?: TrustedBundleKeys,
+) => Promise<BundleVerification>;
+
+/**
+ * Verifies the catalog's signed-release fields against a pinned descriptor.
+ * This is the gate for the shared launcher identity on every platform.
+ */
+export async function verifyCatalogRelease(
+  entry: GameCatalogEntry,
+  manifest: ReleaseManifest,
+  trustedKeys: TrustedBundleKeys,
+  verifier: CatalogBundleVerifier = verifyBundleSignature,
+): Promise<VerifiedCatalogRelease> {
+  if (entry.status !== "available") {
+    throw new Error("The game is not available.");
+  }
+  if (entry.release === undefined) {
+    throw new Error("The catalog has no signed release for this game.");
+  }
+  if (entry.version !== undefined && entry.version !== entry.release.version) {
+    throw new Error("The catalog version does not match its signed release.");
+  }
+  if (entry.release.minHostProtocol > GAME_PROTOCOL_VERSION) {
+    throw new Error("This release needs a newer MoonGames host.");
+  }
+  const descriptor = manifest.bundles.find(
+    (bundle) =>
+      bundle.gameId === entry.id && bundle.version === entry.release?.version,
+  );
+  if (descriptor === undefined) {
+    throw new Error(
+      `Release ${entry.release.version} is missing from the signed manifest.`,
+    );
+  }
+  if (
+    descriptor.sha256 !== entry.release.sha256 ||
+    descriptor.size !== entry.release.size ||
+    descriptor.keyId !== entry.release.keyId ||
+    descriptor.minHostProtocol !== entry.release.minHostProtocol
+  ) {
+    throw new Error("The catalog release does not match the signed descriptor.");
+  }
+  if (descriptor.minHostProtocol > GAME_PROTOCOL_VERSION) {
+    throw new Error("This release needs a newer MoonGames host.");
+  }
+  const pinProblem = checkPinnedSigner(manifest, descriptor, trustedKeys);
+  if (pinProblem !== null) {
+    throw new Error(pinProblem);
+  }
+  const verification = await verifier(descriptor, trustedKeys);
+  if (!verification.ok) {
+    throw new Error(verification.error ?? "The release signature is invalid.");
+  }
+  return {
+    gameId: entry.id,
+    version: descriptor.version,
+    descriptor,
+    verifiedAt: Date.now(),
+  };
+}
+
+export interface FetchVerifiedCatalogOptions {
+  fetchImpl?: typeof fetch;
+  trustedKeys: TrustedBundleKeys;
+  verifier?: CatalogBundleVerifier;
+  timeoutMs?: number;
+}
+
+/**
+ * Loads the signed manifest and verifies every available catalog game. One bad
+ * release is isolated in `errors` so the menu can still open the others.
+ */
+export async function fetchVerifiedCatalog(
+  catalog: GamesCatalog,
+  manifestUrl: string,
+  options: FetchVerifiedCatalogOptions,
+): Promise<VerifiedCatalogRegistry> {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const games = new Map<string, VerifiedCatalogRelease>();
+  const errors = new Map<string, string>();
+  if (fetchImpl === undefined) {
+    return {
+      manifestUrl,
+      games,
+      errors,
+      error: "No fetch implementation is available.",
+    };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    options.timeoutMs ?? 12_000,
+  );
+  try {
+    const response = await fetchImpl(manifestUrl, {
+      headers: { accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(
+        `Release manifest request failed with HTTP ${response.status}.`,
+      );
+    }
+    const manifest = parseReleaseManifest(await response.json());
+    const verifier = options.verifier ?? verifyBundleSignature;
+    await Promise.all(
+      catalog.games
+        .filter((entry) => entry.status === "available")
+        .map(async (entry) => {
+          try {
+            const record = await verifyCatalogRelease(
+              entry,
+              manifest,
+              options.trustedKeys,
+              verifier,
+            );
+            games.set(entry.id, record);
+          } catch (cause) {
+            errors.set(
+              entry.id,
+              cause instanceof Error
+                ? cause.message
+                : "The release could not be verified.",
+            );
+          }
+        }),
+    );
+    return { manifestUrl, games, errors, error: null };
+  } catch (cause) {
+    return {
+      manifestUrl,
+      games,
+      errors,
+      error:
+        cause instanceof Error
+          ? cause.message
+          : "The signed release manifest could not be loaded.",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export interface LauncherHostConfigInput {
+  entry: GameCatalogEntry;
+  /** Present only when the operator verified this release prospectively. */
+  release?: VerifiedCatalogRelease | null;
+  session?: GameSession;
+  nakama?: NakamaConnection;
+  theme: GameTheme;
+  locale: string;
+  launch?: GameLaunchContext;
+}
+
+/**
+ * Creates the single native launch config used by menu shells. Verified games
+ * always receive the launcher session and are marked official; unverified games
+ * never receive that session and keep their own account flow.
+ */
+export function buildLauncherHostConfig(
+  input: LauncherHostConfigInput,
+): GameHostConfig {
+  const base: GameHostConfig = {
+    protocol: GAME_PROTOCOL_VERSION,
+    gameId: input.entry.id,
+    locale: input.locale,
+    theme: input.theme,
+    ...(input.launch === undefined ? {} : { launch: input.launch }),
+  };
+
+  if (input.release === undefined || input.release === null) {
+    return { ...base, accountMode: "per-game" };
+  }
+  if (input.release.gameId !== input.entry.id) {
+    throw new Error("The verified release belongs to a different game.");
+  }
+  if (input.session === undefined || input.nakama === undefined) {
+    throw new Error(
+      "Verified games require a launcher session and Nakama connection.",
+    );
+  }
+  return {
+    ...base,
+    session: input.session,
+    nakama: input.nakama,
+    accountMode: "shared",
+    official: true,
+    release: {
+      version: input.release.version,
+      sha256: input.release.descriptor.sha256,
+      keyId: input.release.descriptor.keyId,
+    },
+  };
 }

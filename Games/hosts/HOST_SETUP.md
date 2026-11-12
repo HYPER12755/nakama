@@ -17,6 +17,7 @@ The host app is responsible for:
 - caching the bundle and falling back to an app-bundled copy
 - loading the game in a WebView
 - passing the host theme, locale, Nakama session, and Nakama server config
+- owning the launcher account/social UI and supplying its current session
 - forwarding lifecycle, toast, sound, analytics, URL, and session-refresh events
 
 The game bundle and Nakama remain responsible for:
@@ -29,10 +30,11 @@ The game bundle and Nakama remain responsible for:
 ## Shared launcher account and official proof
 
 Verified official games share the launcher's Nakama identity. This is not a
-per-game account choice. The web launcher verifies the signed release descriptor
-against app-pinned keys and checks the catalog version, SHA-256, size, and key id
-before showing the verified badge or enabling shared auth. If verification
-fails, Play still opens the game with its independent auth.
+per-game account choice. The web launcher and the React Native
+`MoonGamesLauncher` verify the signed release descriptor against app-pinned keys
+and check the catalog version, SHA-256, size, and key id before showing the
+verified badge or enabling shared auth. If verification fails, Play still opens
+the game with its independent auth.
 
 For browser navigation, the launcher writes a one-game, session-scoped handoff
 under `moongames.launcher.handoff.v1.<gameId>`. It contains the verified proof,
@@ -53,10 +55,12 @@ Native launchers can use the same policy through the launch request:
 ```
 
 The native host must pass those values through the normal game `init` config,
-along with `official: true` and the verified release identity. It must not use
-the web catalog `webPath` as a native bundle URL. The same manifest selection,
-pinned-key check, descriptor signature, ZIP size/SHA-256, and bundled fallback
-rules still apply.
+along with `official: true` and the verified release identity. The React Native
+launcher package provides this native menu and config construction; Flutter apps
+use the catalog plus `MoonGamesHost` while the equivalent Flutter shell is
+pending. Neither should use the web catalog `webPath` as a native bundle URL.
+The same manifest selection, pinned-key check, descriptor signature, ZIP
+size/SHA-256, and bundled fallback rules still apply.
 
 ## 1. Host the release manifest
 

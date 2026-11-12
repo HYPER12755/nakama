@@ -25,7 +25,7 @@ Map<String, Object?> _catalog({List<Map<String, Object?>>? games}) {
             'orientation': 'any',
             'tags': ['strategy', '1v1'],
             'accent': '#e5b85c',
-            'icon': '♞',
+            'icon': 'chess',
             'featured': true,
             'sortOrder': 10,
             'webPath': 'chess/',

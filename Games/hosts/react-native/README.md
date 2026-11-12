@@ -22,6 +22,9 @@ See the full [React Native integration guide](INTEGRATION.md) and the shared
   sound, URL, share, analytics, and session-refresh messages from `shared/sdk/`
 - re-exports the shared games-catalog client and types for custom native game
   panels
+- provides `MoonGamesLauncher`, a native catalog screen that verifies releases,
+  renders its own SVG-illustrated menu, and opens signed bundles without loading
+  the web launcher
 
 The current Chess bundle is one self-contained `index.html` with inline
 JavaScript and CSS, so loading from a file path does not depend on `file://`
@@ -43,7 +46,7 @@ pnpm add @moongames/react-native-host@workspace:*
 # From an external app, use the checkout path instead:
 pnpm add /path/to/Games/hosts/react-native
 
-pnpm add react-native-webview react-native-fs react-native-zip-archive
+pnpm add react-native-webview react-native-fs react-native-svg react-native-zip-archive
 ```
 
 Run the usual React Native autolinking step after adding the native modules.
@@ -96,7 +99,72 @@ first launch. Never load an unsigned fallback. Provide both `session` and
 `nakama` for online play; otherwise the web bundle falls back to automatic
 device authentication and its local server default.
 
+## Native launcher shell
+
+`MoonGamesLauncher` is a ready-made native catalog/menu. It reads `games.json`
+itself, verifies each available game against the signed release manifest, and
+then renders the existing `MoonGamesWebView` for the selected title. It never
+loads the web launcher, so a native app's home screen is independent of the
+MoonGames web UI.
+
+```tsx
+import { MoonGamesLauncher } from "@moongames/react-native-host/launcher";
+import type { GameSession, NakamaConnection } from "@moongames/game-sdk";
+
+<MoonGamesLauncher
+  catalogUrl="https://cdn.example.com/moongames/games.json"
+  manifestUrl="https://cdn.example.com/moongames/release-manifest.json"
+  trustedKeys={trustedKeys}
+  bundledFallbacks={{
+    chess: {
+      zipPath: bundledChessZipPath,
+      descriptor: bundledChessDescriptor,
+    },
+  }}
+  session={session}
+  nakama={nakama}
+  theme={{ mode: "dark" }}
+  accountLabel={session?.username}
+  onOpenAccount={openAccount}
+  onRequestSignIn={openAccount}
+  launchRequest={
+    deepLink === null
+      ? null
+      : {
+          gameId: deepLink.gameId,
+          query: deepLink.query,
+          requestId: deepLink.id,
+        }
+  }
+  onLaunchRequestHandled={clearDeepLink}
+  onGameClosed={() => navigation.goBack()}
+  onRequestSessionRefresh={refreshNakamaSession}
+/>;
+```
+
+The menu shows a verified badge only for a catalog entry whose version, size,
+SHA-256, key id, and Ed25519 descriptor signature match the pinned release. It
+passes `accountMode: "shared"`, `official: true`, the release identity, the
+Nakama session, and the server configuration for verified games. Unverified
+games open with `accountMode: "per-game"` and never receive the launcher session.
+If a verified game is tapped without a session and Nakama connection, the menu
+calls `onRequestSignIn` instead of opening it.
+
+The host app still owns sign-in and social UI. `MoonGamesLauncher` accepts the
+same session your app already uses and does not implement a second account
+system. `launchRequest` handles deep links. `showGameChrome={false}` gives the
+game the full screen; Android hardware back still returns to the library, and
+games can send the shared `exit` bridge message. Keep the app's own iOS back
+affordance when chrome is hidden.
+
+The launcher shell uses `react-native-svg` for its controls and artwork. It does
+not depend on remote cover images; a game's stable catalog `icon` key is mapped
+to a local vector icon.
+
 ## Custom games list
+
+If the built-in shell is not the right fit, build your own cards from the
+catalog and pass the selected game to `MoonGamesWebView`:
 
 ```tsx
 import { fetchGamesCatalog } from "@moongames/react-native-host";
@@ -107,9 +175,11 @@ const catalog = await fetchGamesCatalog(
 const available = catalog.games.filter((game) => game.status === "available");
 ```
 
-Use `GameCatalogEntry` fields in your own cards and pass the selected `id` to
-`MoonGamesWebView`. Keep using the signed fallback assets and release manifest
-for the actual bundle. See [the catalog guide](../../catalog/README.md).
+For verified launches, use `buildLauncherHostConfig` and
+`fetchVerifiedCatalog` from `@moongames/react-native-host/launcher`, then pass
+the resulting `hostConfig` to `MoonGamesWebView`. This keeps the shared-account
+gate identical to the ready-made shell. See
+[the catalog guide](../../catalog/README.md).
 
 ## Status
 
