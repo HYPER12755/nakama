@@ -132,7 +132,7 @@ native integration guides for a minimal embedding example:
 [Flutter](../hosts/flutter/INTEGRATION.md) and
 [React Native](../hosts/react-native/INTEGRATION.md).
 
-## Account and social model
+## Account, invitations, and social model
 
 - Guest or email identity is created once in the launcher. Every verified
   official game shares it. There is no per-game account choice for official
@@ -140,20 +140,41 @@ native integration guides for a minimal embedding example:
 - The verified badge and shared handoff require a valid signed descriptor whose
   version, SHA-256, size, and key id match the catalog. A missing or invalid
   proof leaves Play available with the game's independent auth.
-- Friends use Nakama `addFriends`, `listFriends`, and `deleteFriends`.
+- Friends use Nakama's friend graph through the shared MoonGames RPCs, which add
+  request/accept/decline/cancel notifications.
 - Personal chats use persisted direct channels (`type: 2`) through
   `joinChat`, `writeChatMessage`, and `listChannelMessages`. The launcher does
   not add a custom chat database.
 - Direct channels are resolved by joining the other user's id. Both players
   receive the same `4.<sorted-user-ids>.` channel.
-- Match chat is not shown here; it stays temporary inside each game.
+- The Alerts drawer combines friend events, invites, unread direct messages,
+  filters, and mark-read controls. Notification read state is stored in Nakama,
+  so it survives relaunches; a `BroadcastChannel` refreshes other open tabs.
+- Invites can be created from friends or recent opponents. The authoritative
+  game backend creates the private room at invite time; the launcher resolves,
+  accepts, declines, cancels, and joins the returned match.
+- Invite cards can live in launcher DMs. Outgoing cards copy a shareable token
+  link. Deep links accept `/invite/<token>` or the stable `/invite/<inviteId>`
+  (including the `moongames://` form), and the server still authorizes the
+  sender or recipient. Native hosts receive the same card and token data
+  through the SDK.
+- Emoji pickers are part of MoonGames-owned chat UI: launcher friend chat and
+  temporary in-game match chat. Host-owned chat UIs are not modified.
+- Match chat is not shown here; it stays temporary inside each game and is never
+  persisted.
 
 Run the real-backend checks after starting the stack:
 
 ```bash
 pnpm --filter @moongames/launcher smoke:account
 pnpm --filter @moongames/launcher smoke:social
+pnpm --filter @moongames/launcher smoke:invite
 ```
+
+The invite smoke test creates a real Chess room, exercises token/id/deep-link
+resolution, accept/decline/cancel, joins the accepted room from both sides,
+checks notification read state and offline replay, and verifies a persisted
+direct-chat invite card without leaking its creator token.
 
 ## Adding a web game
 

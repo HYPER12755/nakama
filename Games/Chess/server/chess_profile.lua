@@ -538,6 +538,13 @@ function progression.finalize_match(context, state, result, now)
           outcomes[player.user_id]
         )
       end
+      local social_ok, social = pcall(require, "moongames_social")
+      if social_ok and type(social) == "table" and social.record_recent_players then
+        pcall(social.record_recent_players, "chess", {
+          { userId = white.user_id, username = white.username },
+          { userId = black.user_id, username = black.username },
+        })
+      end
       return true
     end
 

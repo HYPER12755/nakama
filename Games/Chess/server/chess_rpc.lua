@@ -3,6 +3,54 @@
 local nk = require("nakama")
 local protocol = require("chess_protocol")
 local progression = require("chess_profile")
+local social = require("moongames_social")
+
+social.register_game("chess", {
+  create_room = function(context, params, recipient)
+    local source = params.timeControl or params.time_control
+    if source == nil then
+      source = {
+        initialMs = params.initialMs,
+        incrementMs = params.incrementMs,
+      }
+    end
+    local time_control, time_error = protocol.parse_time_control(source)
+    if not time_control then
+      error(time_error or "invalid time control")
+    end
+    local match_id = nk.match_create("chess_match", {
+      mode = "private",
+      rated = false,
+      creator = context.user_id,
+      expected_users = {
+        {
+          user_id = context.user_id,
+          username = context.username or "Player",
+          color = "w",
+        },
+        {
+          user_id = recipient.user_id,
+          username = recipient.username or "Player",
+          color = "b",
+        },
+      },
+      time_control = {
+        initial_ms = time_control.initial_ms,
+        increment_ms = time_control.increment_ms,
+      },
+      lobby_timeout_ms = social.INVITE_TTL_MS + 60000,
+    })
+    return {
+      matchId = match_id,
+      gameTitle = "Chess",
+      mode = "private",
+      metadata = {
+        timeControl = protocol.time_control_wire(time_control),
+      },
+    }
+  end,
+})
+
 
 local function decode_payload(payload)
   if payload == nil or payload == "" then

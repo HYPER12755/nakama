@@ -49,7 +49,10 @@ const SERVICE_LOGS = {
 const CHESS_ENTRY = path.join(GAMES_ROOT, "launcher", "dist", "chess", "index.html");
 const WEB_ENTRY = path.join(GAMES_ROOT, "launcher", "dist", "index.html");
 const WEB_CATALOG = path.join(GAMES_ROOT, "launcher", "dist", "games.json");
-const MODULE_SOURCE = path.join(GAMES_ROOT, "Chess", "server");
+const MODULE_SOURCES = [
+  path.join(GAMES_ROOT, "Chess", "server"),
+  path.join(GAMES_ROOT, "shared", "server"),
+];
 const RELEASE_MANIFEST = path.join(GAMES_ROOT, "releases", "release-manifest.json");
 
 function fail(message) {
@@ -260,7 +263,7 @@ async function loadSettings() {
     logDir,
     stateFile,
     modulesDir,
-    moduleSource: MODULE_SOURCE,
+    moduleSources: MODULE_SOURCES,
     web: {
       host: process.env.MOONGAMES_WEB_HOST ?? "0.0.0.0",
       port: webPort,
@@ -627,23 +630,32 @@ async function showLogHint(settings, service) {
 }
 
 async function syncModules(settings) {
-  if (!(await exists(settings.moduleSource))) {
-    fail(`Chess module directory is missing: ${settings.moduleSource}`);
+  const modules = [];
+  for (const source of settings.moduleSources) {
+    if (!(await exists(source))) {
+      fail(`Nakama module directory is missing: ${source}`);
+    }
+    const entries = await readdir(source, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.endsWith(".lua")) {
+        modules.push({ name: entry.name, source: path.join(source, entry.name) });
+      }
+    }
   }
-  const entries = await readdir(settings.moduleSource, { withFileTypes: true });
-  const modules = entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".lua"))
-    .map((entry) => entry.name)
-    .sort();
   if (modules.length === 0) {
-    fail(`No Lua modules found in ${settings.moduleSource}`);
+    fail("No Lua modules found in the configured module directories.");
+  }
+  modules.sort((left, right) => left.name.localeCompare(right.name));
+  const seen = new Set();
+  for (const module of modules) {
+    if (seen.has(module.name)) {
+      fail(`Duplicate Lua module name across sources: ${module.name}`);
+    }
+    seen.add(module.name);
   }
   await mkdir(settings.modulesDir, { recursive: true });
   for (const module of modules) {
-    await copyFile(
-      path.join(settings.moduleSource, module),
-      path.join(settings.modulesDir, module),
-    );
+    await copyFile(module.source, path.join(settings.modulesDir, module.name));
   }
   console.log(
     `Synced ${modules.length} Lua module${modules.length === 1 ? "" : "s"} to ${settings.modulesDir}`,

@@ -15,6 +15,7 @@ dependencies:
   cryptography: ^2.9.0
   flutter_inappwebview: ^6.1.5
   http: ^1.6.0
+  nakama: ^1.4.0
   path: ^1.9.1
   path_provider: ^2.1.6
   share_plus: ^11.0.0

@@ -78,7 +78,7 @@ const trustedKeys = {
   accountMode="shared"
   official
   release={{
-    version: "0.6.0",
+    version: "0.7.0",
     sha256: "281b794297e43c10f1d45658f1eb776f8e34801a7e7f714d3a31aea8f6da4724",
     keyId: "dev-1",
   }}
@@ -160,6 +160,60 @@ affordance when chrome is hidden.
 The launcher shell uses `react-native-svg` for its controls and artwork. It does
 not depend on remote cover images; a game's stable catalog `icon` key is mapped
 to a local vector icon.
+
+## Identity, invites, and notifications
+
+The package re-exports the headless `MoonGamesSocialClient` from
+`@moongames/social`. It uses the host's existing Nakama session and renders no
+UI, so your app can build its own invite cards and notification center.
+
+```tsx
+import {
+  MoonGamesSocialClient,
+  linkHostAccount,
+  syncMoonGamesUsername,
+} from "@moongames/react-native-host";
+
+const social = new MoonGamesSocialClient({
+  client,
+  session,
+  socket,
+  selfUserId: session.user_id,
+});
+
+social.onNotification((notification) => {
+  if (notification.invite) {
+    // Post this data into the host app's own DM thread.
+    hostPostInviteCard(notification.invite);
+  }
+});
+
+// Replay persistent notifications after a reconnect.
+const pendingInvites = await social.replayInvites();
+
+const linked = await linkHostAccount({
+  client,
+  guestSession: session,
+  email: hostAccount.email,
+  username: hostAccount.username,
+  password: moonGamesPassword,
+  mode: "existing", // or "create" to link the current guest
+});
+
+// Keep the shared player name aligned when the host account is renamed.
+await syncMoonGamesUsername({ client, session: linked, username: hostAccount.username });
+```
+
+`createInvite` always asks the authoritative game backend to create the room.
+The returned `MoonGamesInvite` carries game/title, sender/recipient, status,
+expiry, token, match id, join/deep-link paths, preview art, and metadata. Use
+`sendInviteMessage` to post a MoonGames card into the persisted direct chat.
+`listDirectMessages`/`sendDirectMessage` expose persisted DM history. Temporary
+match chat stays in the game server and is never stored by this client.
+
+Use `inviteTokenFromLink` to parse `/invite/<token>` or `moongames://invite/<token>` deep links, then call `resolveInvite`/`acceptInvite` with the token. It also accepts the stable invite id returned in `deepLink`. The host's social database remains authoritative for its own DM UI. MoonGames
+only receives the target MoonGames username/id and returns the invite event;
+the host matches that username to its own user and renders the card.
 
 ## Custom games list
 

@@ -2543,6 +2543,682 @@ dd {
   margin: 0 14px 4px;
 }
 
+.friend-action--invite {
+  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.friend-action--invite:hover:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 54%, var(--border));
+}
+
+.drawer-feedback--success {
+  color: var(--success);
+}
+
+.drawer-hint {
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.alerts-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.alerts-heading h3 {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: -0.03em;
+}
+
+.alerts-heading p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.alert-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.alert-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 2%, transparent);
+  color: var(--muted);
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.alert-filter:hover {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  color: var(--text);
+}
+
+.alert-filter--active {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text);
+}
+
+.alert-filter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.alert-filter > span {
+  display: grid;
+  min-width: 15px;
+  height: 15px;
+  place-items: center;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast, #17120a);
+  font-size: 8px;
+}
+
+.notification-list {
+  display: grid;
+  gap: 8px;
+}
+
+.alerts-message-list {
+  display: grid;
+  gap: 6px;
+}
+
+.alerts-message-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: 12px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%),
+    color-mix(in srgb, var(--text) 2.2%, transparent);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.alerts-message-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  transform: translateY(-1px);
+}
+
+.alerts-message-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.alerts-message-row > svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.alerts-message-row__copy {
+  flex: 1;
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.alerts-message-row__copy strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alerts-message-row__copy span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.notification-card {
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--text) 2.2%, transparent);
+}
+
+.notification-card--unread {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 65%),
+    color-mix(in srgb, var(--text) 2.2%, transparent);
+}
+
+.notification-card__summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notification-card__icon {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  color: color-mix(in srgb, var(--accent) 80%, var(--text));
+}
+
+.notification-card__copy {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notification-card__copy strong {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notification-card__copy span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.notification-card__dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.invite-card {
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: 14px;
+  background:
+    radial-gradient(320px 180px at 100% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%),
+    color-mix(in srgb, var(--panel-raised) 78%, transparent);
+}
+
+.invite-card--accepted {
+  border-color: color-mix(in srgb, var(--success) 30%, var(--border));
+}
+
+.invite-card--declined,
+.invite-card--cancelled,
+.invite-card--expired {
+  opacity: 0.78;
+}
+
+.invite-card__topline {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.invite-card__mark {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: color-mix(in srgb, var(--accent) 86%, var(--text));
+}
+
+.invite-card__identity {
+  flex: 1;
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.invite-card__identity strong {
+  font-size: 12px;
+  letter-spacing: -0.01em;
+}
+
+.invite-card__identity span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-card__status {
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.invite-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.invite-card__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.invite-card__message {
+  margin: 0;
+  padding: 7px 9px;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+  color: var(--muted-strong);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.invite-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chat-bubble--invite {
+  width: min(94%, 350px);
+  max-width: min(94%, 350px);
+  padding: 4px;
+  background: transparent;
+}
+
+.chat-bubble--invite .invite-card {
+  width: 100%;
+}
+
+.chat-bubble--invite time {
+  padding-right: 4px;
+}
+
+.chat-composer__emoji {
+  position: relative;
+  flex: none;
+}
+
+.chat-composer__emoji-toggle {
+  width: 36px;
+  height: 36px;
+}
+
+.chat-composer__emoji-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.emoji-picker {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  width: min(310px, calc(100vw - 40px));
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 15px;
+  background: var(--panel-solid);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.4);
+}
+
+.emoji-picker--right {
+  right: 0;
+}
+
+.emoji-picker--left {
+  left: 0;
+}
+
+.emoji-picker__section {
+  display: grid;
+  gap: 5px;
+}
+
+.emoji-picker__label {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.emoji-picker__tabs {
+  display: flex;
+  gap: 3px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.emoji-picker__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.emoji-picker__tab {
+  flex: none;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.emoji-picker__tab:hover,
+.emoji-picker__tab--active {
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.emoji-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  max-height: 188px;
+  max-height: min(188px, 26dvh);
+  overflow-y: auto;
+}
+
+.emoji-picker__grid--recent {
+  grid-template-columns: repeat(8, 1fr);
+}
+
+.emoji-picker__emoji {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.emoji-picker__emoji:hover,
+.emoji-picker__emoji:focus-visible {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  outline: 0;
+}
+
+.invite-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(3, 5, 10, 0.66);
+  backdrop-filter: blur(7px);
+  animation: account-fade 0.18s ease both;
+}
+
+.invite-composer {
+  width: min(580px, 100%);
+  max-height: min(760px, calc(100dvh - 40px));
+  overflow-y: auto;
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  background:
+    radial-gradient(600px 300px at 100% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 65%),
+    var(--panel-solid);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.5);
+}
+
+.invite-composer__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.invite-composer__header > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.invite-composer__header h2 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.04em;
+}
+
+.invite-composer__header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.invite-composer__mark {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: color-mix(in srgb, var(--accent) 84%, var(--text));
+}
+
+.invite-composer__games,
+.invite-composer__time {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.invite-composer legend,
+.invite-composer__message > span {
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.invite-composer legend {
+  padding: 0;
+}
+
+.invite-game-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.invite-game-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--text) 2.2%, transparent);
+  cursor: pointer;
+}
+
+.invite-game-option input,
+.invite-time-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.invite-game-option--active {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 70%),
+    color-mix(in srgb, var(--text) 2.2%, transparent);
+}
+
+.invite-game-option__icon {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  color: color-mix(in srgb, var(--accent) 80%, var(--text));
+}
+
+.invite-game-option > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.invite-game-option strong {
+  font-size: 12px;
+}
+
+.invite-game-option small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-time-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.invite-time-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.invite-time-option--active {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.invite-composer__message {
+  display: grid;
+  gap: 5px;
+}
+
+.invite-composer__message > span small {
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.invite-composer__message textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  outline: 0;
+  background: color-mix(in srgb, var(--bg) 30%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.invite-composer__message textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.invite-composer__message > small {
+  justify-self: end;
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.invite-composer__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
 @keyframes account-fade {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -2606,6 +3282,31 @@ dd {
 
   .account-tabs {
     padding-inline: 12px;
+  }
+
+  .account-tab {
+    gap: 4px;
+    padding-inline: 5px;
+    font-size: 10px;
+  }
+
+  .invite-layer {
+    align-items: flex-end;
+    padding: 10px;
+  }
+
+  .invite-composer {
+    max-height: calc(100dvh - 20px);
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .invite-game-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .emoji-picker {
+    width: min(300px, calc(100vw - 28px));
   }
 
   .account-drawer__body {

@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@moongames/game-sdk": "workspace:*",
-    "@moongames/host-core": "workspace:*"
+    "@moongames/host-core": "workspace:*",
+    "@moongames/social": "workspace:*"
   },
   "peerDependencies": {
     "react": ">=19",

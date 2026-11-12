@@ -12,6 +12,7 @@ export type IconName =
   | "moon"
   | "shield-check"
   | "skip-back"
+  | "smile"
   | "skip-forward"
   | "sun"
   | "user";
@@ -84,6 +85,12 @@ export function Icon({
         </>
       )}
       {name === "close" && <path d="M6 6l12 12M18 6 6 18" />}
+      {name === "smile" && (
+        <>
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M8.6 14.1a4.1 4.1 0 0 0 6.8 0M9.2 9.6h.01M14.8 9.6h.01" />
+        </>
+      )}
       {name === "arrow-left" && (
         <>
           <path d="M19 12H5" />

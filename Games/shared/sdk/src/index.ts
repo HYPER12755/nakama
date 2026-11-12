@@ -7,3 +7,5 @@ export * from "./platform";
 export * from "./bridge";
 export * from "./game";
 export * from "./bundle";
+export * from "./social";
+export * from "./emoji";

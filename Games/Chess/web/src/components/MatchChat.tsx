@@ -4,7 +4,9 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { insertEmojiAtSelection } from "@moongames/game-sdk";
 import type { OnlineChatMessage } from "../lib/onlineProtocol";
+import { EmojiPicker } from "./EmojiPicker";
 import { Icon } from "./Icon";
 
 export interface MatchChatProps {
@@ -65,6 +67,7 @@ export function MatchChat({
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [seenCount, setSeenCount] = useState(0);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
@@ -78,6 +81,7 @@ export function MatchChat({
     setOpen(false);
     setText("");
     setSeenCount(0);
+    setEmojiOpen(false);
   }, [matchId]);
 
   useEffect(() => {
@@ -93,6 +97,7 @@ export function MatchChat({
       const timer = window.setTimeout(() => inputRef.current?.focus(), 60);
       return () => window.clearTimeout(timer);
     }
+    setEmojiOpen(false);
     if (wasOpenRef.current) {
       wasOpenRef.current = false;
       launcherRef.current?.focus();
@@ -134,6 +139,17 @@ export function MatchChat({
     }
     onSend(text);
     setText("");
+  };
+
+  const insertEmoji = (emoji: string) => {
+    const start = inputRef.current?.selectionStart ?? text.length;
+    const end = inputRef.current?.selectionEnd ?? start;
+    const next = insertEmojiAtSelection(text, emoji, start, end);
+    setText(next.value);
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(next.caret, next.caret);
+    });
   };
 
   return (
@@ -206,6 +222,23 @@ export function MatchChat({
           </div>
 
           <form className="chat-panel__composer" onSubmit={submit}>
+            <div className="chat-panel__emoji">
+              <button
+                type="button"
+                className="chat-panel__emoji-toggle"
+                aria-label="Choose an emoji"
+                aria-expanded={emojiOpen}
+                onClick={() => setEmojiOpen((current) => !current)}
+              >
+                <Icon name="smile" size={19} />
+              </button>
+              {emojiOpen ? (
+                <EmojiPicker
+                  onPick={insertEmoji}
+                  onClose={() => setEmojiOpen(false)}
+                />
+              ) : null}
+            </div>
             <label className="chat-panel__input">
               <span className="visually-hidden">Chat message</span>
               <input

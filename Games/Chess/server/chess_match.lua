@@ -726,6 +726,7 @@ local function match_init(context, params)
   local state = {
     mode = mode,
     rated = params.rated == true,
+    lobby_timeout_ms = tonumber(params.lobby_timeout_ms) or LOBBY_TIMEOUT_MS,
     time_control = time_control,
     game = rules.new(),
     players = {},
@@ -944,7 +945,7 @@ local function match_loop(context, dispatcher, tick, state, messages)
   end
 
   if not state.started_at then
-    if now - state.created_at >= LOBBY_TIMEOUT_MS then
+    if now - state.created_at >= (state.lobby_timeout_ms or LOBBY_TIMEOUT_MS) then
       return nil
     end
     return state

@@ -3,8 +3,9 @@
 local script_path = arg[0] or "Chess/server/test/chess_profile_test.lua"
 local script_dir = script_path:match("^(.*)[/\\]") or "."
 local server_dir = script_dir .. "/.."
+local shared_server_dir = server_dir .. "/../../shared/server"
 
-package.path = server_dir .. "/?.lua;" .. package.path
+package.path = server_dir .. "/?.lua;" .. shared_server_dir .. "/?.lua;" .. package.path
 
 local fake_time = 1700000000000
 local storage = {}
@@ -43,6 +44,8 @@ end
 fake_nk = {
   time = function()
     return fake_time
+  end,
+  register_rpc = function()
   end,
   logger_warn = function() end,
   logger_error = function() end,
@@ -473,6 +476,25 @@ test("profile payload returns defaults, stats, and newest history first", functi
   assert_equal(#payload.history, 2)
   assert_equal(payload.history[1].matchId, "new-match")
   assert_equal(payload.history[2].matchId, "old-match")
+end)
+
+test("records both recent opponents after a finished match", function()
+  reset()
+  local state = new_state({ rated = true })
+  progression.finalize_match(
+    { match_id = "recent-match" },
+    state,
+    result_for("resign", "b"),
+    fake_time
+  )
+
+  local for_white = exposed_record("u1", "moongames_recent_players", "recent")
+  local for_black = exposed_record("u2", "moongames_recent_players", "recent")
+  assert_truthy(for_white)
+  assert_truthy(for_black)
+  assert_equal(for_white.value.entries[1].userId, "u2")
+  assert_equal(for_white.value.entries[1].gameId, "chess")
+  assert_equal(for_black.value.entries[1].userId, "u1")
 end)
 
 test("leaderboard payload returns ranked entries and the caller's record", function()

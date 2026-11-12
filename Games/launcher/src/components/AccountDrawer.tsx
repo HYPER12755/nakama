@@ -5,7 +5,18 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import {
+  effectiveInviteStatus,
+  insertEmojiAtSelection,
+  inviteShareUrl,
+  inviteStatusLabel,
+  isInviteJoinable,
+  notificationActionLabel,
+  type MoonGamesInvite,
+  type SocialNotification,
+} from "@moongames/game-sdk";
 import type { LauncherSocialController } from "../hooks/useLauncherSocial";
+import { copyText } from "../lib/clipboard";
 import {
   acceptedFriends,
   chatPreview,
@@ -14,9 +25,15 @@ import {
   type LauncherFriend,
   type SocialMessage,
 } from "../lib/social";
-import { Icon } from "./Icon";
+import { EmojiPicker, EmojiTriggerIcon } from "./EmojiPicker";
+import { Icon, gameIconName } from "./Icon";
 
-export type AccountDrawerTab = "account" | "friends" | "chats";
+export type AccountDrawerTab = "account" | "alerts" | "friends" | "chats";
+
+interface InviteTarget {
+  userId: string;
+  username: string;
+}
 
 interface AccountDrawerProps {
   open: boolean;
@@ -24,6 +41,8 @@ interface AccountDrawerProps {
   onTabChange: (tab: AccountDrawerTab) => void;
   onClose: () => void;
   social: LauncherSocialController;
+  onInvitePlayer: (target: InviteTarget) => void;
+  onJoinInvite: (invite: MoonGamesInvite) => void;
 }
 
 function avatarInitial(name: string | undefined): string {
@@ -50,6 +69,8 @@ export function AccountDrawer({
   onTabChange,
   onClose,
   social,
+  onInvitePlayer,
+  onJoinInvite,
 }: AccountDrawerProps) {
   useEffect(() => {
     if (!open) {
@@ -129,6 +150,20 @@ export function AccountDrawer({
           </button>
           <button
             type="button"
+            className={tab === "alerts" ? "account-tab account-tab--active" : "account-tab"}
+            aria-current={tab === "alerts" ? "page" : undefined}
+            onClick={() => onTabChange("alerts")}
+          >
+            <Icon name="bell" size={16} />
+            Alerts
+            {social.notificationUnread + social.unreadTotal > 0 ? (
+              <span className="account-tab__badge">
+                {social.notificationUnread + social.unreadTotal}
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
             className={tab === "friends" ? "account-tab account-tab--active" : "account-tab"}
             aria-current={tab === "friends" ? "page" : undefined}
             onClick={() => onTabChange("friends")}
@@ -155,10 +190,25 @@ export function AccountDrawer({
 
         <div className="account-drawer__body">
           {tab === "account" ? <AccountTab social={social} /> : null}
-          {tab === "friends" ? (
-            <FriendsTab social={social} onOpenChat={() => onTabChange("chats")} />
+          {tab === "alerts" ? (
+            <AlertsTab
+              social={social}
+              onOpenFriends={() => onTabChange("friends")}
+              onOpenMessages={() => onTabChange("chats")}
+              onInvitePlayer={onInvitePlayer}
+              onJoinInvite={onJoinInvite}
+            />
           ) : null}
-          {tab === "chats" ? <ChatsTab social={social} /> : null}
+          {tab === "friends" ? (
+            <FriendsTab
+              social={social}
+              onOpenChat={() => onTabChange("chats")}
+              onInvitePlayer={onInvitePlayer}
+            />
+          ) : null}
+          {tab === "chats" ? (
+            <ChatsTab social={social} onJoinInvite={onJoinInvite} />
+          ) : null}
         </div>
       </aside>
     </div>
@@ -414,9 +464,11 @@ function FriendAvatar({ friend }: { friend: LauncherFriend }) {
 function FriendsTab({
   social,
   onOpenChat,
+  onInvitePlayer,
 }: {
   social: LauncherSocialController;
   onOpenChat: () => void;
+  onInvitePlayer: (target: InviteTarget) => void;
 }) {
   const [username, setUsername] = useState("");
   const accepted = useMemo(() => acceptedFriends(social.friends), [social.friends]);
@@ -543,6 +595,15 @@ function FriendsTab({
                 </div>
                 <div className="friend-row__actions">
                   <button
+                    className="friend-action friend-action--invite"
+                    type="button"
+                    aria-label={`Invite ${friend.username} to a game`}
+                    disabled={social.connection !== "online" || social.inviteBusy !== null}
+                    onClick={() => onInvitePlayer(friend)}
+                  >
+                    <Icon name="gamepad" size={16} />
+                  </button>
+                  <button
                     className="friend-action friend-action--message"
                     type="button"
                     aria-label={`Message ${friend.username}`}
@@ -607,7 +668,13 @@ function FriendsTab({
   );
 }
 
-function ChatsTab({ social }: { social: LauncherSocialController }) {
+function ChatsTab({
+  social,
+  onJoinInvite,
+}: {
+  social: LauncherSocialController;
+  onJoinInvite: (invite: MoonGamesInvite) => void;
+}) {
   const accepted = useMemo(() => acceptedFriends(social.friends), [social.friends]);
   const ordered = useMemo(() => {
     return [...accepted].sort((left, right) => {
@@ -624,7 +691,13 @@ function ChatsTab({ social }: { social: LauncherSocialController }) {
   }, [accepted, social.conversations]);
 
   if (social.activeFriend !== null) {
-    return <Conversation social={social} friend={social.activeFriend} />;
+    return (
+      <Conversation
+        social={social}
+        friend={social.activeFriend}
+        onJoinInvite={onJoinInvite}
+      />
+    );
   }
 
   return (
@@ -685,12 +758,16 @@ function ChatsTab({ social }: { social: LauncherSocialController }) {
 function Conversation({
   social,
   friend,
+  onJoinInvite,
 }: {
   social: LauncherSocialController;
   friend: LauncherFriend;
+  onJoinInvite: (invite: MoonGamesInvite) => void;
 }) {
   const [draft, setDraft] = useState("");
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const messages = social.messages;
 
   useEffect(() => {
@@ -707,6 +784,17 @@ function Conversation({
       .sendMessage(value)
       .then(() => setDraft(""))
       .catch(() => undefined);
+  };
+
+  const insertEmoji = (emoji: string) => {
+    const start = inputRef.current?.selectionStart ?? draft.length;
+    const end = inputRef.current?.selectionEnd ?? start;
+    const next = insertEmojiAtSelection(draft, emoji, start, end);
+    setDraft(next.value);
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(next.caret, next.caret);
+    });
   };
 
   return (
@@ -740,10 +828,18 @@ function Conversation({
         ) : null}
         {messages.map((message: SocialMessage) => (
           <article
-            className={`chat-bubble${message.own ? " chat-bubble--own" : ""}`}
+            className={`chat-bubble${message.own ? " chat-bubble--own" : ""}${message.invite !== null ? " chat-bubble--invite" : ""}`}
             key={message.id}
           >
-            <p>{message.text}</p>
+            {message.invite !== null ? (
+              <InviteCard
+                invite={message.invite}
+                social={social}
+                onJoin={onJoinInvite}
+              />
+            ) : (
+              <p>{message.text}</p>
+            )}
             <time dateTime={new Date(message.createdAt).toISOString()}>
               {formatChatTime(message.createdAt)}
             </time>
@@ -759,7 +855,26 @@ function Conversation({
       ) : null}
 
       <form className="chat-composer" onSubmit={submit}>
+        <div className="chat-composer__emoji">
+          <button
+            className="account-icon-button chat-composer__emoji-toggle"
+            type="button"
+            aria-label="Choose an emoji"
+            aria-expanded={emojiOpen}
+            onClick={() => setEmojiOpen((current) => !current)}
+          >
+            <EmojiTriggerIcon />
+          </button>
+          {emojiOpen ? (
+            <EmojiPicker
+              onPick={insertEmoji}
+              onClose={() => setEmojiOpen(false)}
+              align="left"
+            />
+          ) : null}
+        </div>
         <input
+          ref={inputRef}
           type="text"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
@@ -783,12 +898,451 @@ function Conversation({
   );
 }
 
+function AlertsTab({
+  social,
+  onOpenFriends,
+  onOpenMessages,
+  onInvitePlayer,
+  onJoinInvite,
+}: {
+  social: LauncherSocialController;
+  onOpenFriends: () => void;
+  onOpenMessages: () => void;
+  onInvitePlayer: (target: InviteTarget) => void;
+  onJoinInvite: (invite: MoonGamesInvite) => void;
+}) {
+  const alertUnread = social.notificationUnread;
+  const unread = alertUnread + social.unreadTotal;
+  const [filter, setFilter] = useState<
+    "all" | "invites" | "friends" | "messages"
+  >("all");
+  const unreadFriends = social.friends.filter(
+    (friend) => (social.unread[friend.userId] ?? 0) > 0,
+  );
+  const visibleNotifications = social.notifications.filter((notification) => {
+    if (filter === "all" || filter === "messages") {
+      return true;
+    }
+    const invite =
+      notification.kind === "invite" ||
+      notification.kind === "invite-accepted" ||
+      notification.kind === "invite-declined" ||
+      notification.kind === "invite-cancelled" ||
+      notification.kind === "invite-expired";
+    return filter === "invites" ? invite : !invite;
+  });
+  const showMessages = filter === "all" || filter === "messages";
+  const showNotificationList = filter !== "messages";
+  const hasFilteredContent =
+    (showMessages && unreadFriends.length > 0) ||
+    (showNotificationList && visibleNotifications.length > 0);
+  return (
+    <div className="drawer-stack">
+      <section className="alerts-heading">
+        <div>
+          <h3>Notifications</h3>
+          <p>{unread > 0 ? `${unread} waiting for you` : "You are all caught up"}</p>
+        </div>
+        <button
+          className="button button--ghost button--compact"
+          type="button"
+          disabled={social.connection !== "online" || social.notificationBusy || alertUnread === 0}
+          onClick={() => {
+            void social.markNotificationsRead([], true);
+          }}
+        >
+          <Icon name="check" size={15} />
+          Mark alerts read
+        </button>
+      </section>
+
+      <Feedback error={social.notificationError} notice={social.notificationNotice} />
+      <Feedback error={social.inviteError} notice={social.inviteNotice} />
+
+      <div className="alert-filters" role="group" aria-label="Filter alerts">
+        {(
+          [
+            ["all", "All"],
+            ["invites", "Invites"],
+            ["friends", "Friends"],
+            ["messages", "Messages"],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            className={`alert-filter${filter === value ? " alert-filter--active" : ""}`}
+            type="button"
+            aria-pressed={filter === value}
+            key={value}
+            onClick={() => setFilter(value)}
+          >
+            {label}
+            {value === "messages" && social.unreadTotal > 0 ? (
+              <span>{social.unreadTotal}</span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+
+      {social.selectedInvite !== null ? (
+        <section className="friend-section friend-section--selected">
+          <div className="friend-section__heading">
+            <h3>Selected invite</h3>
+            <button
+              className="account-icon-button"
+              type="button"
+              aria-label="Dismiss selected invite"
+              onClick={() => {
+                void social.selectInvite(null);
+              }}
+            >
+              <Icon name="x" size={15} />
+            </button>
+          </div>
+          <InviteCard
+            invite={social.selectedInvite.invite}
+            social={social}
+            onJoin={onJoinInvite}
+          />
+        </section>
+      ) : null}
+
+      {showMessages && unreadFriends.length > 0 ? (
+        <section className="friend-section">
+          <div className="friend-section__heading">
+            <h3>Unread messages</h3>
+            <span>{unreadFriends.length}</span>
+          </div>
+          <div className="alerts-message-list">
+            {unreadFriends.map((friend) => {
+              const count = social.unread[friend.userId] ?? 0;
+              return (
+                <button
+                  className="alerts-message-row"
+                  type="button"
+                  key={friend.userId}
+                  onClick={() => {
+                    void social.openChat(friend).then(onOpenMessages);
+                  }}
+                >
+                  <span className="friend-avatar" aria-hidden="true">
+                    {avatarInitial(friendDisplayName(friend))}
+                  </span>
+                  <span className="alerts-message-row__copy">
+                    <strong>{friendDisplayName(friend)}</strong>
+                    <span>
+                      {count} unread message{count === 1 ? "" : "s"}
+                    </span>
+                  </span>
+                  <Icon name="chat" size={16} />
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {social.connection !== "online" ? (
+        <DrawerEmpty
+          icon="bell"
+          title="Alerts are offline"
+          body="Reconnect to MoonGames to see invites, messages, and friend updates."
+        />
+      ) : social.notificationBusy && social.notifications.length === 0 ? (
+        <p className="conversation__status">Loading notifications…</p>
+      ) : !hasFilteredContent ? (
+        <DrawerEmpty
+          icon="bell"
+          title={filter === "messages" ? "No unread messages" : "No alerts here"}
+          body={
+            filter === "messages"
+              ? "Open a friend chat to start a conversation."
+              : "Friend requests, messages, and game invites will appear here."
+          }
+        />
+      ) : null}
+
+      {showNotificationList && visibleNotifications.length > 0 ? (
+        <section className="notification-list" aria-live="polite">
+          {visibleNotifications.map((notification) => (
+            <NotificationRow
+              key={notification.id}
+              notification={notification}
+              social={social}
+              onOpenFriends={onOpenFriends}
+              onJoinInvite={onJoinInvite}
+            />
+          ))}
+        </section>
+      ) : null}
+
+      <section className="friend-section">
+        <div className="friend-section__heading">
+          <h3>Recent players</h3>
+          <span>{social.recentPlayers.length}</span>
+        </div>
+        {social.recentPlayersBusy ? (
+          <p className="conversation__status">Loading recent players…</p>
+        ) : social.recentPlayers.length === 0 ? (
+          <p className="drawer-hint">
+            Finish an online match and your recent table will appear here.
+          </p>
+        ) : (
+          <div className="friend-list">
+            {social.recentPlayers.map((player) => (
+              <article className="friend-row" key={player.userId}>
+                <span className="friend-avatar" aria-hidden="true">
+                  {avatarInitial(player.displayName ?? player.username)}
+                </span>
+                <div className="friend-row__copy">
+                  <strong>{player.displayName ?? player.username}</strong>
+                  <span>{player.username}</span>
+                </div>
+                <button
+                  className="friend-action friend-action--invite"
+                  type="button"
+                  aria-label={`Invite ${player.username} to a game`}
+                  disabled={social.connection !== "online" || social.inviteBusy !== null}
+                  onClick={() => onInvitePlayer(player)}
+                >
+                  <Icon name="gamepad" size={16} />
+                </button>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function notificationIcon(kind: SocialNotification["kind"]): "bell" | "users" | "chat" | "gamepad" {
+  switch (kind) {
+    case "message":
+      return "chat";
+    case "friend-request":
+    case "friend-accepted":
+    case "friend-declined":
+    case "friend-cancelled":
+    case "friend-removed":
+      return "users";
+    case "invite":
+    case "invite-accepted":
+    case "invite-declined":
+    case "invite-cancelled":
+    case "invite-expired":
+      return "gamepad";
+    default:
+      return "bell";
+  }
+}
+
+function NotificationRow({
+  notification,
+  social,
+  onOpenFriends,
+  onJoinInvite,
+}: {
+  notification: SocialNotification;
+  social: LauncherSocialController;
+  onOpenFriends: () => void;
+  onJoinInvite: (invite: MoonGamesInvite) => void;
+}) {
+  const action = notificationActionLabel(notification);
+  return (
+    <article className={`notification-card${notification.read ? "" : " notification-card--unread"}`}>
+      <button
+        className="notification-card__summary"
+        type="button"
+        onClick={() => {
+          void social.handleNotification(notification);
+          if (
+            notification.kind !== "invite" &&
+            notification.kind !== "invite-accepted" &&
+            notification.kind !== "invite-declined" &&
+            notification.kind !== "invite-cancelled" &&
+            notification.kind !== "invite-expired" &&
+            notification.kind !== "message"
+          ) {
+            onOpenFriends();
+          }
+        }}
+      >
+        <span className="notification-card__icon" aria-hidden="true">
+          <Icon name={notificationIcon(notification.kind)} size={17} />
+        </span>
+        <span className="notification-card__copy">
+          <strong>{notification.subject}</strong>
+          <span>
+            {formatChatTime(notification.createdAt)}
+            {action === null ? "" : ` · ${action}`}
+          </span>
+        </span>
+        {!notification.read ? <span className="notification-card__dot" aria-label="Unread" /> : null}
+      </button>
+      {notification.invite !== null ? (
+        <InviteCard
+          invite={notification.invite}
+          social={social}
+          onJoin={onJoinInvite}
+        />
+      ) : null}
+    </article>
+  );
+}
+
+function InviteCard({
+  invite,
+  social,
+  onJoin,
+}: {
+  invite: MoonGamesInvite;
+  social: LauncherSocialController;
+  onJoin: (invite: MoonGamesInvite) => void;
+}) {
+  const self = social.account?.userId ?? "";
+  const outgoing = invite.sender.userId === self;
+  const status = effectiveInviteStatus(invite);
+  const pending = status === "pending";
+  const busy = social.inviteBusy === invite.inviteId;
+  const canJoin = isInviteJoinable(invite);
+  const [linkState, setLinkState] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
+  const canShare = outgoing && (pending || canJoin);
+  const copyInviteLink = async () => {
+    try {
+      const base = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
+      const link =
+        invite.token !== undefined && invite.token.length > 0
+          ? inviteShareUrl(base, invite)
+          : new URL(invite.joinPath.replace(/^\/+/, ""), base).toString();
+      if (link === null) {
+        setLinkState("failed");
+        return;
+      }
+      setLinkState((await copyText(link)) ? "copied" : "failed");
+    } catch {
+      setLinkState("failed");
+    }
+  };
+  return (
+    <div className={`invite-card invite-card--${status}`}>
+      <div className="invite-card__topline">
+        <span className="invite-card__mark" aria-hidden="true">
+          <Icon name={gameIconName(invite.gameId)} size={20} />
+        </span>
+        <span className="invite-card__identity">
+          <strong>{invite.gameTitle}</strong>
+          <span>
+            {outgoing
+              ? `Invite sent to ${invite.recipient.username}`
+              : `${invite.sender.username} invited you`}
+          </span>
+        </span>
+        <span className="invite-card__status">{inviteStatusLabel(invite)}</span>
+      </div>
+
+      <div className="invite-card__meta">
+        <span>
+          <Icon name="clock" size={13} />
+          {status === "pending"
+            ? `Expires ${formatChatTime(invite.expiresAt)}`
+            : `Sent ${formatChatTime(invite.createdAt)}`}
+        </span>
+        <span>
+          <Icon name="shield-check" size={13} />
+          Private room
+        </span>
+      </div>
+
+      {invite.message !== null ? (
+        <p className="invite-card__message">{invite.message}</p>
+      ) : null}
+
+      {social.inviteError !== null && busy ? (
+        <p className="drawer-feedback drawer-feedback--error" role="alert">
+          {social.inviteError}
+        </p>
+      ) : null}
+
+      <div className="invite-card__actions">
+        {pending && !outgoing ? (
+          <>
+            <button
+              className="button button--primary button--compact"
+              type="button"
+              disabled={busy || social.connection !== "online"}
+              onClick={() => {
+                void social.acceptInvite(invite);
+              }}
+            >
+              <Icon name="check" size={15} />
+              {busy ? "Accepting…" : "Accept"}
+            </button>
+            <button
+              className="button button--ghost button--compact"
+              type="button"
+              disabled={busy || social.connection !== "online"}
+              onClick={() => {
+                void social.declineInvite(invite);
+              }}
+            >
+              <Icon name="x" size={15} />
+              Decline
+            </button>
+          </>
+        ) : null}
+        {pending && outgoing ? (
+          <button
+            className="button button--ghost button--compact"
+            type="button"
+            disabled={busy || social.connection !== "online"}
+            onClick={() => {
+              void social.cancelInvite(invite);
+            }}
+          >
+            <Icon name="x" size={15} />
+            {busy ? "Cancelling…" : "Cancel invite"}
+          </button>
+        ) : null}
+        {canJoin ? (
+          <button
+            className="button button--primary button--compact"
+            type="button"
+            disabled={busy}
+            onClick={() => onJoin(invite)}
+          >
+            <Icon name="gamepad" size={15} />
+            Join room
+          </button>
+        ) : null}
+        {canShare ? (
+          <button
+            className="button button--ghost button--compact"
+            type="button"
+            onClick={() => {
+              void copyInviteLink();
+            }}
+          >
+            <Icon name={linkState === "copied" ? "check" : "link"} size={15} />
+            {linkState === "copied"
+              ? "Link copied"
+              : linkState === "failed"
+                ? "Copy failed"
+                : "Copy link"}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function DrawerEmpty({
   icon,
   title,
   body,
 }: {
-  icon: "users" | "chat";
+  icon: "users" | "chat" | "bell" | "gamepad";
   title: string;
   body: string;
 }) {

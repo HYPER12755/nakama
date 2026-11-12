@@ -34,9 +34,16 @@ Both wrappers implement the same contract from `shared/sdk/`:
 The React Native package also ships `MoonGamesLauncher`, a native catalog/menu
 with no dependency on the web launcher. It reads the operator catalog, verifies
 signed releases through `hosts/core`, and constructs the shared-account launch
-config for verified games. The equivalent Flutter launcher shell is still
-planned; Flutter apps can build one from the catalog client and
-`MoonGamesHost`.
+config for verified games. The Flutter package ships the equivalent
+`MoonGamesLauncher` shell, backed by `release_proof.dart` and the same catalog
+rules. Both native shells are optional; the default embedded experience remains
+the MoonGames web launcher in a WebView.
+
+Both host SDKs expose the shared social layer (`@moongames/social` in
+TypeScript and `MoonGamesSocialClient` in Flutter) for friend lists, direct
+chat, invites, notifications, account linking, and invite-card data. Hosts own
+their custom invite cards and notification UI; MoonGames supplies the data and
+never writes to the host's social database.
 
 The current Chess bundle is a single self-contained `index.html` with inline
 JavaScript and CSS. Hosts therefore do not depend on `file://` ES-module or

@@ -1,3 +1,6 @@
+import type { MoonGamesInvite } from "@moongames/game-sdk";
+import { parseInviteMessage } from "@moongames/game-sdk";
+
 export const FRIEND_STATE = {
   mutual: 0,
   invited: 1,
@@ -21,6 +24,7 @@ export interface SocialMessage {
   text: string;
   createdAt: number;
   own: boolean;
+  invite: MoonGamesInvite | null;
 }
 
 interface FriendLike {
@@ -86,13 +90,14 @@ export function normalizeChatMessage(
   message: MessageLike,
   selfUserId: string,
 ): SocialMessage | null {
+  const invite = parseInviteMessage(message.content);
   const text =
     typeof message.content === "object" &&
     message.content !== null &&
     typeof (message.content as { text?: unknown }).text === "string"
       ? (message.content as { text: string }).text.trim().slice(0, 1000)
       : "";
-  if (text.length === 0) {
+  if (text.length === 0 && invite === null) {
     return null;
   }
   const senderId = message.sender_id ?? "";
@@ -100,12 +105,13 @@ export function normalizeChatMessage(
   return {
     id:
       message.message_id ??
-      `${senderId}-${message.create_time ?? Date.now()}-${text.slice(0, 16)}`,
+      `${senderId}-${message.create_time ?? Date.now()}-${(text || invite?.inviteId || "invite").slice(0, 16)}`,
     senderId,
     username: message.username?.trim() || "Player",
     text,
     createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
     own: senderId.length > 0 && senderId === selfUserId,
+    invite,
   };
 }
 
@@ -131,6 +137,9 @@ export function chatPreview(messages: SocialMessage[]): string {
     return "Start a conversation";
   }
   const prefix = last.own ? "You: " : "";
+  if (last.invite !== null) {
+    return `${prefix}${last.invite.gameTitle} invite`;
+  }
   return `${prefix}${last.text}`;
 }
 

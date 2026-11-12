@@ -6,8 +6,9 @@
 local script_path = arg[0] or "Chess/server/test/chess_match_test.lua"
 local script_dir = script_path:match("^(.*)[/\\]") or "."
 local server_dir = script_dir .. "/.."
+local shared_server_dir = server_dir .. "/../../shared/server"
 
-package.path = server_dir .. "/?.lua;" .. package.path
+package.path = server_dir .. "/?.lua;" .. shared_server_dir .. "/?.lua;" .. package.path
 
 local fake_time = 1700000000000
 local fake_nk

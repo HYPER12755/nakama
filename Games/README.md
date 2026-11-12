@@ -146,8 +146,13 @@ game still opens with its own independent account.
 
 Friends are stored with Nakama's built-in friend graph. Personal chats use
 persisted direct-chat channels (`type: 2`), so message history is stored by
-Nakama and is not duplicated in a custom database. Match chat remains temporary
-and is never written to history.
+Nakama and is not duplicated in a custom database. The launcher Alerts center
+covers friend requests, accept/decline/cancel events, invites, invite status
+changes, and unread personal messages. Invite cards can be shared in launcher
+DMs and opened from `/invite/<token>` or `moongames://invite/<token>`. Friends
+or recent opponents can be invited to an authoritative game room; game rules
+stay in the game backend. MoonGames-owned chat surfaces include an emoji picker,
+while match chat remains temporary and is never written to history.
 
 ```text
 https://games.example.com/moongames/games.json
@@ -217,8 +222,8 @@ pnpm test:all
 pnpm package:chess
 pnpm release:manifest
 pnpm verify:bundle \
-  releases/chess/0.6.0/chess-0.6.0.bundle.json \
-  releases/chess/0.6.0/chess-0.6.0.zip \
+  releases/chess/0.7.0/chess-0.7.0.bundle.json \
+  releases/chess/0.7.0/chess-0.7.0.zip \
   --key "dev-1=<base64-public-key>"
 
 # End-to-end online smoke test (requires local Nakama)
@@ -232,6 +237,9 @@ pnpm --filter @moongames/launcher smoke:account
 
 # Friends, direct chat, live delivery, and persisted history against local Nakama
 pnpm --filter @moongames/launcher smoke:social
+
+# Invites, notifications, offline replay, and invite cards against local Nakama
+pnpm --filter @moongames/launcher smoke:invite
 ```
 
 `pnpm stack start` is the normal local development entry point. It syncs the
@@ -282,8 +290,8 @@ public deployment.
 
 ## Current status
 
-Phases 1–7.5 are code-complete except optional quick messages and real-device
-build/QA validation:
+Phases 1–7.6 are code-complete except optional host attestation, visual
+mobile QA, and real-device build validation:
 
 - The TypeScript chess core is implemented and covered by 22 passing tests.
 - The portable web client has 26 passing tests for invite links, native launch
@@ -301,9 +309,10 @@ build/QA validation:
 - The pure Lua rules engine is implemented in `Chess/server/chess_rules.lua` and
   covered by 21 passing tests, including shared vectors, perft, SAN, castling,
   en passant, promotion, draws, undo, and JSON-safe state serialization.
-- The authoritative Nakama match handler, protocol, RPCs, matchmaker hook, and
-  progression module are covered by 39 additional Lua tests (8 protocol,
-  23 match, 8 progression), for 60 Lua tests in total.
+- The authoritative Nakama match handler, protocol, RPCs, matchmaker hook,
+  progression, and shared social modules are covered by 54 additional Lua tests
+  (8 protocol, 23 match, 9 profile, 21 rules, 14 shared social), for 75 Lua
+  tests in total.
 - Online Chess is wired into the web UI with quick match, private match IDs,
   guest sign-in, email/password accounts, host-supplied sessions, connection
   status, authoritative clocks, reconnect, resign, draw offers, and server
@@ -356,9 +365,9 @@ build/QA validation:
 - A responsive browser launcher reads the same catalog and renders search,
   filters, a featured game, themed cards, and coming-soon titles. It includes a
   shared launcher account, verified-release badges, friends, personal chats,
-  and the native launch bridge. Its 28 tests cover account validation, release
-  proofs, the signed web handoff, social helpers, catalog helpers, and native
-  launch options. It builds together with Chess as a deployable static web app.
+  and the native launch bridge. Its 33 tests cover account validation, release
+  proofs, the signed web handoff, social/invite helpers, shared social RPC
+  clients, catalog helpers, and native launch options. It builds together with Chess as a deployable static web app.
 - `@moongames/host-core` verifies sizes, SHA-256 digests, and Ed25519 signatures
   with the same payload contract on web/native JavaScript runtimes; its 13
   tests include a cross-check against Node-generated signatures, catalog
@@ -367,15 +376,17 @@ build/QA validation:
 - The React Native host package implements remote/cache/bundled resolution,
   pinned keys, downgrade rejection, the full WebView bridge, and native launch
   queries. It also ships a native `MoonGamesLauncher` catalog with SVG controls,
-  signed-release badges, deep-link handling, and the verified shared-account
+  signed-release badges, deep-link handling, the verified shared-account
   gate. It typechecks against local native-module shims.
 - The Flutter host package implements the same resolution, bridge, and launch
   query contract.
   Dart 3.13 formatting and a pure-Dart harness validated the descriptor,
   signature, archive, remote, cache, offline, and bundled paths against a real
   signed Chess release. The WebView widget was also typechecked against local
-  platform API stubs. The Flutter SDK is not installed here, so
-  `flutter analyze/test` and an app build remain outstanding.
+  platform API stubs. The optional Flutter `MoonGamesLauncher` shell mirrors the
+  React Native verified-release gate, and its pure-Dart proof and social-model
+  harnesses pass. The Flutter SDK is not installed here, so `flutter
+  analyze/test` and an app build remain outstanding.
 - `pnpm smoke:online` runs real WebSocket clients against Nakama and verifies
   private seating, spectator join/read-only behavior/result delivery,
   player/spectator chat, moves, clock broadcasts, reconnect, state snapshots,
@@ -383,12 +394,28 @@ build/QA validation:
   agreement, casual/rated persistence, Elo changes, history, and leaderboard
   records.
 
-Current local automation: 22 core + 26 web + 13 host-core + 28 launcher
-TypeScript tests, 11 tool tests, and 60 Lua tests (160 passing tests total,
-excluding the Flutter tests that require the Flutter SDK). The launcher account
-and social smoke scripts also run against real local Nakama. Manual browser QA
-of the catalog menu, account/social drawer, verified launch flow, AI, spectator,
-invite, replay, fullscreen board, chat, and online/profile flows, plus Android
+Current local automation: 22 core + 26 web + 13 host-core + 33 launcher
+TypeScript tests, 11 tool tests, and 75 Lua tests (180 passing tests total,
+excluding Flutter package tests that require the Flutter SDK). The launcher
+account, social, and invite smoke scripts also run against real local Nakama.
+Manual browser QA of the catalog menu, account/social/notification drawer,
+verified launch flow, AI, spectator, invite, replay, fullscreen board, launcher
+and match-chat emoji pickers, and online/profile flows, plus Android
 Chrome/Flutter/React Native device testing, is still required.
 
-Optional quick messages are tracked in `TODO.md`.
+Current limitations:
+
+- The local Chess release is signed with the development key `dev-1`; pin and
+  sign with a production Ed25519 key before public deployment.
+- The Flutter SDK is not installed in this environment, so full Flutter
+  analysis/tests and native app builds remain outstanding even though the pure
+  Dart proof and social harnesses pass.
+- Launcher/match emoji pickers and responsive layouts still need visual QA on
+  real Android Chrome, Flutter, React Native, and iOS surfaces.
+- Email verification and password reset require operator SMTP configuration.
+- OS push notifications are out of scope for this milestone; the launcher uses
+  sockets plus persistent in-app notifications.
+- Host identity attestation is optional and deferred. Host account linking is
+  currently password-gated to prevent silent account takeover.
+
+The remaining device/multi-file work is tracked in `TODO.md`.

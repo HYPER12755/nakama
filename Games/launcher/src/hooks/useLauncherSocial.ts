@@ -7,7 +7,25 @@ import {
   type Socket,
   type StatusPresenceEvent,
 } from "@heroiclabs/nakama-js";
-import type { GameSession, NakamaConnection } from "@moongames/game-sdk";
+import {
+  inviteIsExpired,
+  isInviteJoinable,
+  mergeNotifications,
+  notificationActionLabel,
+  resolveInviteView,
+  unreadNotificationCount,
+  type GameSession,
+  type InviteCreateInput,
+  type InviteResolveResult,
+  type MoonGamesInvite,
+  type NakamaConnection,
+  type SocialNotification,
+  type SocialPlayerSummary,
+} from "@moongames/game-sdk";
+import {
+  MoonGamesSocialClient,
+  type NotificationReadState,
+} from "@moongames/social";
 import {
   authErrorDetail,
   authErrorMessage,
@@ -41,6 +59,8 @@ import {
   type SocialMessage,
 } from "../lib/social";
 
+const NOTIFICATION_CHANNEL = "moongames.launcher.notifications.v1";
+
 export type LauncherConnection =
   | "offline"
   | "connecting"
@@ -65,6 +85,17 @@ export interface LauncherSocialController {
   outgoing: LauncherFriend[];
   unread: Record<string, number>;
   unreadTotal: number;
+  notifications: SocialNotification[];
+  notificationUnread: number;
+  notificationBusy: boolean;
+  notificationError: string | null;
+  notificationNotice: string | null;
+  recentPlayers: SocialPlayerSummary[];
+  recentPlayersBusy: boolean;
+  inviteBusy: string | null;
+  inviteError: string | null;
+  inviteNotice: string | null;
+  selectedInvite: InviteResolveResult | null;
   activeFriendId: string | null;
   activeFriend: LauncherFriend | null;
   messages: SocialMessage[];
@@ -84,6 +115,17 @@ export interface LauncherSocialController {
   acceptFriend: (friend: LauncherFriend) => Promise<void>;
   removeFriend: (friend: LauncherFriend) => Promise<void>;
   refreshFriends: () => Promise<void>;
+  refreshNotifications: () => Promise<void>;
+  markNotificationsRead: (ids?: string[], all?: boolean) => Promise<void>;
+  handleNotification: (notification: SocialNotification) => Promise<void>;
+  refreshRecentPlayers: () => Promise<void>;
+  createInvite: (input: InviteCreateInput) => Promise<MoonGamesInvite | null>;
+  selectInvite: (invite: MoonGamesInvite | null) => Promise<void>;
+  resolveInviteLink: (token: string) => Promise<boolean>;
+  acceptInvite: (invite: MoonGamesInvite) => Promise<void>;
+  declineInvite: (invite: MoonGamesInvite) => Promise<void>;
+  cancelInvite: (invite: MoonGamesInvite) => Promise<void>;
+  clearInviteFeedback: () => void;
   openChat: (friend: LauncherFriend) => Promise<void>;
   closeChat: () => void;
   sendMessage: (text: string) => Promise<void>;
@@ -153,6 +195,16 @@ export function useLauncherSocial(): LauncherSocialController {
   const [friendError, setFriendError] = useState<string | null>(null);
   const [friendNotice, setFriendNotice] = useState<string | null>(null);
   const [unread, setUnread] = useState<Record<string, number>>({});
+  const [notifications, setNotifications] = useState<SocialNotification[]>([]);
+  const [notificationBusy, setNotificationBusy] = useState(false);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [notificationNotice, setNotificationNotice] = useState<string | null>(null);
+  const [recentPlayers, setRecentPlayers] = useState<SocialPlayerSummary[]>([]);
+  const [recentPlayersBusy, setRecentPlayersBusy] = useState(false);
+  const [inviteBusy, setInviteBusy] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
+  const [selectedInvite, setSelectedInvite] = useState<InviteResolveResult | null>(null);
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const [messagesByFriend, setMessagesByFriend] = useState<
     Record<string, SocialMessage[]>
@@ -162,9 +214,11 @@ export function useLauncherSocial(): LauncherSocialController {
 
   const clientRef = useRef<Client | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const socialRef = useRef<MoonGamesSocialClient | null>(null);
   const sessionRef = useRef<Session | null>(null);
   const accountRef = useRef<LauncherAccount | null>(null);
   const friendsRef = useRef<LauncherFriend[]>([]);
+  const notificationReadIdsRef = useRef<Set<string>>(new Set());
   const onlineIdsRef = useRef<Set<string>>(new Set());
   const channelsRef = useRef<Map<string, string>>(new Map());
   const channelFriendsRef = useRef<Map<string, string>>(new Map());
@@ -275,6 +329,9 @@ export function useLauncherSocial(): LauncherSocialController {
       return;
     }
     const result = await client.listFriends(session);
+    if (clientRef.current !== client || sessionRef.current !== session) {
+      return;
+    }
     const normalized = (result.friends ?? [])
       .map((friend: Friend) => normalizeFriend(friend, onlineIdsRef.current))
       .filter((friend): friend is LauncherFriend => friend !== null);
@@ -317,6 +374,9 @@ export function useLauncherSocial(): LauncherSocialController {
         latest[result.value.friendId] = result.value.message;
       }
     }
+    if (clientRef.current !== client || sessionRef.current !== session) {
+      return;
+    }
     if (Object.keys(latest).length > 0) {
       setMessagesByFriend((current) => {
         const next = { ...current };
@@ -341,6 +401,404 @@ export function useLauncherSocial(): LauncherSocialController {
       }
     }
   }, [applyOnline, joinDirectChat]);
+
+  const handleSocialNotification = useCallback(
+    (notification: SocialNotification) => {
+      setNotifications((current) => {
+        const merged = mergeNotifications(
+          current,
+          [notification],
+          notificationReadIdsRef.current,
+        );
+        const invite = notification.invite;
+        if (invite === null) {
+          return merged;
+        }
+        // Lifecycle notifications carry the newest authoritative status. Apply
+        // it to the older invite-received row too, so its actions cannot linger.
+        return merged.map((entry) =>
+          entry.invite?.inviteId === invite.inviteId
+            ? { ...entry, invite }
+            : entry,
+        );
+      });
+      if (notification.invite !== null) {
+        setInviteNotice(notification.subject);
+      }
+      if (notification.kind.startsWith("friend-")) {
+        void refreshFriends();
+      }
+    },
+    [refreshFriends],
+  );
+
+  const refreshNotifications = useCallback(async (): Promise<void> => {
+    const social = socialRef.current;
+    if (social === null) {
+      return;
+    }
+    setNotificationBusy(true);
+    setNotificationError(null);
+    try {
+      const state = await social.notificationsState();
+      if (socialRef.current !== social) {
+        return;
+      }
+      notificationReadIdsRef.current = new Set(state.readIds);
+      const next = await social.listNotifications();
+      if (socialRef.current !== social) {
+        return;
+      }
+      const inviteIds = [
+        ...new Set(
+          next
+            .map((notification) => notification.invite?.inviteId)
+            .filter((id): id is string => id !== undefined),
+        ),
+      ];
+      const resolved = new Map<string, MoonGamesInvite>();
+      await Promise.allSettled(
+        inviteIds.map(async (inviteId) => {
+          try {
+            const result = await social.resolveInvite({ inviteId });
+            resolved.set(inviteId, result.invite);
+          } catch {
+            // Keep the notification payload if the invite was already removed.
+          }
+        }),
+      );
+      if (socialRef.current !== social) {
+        return;
+      }
+      setNotifications(
+        next.map((notification) => {
+          const invite = notification.invite;
+          if (invite === null) {
+            return notification;
+          }
+          const current = resolved.get(invite.inviteId);
+          return current === undefined
+            ? notification
+            : { ...notification, invite: current };
+        }),
+      );
+    } catch (cause) {
+      if (socialRef.current !== social) {
+        return;
+      }
+      setNotificationError(
+        await readableError(cause, "Could not load your notifications."),
+      );
+    } finally {
+      setNotificationBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") {
+      return undefined;
+    }
+    let channel: BroadcastChannel;
+    try {
+      channel = new BroadcastChannel(NOTIFICATION_CHANNEL);
+    } catch {
+      return undefined;
+    }
+    channel.onmessage = (event: MessageEvent<unknown>) => {
+      const payload = event.data;
+      if (typeof payload !== "object" || payload === null) {
+        return;
+      }
+      const source = payload as { userId?: unknown };
+      if (source.userId !== accountRef.current?.userId) {
+        return;
+      }
+      void refreshNotifications();
+    };
+    return () => {
+      channel.close();
+    };
+  }, [refreshNotifications]);
+
+  const broadcastNotificationChange = useCallback((userId: string) => {
+    if (typeof BroadcastChannel === "undefined") {
+      return;
+    }
+    try {
+      const channel = new BroadcastChannel(NOTIFICATION_CHANNEL);
+      channel.postMessage({ userId });
+      channel.close();
+    } catch {
+      // Cross-tab sync is an enhancement; server read state remains canonical.
+    }
+  }, []);
+
+  const refreshRecentPlayers = useCallback(async (): Promise<void> => {
+    const social = socialRef.current;
+    if (social === null) {
+      return;
+    }
+    setRecentPlayersBusy(true);
+    try {
+      setRecentPlayers(await social.listRecentPlayers());
+    } catch {
+      setRecentPlayers([]);
+    } finally {
+      setRecentPlayersBusy(false);
+    }
+  }, []);
+
+  const markNotificationsRead = useCallback(
+    async (ids: string[] = [], all = false): Promise<void> => {
+      const social = socialRef.current;
+      if (social === null) {
+        return;
+      }
+      try {
+        const state = await social.markNotificationsRead(ids, all);
+        notificationReadIdsRef.current = new Set(state.readIds);
+        setNotifications((current) =>
+          current.map((notification) => ({
+            ...notification,
+            read:
+              all ||
+              notification.read ||
+              ids.includes(notification.id) ||
+              state.readIds.includes(notification.id),
+          })),
+        );
+        const userId = accountRef.current?.userId;
+        if (userId !== undefined) {
+          broadcastNotificationChange(userId);
+        }
+      } catch (cause) {
+        setNotificationError(
+          await readableError(cause, "Could not update notification state."),
+        );
+      }
+    },
+    [broadcastNotificationChange],
+  );
+
+  const selectInvite = useCallback(
+    async (invite: MoonGamesInvite | null): Promise<void> => {
+      setInviteError(null);
+      if (invite === null) {
+        setSelectedInvite(null);
+        return;
+      }
+      const self = accountRef.current;
+      if (self === null) {
+        setInviteError("Connect to MoonGames before opening an invite.");
+        return;
+      }
+      const local = resolveInviteView(invite, self.userId);
+      if (local !== null) {
+        setSelectedInvite(local);
+      }
+      const social = socialRef.current;
+      if (social === null) {
+        return;
+      }
+      setInviteBusy(invite.inviteId);
+      try {
+        const resolved = await social.resolveInvite({
+          inviteId: invite.inviteId,
+        });
+        setSelectedInvite(resolved);
+      } catch (cause) {
+        setInviteError(
+          await readableError(cause, "Could not open that invite."),
+        );
+      } finally {
+        setInviteBusy(null);
+      }
+    },
+    [],
+  );
+
+  const handleNotification = useCallback(
+    async (notification: SocialNotification): Promise<void> => {
+      await markNotificationsRead([notification.id]);
+      if (notification.invite !== null) {
+        await selectInvite(notification.invite);
+      }
+    },
+    [markNotificationsRead, selectInvite],
+  );
+
+  const markInviteNotificationRead = useCallback(
+    async (inviteId: string): Promise<void> => {
+      const ids = notifications
+        .filter(
+          (notification) =>
+            !notification.read && notification.invite?.inviteId === inviteId,
+        )
+        .map((notification) => notification.id);
+      if (ids.length > 0) {
+        await markNotificationsRead(ids);
+      }
+    },
+    [markNotificationsRead, notifications],
+  );
+
+  const resolveInviteLink = useCallback(async (token: string): Promise<boolean> => {
+    setInviteError(null);
+    setInviteNotice(null);
+    const social = socialRef.current;
+    if (social === null) {
+      setInviteError("Connect to MoonGames before opening an invite.");
+      return false;
+    }
+    setInviteBusy("link");
+    try {
+      const resolved = await social.resolveInvite({ token });
+      setSelectedInvite(resolved);
+      return true;
+    } catch (cause) {
+      setInviteError(
+        await readableError(cause, "That invite link is invalid or expired."),
+      );
+      return false;
+    } finally {
+      setInviteBusy(null);
+    }
+  }, []);
+
+  const createInvite = useCallback(
+    async (input: InviteCreateInput): Promise<MoonGamesInvite | null> => {
+      setInviteError(null);
+      setInviteNotice(null);
+      const social = socialRef.current;
+      if (social === null) {
+        setInviteError("Connect to MoonGames before sending an invite.");
+        return null;
+      }
+      const self = accountRef.current;
+      if (self === null) {
+        setInviteError("Connect to MoonGames before sending an invite.");
+        return null;
+      }
+      setInviteBusy(input.recipientId ?? input.recipientUsername ?? "new");
+      try {
+        const invite = await social.createInvite(input);
+        const recipientId = invite.recipient.userId;
+        try {
+          const message = await social.sendInviteMessage(recipientId, invite);
+          if (channelFriendsRef.current.has(message.channelId)) {
+            appendChatMessage(recipientId, {
+              id: message.id,
+              senderId: self.userId,
+              username: self.username,
+              text: "",
+              createdAt: message.createdAt,
+              own: true,
+              invite,
+            });
+          }
+        } catch {
+          // The persistent notification and share link still deliver the invite.
+        }
+        setInviteNotice(`Invite sent to ${invite.recipient.username}.`);
+        setSelectedInvite(resolveInviteView(invite, self.userId));
+        return invite;
+      } catch (cause) {
+        setInviteError(
+          await readableError(cause, "Could not send that invite."),
+        );
+        return null;
+      } finally {
+        setInviteBusy(null);
+      }
+    },
+    [appendChatMessage],
+  );
+
+  const acceptInvite = useCallback(
+    async (invite: MoonGamesInvite): Promise<void> => {
+      setInviteError(null);
+      setInviteNotice(null);
+      const social = socialRef.current;
+      if (social === null) {
+        setInviteError("Connect to MoonGames before accepting an invite.");
+        return;
+      }
+      setInviteBusy(invite.inviteId);
+      try {
+        const next = await social.acceptInvite({ inviteId: invite.inviteId });
+        setInviteNotice(`You accepted ${next.sender.username}'s invite.`);
+        setSelectedInvite(resolveInviteView(next, next.recipient.userId));
+        await markInviteNotificationRead(next.inviteId);
+        await refreshNotifications();
+      } catch (cause) {
+        setInviteError(
+          await readableError(cause, "Could not accept that invite."),
+        );
+      } finally {
+        setInviteBusy(null);
+      }
+    },
+    [markInviteNotificationRead, refreshNotifications],
+  );
+
+  const declineInvite = useCallback(
+    async (invite: MoonGamesInvite): Promise<void> => {
+      setInviteError(null);
+      setInviteNotice(null);
+      const social = socialRef.current;
+      if (social === null) {
+        setInviteError("Connect to MoonGames before declining an invite.");
+        return;
+      }
+      setInviteBusy(invite.inviteId);
+      try {
+        const next = await social.declineInvite({ inviteId: invite.inviteId });
+        setInviteNotice("Invite declined.");
+        setSelectedInvite(resolveInviteView(next, next.recipient.userId));
+        await markInviteNotificationRead(next.inviteId);
+        await refreshNotifications();
+      } catch (cause) {
+        setInviteError(
+          await readableError(cause, "Could not decline that invite."),
+        );
+      } finally {
+        setInviteBusy(null);
+      }
+    },
+    [markInviteNotificationRead, refreshNotifications],
+  );
+
+  const cancelInvite = useCallback(
+    async (invite: MoonGamesInvite): Promise<void> => {
+      setInviteError(null);
+      setInviteNotice(null);
+      const social = socialRef.current;
+      if (social === null) {
+        setInviteError("Connect to MoonGames before cancelling an invite.");
+        return;
+      }
+      setInviteBusy(invite.inviteId);
+      try {
+        const next = await social.cancelInvite({ inviteId: invite.inviteId });
+        setInviteNotice("Invite cancelled.");
+        setSelectedInvite(resolveInviteView(next, next.sender.userId));
+        await markInviteNotificationRead(next.inviteId);
+        await refreshNotifications();
+      } catch (cause) {
+        setInviteError(
+          await readableError(cause, "Could not cancel that invite."),
+        );
+      } finally {
+        setInviteBusy(null);
+      }
+    },
+    [markInviteNotificationRead, refreshNotifications],
+  );
+
+  const clearInviteFeedback = useCallback(() => {
+    setInviteError(null);
+    setInviteNotice(null);
+  }, []);
 
   const connect = useCallback((): Promise<void> => {
     if (socketRef.current !== null) {
@@ -472,6 +930,7 @@ export function useLauncherSocial(): LauncherSocialController {
           }
           socketRef.current = null;
           clientRef.current = null;
+          socialRef.current = null;
           sessionRef.current = null;
           accountRef.current = null;
           setConnection("offline");
@@ -479,6 +938,10 @@ export function useLauncherSocial(): LauncherSocialController {
           setGameSession(null);
           setFriends([]);
           friendsRef.current = [];
+          notificationReadIdsRef.current = new Set();
+          setNotifications([]);
+          setRecentPlayers([]);
+          setSelectedInvite(null);
           channelsRef.current.clear();
           channelFriendsRef.current.clear();
           clearReconnectTimer();
@@ -497,6 +960,16 @@ export function useLauncherSocial(): LauncherSocialController {
         socketRef.current = socket;
         sessionRef.current = session;
         accountRef.current = resolvedAccount;
+        socialRef.current = new MoonGamesSocialClient({
+          client,
+          session,
+          socket,
+          selfUserId: resolvedAccount.userId,
+        });
+        socialRef.current.onNotification(handleSocialNotification);
+        for (const notification of socialRef.current.drainPendingNotifications()) {
+          handleSocialNotification(notification);
+        }
         setAccount(resolvedAccount);
         setServerLabel(address.label);
         setNakama({
@@ -530,6 +1003,10 @@ export function useLauncherSocial(): LauncherSocialController {
         } catch {
           setError("Connected, but your friends list could not be loaded.");
         }
+        await Promise.allSettled([
+          refreshNotifications(),
+          refreshRecentPlayers(),
+        ]);
       } catch (cause) {
         manualDisconnectRef.current = true;
         const activeSocket = socketRef.current ?? pendingSocket;
@@ -542,6 +1019,7 @@ export function useLauncherSocial(): LauncherSocialController {
         }
         socketRef.current = null;
         clientRef.current = null;
+        socialRef.current = null;
         sessionRef.current = null;
         accountRef.current = null;
         setConnection("error");
@@ -549,6 +1027,10 @@ export function useLauncherSocial(): LauncherSocialController {
         setGameSession(null);
         setFriends([]);
         friendsRef.current = [];
+        notificationReadIdsRef.current = new Set();
+        setNotifications([]);
+        setRecentPlayers([]);
+        setSelectedInvite(null);
         setError(
           await readableError(
             cause,
@@ -566,8 +1048,11 @@ export function useLauncherSocial(): LauncherSocialController {
   }, [
     clearReconnectTimer,
     handleChannelMessage,
+    handleSocialNotification,
     handleStatusPresence,
     refreshFriends,
+    refreshNotifications,
+    refreshRecentPlayers,
   ]);
 
   const disconnect = useCallback(() => {
@@ -587,6 +1072,7 @@ export function useLauncherSocial(): LauncherSocialController {
     }
     socketRef.current = null;
     clientRef.current = null;
+    socialRef.current = null;
     sessionRef.current = null;
     accountRef.current = null;
     channelsRef.current.clear();
@@ -596,6 +1082,14 @@ export function useLauncherSocial(): LauncherSocialController {
     setGameSession(null);
     setFriends([]);
     friendsRef.current = [];
+    notificationReadIdsRef.current = new Set();
+    setNotifications([]);
+    setRecentPlayers([]);
+    setSelectedInvite(null);
+    setNotificationError(null);
+    setNotificationNotice(null);
+    setInviteError(null);
+    setInviteNotice(null);
     setUnread({});
     setActiveFriendId(null);
     activeFriendRef.current = null;
@@ -623,6 +1117,10 @@ export function useLauncherSocial(): LauncherSocialController {
     setFriendError(null);
     setFriendNotice(null);
     setChatError(null);
+    setNotificationError(null);
+    setNotificationNotice(null);
+    setInviteError(null);
+    setInviteNotice(null);
     setError(null);
   }, []);
 
@@ -817,16 +1315,22 @@ export function useLauncherSocial(): LauncherSocialController {
       }
       const client = clientRef.current;
       const session = sessionRef.current;
-      if (client === null || session === null) {
+      const social = socialRef.current;
+      if (client === null || session === null || social === null) {
         setFriendError("Connect to MoonGames before adding friends.");
         return;
       }
       setFriendBusy("add");
       try {
-        await client.addFriends(session, undefined, [value]);
+        const status = await social.requestFriend({ username: value });
         await refreshFriends();
+        await refreshNotifications();
         setFriendNotice(
-          `Friend request sent to ${value}. You will see it here when they accept.`,
+          status === "friends"
+            ? `${value} is now your friend.`
+            : status === "already_requested"
+              ? `You already sent a friend request to ${value}.`
+              : `Friend request sent to ${value}. You will see it here when they accept.`,
         );
       } catch (cause) {
         setFriendError(
@@ -836,7 +1340,7 @@ export function useLauncherSocial(): LauncherSocialController {
         setFriendBusy(null);
       }
     },
-    [refreshFriends],
+    [refreshFriends, refreshNotifications],
   );
 
   const acceptFriend = useCallback(
@@ -845,14 +1349,16 @@ export function useLauncherSocial(): LauncherSocialController {
       setFriendNotice(null);
       const client = clientRef.current;
       const session = sessionRef.current;
-      if (client === null || session === null) {
+      const social = socialRef.current;
+      if (client === null || session === null || social === null) {
         setFriendError("Connect to MoonGames before accepting friends.");
         return;
       }
       setFriendBusy(friend.userId);
       try {
-        await client.addFriends(session, [friend.userId]);
+        await social.acceptFriend({ userId: friend.userId });
         await refreshFriends();
+        await refreshNotifications();
         setFriendNotice(`${friend.username} is now your friend.`);
       } catch (cause) {
         setFriendError(
@@ -862,7 +1368,7 @@ export function useLauncherSocial(): LauncherSocialController {
         setFriendBusy(null);
       }
     },
-    [refreshFriends],
+    [refreshFriends, refreshNotifications],
   );
 
   const removeFriend = useCallback(
@@ -871,13 +1377,20 @@ export function useLauncherSocial(): LauncherSocialController {
       setFriendNotice(null);
       const client = clientRef.current;
       const session = sessionRef.current;
-      if (client === null || session === null) {
+      const social = socialRef.current;
+      if (client === null || session === null || social === null) {
         setFriendError("Connect to MoonGames before changing friends.");
         return;
       }
       setFriendBusy(friend.userId);
       try {
-        await client.deleteFriends(session, [friend.userId]);
+        if (friend.state === FRIEND_STATE.requested) {
+          await social.declineFriend({ userId: friend.userId });
+        } else if (friend.state === FRIEND_STATE.invited) {
+          await social.cancelFriend({ userId: friend.userId });
+        } else {
+          await social.removeFriend({ userId: friend.userId });
+        }
         const channelId = channelsRef.current.get(friend.userId);
         if (channelId !== undefined) {
           try {
@@ -904,6 +1417,7 @@ export function useLauncherSocial(): LauncherSocialController {
               : `${friend.username} was removed from your friends.`,
         );
         await refreshFriends();
+        await refreshNotifications();
       } catch (cause) {
         setFriendError(
           await readableError(cause, "Could not update that friendship."),
@@ -912,7 +1426,7 @@ export function useLauncherSocial(): LauncherSocialController {
         setFriendBusy(null);
       }
     },
-    [refreshFriends],
+    [refreshFriends, refreshNotifications],
   );
 
   const openChat = useCallback(
@@ -1003,6 +1517,7 @@ export function useLauncherSocial(): LauncherSocialController {
           text: value,
           createdAt: Date.parse(ack.create_time) || Date.now(),
           own: true,
+          invite: null,
         });
       } catch (cause) {
         setChatError(
@@ -1080,6 +1595,10 @@ export function useLauncherSocial(): LauncherSocialController {
     () => Object.values(unread).reduce((total, count) => total + count, 0),
     [unread],
   );
+  const notificationUnread = useMemo(
+    () => unreadNotificationCount(notifications),
+    [notifications],
+  );
 
   useEffect(() => {
     return () => {
@@ -1105,6 +1624,17 @@ export function useLauncherSocial(): LauncherSocialController {
     outgoing,
     unread,
     unreadTotal,
+    notifications,
+    notificationUnread,
+    notificationBusy,
+    notificationError,
+    notificationNotice,
+    recentPlayers,
+    recentPlayersBusy,
+    inviteBusy,
+    inviteError,
+    inviteNotice,
+    selectedInvite,
     activeFriendId,
     activeFriend,
     messages,
@@ -1120,6 +1650,17 @@ export function useLauncherSocial(): LauncherSocialController {
     acceptFriend,
     removeFriend,
     refreshFriends,
+    refreshNotifications,
+    markNotificationsRead,
+    handleNotification,
+    refreshRecentPlayers,
+    createInvite,
+    selectInvite,
+    resolveInviteLink,
+    acceptInvite,
+    declineInvite,
+    cancelInvite,
+    clearInviteFeedback,
     openChat,
     closeChat,
     sendMessage,

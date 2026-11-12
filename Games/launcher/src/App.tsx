@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
 } from "react";
@@ -10,10 +11,12 @@ import {
   clearAllLauncherHandoffs,
   clearLauncherHandoff,
   fetchGamesCatalog,
+  inviteTokenFromLink,
   writeLauncherHandoff,
   type GameCatalogEntry,
   type GameHostConfig,
   type GamesCatalog,
+  type MoonGamesInvite,
 } from "@moongames/game-sdk";
 import {
   AccountDrawer,
@@ -23,9 +26,15 @@ import { FeaturedGame } from "./components/FeaturedGame";
 import { GameCard } from "./components/GameCard";
 import { Icon, gameIconName } from "./components/Icon";
 import {
+  InviteComposer,
+  type InviteComposerInput,
+  type InviteComposerTarget,
+} from "./components/InviteComposer";
+import {
   defaultCatalogUrl,
   featuredGame,
   filterCatalog,
+  gameWebUrl,
   type CatalogFilter,
 } from "./lib/catalog";
 import {
@@ -82,6 +91,9 @@ function App() {
   const [drawerTab, setDrawerTab] = useState<AccountDrawerTab>("account");
   const [launchingId, setLaunchingId] = useState<string | null>(null);
   const [launchNotice, setLaunchNotice] = useState<string | null>(null);
+  const [inviteTarget, setInviteTarget] = useState<InviteComposerTarget | null>(null);
+  const [inviteSending, setInviteSending] = useState(false);
+  const inviteLinkHandledRef = useRef(false);
   const social = useLauncherSocial();
 
   useEffect(() => {
@@ -268,11 +280,89 @@ function App() {
     ],
   );
 
+  const sendInvite = useCallback(
+    async (input: InviteComposerInput): Promise<void> => {
+      if (inviteTarget === null) {
+        return;
+      }
+      setInviteSending(true);
+      const invite = await social.createInvite({
+        gameId: input.gameId,
+        mode: "private",
+        recipientId: inviteTarget.userId,
+        recipientUsername: inviteTarget.username,
+        message: input.message,
+        timeControl: input.timeControl,
+      });
+      setInviteSending(false);
+      if (invite !== null) {
+        setInviteTarget(null);
+        setDrawerTab("alerts");
+        setDrawerOpen(true);
+      }
+    },
+    [inviteTarget, social.createInvite],
+  );
+
+  const openInviteComposer = useCallback(
+    (target: InviteComposerTarget) => {
+      social.clearInviteFeedback();
+      setInviteTarget(target);
+    },
+    [social.clearInviteFeedback],
+  );
+
+  const joinInvite = useCallback(
+    async (invite: MoonGamesInvite): Promise<void> => {
+      const game = games.find((entry) => entry.id === invite.gameId);
+      if (game === undefined || invite.matchId === null) {
+        setLaunchNotice("That invite's game room is no longer available.");
+        return;
+      }
+      const base = gameWebUrl(game, catalogUrl);
+      if (base === null && !nativeLaunch) {
+        setLaunchNotice("That invite's game is not installed on this host.");
+        return;
+      }
+      const url = base === null ? null : new URL(base);
+      if (url !== null) {
+        url.searchParams.set("match", invite.matchId);
+      }
+      setDrawerOpen(false);
+      await playGame(game, url?.toString() ?? null);
+    },
+    [games, nativeLaunch, playGame],
+  );
+
+  useEffect(() => {
+    if (social.connection !== "online" || inviteLinkHandledRef.current) {
+      return;
+    }
+    const url = new URL(window.location.href);
+    const token = inviteTokenFromLink(window.location.href) ?? "";
+    const pathToken = window.location.pathname.match(/\/invite\/([^/?#]+)/)?.[1];
+    if (token.length === 0) {
+      return;
+    }
+    void social.resolveInviteLink(token).then((resolved) => {
+      setDrawerTab("alerts");
+      setDrawerOpen(true);
+      if (!resolved) {
+        return;
+      }
+      inviteLinkHandledRef.current = true;
+      url.searchParams.delete("invite");
+      if (pathToken !== undefined) {
+        url.pathname = url.pathname.replace(/\/invite\/[^/]+\/?$/, "/");
+      }
+      window.history.replaceState({}, "", url.toString());
+    });
+  }, [social.connection, social.resolveInviteLink]);
+
   const clearFilters = () => {
     setFilter("all");
     setQuery("");
   };
-
   return (
     <div className="site-shell" id="top">
       <header className="topbar">
@@ -290,6 +380,23 @@ function App() {
           <a href="#how-it-works">How it works</a>
         </nav>
         <div className="topbar__actions">
+          <button
+            className="social-toggle social-toggle--alerts"
+            type="button"
+            aria-label="Open notifications and invites"
+            onClick={() => {
+              setDrawerTab("alerts");
+              setDrawerOpen(true);
+            }}
+          >
+            <Icon name="bell" size={16} />
+            <span>Alerts</span>
+            {social.notificationUnread + social.unreadTotal > 0 ? (
+              <span className="social-toggle__badge">
+                {social.notificationUnread + social.unreadTotal}
+              </span>
+            ) : null}
+          </button>
           <button
             className="social-toggle"
             type="button"
@@ -614,7 +721,28 @@ function App() {
         onTabChange={setDrawerTab}
         onClose={() => setDrawerOpen(false)}
         social={social}
+        onInvitePlayer={openInviteComposer}
+        onJoinInvite={(invite) => {
+          void joinInvite(invite);
+        }}
       />
+
+      {inviteTarget === null ? null : (
+        <InviteComposer
+          target={inviteTarget}
+          games={games}
+          busy={inviteSending}
+          error={social.inviteError}
+          notice={social.inviteNotice}
+          onClose={() => {
+            if (!inviteSending) {
+              setInviteTarget(null);
+              social.clearInviteFeedback();
+            }
+          }}
+          onSend={sendInvite}
+        />
+      )}
     </div>
   );
 }

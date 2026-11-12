@@ -99,7 +99,7 @@
 - [x] Pass the shared session, account mode, and Nakama connection through native launch requests.
 - [x] Add optional shared-account, official, and release-identity fields to the Flutter and React Native host wrappers.
 - [x] Add a React Native launcher shell with a native catalog, signed-release verification, deep-link requests, and shared-account game launch.
-- [ ] Add an equivalent Flutter launcher shell on top of the catalog client and `MoonGamesHost`.
+- [x] Add an equivalent Flutter launcher shell on top of the catalog client and `MoonGamesHost`.
 - [ ] Device-test native shared handoff, deep links, and session refresh on Android and iOS.
 - [x] Add persistent friends using Nakama's built-in friend graph.
 - [x] Add persisted personal chats using Nakama direct channels, with live delivery and history.
@@ -115,6 +115,75 @@
 - [x] Assemble the launcher and available web game builds into one deployable directory.
 - [ ] Run browser visual QA of the launcher and launch flow.
 - [ ] Add real cover art/screenshots when the asset pipeline lands.
+
+## Phase 7.6 — Host-platform social, accounts, invites, and notifications
+
+### Locked product decisions
+
+- [x] MoonGames is a platform for vetted Flutter, React Native, and web host apps; only official MoonGames games are published for now.
+- [x] MoonGames owns one global identity, the global friend graph, launcher DMs, launcher notifications, and game invites.
+- [x] Host apps keep their own social/DM system and data. MoonGames does not read or write host databases.
+- [x] MoonGames sends invite events and card data to the host SDK; the host maps the recipient by username and posts the card in its own DM UI.
+- [x] Both chat surfaces can receive an invite: MoonGames launcher chat and the host app's own DM UI.
+- [x] Groups are out of scope for this milestone. Only direct friend invites are planned.
+- [x] The default embedded launcher is the web launcher inside a WebView. Native Flutter/RN launcher components remain optional.
+- [x] Host apps can build their own native screens through the MoonGames SDK and must be able to reach parity with the web launcher.
+- [x] Host apps provide email and username from their own signed-in account. Email is the stable identity key; username syncs when it changes.
+- [x] First link asks the user to agree, choose a MoonGames password, and creates the global account. No host backend is required.
+- [x] Existing-account access requires the MoonGames password, preventing a host app from silently taking over an account by supplying a fake email.
+- [x] A matching email links to the same MoonGames account. A username collision is non-fatal: the guest name is preserved, the host sees the actual returned name, and can ask for another before calling username sync.
+- [x] Email verification and password reset remain blocked on operator SMTP; the host's verified email is accepted for vetted apps during development.
+- [x] Headless SDK events drive host-owned notification/invite UI. MoonGames renders its own notification center only in the launcher.
+- [x] OS push notifications are not in this milestone; sockets plus queued in-app notifications are.
+- [x] Emoji pickers belong to MoonGames-owned chat surfaces (launcher friend chat and in-game match chat), not host-owned chat.
+- [x] Invite creation uses the authoritative game backend; invites expire and unfilled rooms are cleaned up.
+- [x] Recent-player invites can merge MoonGames match history with a host-provided player list.
+
+### Shared contracts and backend
+
+- [x] Add versioned social types/constants to `Games/shared/sdk` for friends, DMs, invites, notifications, and invite-card payloads.
+- [x] Add a shared Lua social module under `Games/shared/server/`; keep game rules out of it and register room creation per game.
+- [x] Add RPCs for friend request/accept/decline/remove event notifications.
+- [x] Add RPCs for invite create/resolve/accept/decline/cancel plus unread notification state.
+- [x] Store invite records and notification read state in Nakama storage; never persist temporary match chat.
+- [x] Add hashed invite tokens with expiry, recipient checks, friend checks, and idempotent accept/decline/cancel.
+- [x] Register Chess invite-room creation through the shared registry without moving Chess rules into shared code.
+- [x] Add recent-player tracking from completed authoritative matches.
+- [x] Add automated shared Lua tests for invite state, expiry, authorization, notification read state, and RPC context forwarding.
+- [x] Sync shared social modules in `Games/tools/sync-nakama-modules.sh` and document the server contract.
+
+### Web launcher
+
+- [x] Add a notification bell/center with unread badge, filters, mark-read, and empty/error states.
+- [x] Generate notifications for friend requests, accepts, declines, cancels, invites, and invite status changes. DMs surface as unread message alerts.
+- [x] Add invite actions from friends and recent players with game/mode selection.
+- [x] Render invite cards in DMs with join, accept, decline, cancel, expired, and already-joined states.
+- [x] Add emoji picker and recent emojis to launcher friend chat and match chat.
+- [x] Add a shareable invite link and deep-link handling for `moongames://invite/<token>` and `/invite/<token>`.
+- [x] Keep notification/read state synced across tabs and launcher relaunches using Nakama read state plus `BroadcastChannel` refresh.
+- [x] Add focused web tests for notification normalization, invite state, cross-client invite parsing, and emoji insertion.
+
+### Host SDKs
+
+- [x] Add host-facing account-link, friend, DM, invite, notification, catalog, and launch APIs to the shared TypeScript SDK.
+- [x] Add a documented invite event stream with replay of pending events after reconnect.
+- [x] Add invite card payloads containing preview art, game title, sender, room/join URL, expiry, status, and safe metadata.
+- [x] Add `linkHostAccount` with new-account/password and existing-account/password flows.
+- [x] Add Flutter high-level social/invite/notification controllers using the official `nakama` Dart package.
+- [x] Add React Native high-level social/invite/notification controllers using `@heroiclabs/nakama-js`.
+- [ ] Add optional host identity attestation hooks so a host with a backend can replace password-gated linking later.
+- [x] Add SDK docs and examples for custom invitation cards and custom native notification centers.
+- [x] Add focused SDK tests; do not require Flutter/RN device builds for pure logic tests.
+
+### Validation
+
+- [x] Run focused web, SDK, Lua, and tools tests.
+- [x] Run real Nakama account/link/invite/notification smoke tests.
+- [x] Verify two real users can invite, accept, join, decline, cancel, and see read-state changes.
+- [x] Verify offline invite queue delivery after reconnect.
+- [ ] Verify launcher friend chat and match chat emoji rendering on desktop and mobile widths. Model insertion tests pass; visual device verification is still required.
+- [x] Verify temporary match chat is never persisted while invite/DM records are.
+- [x] Document remaining Flutter/RN device and SMTP blockers.
 
 ## Phase 8 prerequisite — multi-file game loading
 

@@ -100,6 +100,82 @@ a font glyph: map it to your app's SVG or icon set. Pass the selected `id` to
 `MoonGamesHost`; keep using the signed fallback assets and release manifest for
 the actual bundle. See [the catalog guide](../../catalog/README.md).
 
+## Native launcher shell
+
+`MoonGamesLauncher` is the optional Flutter catalog/menu. It fetches and
+verifies the signed catalog, renders its own vector UI, and opens verified games
+with the shared launcher session. Unverified games open with per-game auth and
+never receive that session. Supply the host session and Nakama configuration only
+after your app has authenticated the user:
+
+```dart
+MoonGamesLauncher(
+  catalogUrl: 'https://cdn.example.com/moongames/games.json',
+  manifestUrl: 'https://cdn.example.com/moongames/release-manifest.json',
+  trustedKeys: trustedKeys,
+  session: session,
+  nakama: nakama,
+  onOpenAccount: openAccountSheet,
+  onRequestSignIn: openAccountSheet,
+)
+```
+
+The default embedded experience remains the MoonGames web launcher inside a
+WebView. The native shell is for host apps that want their own Menu surface.
+
+## Identity, invites, and notifications
+
+`MoonGamesSocialClient` is the Flutter headless social client, built on the
+official `nakama` 1.4.x package. It renders no UI and never writes to the host's
+social database.
+
+```dart
+final social = MoonGamesSocialClient(
+  client: nakamaClient,
+  session: session,
+  socket: socket,
+  selfUserId: session.userId,
+);
+
+social.notificationStream.listen((notification) {
+  if (notification.invite != null) {
+    hostPostInviteCard(notification.invite!);
+  }
+});
+
+// Events that arrived before the UI attached its listener.
+for (final notification in social.drainPendingNotifications()) {
+  if (notification.invite != null) {
+    hostPostInviteCard(notification.invite!);
+  }
+}
+
+// Reconnect: persistent Nakama notifications replay queued invites.
+final pending = await social.listNotifications();
+final invites = await social.replayInvites();
+
+final account = MoonGamesAccountClient(nakamaClient);
+final linked = await account.linkHostAccount(
+  guestSession: session,
+  email: hostAccount.email,
+  username: hostAccount.username,
+  password: moonGamesPassword,
+  mode: 'existing', // or 'create' to link the current guest
+);
+
+// Keep the shared player name aligned when the host account is renamed.
+await account.syncUsername(session: linked, username: hostAccount.username);
+```
+
+`createInvite`, `resolveInvite`, `acceptInvite`, `declineInvite`,
+`cancelInvite`, friend RPCs, recent players, and direct chat are exposed as
+typed methods. `MoonGamesInvite` carries preview art, game title, sender,
+recipient, status, expiry, token, match id, join/deep-link paths, and metadata
+for host-owned invite cards. `sendInviteMessage` writes a card into the persisted
+Nakama direct chat. Temporary in-match chat remains in the authoritative game
+server. Use top-level `inviteTokenFromLink` (token or stable invite id) and
+`inviteShareUrl` helpers for native deep links and share sheets.
+
 ## Status
 
 The bundle descriptor, Ed25519 verification, archive inspection, remote

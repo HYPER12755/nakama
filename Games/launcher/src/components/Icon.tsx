@@ -4,12 +4,14 @@ export type LauncherIconName =
   | "arrow-down"
   | "arrow-left"
   | "arrow-up-right"
+  | "bell"
   | "carrom"
   | "cards"
   | "chat"
   | "check"
   | "chess"
   | "chevron-right"
+  | "clock"
   | "eye"
   | "eye-off"
   | "gamepad"
@@ -199,6 +201,18 @@ export function Icon({
         </>
       )}
       {name === "check" && <path d="m5 12.5 4.4 4.4L19 7.3" />}
+      {name === "bell" && (
+        <>
+          <path d="M18.2 9.2a6.2 6.2 0 0 0-12.4 0c0 7-2.8 7-2.8 8.5h18c0-1.5-2.8-1.5-2.8-8.5Z" />
+          <path d="M9.5 20.3a2.6 2.6 0 0 0 5 0" />
+        </>
+      )}
+      {name === "clock" && (
+        <>
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 7.5V12l3 1.8" />
+        </>
+      )}
       {name === "chevron-right" && <path d="m9 5 7 7-7 7" />}
       {name === "x" && (
         <>

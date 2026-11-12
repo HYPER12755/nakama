@@ -49,8 +49,8 @@ The package requires Flutter 3.27 or newer.
 Copy the current signed files into the Flutter app:
 
 ```text
-assets/moongames/chess-0.6.0.bundle.json
-assets/moongames/chess-0.6.0.zip
+assets/moongames/chess-0.7.0.bundle.json
+assets/moongames/chess-0.7.0.zip
 ```
 
 Declare them in `pubspec.yaml`:
@@ -58,12 +58,12 @@ Declare them in `pubspec.yaml`:
 ```yaml
 flutter:
   assets:
-    - assets/moongames/chess-0.6.0.bundle.json
-    - assets/moongames/chess-0.6.0.zip
+    - assets/moongames/chess-0.7.0.bundle.json
+    - assets/moongames/chess-0.7.0.zip
 ```
 
 The JSON descriptor is the `.bundle.json` file from
-`Games/releases/chess/0.6.0/`. Do not create or edit it by hand.
+`Games/releases/chess/0.7.0/`. Do not create or edit it by hand.
 
 ## 3. Map the app session
 
@@ -146,8 +146,8 @@ class _ChessScreenState extends State<ChessScreen> {
           },
 
           bundledDescriptorAsset:
-              'assets/moongames/chess-0.6.0.bundle.json',
-          bundledZipAsset: 'assets/moongames/chess-0.6.0.zip',
+              'assets/moongames/chess-0.7.0.bundle.json',
+          bundledZipAsset: 'assets/moongames/chess-0.7.0.zip',
 
           locale: Localizations.localeOf(context).toLanguageTag(),
 
@@ -163,7 +163,7 @@ class _ChessScreenState extends State<ChessScreen> {
           accountMode: MoonGamesAccountMode.shared,
           official: true,
           release: const MoonGamesReleaseIdentity(
-            version: '0.6.0',
+            version: '0.7.0',
             sha256: '281b794297e43c10f1d45658f1eb776f8e34801a7e7f714d3a31aea8f6da4724',
             keyId: 'dev-1',
           ),
@@ -393,6 +393,47 @@ Ignore the payload's `webUrl` for native loading; it is the browser link, not a
 trusted bundle URL.
 
 The menu also works on its own in a browser when no host bridge is present.
+
+## Custom invites and notifications
+
+`MoonGamesSocialClient` is a pure-Dart, headless client over the host's existing
+Nakama session. It returns typed invites and notifications; it renders no UI.
+
+```dart
+final social = MoonGamesSocialClient(
+  client: nakamaClient,
+  session: session,
+  socket: socket,
+);
+
+social.notificationStream.listen((notification) {
+  final invite = notification.invite;
+  if (invite != null) {
+    insertHostInviteCard(invite);
+  }
+});
+
+for (final notification in social.drainPendingNotifications()) {
+  final invite = notification.invite;
+  if (invite != null) {
+    insertHostInviteCard(invite);
+  }
+}
+
+final pendingInvites = await social.replayInvites();
+```
+
+`MoonGamesInvite` includes game id/title, sender/recipient, status, expiry,
+token, match id, share/deep-link paths, preview art, and metadata. Build your
+own card and insert it into your own DM database/UI. `sendInviteMessage` can also
+post the MoonGames card into Nakama's persisted direct chat; `listDirectMessages`
+and `sendDirectMessage` expose that history.
+
+Use `MoonGamesAccountClient.linkHostAccount` for host-supplied identity. The
+host must ask which option the user wants: link the current guest after choosing
+a MoonGames password, or sign in to the existing email account with its
+MoonGames password. Email is matched first; a username collision asks for a new
+name. Never create or sign in without explicit user consent.
 
 ## Current validation status
 

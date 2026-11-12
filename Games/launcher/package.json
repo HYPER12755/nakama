@@ -10,12 +10,14 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "smoke:account": "node scripts/account-smoke.mjs",
-    "smoke:social": "node scripts/social-smoke.mjs"
+    "smoke:social": "node scripts/social-smoke.mjs",
+    "smoke:invite": "node scripts/invite-smoke.mjs"
   },
   "dependencies": {
     "@heroiclabs/nakama-js": "^2.8.0",
     "@moongames/game-sdk": "workspace:*",
     "@moongames/host-core": "workspace:*",
+    "@moongames/social": "workspace:*",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
