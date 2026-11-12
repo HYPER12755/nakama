@@ -50,6 +50,16 @@ If the configured database role cannot connect, it tries the local `postgres`
 and current-user roles before starting Nakama. Run `pnpm stack help` for all
 path, port, host, and credential environment variables.
 
+For local-network testing, the launcher, release server, Nakama API, and Nakama
+console bind to all interfaces by default. `pnpm stack urls` prints the LAN URL
+for each host address alongside the loopback URLs. A browser opening the
+launcher from another device automatically points the launcher and games at
+Nakama on the same host. Bind individual services to loopback with
+`MOONGAMES_WEB_HOST=127.0.0.1`, `MOONGAMES_RELEASES_HOST=127.0.0.1`,
+`MOONGAMES_NAKAMA_HOST=127.0.0.1`, or
+`MOONGAMES_CONSOLE_HOST=127.0.0.1`. PostgreSQL remains loopback-only because
+game clients never connect to it directly.
+
 `pnpm stack status --json` emits machine-readable health and process data.
 `pnpm stack logs` shows all service logs; add a service name and `--follow` to
 stream one log.

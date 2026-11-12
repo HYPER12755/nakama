@@ -245,7 +245,13 @@ pnpm --filter @moongames/launcher smoke:invite
 `pnpm stack start` is the normal local development entry point. It syncs the
 Lua modules, starts PostgreSQL and Nakama, serves the assembled launcher at
 `http://localhost:4174/`, and serves signed releases at
-`http://127.0.0.1:8099/`. Managed PIDs, logs, and state live under
+`http://127.0.0.1:8099/`. The launcher, release server, Nakama API, and Nakama
+console also listen on all interfaces for local-network testing; run
+`pnpm stack urls` to print their LAN addresses. A browser that opens the
+launcher from another device automatically uses Nakama on that same host.
+Set the corresponding `MOONGAMES_*_HOST` variable to `127.0.0.1` to restrict a
+service to loopback. PostgreSQL remains loopback-only because clients do not
+connect to it directly. Managed PIDs, logs, and state live under
 `runtime/stack/`, which is ignored by git. The script locates the Nakama config
 at `~/nakama/nakama.yml`, `~/nakama/local.yml`, the repository root
 `nakama.yml`/`local.yml`, or `Games/runtime/nakama.yml`, and locates the binary
@@ -279,7 +285,9 @@ is loaded from Nakama, so it survives reloads and devices. Match chat in Chess i
 separate, rate-limited, temporary, and cleared at game end.
 
 The browser defaults to Nakama at `http://<current-page-host>:7350`; the server
-address is editable in the Online panel. Production builds can set
+address is editable in the Online panel. Opening the launcher at
+`http://<LAN-IP>:4174/` therefore uses `http://<LAN-IP>:7350` automatically.
+Production builds can set
 `VITE_NAKAMA_HOST`, `VITE_NAKAMA_PORT`, `VITE_NAKAMA_SSL`, and
 `VITE_NAKAMA_SERVER_KEY` at build time. The server key is not a secret in the
 same way as a database password; it is the public Nakama game-server key. The

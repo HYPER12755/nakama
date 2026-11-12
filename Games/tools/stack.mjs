@@ -235,6 +235,8 @@ async function loadSettings() {
   );
   const webPort = integerFrom(process.env.MOONGAMES_WEB_PORT, 4174);
   const releasesPort = integerFrom(process.env.MOONGAMES_RELEASES_PORT, 8099);
+  const nakamaHost = process.env.MOONGAMES_NAKAMA_HOST ?? "0.0.0.0";
+  const consoleHost = process.env.MOONGAMES_CONSOLE_HOST ?? nakamaHost;
 
   const configuredDatabase =
     process.env.MOONGAMES_NAKAMA_DB ??
@@ -297,9 +299,9 @@ async function loadSettings() {
         config?.dataDir ??
         path.join(HOME, "nakama", "data"),
       runtimePath: runtime.path,
-      socketAddress: socket.address ?? "127.0.0.1",
+      socketAddress: nakamaHost,
       socketPort: nakamaPort,
-      consoleAddress: consoleSection.address ?? "127.0.0.1",
+      consoleAddress: consoleHost,
       consolePort,
       consoleUsername:
         process.env.MOONGAMES_CONSOLE_USERNAME ?? consoleSection.username,
@@ -913,6 +915,14 @@ async function startNakama(settings, state) {
     settings.nakama.configPath,
     "--runtime.path",
     settings.modulesDir,
+    "--socket.address",
+    settings.nakama.socketAddress,
+    "--socket.port",
+    String(settings.nakama.socketPort),
+    "--console.address",
+    settings.nakama.consoleAddress,
+    "--console.port",
+    String(settings.nakama.consolePort),
   ];
   if (database.address !== database.configured) {
     args.push("--database.address", database.address);
@@ -1229,26 +1239,44 @@ function printUrls(settings) {
   console.log(`  Nakama API:    http://${urlHost(settings.nakama.socketAddress)}:${settings.nakama.socketPort}`);
   console.log(`  Console:       ${consoleUrl(settings)}`);
   console.log(`  Releases:      ${releasesUrl(settings)}`);
-  if (bindIncludesLan(settings.web.host)) {
-    for (const address of ipv4Addresses()) {
+
+  const addresses = ipv4Addresses();
+  const lanMenu = bindIncludesLan(settings.web.host);
+  const lanApi = bindIncludesLan(settings.nakama.socketAddress);
+  const lanConsole = bindIncludesLan(settings.nakama.consoleAddress);
+  const lanReleases = bindIncludesLan(settings.releases.host);
+  for (const address of addresses) {
+    if (lanMenu) {
       console.log(`  LAN menu:      ${webUrl(settings, address)}`);
+      console.log(`  LAN chess:     ${chessUrl(settings, address)}`);
     }
-  }
-  if (
-    bindIncludesLan(settings.nakama.socketAddress) &&
-    bindIncludesLan(settings.nakama.consoleAddress)
-  ) {
-    for (const address of ipv4Addresses()) {
+    if (lanApi) {
       console.log(
         `  LAN API:       http://${address}:${settings.nakama.socketPort}`,
       );
+    }
+    if (lanConsole) {
       console.log(
         `  LAN console:   http://${address}:${settings.nakama.consolePort}/`,
       );
     }
-  } else {
+    if (lanReleases) {
+      console.log(
+        `  LAN releases:  http://${address}:${settings.releases.port}/`,
+      );
+    }
+  }
+  if (!lanApi) {
     console.log(
       "  Note:          Nakama is bound to loopback; online play from another device needs a LAN bind.",
+    );
+  }
+  if (
+    addresses.length === 0 &&
+    (lanMenu || lanApi || lanConsole || lanReleases)
+  ) {
+    console.log(
+      "  Note:          No non-loopback IPv4 address was found for LAN access.",
     );
   }
 }
@@ -1470,7 +1498,9 @@ Environment:
   MOONGAMES_PG_SOCKET       PostgreSQL socket directory
   MOONGAMES_PG_PORT         PostgreSQL port (default: 5432)
   MOONGAMES_PG_HOST         PostgreSQL host (default: 127.0.0.1)
+  MOONGAMES_NAKAMA_HOST     Nakama socket bind address (default: 0.0.0.0)
   MOONGAMES_NAKAMA_PORT     Nakama socket port (default: 7350)
+  MOONGAMES_CONSOLE_HOST    Nakama console bind address (default: follows Nakama host)
   MOONGAMES_CONSOLE_PORT    Nakama console port (default: 7351)
   MOONGAMES_CONSOLE_USERNAME  Nakama console username override
   MOONGAMES_CONSOLE_PASSWORD  Nakama console password override
