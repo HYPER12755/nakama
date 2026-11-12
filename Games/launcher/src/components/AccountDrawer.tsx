@@ -577,11 +577,7 @@ function FriendsTab({
                         : state === 3
                           ? "Blocked"
                           : "Add";
-                const disabled =
-                  state === 0 ||
-                  state === 1 ||
-                  state === 3 ||
-                  social.friendBusy !== null;
+                const actionable = state === 2 || state === null;
                 return (
                   <article className="friend-row" key={player.userId}>
                     <span className="friend-avatar" aria-hidden="true">
@@ -591,14 +587,18 @@ function FriendsTab({
                       <strong>{player.displayName ?? player.username}</strong>
                       <span>@{player.username}</span>
                     </div>
-                    <button
-                      className="mini-button"
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => void addResult(player)}
-                    >
-                      {label}
-                    </button>
+                    {actionable ? (
+                      <button
+                        className={`friend-row__action${state === 2 ? " friend-row__action--accent" : ""}`}
+                        type="button"
+                        disabled={social.friendBusy !== null}
+                        onClick={() => void addResult(player)}
+                      >
+                        {state === 2 ? "Accept" : "Add"}
+                      </button>
+                    ) : (
+                      <span className="friend-row__state">{label}</span>
+                    )}
                   </article>
                 );
               })}

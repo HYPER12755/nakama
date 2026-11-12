@@ -72,6 +72,7 @@ export interface PendingOnlinePromotion {
 export interface FriendInviteInput {
   userId: string;
   username: string;
+  state?: number;
   matchId?: string;
   spectate?: boolean;
   timeControl?: OnlineTimeControl;
@@ -1218,7 +1219,26 @@ export function useOnlineChess(
           client,
           session: currentSession,
         });
-        setFriends(await social.listFriends());
+        const [mutual, outgoing, incoming] = await Promise.all([
+          social.listFriends(0),
+          social.listFriends(1),
+          social.listFriends(2),
+        ]);
+        const byId = new Map<string, SocialFriend>();
+        for (const friend of [...mutual, ...incoming, ...outgoing]) {
+          byId.set(friend.userId, friend);
+        }
+        const rank = (state: number) =>
+          state === 0 ? 0 : state === 2 ? 1 : state === 1 ? 2 : 3;
+        setFriends(
+          [...byId.values()].sort(
+            (left, right) =>
+              rank(left.state) - rank(right.state) ||
+              left.username.localeCompare(right.username, undefined, {
+                sensitivity: "base",
+              }),
+          ),
+        );
       } catch (cause) {
         setFriendsError(
           errorMessage(cause, "Could not load your MoonGames friends."),
@@ -1258,6 +1278,15 @@ export function useOnlineChess(
           client,
           session: currentSession,
         });
+        if (input.state === 1) {
+          throw new Error(
+            "That player still needs to accept your friend request. Once they do, they will appear here as a friend.",
+          );
+        }
+        if (input.state === 2) {
+          // Incoming requests can be accepted directly from the invite picker.
+          await social.acceptFriend({ userId: input.userId });
+        }
         const invite = await social.createInvite({
           gameId: "chess",
           mode: "private",

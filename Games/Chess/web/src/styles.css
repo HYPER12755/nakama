@@ -1742,6 +1742,18 @@ button {
   white-space: nowrap;
 }
 
+.friend-invite-name .friend-invite-name__status {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.friend-invite-row .mini-button {
+  min-width: 92px;
+}
+
 .friend-invite-empty {
   display: flex;
   min-height: 124px;

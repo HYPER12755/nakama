@@ -132,6 +132,7 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
       await inviteFriend({
         userId: friend.userId,
         username: friend.username,
+        state: friend.state,
         matchId: inviteTarget.matchId,
         spectate: inviteTarget.spectate,
         timeControl: serverState?.match.timeControl ?? timeControl,

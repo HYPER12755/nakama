@@ -159,16 +159,18 @@ export function FriendInviteDialog({
               <div className="friend-invite-empty-icon" aria-hidden="true">
                 <Icon name="user" size={22} />
               </div>
-              <p>No MoonGames friends yet.</p>
+              <p>No MoonGames friends or requests yet.</p>
               <span>
-                Add friends from the MoonGames menu, or share the private room
-                link instead.
+                Search and add players from the MoonGames menu, or share the
+                private room link instead.
               </span>
             </div>
           ) : (
             friends.map((friend) => {
               const sent = sentIds.has(friend.userId);
               const sending = sendingId === friend.userId;
+              const incoming = friend.state === 2;
+              const outgoing = friend.state === 1;
               return (
                 <div key={friend.userId} className="friend-invite-row">
                   <span className="friend-invite-avatar" aria-hidden="true">
@@ -181,14 +183,33 @@ export function FriendInviteDialog({
                   <span className="friend-invite-name">
                     <strong>{friend.displayName ?? friend.username}</strong>
                     <span>@{friend.username}</span>
+                    {incoming ? (
+                      <span className="friend-invite-name__status">
+                        Incoming friend request
+                      </span>
+                    ) : outgoing ? (
+                      <span className="friend-invite-name__status">
+                        Friend request pending
+                      </span>
+                    ) : null}
                   </span>
                   <button
                     type="button"
                     className={`mini-button${sent ? " mini-button--sent" : ""}`}
                     onClick={() => void invite(friend)}
-                    disabled={sent || sendingId !== null}
+                    disabled={sent || sendingId !== null || outgoing}
                   >
-                    {sent ? "Invite sent" : sending ? "Sending…" : "Invite"}
+                    {sent
+                      ? "Invite sent"
+                      : sending
+                        ? incoming
+                          ? "Accepting…"
+                          : "Sending…"
+                        : outgoing
+                          ? "Pending"
+                          : incoming
+                            ? "Accept & invite"
+                            : "Invite"}
                   </button>
                 </div>
               );
