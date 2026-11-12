@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { GameBridge } from "@moongames/game-sdk";
+import { applyPerformanceMode, GameBridge } from "@moongames/game-sdk";
 import App from "./App";
 import { HostPreviewPanel } from "./preview/HostPreviewPanel";
 import {
@@ -8,6 +8,8 @@ import {
   hostPreviewEnabled,
 } from "./preview/hostPreview";
 import "./styles.css";
+
+applyPerformanceMode();
 
 const rootElement = document.getElementById("root");
 if (!rootElement) {

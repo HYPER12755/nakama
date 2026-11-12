@@ -9,3 +9,4 @@ export * from "./game";
 export * from "./bundle";
 export * from "./social";
 export * from "./emoji";
+export * from "./performance";

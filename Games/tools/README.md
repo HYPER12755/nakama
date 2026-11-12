@@ -64,6 +64,13 @@ game clients never connect to it directly.
 `pnpm stack logs` shows all service logs; add a service name and `--follow` to
 stream one log.
 
+The managed launcher is served by `tools/serve-web.mjs`, not `vite preview`.
+It precompresses text assets with Brotli or gzip, serves hashed assets with
+long-lived immutable caching, revalidates HTML/JSON, and supports launcher deep
+links such as `/invite/<token>`. The browser clients automatically use a
+lighter paint path on touch and low-memory devices; use `?perf=full` or
+`?perf=lite` to compare both modes on the same device.
+
 ## Package a game
 
 ```bash

@@ -3389,3 +3389,24 @@ dd {
     animation: none;
   }
 }
+
+/* Low-memory phones keep the composition but avoid live GPU blur/filter work. */
+:root[data-moonperf="lite"] {
+  --panel: var(--panel-solid);
+}
+
+html[data-moonperf="lite"] *,
+html[data-moonperf="lite"] *::before,
+html[data-moonperf="lite"] *::after {
+  backdrop-filter: none !important;
+}
+
+html[data-moonperf="lite"] .hero-orbit {
+  filter: none;
+}
+
+html[data-moonperf="lite"] .hero-orbit__ring--one,
+html[data-moonperf="lite"] .hero-orbit__ring--two,
+html[data-moonperf="lite"] .orbit-token {
+  animation: none !important;
+}

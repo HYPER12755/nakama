@@ -1633,12 +1633,28 @@ button {
   line-height: 1.45;
 }
 
-.friend-invite-close {
+.friend-invite-heading .friend-invite-account {
+  margin-top: 4px;
+  color: var(--muted-strong);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.friend-invite-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: -3px -3px 0 0;
+}
+
+.friend-invite-close,
+.friend-invite-refresh {
   display: grid;
   place-items: center;
   width: 32px;
   height: 32px;
-  margin: -3px -3px 0 0;
   border: 0;
   border-radius: 9px;
   background: transparent;
@@ -1646,9 +1662,23 @@ button {
   cursor: pointer;
 }
 
-.friend-invite-close:hover {
+.friend-invite-close:hover,
+.friend-invite-refresh:hover:not(:disabled) {
   background: var(--panel-raised);
   color: var(--text);
+}
+
+.friend-invite-refresh:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.friend-invite-offline-note {
+  margin: 0;
+  padding: 0 17px 10px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.4;
 }
 
 .friend-invite-banner {
@@ -1834,6 +1864,10 @@ button {
 
   .friend-invite-list {
     padding: 9px 12px;
+  }
+
+  .friend-invite-offline-note {
+    padding: 0 12px 8px;
   }
 
   .friend-invite-footer {
@@ -3160,4 +3194,23 @@ body.board-fullscreen-active {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Low-memory phones keep the composition but avoid live GPU blur/filter work. */
+:root[data-moonperf="lite"] {
+  --panel: var(--panel-solid);
+}
+
+html[data-moonperf="lite"] *,
+html[data-moonperf="lite"] *::before,
+html[data-moonperf="lite"] *::after {
+  backdrop-filter: none !important;
+}
+
+html[data-moonperf="lite"] .piece {
+  filter: none;
+}
+
+html[data-moonperf="lite"] .check-glow {
+  animation: none !important;
 }

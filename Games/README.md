@@ -202,6 +202,14 @@ pnpm preview:chess
 pnpm build:web
 pnpm preview:web
 
+# Touch and low-memory devices automatically use the lighter paint path.
+# Force either mode for an A/B comparison on the same device:
+#   http://localhost:4174/?perf=full
+#   http://localhost:4174/?perf=lite
+# The managed stack serves the same bundle through tools/serve-web.mjs with
+# Brotli/gzip compression and immutable caching for hashed assets.
+pnpm stack start
+
 # Regenerate releases/games.json and launcher/public/games.json
 pnpm catalog:generate
 

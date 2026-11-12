@@ -6,6 +6,7 @@ export interface FriendInviteDialogProps {
   open: boolean;
   matchId: string;
   spectate: boolean;
+  accountName: string | null;
   friends: SocialFriend[];
   loading: boolean;
   loadError: string | null;
@@ -34,6 +35,7 @@ export function FriendInviteDialog({
   open,
   matchId,
   spectate,
+  accountName,
   friends,
   loading,
   loadError,
@@ -117,16 +119,33 @@ export function FriendInviteDialog({
                 ? "They will join the live room as a spectator."
                 : "They will get a MoonGames invite for this private room."}
             </p>
+            {accountName !== null && (
+              <p className="friend-invite-account">
+                Signed in as @{accountName}
+              </p>
+            )}
           </div>
-          <button
-            ref={closeRef}
-            type="button"
-            className="friend-invite-close"
-            onClick={onClose}
-            aria-label="Close friend invitations"
-          >
-            <Icon name="close" size={18} />
-          </button>
+          <div className="friend-invite-heading-actions">
+            <button
+              type="button"
+              className="friend-invite-refresh"
+              onClick={onRetry}
+              disabled={loading}
+              aria-label="Refresh friend list"
+              title="Refresh friend list"
+            >
+              <Icon name="refresh" size={17} />
+            </button>
+            <button
+              ref={closeRef}
+              type="button"
+              className="friend-invite-close"
+              onClick={onClose}
+              aria-label="Close friend invitations"
+            >
+              <Icon name="close" size={18} />
+            </button>
+          </div>
         </div>
 
         {inviteNotice !== null && (
@@ -162,7 +181,8 @@ export function FriendInviteDialog({
               <p>No MoonGames friends or requests yet.</p>
               <span>
                 Search and add players from the MoonGames menu, or share the
-                private room link instead.
+                private room link instead. Friends only appear when Chess is
+                opened from the menu with your shared account.
               </span>
             </div>
           ) : (
@@ -216,6 +236,12 @@ export function FriendInviteDialog({
             })
           )}
         </div>
+
+        {friends.length > 0 && (
+          <p className="friend-invite-offline-note">
+            Offline friends can still receive the invite.
+          </p>
+        )}
 
         <div className="friend-invite-footer">
           <button type="button" className="text-button" onClick={onCopyInvite}>

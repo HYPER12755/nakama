@@ -269,6 +269,7 @@ async function loadSettings() {
     web: {
       host: process.env.MOONGAMES_WEB_HOST ?? "0.0.0.0",
       port: webPort,
+      root: path.join(GAMES_ROOT, "launcher", "dist"),
       entry: WEB_ENTRY,
       catalog: WEB_CATALOG,
       logPath: path.join(logDir, SERVICE_LOGS.web),
@@ -989,21 +990,18 @@ async function startWeb(settings, state, options) {
   }
 
   await startManaged(settings, state, "web", {
-    command: settings.pnpm,
+    command: process.execPath,
     args: [
-      "--filter",
-      "@moongames/launcher",
-      "exec",
-      "vite",
-      "preview",
+      path.join(GAMES_ROOT, "tools", "serve-web.mjs"),
+      "--root",
+      settings.web.root,
       "--host",
       settings.web.host,
       "--port",
       String(settings.web.port),
-      "--strictPort",
     ],
     logPath: settings.web.logPath,
-    displayCommand: "vite preview",
+    displayCommand: "serve-web",
   });
 
   if (!(await waitFor("Launcher", () => serviceUp(settings, "web"), 20_000))) {

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type {
   BoardPiece,
   MoveRecord,
@@ -40,7 +41,7 @@ function motionBetween(
   };
 }
 
-export function ChessBoard({
+export const ChessBoard = memo(function ChessBoard({
   board,
   selected,
   legalTargets,
@@ -161,4 +162,4 @@ export function ChessBoard({
       })}
     </div>
   );
-}
+});

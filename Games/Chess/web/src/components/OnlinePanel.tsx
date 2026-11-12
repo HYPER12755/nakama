@@ -490,6 +490,7 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
           open
           matchId={inviteTarget.matchId}
           spectate={inviteTarget.spectate}
+          accountName={session?.username ?? null}
           friends={friends}
           loading={friendsLoading}
           loadError={friendsError}

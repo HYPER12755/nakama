@@ -2,7 +2,9 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  base: "./",
+  // The launcher is served from the web root and must keep working on deep
+  // links such as /invite/<token>, where relative asset URLs resolve wrongly.
+  base: "/",
   plugins: [react()],
   server: {
     port: 5174,

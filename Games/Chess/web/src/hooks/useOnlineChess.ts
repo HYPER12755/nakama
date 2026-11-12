@@ -396,8 +396,10 @@ export function useOnlineChess(
       return;
     }
 
+    // The clock is rendered to whole seconds, so four updates per second did
+    // four times the React work for no visible benefit.
     setNowTick(Date.now());
-    const timer = window.setInterval(() => setNowTick(Date.now()), 250);
+    const timer = window.setInterval(() => setNowTick(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [connection, serverState?.match.started, serverState?.result]);
 
@@ -1219,14 +1221,31 @@ export function useOnlineChess(
           client,
           session: currentSession,
         });
-        const [mutual, outgoing, incoming] = await Promise.all([
+        // Load each relationship state independently. A failure in one state
+        // must never hide accepted friends from the invite picker.
+        const responses = await Promise.allSettled([
           social.listFriends(0),
           social.listFriends(1),
           social.listFriends(2),
         ]);
+        const groups = responses.flatMap((result) =>
+          result.status === "fulfilled" ? [result.value] : [],
+        );
+        if (groups.length === 0) {
+          const rejected = responses.find(
+            (result): result is PromiseRejectedResult =>
+              result.status === "rejected",
+          );
+          throw rejected?.reason ?? new Error("Friend list unavailable.");
+        }
+        if (groups.length < responses.length) {
+          console.warn("Some MoonGames friend states could not be loaded.");
+        }
         const byId = new Map<string, SocialFriend>();
-        for (const friend of [...mutual, ...incoming, ...outgoing]) {
-          byId.set(friend.userId, friend);
+        for (const group of groups) {
+          for (const friend of group) {
+            byId.set(friend.userId, friend);
+          }
         }
         const rank = (state: number) =>
           state === 0 ? 0 : state === 2 ? 1 : state === 1 ? 2 : 3;
@@ -1251,6 +1270,26 @@ export function useOnlineChess(
     friendsPromiseRef.current = request;
     await request;
   }, []);
+
+  useEffect(() => {
+    if (connection !== "connected") {
+      return;
+    }
+    // Warm the cache as soon as the socket is ready, and refresh when the
+    // player returns from another tab after accepting a request.
+    void loadFriends();
+    const refresh = () => {
+      if (document.visibilityState === "visible") {
+        void loadFriends();
+      }
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [connection, loadFriends]);
 
   const clearInviteFeedback = useCallback(() => {
     setInviteError(null);
