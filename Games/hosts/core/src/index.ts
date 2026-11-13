@@ -1,5 +1,5 @@
-import { verifyAsync } from "@noble/ed25519";
-import { sha256 } from "@noble/hashes/sha2.js";
+import { hashes, verify } from "@noble/ed25519";
+import { sha256, sha512 } from "@noble/hashes/sha2.js";
 import {
   GAME_PROTOCOL_VERSION,
   assertBundleDescriptor,
@@ -33,10 +33,15 @@ export interface BundleVerification {
   error?: string;
 }
 
+// The async Ed25519 verifier depends on WebCrypto, which is unavailable on
+// plain-HTTP LAN origins. Pure-JS SHA-512 keeps signature verification working
+// when the launcher is opened from another device on local WiFi.
+hashes.sha512 = sha512;
+
 export const nobleCryptoAdapter: HostCryptoAdapter = {
   sha256: (data) => sha256(data),
   verifyEd25519: (signature, message, publicKey) =>
-    verifyAsync(signature, message, publicKey, { zip215: false }),
+    verify(signature, message, publicKey, { zip215: false }),
 };
 
 export function base64ToBytes(value: string): Uint8Array {

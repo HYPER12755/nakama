@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { getPublicKey, hashes, sign } from "@noble/ed25519";
+import { sha512 } from "@noble/hashes/sha2.js";
 import {
   GAME_PROTOCOL_VERSION,
+  bundleSigningPayload,
   type GameBundleDescriptor,
   type GameCatalogEntry,
   type GameSession,
@@ -236,5 +239,48 @@ describe("native launcher core", () => {
     expect(result.error).toBeNull();
     expect(result.games.has("chess")).toBe(true);
     expect(result.errors.get("cards")).toBe("Nope.");
+  });
+
+  it("verifies a release without WebCrypto on a plain-HTTP LAN origin", async () => {
+    hashes.sha512 = sha512;
+    const secretKey = new Uint8Array(32).fill(7);
+    const publicKey = getPublicKey(secretKey);
+    const unsigned = descriptor({
+      keyId: "lan-1",
+      publicKey: Buffer.from(publicKey).toString("base64"),
+    });
+    const signed: GameBundleDescriptor = {
+      ...unsigned,
+      signature: Buffer.from(
+        sign(
+          new TextEncoder().encode(bundleSigningPayload(unsigned)),
+          secretKey,
+        ),
+      ).toString("base64"),
+    };
+    const signedManifest: ReleaseManifest = {
+      ...manifest(signed),
+      signers: {
+        "lan-1": {
+          algorithm: "ed25519",
+          publicKey: unsigned.publicKey,
+        },
+      },
+    };
+    const originalCrypto = globalThis.crypto;
+
+    try {
+      vi.stubGlobal("crypto", {
+        getRandomValues: originalCrypto.getRandomValues.bind(originalCrypto),
+      });
+      expect(globalThis.crypto.subtle).toBeUndefined();
+      await expect(
+        verifyCatalogRelease(entry(signed), signedManifest, {
+          "lan-1": unsigned.publicKey,
+        }),
+      ).resolves.toMatchObject({ version: signed.version });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
