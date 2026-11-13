@@ -365,6 +365,22 @@ export default function App({ bridge }: AppProps) {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  const announcedInviteRef = useRef<string | null>(null);
+  useEffect(() => {
+    const invite = online.incomingInvite;
+    if (invite === null) {
+      announcedInviteRef.current = null;
+      return;
+    }
+    if (announcedInviteRef.current === invite.inviteId) {
+      return;
+    }
+    announcedInviteRef.current = invite.inviteId;
+    setToast(
+      `${invite.sender.username} invited you to ${invite.gameTitle}. Open Online to accept.`,
+    );
+  }, [online.incomingInvite]);
+
   const handleModeChange = (nextMode: GameMode) => {
     const onlineActive =
       mode === "online" &&

@@ -114,6 +114,88 @@ describe("shared social client", () => {
     );
   });
 
+  it("paginates old notifications so a recent invite is never hidden", async () => {
+    const oldNotifications = Array.from({ length: 50 }, (_, index) => ({
+      id: `old-${index}`,
+      code: -1,
+      subject: `Old chat ${index}`,
+      content: {},
+      create_time: `2026-11-12T09:${String(index).padStart(2, "0")}:00Z`,
+      sender_id: "friend",
+    }));
+    const inviteNotification = {
+      id: "new-invite",
+      code: 2101,
+      subject: "Nova invited you to Chess",
+      content: { invite: { ...invite, token: undefined } },
+      create_time: "2026-11-13T10:00:00Z",
+      sender_id: "self",
+    };
+    const listNotifications = vi
+      .fn()
+      .mockResolvedValueOnce({
+        notifications: oldNotifications,
+        cacheable_cursor: "page-2",
+      })
+      .mockResolvedValueOnce({
+        notifications: [inviteNotification],
+        cacheable_cursor: "page-3",
+      })
+      .mockResolvedValueOnce({
+        notifications: [],
+        cacheable_cursor: "page-3",
+      });
+    const client = {
+      rpc: vi.fn(async () => ({ payload: { ok: true, readIds: [] } })),
+      listNotifications,
+    } as unknown as Client;
+    const social = new MoonGamesSocialClient({
+      client,
+      session,
+      selfUserId: "self",
+    });
+
+    const listed = await social.listNotifications(50);
+
+    expect(listed).toHaveLength(51);
+    expect(listed[0].id).toBe("new-invite");
+    expect(listed[0].kind).toBe("invite");
+    expect(listNotifications).toHaveBeenNthCalledWith(1, session, 50, undefined);
+    expect(listNotifications).toHaveBeenNthCalledWith(2, session, 50, "page-2");
+    expect(listNotifications).toHaveBeenNthCalledWith(3, session, 50, "page-3");
+  });
+
+  it("sends the invite card through the direct chat channel", async () => {
+    const writeChatMessage = vi.fn(
+      async (_channelId: string, _content: Record<string, unknown>) => ({
+        message_id: "message-1",
+        create_time: "2026-11-13T10:00:00Z",
+      }),
+    );
+    const socket = {
+      joinChat: vi.fn(async () => ({ id: "4.self.friend." })),
+      writeChatMessage,
+    };
+    const social = new MoonGamesSocialClient({
+      client: fakeClient(),
+      session,
+      socket: socket as never,
+      selfUserId: "self",
+    });
+
+    const message = await social.sendInviteMessage("friend", invite);
+
+    expect(socket.joinChat).toHaveBeenCalledWith("friend", 2, true, false);
+    expect(writeChatMessage).toHaveBeenCalledTimes(1);
+    const content = writeChatMessage.mock.calls[0]?.[1] as {
+      type?: string;
+      invite?: { token?: string };
+    };
+    expect(content.type).toBe("moongames.invite");
+    expect(content.invite?.token).toBeUndefined();
+    expect(message.invite?.token).toBe(invite.token);
+  });
+
   it("queues live notifications until the host attaches its own UI", async () => {
     const socket = {
       received: [] as unknown[],

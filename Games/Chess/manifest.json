@@ -1,7 +1,7 @@
 {
   "id": "chess",
   "name": "Chess",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "sdkVersion": "0.1.0",
   "entry": "index.html",
   "minPlayers": 2,
@@ -16,7 +16,7 @@
     "replay"
   ],
   "orientation": "any",
-  "description": "Standard chess with local, AI, online, private-match, spectator, invite-link, replay, fullscreen, temporary match-chat, friend invites, launcher notifications, and a shared MoonGames account when launched from the verified web menu.",
+  "description": "Standard chess with local, AI, online, private-match, spectator, invite-link, replay, fullscreen, temporary match-chat, friend invites with persistent chat cards, in-game invite alerts, launcher notifications, and a shared MoonGames account when launched from the verified web menu.",
   "tagline": "Classic chess. Local, AI, or rated online.",
   "status": "available",
   "tags": ["strategy", "1v1", "rated", "online", "chat", "invites", "notifications"],

@@ -525,6 +525,23 @@ export function useLauncherSocial(): LauncherSocialController {
     };
   }, [refreshNotifications]);
 
+  useEffect(() => {
+    if (connection !== "online") {
+      return undefined;
+    }
+    const refresh = () => {
+      if (document.visibilityState === "visible") {
+        void Promise.allSettled([refreshFriends(), refreshNotifications()]);
+      }
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [connection, refreshFriends, refreshNotifications]);
+
   const broadcastNotificationChange = useCallback((userId: string) => {
     if (typeof BroadcastChannel === "undefined") {
       return;

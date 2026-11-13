@@ -161,7 +161,9 @@
 - [x] Add emoji picker and recent emojis to launcher friend chat and match chat.
 - [x] Add a shareable invite link and deep-link handling for `moongames://invite/<token>` and `/invite/<token>`.
 - [x] Keep notification/read state synced across tabs and launcher relaunches using Nakama read state plus `BroadcastChannel` refresh.
-- [x] Add focused web tests for notification normalization, invite state, cross-client invite parsing, and emoji insertion.
+- [x] Page through Nakama's oldest-first notification cursor, refresh on focus/visibility, and re-read Alerts when opened so new invites cannot be hidden behind older notifications.
+- [x] Send a persisted direct-chat invite card from in-game invites and show an in-game invite banner with accept/dismiss.
+- [x] Add focused web tests for notification normalization, notification pagination, direct-chat invite cards, invite state, cross-client invite parsing, and emoji insertion.
 
 ### Host SDKs
 

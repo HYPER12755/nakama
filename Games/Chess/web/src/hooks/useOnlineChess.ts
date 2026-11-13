@@ -7,10 +7,12 @@ import {
   type Socket,
 } from "@heroiclabs/nakama-js";
 import { MoonGamesSocialClient } from "@moongames/social";
-import type {
-  GameHostConfig,
-  MoonGamesInvite,
-  SocialFriend,
+import {
+  inviteWantsSpectator,
+  type GameHostConfig,
+  type MoonGamesInvite,
+  type SocialFriend,
+  type SocialNotification,
 } from "@moongames/game-sdk";
 import type {
   ChessState,
@@ -121,9 +123,12 @@ export interface OnlineChessController {
   inviteSendingId: string | null;
   inviteError: string | null;
   inviteNotice: string | null;
+  incomingInvite: MoonGamesInvite | null;
   loadFriends: () => Promise<void>;
   clearInviteFeedback: () => void;
   inviteFriend: (input: FriendInviteInput) => Promise<MoonGamesInvite>;
+  acceptIncomingInvite: () => Promise<void>;
+  dismissIncomingInvite: () => void;
   profile: OnlineProfile | null;
   history: OnlineHistoryEntry[];
   leaderboard: OnlineLeaderboardEntry[];
@@ -334,6 +339,9 @@ export function useOnlineChess(
   const [inviteSendingId, setInviteSendingId] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
+  const [incomingInvite, setIncomingInvite] = useState<MoonGamesInvite | null>(
+    null,
+  );
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [profile, setProfile] = useState<OnlineProfile | null>(null);
   const [history, setHistory] = useState<OnlineHistoryEntry[]>([]);
@@ -360,6 +368,8 @@ export function useOnlineChess(
   const matchmakingRunRef = useRef(0);
   const clockOffsetRef = useRef(0);
   const friendsPromiseRef = useRef<Promise<void> | null>(null);
+  const socialRef = useRef<MoonGamesSocialClient | null>(null);
+  const loadFriendsRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     if (!matchmaking) {
@@ -575,6 +585,30 @@ export function useOnlineChess(
     pending.reject(new Error(message));
   }, []);
 
+  const handleSocialNotification = useCallback(
+    (notification: SocialNotification) => {
+      const invite = notification.invite;
+      setIncomingInvite((current) => {
+        if (invite === null) {
+          return current;
+        }
+        if (
+          notification.kind === "invite" &&
+          invite.status === "pending" &&
+          invite.expiresAt > Date.now() &&
+          invite.sender.userId !== sessionRef.current?.user_id
+        ) {
+          return invite;
+        }
+        return current?.inviteId === invite.inviteId ? null : current;
+      });
+      if (notification.kind.startsWith("friend-")) {
+        void loadFriendsRef.current?.();
+      }
+    },
+    [],
+  );
+
   const disconnect = useCallback(() => {
     matchmakingRunRef.current += 1;
     failPendingMatchmaker("Disconnected while searching for a match.");
@@ -594,6 +628,7 @@ export function useOnlineChess(
     socketRef.current = null;
     clientRef.current = null;
     sessionRef.current = null;
+    socialRef.current = null;
     setConnection("offline");
     setSession(null);
     setAccount(null);
@@ -613,6 +648,7 @@ export function useOnlineChess(
     setInviteError(null);
     setInviteNotice(null);
     setInviteSendingId(null);
+    setIncomingInvite(null);
     friendsPromiseRef.current = null;
     matchmakingActiveRef.current = false;
     setMatchmaking(false);
@@ -728,6 +764,12 @@ export function useOnlineChess(
           }
         }
         const socket = client.createSocket(address.useSSL, false);
+        const social = new MoonGamesSocialClient({
+          client,
+          session: sessionResult,
+          socket,
+          selfUserId: sessionResult.user_id,
+        });
 
         socket.onmatchdata = handleMatchData;
         socket.onmatchmakermatched = (matched) => {
@@ -755,6 +797,7 @@ export function useOnlineChess(
           socketRef.current = null;
           clientRef.current = null;
           sessionRef.current = null;
+          socialRef.current = null;
           setConnection("connecting");
           setProfileLoading(false);
           setFriendsError(null);
@@ -762,6 +805,7 @@ export function useOnlineChess(
           setInviteError(null);
           setInviteNotice(null);
           setInviteSendingId(null);
+          setIncomingInvite(null);
           friendsPromiseRef.current = null;
           setError("Connection lost. Reconnecting to the table…");
 
@@ -794,6 +838,25 @@ export function useOnlineChess(
         clientRef.current = client;
         sessionRef.current = sessionResult;
         socketRef.current = socket;
+        socialRef.current = social;
+        social.onNotification(handleSocialNotification);
+        for (const notification of social.drainPendingNotifications()) {
+          handleSocialNotification(notification);
+        }
+        void social
+          .replayInvites()
+          .then((pending) => {
+            if (socialRef.current !== social) {
+              return;
+            }
+            for (const notification of pending) {
+              handleSocialNotification(notification);
+            }
+          })
+          .catch(() => {
+            // Persistent notifications are retried by the launcher and on the
+            // next connection; live socket delivery is already active.
+          });
 
         const resolvedAccount = await resolveAccountIdentity(
           client,
@@ -853,6 +916,8 @@ export function useOnlineChess(
         socketRef.current = null;
         clientRef.current = null;
         sessionRef.current = null;
+        socialRef.current = null;
+        setIncomingInvite(null);
         setConnection("error");
         setError(errorMessage(cause, "Could not connect to the game server."));
         throw cause;
@@ -863,10 +928,16 @@ export function useOnlineChess(
       connectPromiseRef.current = null;
     });
     return connectPromiseRef.current;
-  }, [failPendingMatchmaker, handleMatchData, serverAddress]);
+  }, [
+    failPendingMatchmaker,
+    handleMatchData,
+    handleSocialNotification,
+    serverAddress,
+  ]);
 
   useEffect(() => {
     return () => {
+      socialRef.current = null;
       const socket = socketRef.current;
       if (socket !== null) {
         try {
@@ -1272,6 +1343,15 @@ export function useOnlineChess(
   }, []);
 
   useEffect(() => {
+    loadFriendsRef.current = loadFriends;
+    return () => {
+      if (loadFriendsRef.current === loadFriends) {
+        loadFriendsRef.current = null;
+      }
+    };
+  }, [loadFriends]);
+
+  useEffect(() => {
     if (connection !== "connected") {
       return;
     }
@@ -1313,10 +1393,15 @@ export function useOnlineChess(
       setInviteError(null);
       setInviteNotice(null);
       try {
-        const social = new MoonGamesSocialClient({
-          client,
-          session: currentSession,
-        });
+        const socket = socketRef.current;
+        const social =
+          socialRef.current ??
+          new MoonGamesSocialClient({
+            client,
+            session: currentSession,
+            socket,
+            selfUserId: currentSession.user_id,
+          });
         if (input.state === 1) {
           throw new Error(
             "That player still needs to accept your friend request. Once they do, they will appear here as a friend.",
@@ -1337,7 +1422,21 @@ export function useOnlineChess(
             timeControl: input.timeControl ?? timeControl,
           },
         });
-        setInviteNotice(`Invite sent to ${input.username}.`);
+        let chatCardSent = false;
+        if (socket !== null) {
+          try {
+            await social.sendInviteMessage(input.userId, invite);
+            chatCardSent = true;
+          } catch {
+            // The persistent notification is still the authoritative delivery
+            // path; surface the chat-card failure without losing the invite.
+          }
+        }
+        setInviteNotice(
+          chatCardSent
+            ? `Invite sent to ${input.username}.`
+            : `Invite sent to ${input.username}. The chat card could not be delivered, but the invite is waiting in MoonGames.`,
+        );
         return invite;
       } catch (cause) {
         setInviteError(
@@ -1389,6 +1488,45 @@ export function useOnlineChess(
     },
     [requireSocket],
   );
+
+  const dismissIncomingInvite = useCallback(() => {
+    setIncomingInvite(null);
+  }, []);
+
+  const acceptIncomingInvite = useCallback(async (): Promise<void> => {
+    const invite = incomingInvite;
+    if (invite === null) {
+      return;
+    }
+    const social = socialRef.current;
+    if (social === null) {
+      setError("Connect to the game server before accepting an invite.");
+      return;
+    }
+    try {
+      const accepted = await social.acceptInvite({
+        inviteId: invite.inviteId,
+      });
+      setIncomingInvite(null);
+      if (accepted.matchId === null) {
+        setError("That invite no longer has a playable room.");
+        return;
+      }
+      const currentMatchId = matchIdRef.current;
+      if (
+        currentMatchId !== null &&
+        currentMatchId !== accepted.matchId &&
+        !window.confirm("Leave the current match and join this invite?")
+      ) {
+        return;
+      }
+      await joinMatch(accepted.matchId, {
+        spectator: inviteWantsSpectator(accepted),
+      });
+    } catch (cause) {
+      setError(errorMessage(cause, "Could not accept that invite."));
+    }
+  }, [incomingInvite, joinMatch]);
 
   const quickMatch = useCallback(async () => {
     if (matchmakingActiveRef.current) {
@@ -1927,9 +2065,12 @@ export function useOnlineChess(
     inviteSendingId,
     inviteError,
     inviteNotice,
+    incomingInvite,
     loadFriends,
     clearInviteFeedback,
     inviteFriend,
+    acceptIncomingInvite,
+    dismissIncomingInvite,
     profile,
     history,
     leaderboard,

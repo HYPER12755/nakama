@@ -1,5 +1,8 @@
 import { useState, type FormEvent } from "react";
-import type { SocialFriend } from "@moongames/game-sdk";
+import {
+  inviteWantsSpectator,
+  type SocialFriend,
+} from "@moongames/game-sdk";
 import type { OnlineChessController } from "../hooks/useOnlineChess";
 import { copyText } from "../lib/clipboard";
 import { buildMatchInviteUrl } from "../lib/invite";
@@ -59,9 +62,12 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
     inviteSendingId,
     inviteError,
     inviteNotice,
+    incomingInvite,
     loadFriends,
     clearInviteFeedback,
     inviteFriend,
+    acceptIncomingInvite,
+    dismissIncomingInvite,
     profile,
     timeControl,
     connect,
@@ -165,6 +171,39 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
           {connection}
         </span>
       </div>
+
+      {incomingInvite !== null && (
+        <div className="incoming-invite" role="status">
+          <div className="incoming-invite__copy">
+            <span className="field-label">Game invite</span>
+            <strong>
+              {incomingInvite.sender.username} invited you to{" "}
+              {incomingInvite.gameTitle}
+            </strong>
+            <span>
+              {inviteWantsSpectator(incomingInvite)
+                ? "Watch their live room."
+                : "Join their private room."}
+            </span>
+          </div>
+          <div className="incoming-invite__actions">
+            <button
+              type="button"
+              className="mini-button mini-button--accent"
+              onClick={() => void acceptIncomingInvite()}
+            >
+              Accept &amp; join
+            </button>
+            <button
+              type="button"
+              className="mini-button"
+              onClick={dismissIncomingInvite}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {connection !== "connected" ? (
         <div className="online-setup">

@@ -150,6 +150,9 @@ native integration guides for a minimal embedding example:
 - The Alerts drawer combines friend events, invites, unread direct messages,
   filters, and mark-read controls. Notification read state is stored in Nakama,
   so it survives relaunches; a `BroadcastChannel` refreshes other open tabs.
+  Alerts page through Nakama's oldest-first notification cursor and refresh on
+  focus, visibility, and drawer open, so a recent invite cannot be hidden
+  behind older notifications.
 - Invites can be created from friends or recent opponents. The authoritative
   game backend creates the private room at invite time; the launcher resolves,
   accepts, declines, cancels, and joins the returned match.

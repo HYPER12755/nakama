@@ -93,6 +93,13 @@ export function AccountDrawer({
     };
   }, [onClose, open]);
 
+  useEffect(() => {
+    if (!open || tab !== "alerts" || social.connection !== "online") {
+      return;
+    }
+    void social.refreshNotifications();
+  }, [open, social.connection, social.refreshNotifications, tab]);
+
   if (!open) {
     return null;
   }

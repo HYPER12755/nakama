@@ -151,8 +151,13 @@ covers friend requests, accept/decline/cancel events, invites, invite status
 changes, and unread personal messages. Invite cards can be shared in launcher
 DMs and opened from `/invite/<token>` or `moongames://invite/<token>`. Friends
 or recent opponents can be invited to an authoritative game room; game rules
-stay in the game backend. MoonGames-owned chat surfaces include an emoji picker,
-while match chat remains temporary and is never written to history.
+stay in the game backend. In-game invites write the same persisted invite card
+into the direct chat and surface an in-game invite banner, so the recipient can
+act without opening the launcher first. The launcher pages through Nakama's
+oldest-first notification cursor before sorting, refreshes on focus/visibility,
+and re-reads Alerts when opened, so a new invite cannot be hidden behind older
+notifications. MoonGames-owned chat surfaces include an emoji picker, while
+match chat remains temporary and is never written to history.
 
 ```text
 https://games.example.com/moongames/games.json
@@ -326,8 +331,8 @@ mobile QA, and real-device build validation:
   covered by 21 passing tests, including shared vectors, perft, SAN, castling,
   en passant, promotion, draws, undo, and JSON-safe state serialization.
 - The authoritative Nakama match handler, protocol, RPCs, matchmaker hook,
-  progression, and shared social modules are covered by 54 additional Lua tests
-  (8 protocol, 23 match, 9 profile, 21 rules, 14 shared social), for 75 Lua
+  progression, and shared social modules are covered by 60 additional Lua tests
+  (8 protocol, 23 match, 9 profile, 21 rules, 20 shared social), for 81 Lua
   tests in total.
 - Online Chess is wired into the web UI with quick match, private match IDs,
   guest sign-in, email/password accounts, host-supplied sessions, connection
@@ -381,11 +386,13 @@ mobile QA, and real-device build validation:
 - A responsive browser launcher reads the same catalog and renders search,
   filters, a featured game, themed cards, and coming-soon titles. It includes a
   shared launcher account, verified-release badges, friends, personal chats,
-  and the native launch bridge. Its 33 tests cover account validation, release
+  and the native launch bridge. Its 35 tests cover account validation, release
   proofs, the signed web handoff, social/invite helpers, shared social RPC
-  clients, catalog helpers, and native launch options. It builds together with Chess as a deployable static web app.
+  clients, notification pagination, direct-chat invite cards, catalog helpers,
+  and native launch options. It builds together with Chess as a deployable
+  static web app.
 - `@moongames/host-core` verifies sizes, SHA-256 digests, and Ed25519 signatures
-  with the same payload contract on web/native JavaScript runtimes; its 13
+  with the same payload contract on web/native JavaScript runtimes; its 14
   tests include a cross-check against Node-generated signatures, catalog
   behavior, native launch-query parsing, catalog release proofs, and
   shared-account launch-config construction.
@@ -410,8 +417,8 @@ mobile QA, and real-device build validation:
   agreement, casual/rated persistence, Elo changes, history, and leaderboard
   records.
 
-Current local automation: 22 core + 26 web + 13 host-core + 33 launcher
-TypeScript tests, 11 tool tests, and 75 Lua tests (180 passing tests total,
+Current local automation: 22 core + 26 web + 14 host-core + 35 launcher
+TypeScript tests, 11 tool tests, and 81 Lua tests (189 passing tests total,
 excluding Flutter package tests that require the Flutter SDK). The launcher
 account, social, and invite smoke scripts also run against real local Nakama.
 Manual browser QA of the catalog menu, account/social/notification drawer,

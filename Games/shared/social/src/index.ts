@@ -23,6 +23,10 @@ import {
 
 export { inviteShareUrl } from "@moongames/game-sdk";
 
+// Safety cap for very old accounts. Nakama pages forward from oldest to newest,
+// so this must be high enough to reach current invites without unbounded work.
+const NOTIFICATION_MAX_PAGES = 20;
+
 export {
   MoonGamesAccountError,
   linkGuestEmail,
@@ -293,10 +297,44 @@ export class MoonGamesSocialClient {
   ): Promise<SocialNotification[]> {
     const state = await this.notificationsState();
     const readIds = new Set(state.readIds);
-    const response = await this.client.listNotifications(this.session, limit);
+
+    // Nakama returns notifications oldest-first. A single page therefore
+    // hides new invites behind old friend/chat notifications once an account
+    // has more than `limit` entries. Walk the cacheable cursor so the newest
+    // invite is always present, then sort locally.
+    const collected: Notification[] = [];
+    const seen = new Set<string>();
+    let cursor: string | undefined;
+    for (let page = 0; page < NOTIFICATION_MAX_PAGES; page += 1) {
+      const response = await this.client.listNotifications(
+        this.session,
+        limit,
+        cursor,
+      );
+      const batch = response.notifications ?? [];
+      for (const notification of batch) {
+        const id = notification.id;
+        if (typeof id !== "string" || id.length === 0 || seen.has(id)) {
+          continue;
+        }
+        seen.add(id);
+        collected.push(notification);
+      }
+      const nextCursor = response.cacheable_cursor;
+      if (
+        batch.length === 0 ||
+        nextCursor === undefined ||
+        nextCursor.length === 0 ||
+        nextCursor === cursor
+      ) {
+        break;
+      }
+      cursor = nextCursor;
+    }
+
     return mergeNotifications(
       [],
-      (response.notifications ?? [])
+      collected
         .filter(
           (notification) =>
             !isDuplicateFriendRemovalNotification(notification.code),
