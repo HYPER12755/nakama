@@ -18,6 +18,7 @@ export type IconName =
   | "cpu"
   | "users"
   | "check"
+  | "send"
   | "sparkles";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
@@ -131,6 +132,12 @@ export function Icon({
         </>
       )}
       {name === "check" && <path d="m5 12.5 4.4 4.4L19 7.3" />}
+      {name === "send" && (
+        <>
+          <path d="M20.5 3.5 10.8 13.2" />
+          <path d="M20.5 3.5 14.2 20.5l-3.4-7.3-7.3-3.4Z" />
+        </>
+      )}
       {name === "sparkles" && (
         <>
           <path d="M12 3 13.4 7.1 17.5 8.5 13.4 9.9 12 14 10.6 9.9 6.5 8.5 10.6 7.1Z" />

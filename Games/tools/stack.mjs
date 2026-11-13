@@ -51,6 +51,7 @@ const WEB_ENTRY = path.join(GAMES_ROOT, "launcher", "dist", "index.html");
 const WEB_CATALOG = path.join(GAMES_ROOT, "launcher", "dist", "games.json");
 const MODULE_SOURCES = [
   path.join(GAMES_ROOT, "Chess", "server"),
+  path.join(GAMES_ROOT, "Carrom", "server"),
   path.join(GAMES_ROOT, "shared", "server"),
 ];
 const RELEASE_MANIFEST = path.join(GAMES_ROOT, "releases", "release-manifest.json");

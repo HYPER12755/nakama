@@ -209,7 +209,8 @@ hosts are file-backed and should load only the single-entry subset.
   frames, elastic disc collisions, pocket capture, deterministic replay).
 - [x] Carrom rules layer (turn continuation, opponent pockets, striker foul
   with a returned piece, queen pocket/cover cycle, last-piece protection, win
-  condition) with 17 core tests including a full AI match.
+  condition) with 24 core tests including a full AI match and the two, three,
+  and four player opening medallions.
 - [x] Carrom web UI (canvas board drawn to the ICF board spec: 74 cm surface,
   4.45 cm pockets, baseline strips with red base circles, diagonal foul lines,
   centre and outer circles, procedural wood, painted men), pull-back and
@@ -217,13 +218,21 @@ hosts are file-backed and should load only the single-entry subset.
   light/dark theme, fullscreen, lite paint path) with 6 web tests.
 - [x] Carrom simulation-backed AI that yields between candidate batches so a
   phone browser keeps painting.
-- [x] Carrom `0.2.0` signed release, catalog entry, and launcher card.
+- [x] Carrom `0.3.0` signed release, catalog entry, and launcher card.
 - [x] Launcher rebuilt around catalog data: generated artwork for unknown
   games, a real launch phase pipeline for the play button, no hardcoded game
   list, and a data driven time control.
-- [ ] Carrom authoritative Nakama server (Lua port of the physics and rules,
-  quick match, private rooms, spectators, invites, match chat).
-- [ ] Carrom four-player and three-player variants.
-- [ ] Carrom rules and physics parity vectors shared with the Lua server.
+- [x] Carrom authoritative Nakama server (Lua port of the physics and rules)
+  with seats for two, three, and four players, the room creator keeping the
+  first colour, spectators, a rate limited table chat, and the shared invite
+  room hook.
+- [x] Carrom online client: shared account session, launcher Nakama address,
+  atomic matchmaker, private rooms, room codes, and a local replay of the
+  authoritative shot.
+- [x] Carrom rules and physics parity vectors shared with the Lua server, and
+  a live smoke test for two and four player tables.
+- [ ] Carrom in-game friend picker, invite banner, and the shared chat
+  emoji picker.
+- [ ] Carrom offline four player table and ratings or history.
 - [ ] Generated artwork for unknown games in the native React Native and
   Flutter launchers (both currently fall back to a generic board icon).

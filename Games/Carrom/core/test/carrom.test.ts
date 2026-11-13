@@ -1,22 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
   CARROM_BOARD,
-  baselineY,
+  baselineOf,
   chooseAiShot,
   chooseAiShotAsync,
   createInitialState,
   findPocketAt,
-  nearestValidStrikerX,
+  nextPlayerInTurnOrder,
+  nearestValidStrikerPosition,
+  playersInTurnOrder,
   resolveShotRules,
   simulateShot,
   strikerFits,
+  strikerPoint,
   validateShot,
   type CarromPhysicsResult,
   type CarromState,
 } from "../src";
 
 const shot = {
-  strikerX: 0.5,
+  position: 0.5,
   angle: -Math.PI / 2,
   power: 0.8,
 };
@@ -44,8 +47,8 @@ function fabricatePhysics(
     ),
     strikerPocketed,
     striker: {
-      x: shot.strikerX,
-      y: baselineY(state.turn),
+      x: strikerPoint(state.turn, shot.position).x,
+      y: strikerPoint(state.turn, shot.position).y,
       pocketed: strikerPocketed,
     },
     pocketed,
@@ -73,9 +76,10 @@ describe("carrom setup", () => {
       pocketed: false,
     });
     expect(state.turn).toBe("white");
+    expect(state.players).toEqual(["white", "black"]);
     expect(state.striker).toMatchObject({
       x: 0.5,
-      y: baselineY("white"),
+      y: baselineOf("white").linePosition,
       pocketed: false,
     });
   });
@@ -91,10 +95,10 @@ describe("carrom setup", () => {
     expect(CARROM_BOARD.discRadius).toBeCloseTo(0.0216, 3);
     expect(CARROM_BOARD.strikerRadius).toBeCloseTo(0.0279, 3);
     expect(CARROM_BOARD.pocketRadius).toBeCloseTo(0.0301, 3);
-    expect(CARROM_BOARD.baseline.white).toBeCloseTo(0.75, 3);
-    expect(CARROM_BOARD.baseline.black).toBeCloseTo(0.25, 3);
-    expect(CARROM_BOARD.baselineMinX).toBeCloseTo(0.25, 3);
-    expect(CARROM_BOARD.baselineMaxX).toBeCloseTo(0.75, 3);
+    expect(baselineOf("white").linePosition).toBeCloseTo(0.75, 3);
+    expect(baselineOf("black").linePosition).toBeCloseTo(0.25, 3);
+    expect(CARROM_BOARD.baselineMin).toBeCloseTo(0.25, 3);
+    expect(CARROM_BOARD.baselineMax).toBeCloseTo(0.75, 3);
     expect(CARROM_BOARD.baseCircles).toHaveLength(4);
     // A striker is roughly three times the weight of a carrom man.
     expect(CARROM_BOARD.strikerMass).toBeGreaterThan(2.5);
@@ -107,10 +111,14 @@ describe("carrom setup", () => {
     expect(queen.y).toBeCloseTo(0.5, 5);
 
     const inner = state.discs.filter(
-      (disc) => disc.kind !== "queen" && Math.hypot(disc.x - 0.5, disc.y - 0.5) < 0.06,
+      (disc) =>
+        disc.kind !== "queen" &&
+        Math.hypot(disc.x - 0.5, disc.y - 0.5) < 0.06,
     );
     const outer = state.discs.filter(
-      (disc) => disc.kind !== "queen" && Math.hypot(disc.x - 0.5, disc.y - 0.5) >= 0.06,
+      (disc) =>
+        disc.kind !== "queen" &&
+        Math.hypot(disc.x - 0.5, disc.y - 0.5) >= 0.06,
     );
     expect(inner).toHaveLength(6);
     expect(outer).toHaveLength(12);
@@ -140,13 +148,73 @@ describe("carrom setup", () => {
     const state = createInitialState();
     const piece = state.discs.find((disc) => disc.kind === "white")!;
     piece.x = 0.5;
-    piece.y = baselineY("white");
-    const placed = nearestValidStrikerX(state, 0.5);
+    piece.y = baselineOf("white").linePosition;
+    const placed = nearestValidStrikerPosition(state, 0.5);
     expect(placed).not.toBeCloseTo(0.5, 4);
     expect(strikerFits(state, placed)).toBe(true);
-    expect(validateShot(state, { ...shot, strikerX: 0.5 })).toContain(
+    expect(validateShot(state, { ...shot, position: 0.5 })).toContain(
       "blocked",
     );
+  });
+});
+
+describe("carrom tables", () => {
+  it("seats two, three, and four players clockwise", () => {
+    expect(playersInTurnOrder(["white", "black"])).toEqual(["white", "black"]);
+    expect(playersInTurnOrder(["white", "black", "green"])).toEqual([
+      "white",
+      "black",
+      "green",
+    ]);
+    expect(
+      playersInTurnOrder(["white", "black", "green", "yellow"]),
+    ).toEqual(["white", "yellow", "black", "green"]);
+  });
+
+  it("moves the turn to the next seated player", () => {
+    expect(nextPlayerInTurnOrder(["white", "black"], "white")).toBe("black");
+    expect(nextPlayerInTurnOrder(["white", "black"], "black")).toBe("white");
+    expect(nextPlayerInTurnOrder(["white", "black", "green"], "black")).toBe(
+      "green",
+    );
+    expect(
+      nextPlayerInTurnOrder(["white", "black", "green", "yellow"], "white"),
+    ).toBe("yellow");
+  });
+
+  it("opens three and four player boards with the right piece count", () => {
+    const three = createInitialState(["white", "black", "green"]);
+    expect(three.discs.filter((disc) => disc.kind === "queen")).toHaveLength(1);
+    expect(three.discs.filter((disc) => disc.kind === "white")).toHaveLength(9);
+    expect(three.discs.filter((disc) => disc.kind === "black")).toHaveLength(9);
+    expect(three.discs.filter((disc) => disc.kind === "green")).toHaveLength(9);
+    expect(three.discs).toHaveLength(28);
+
+    const four = createInitialState(["white", "black", "green", "yellow"]);
+    expect(four.discs).toHaveLength(37);
+    expect(
+      four.discs.filter((disc) => disc.kind === "yellow"),
+    ).toHaveLength(9);
+  });
+
+  it("keeps every side of a four player board clear of overlaps", () => {
+    const state = createInitialState(["white", "black", "green", "yellow"]);
+    for (let left = 0; left < state.discs.length; left += 1) {
+      for (let right = left + 1; right < state.discs.length; right += 1) {
+        const a = state.discs[left]!;
+        const b = state.discs[right]!;
+        expect(
+          Math.hypot(a.x - b.x, a.y - b.y),
+        ).toBeGreaterThan(CARROM_BOARD.discRadius * 1.9);
+      }
+    }
+  });
+
+  it("puts each player on their own baseline", () => {
+    expect(strikerPoint("white", 0.4)).toEqual({ x: 0.4, y: 0.75 });
+    expect(strikerPoint("black", 0.6)).toEqual({ x: 0.6, y: 0.25 });
+    expect(strikerPoint("green", 0.4)).toEqual({ x: 0.75, y: 0.4 });
+    expect(strikerPoint("yellow", 0.6)).toEqual({ x: 0.25, y: 0.6 });
   });
 });
 
@@ -163,10 +231,10 @@ describe("carrom physics", () => {
 
   it("rejects shots outside the baseline", () => {
     const state = createInitialState();
-    expect(validateShot(state, { ...shot, strikerX: 0.1 })).toContain(
+    expect(validateShot(state, { ...shot, position: 0.1 })).toContain(
       "baseline",
     );
-    expect(() => simulateShot(state, { ...shot, strikerX: 0.1 })).toThrow();
+    expect(() => simulateShot(state, { ...shot, position: 0.1 })).toThrow();
   });
 });
 
@@ -281,6 +349,17 @@ describe("carrom rules", () => {
     expect(next.status).toBe("finished");
     expect(next.winner).toBe("white");
     expect(outcome.winner).toBe("white");
+  });
+
+  it("passes the turn around a four player table", () => {
+    const state = createInitialState(["white", "black", "green", "yellow"]);
+    const { state: next } = resolveShotRules(
+      state,
+      fabricatePhysics(state, ["g1"]),
+      shot,
+    );
+    expect(next.turn).toBe("yellow");
+    expect(next.scores.green).toBe(1);
   });
 
   it(

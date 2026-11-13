@@ -1,7 +1,8 @@
 import {
   CARROM_BOARD,
-  baselineY,
+  nearestValidStrikerPosition,
   strikerFits,
+  strikerPoint,
 } from "./board";
 import type {
   CarromDisc,
@@ -64,22 +65,22 @@ export function validateShot(
     return "The match is finished.";
   }
   if (
-    !Number.isFinite(shot.strikerX) ||
+    !Number.isFinite(shot.position) ||
     !Number.isFinite(shot.angle) ||
     !Number.isFinite(shot.power)
   ) {
     return "The shot contains an invalid value.";
   }
   if (
-    shot.strikerX < CARROM_BOARD.baselineMinX - 0.000001 ||
-    shot.strikerX > CARROM_BOARD.baselineMaxX + 0.000001
+    shot.position < CARROM_BOARD.baselineMin - 0.000001 ||
+    shot.position > CARROM_BOARD.baselineMax + 0.000001
   ) {
     return "Place the striker inside the baseline.";
   }
   if (shot.power < 0.01 || shot.power > 1) {
     return "Choose a shot strength between 1% and 100%.";
   }
-  if (!strikerFits(state, shot.strikerX)) {
+  if (!strikerFits(state, shot.position)) {
     return "The striker is blocked. Move it along the baseline.";
   }
   return null;
@@ -237,11 +238,12 @@ export function simulatePhysics(
   }
 
   const discs = state.discs.map(bodyFromDisc);
+  const start = strikerPoint(state.turn, shot.position);
   const striker: Body = {
     id: "striker",
     kind: "striker",
-    x: shot.strikerX,
-    y: baselineY(state.turn),
+    x: start.x,
+    y: start.y,
     vx: 0,
     vy: 0,
     radius: CARROM_BOARD.strikerRadius,

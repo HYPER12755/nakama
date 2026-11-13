@@ -10,8 +10,9 @@ import {
   CARROM_BOARD,
   PLAYER_LABEL,
   chooseAiShotAsync,
+  baselineOf,
   createInitialState,
-  nearestValidStrikerX,
+  nearestValidStrikerPosition,
   simulateShot,
   validateShot,
   type CarromPlayer,
@@ -22,8 +23,10 @@ import {
 import { CarromBoard } from "./components/CarromBoard";
 import { GameOverDialog } from "./components/GameOverDialog";
 import { Icon } from "./components/Icon";
+import { OnlinePanel } from "./components/OnlinePanel";
 import { RulesDialog } from "./components/RulesDialog";
 import { ScoreCard } from "./components/ScoreCard";
+import { useOnlineCarrom } from "./hooks/useOnlineCarrom";
 import { type AimMode } from "./lib/aim";
 import {
   playFoul,
@@ -38,7 +41,7 @@ import {
   type Theme,
 } from "./lib/theme";
 
-type Mode = "local" | "ai";
+type Mode = "local" | "ai" | "online";
 
 const SOUND_KEY = "moongames.carrom.sound";
 const AIM_KEY = "moongames.carrom.aim";
@@ -67,7 +70,10 @@ function persistSound(enabled: boolean): void {
   }
 }
 
-function queenText(state: CarromState): string {
+function queenText(state: CarromState | null): string {
+  if (state === null) {
+    return "Waiting";
+  }
   if (state.queen.status === "covered" && state.queen.owner !== undefined) {
     return `${PLAYER_LABEL[state.queen.owner]} covered`;
   }
@@ -78,10 +84,13 @@ function queenText(state: CarromState): string {
 }
 
 function statusTitle(
-  state: CarromState,
+  state: CarromState | null,
   animation: CarromShotResult | null,
   aiThinking: boolean,
 ): string {
+  if (state === null) {
+    return "Waiting for the table";
+  }
   if (state.status === "finished" && state.winner !== null) {
     return `${PLAYER_LABEL[state.winner]} wins`;
   }
@@ -98,10 +107,13 @@ function statusTitle(
 }
 
 function statusDetail(
-  state: CarromState,
+  state: CarromState | null,
   animation: CarromShotResult | null,
   aiThinking: boolean,
 ): string {
+  if (state === null) {
+    return "Connect to MoonGames and open a table to play online.";
+  }
   if (animation !== null) {
     return "The table is settling. The next turn starts automatically.";
   }
@@ -125,7 +137,7 @@ export interface AppProps {
 export default function App({ bridge }: AppProps) {
   const [mode, setMode] = useState<Mode>("local");
   const [game, setGame] = useState<CarromState>(() => createInitialState());
-  const [strikerX, setStrikerX] = useState(0.5);
+  const [strikerPosition, setStrikerPosition] = useState(0.5);
   const [animation, setAnimation] = useState<CarromShotResult | null>(null);
   const [theme, setTheme] = useState<Theme>(storedTheme);
   const [soundOn, setSoundOn] = useState(storedSound);
@@ -136,11 +148,34 @@ export default function App({ bridge }: AppProps) {
   const [aiThinking, setAiThinking] = useState(false);
   const [paused, setPaused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [onlineSeats, setOnlineSeats] = useState(2);
 
   const appRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<CarromShotResult | null>(null);
   const soundTimers = useRef<number[]>([]);
   const modeRef = useRef<Mode>(mode);
+
+  const inviteMatchId = useMemo(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    return new URLSearchParams(window.location.search).get("match");
+  }, []);
+  const inviteSpectate = useMemo(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return new URLSearchParams(window.location.search).get("spectate") === "1";
+  }, []);
+  const online = useOnlineCarrom({
+    autoJoinMatchId: inviteMatchId,
+    autoSpectate: inviteSpectate,
+  });
+  const onlineMode = mode === "online";
+  const activeGame: CarromState | null = onlineMode ? online.game : game;
+  const activeAnimation: CarromShotResult | null = onlineMode
+    ? online.animation
+    : animation;
 
   useEffect(() => {
     modeRef.current = mode;
@@ -243,6 +278,11 @@ export default function App({ bridge }: AppProps) {
 
   const handleShoot = useCallback(
     (shot: CarromShotInput) => {
+      if (onlineMode) {
+        // The server owns the table. The client only asks for the shot.
+        online.sendShot(shot);
+        return;
+      }
       if (animationRef.current !== null || paused) {
         return;
       }
@@ -257,14 +297,18 @@ export default function App({ bridge }: AppProps) {
       const result = simulateShot(game, shot);
       animationRef.current = result;
       setAnimation(result);
-      setStrikerX(shot.strikerX);
+      setStrikerPosition(shot.position);
       setAiThinking(false);
       scheduleSounds(result);
     },
-    [game, paused, scheduleSounds],
+    [game, online, onlineMode, paused, scheduleSounds],
   );
 
   const handleAnimationComplete = useCallback(() => {
+    if (onlineMode) {
+      online.clearAnimation();
+      return;
+    }
     const result = animationRef.current;
     if (result === null) {
       return;
@@ -272,7 +316,12 @@ export default function App({ bridge }: AppProps) {
     animationRef.current = null;
     setAnimation(null);
     setGame(result.state);
-    setStrikerX(result.state.striker.x);
+    setStrikerPosition(
+      nearestValidStrikerPosition(
+        result.state,
+        result.state.striker[baselineOf(result.state.turn).slideAxis],
+      ),
+    );
     setToast(result.outcome.message);
     if (result.outcome.winner !== null) {
       setResultOpen(true);
@@ -284,7 +333,7 @@ export default function App({ bridge }: AppProps) {
     } else {
       bridge.haptic("light");
     }
-  }, [bridge]);
+  }, [bridge, online, onlineMode]);
 
   const resetBoard = useCallback(
     (message: string) => {
@@ -292,7 +341,7 @@ export default function App({ bridge }: AppProps) {
       animationRef.current = null;
       setAnimation(null);
       setGame(createInitialState());
-      setStrikerX(0.5);
+      setStrikerPosition(0.5);
       setAiThinking(false);
       setResultOpen(false);
       setToast(message);
@@ -321,16 +370,21 @@ export default function App({ bridge }: AppProps) {
 
   const handleStrikerChange = useCallback(
     (value: number) => {
-      setStrikerX(nearestValidStrikerX(game, value));
+      setStrikerPosition(nearestValidStrikerPosition(activeGame ?? game, value));
     },
-    [game],
+    [activeGame, game],
   );
 
   const nudgeStriker = useCallback(
     (direction: -1 | 1) => {
-      setStrikerX(nearestValidStrikerX(game, strikerX + direction * 0.025));
+      setStrikerPosition(
+        nearestValidStrikerPosition(
+          activeGame ?? game,
+          strikerPosition + direction * 0.025,
+        ),
+      );
     },
-    [game, strikerX],
+    [activeGame, game, strikerPosition],
   );
 
   useEffect(() => {
@@ -377,26 +431,56 @@ export default function App({ bridge }: AppProps) {
     }
   }, []);
 
-  const canShoot =
-    game.status === "aiming" &&
-    animation === null &&
-    !paused &&
-    !aiThinking &&
-    !isAiPlayer(mode, game.turn);
+  const onlineMyTurn =
+    onlineMode &&
+    online.myColour !== null &&
+    activeGame !== null &&
+    online.myColour === activeGame.turn;
 
-  const active = game.status === "aiming" && game.turn;
-  const title = statusTitle(game, animation, aiThinking);
-  const detail = statusDetail(game, animation, aiThinking);
-  const queen = queenText(game);
-  const queenPending = game.queen.status === "pending";
-  const modeLabel = mode === "ai" ? "Moon AI" : "Pass & play";
+  const canShoot = onlineMode
+    ? activeGame !== null &&
+      activeGame.status === "aiming" &&
+      activeAnimation === null &&
+      !paused &&
+      onlineMyTurn
+    : game.status === "aiming" &&
+      animation === null &&
+      !paused &&
+      !aiThinking &&
+      !isAiPlayer(mode, game.turn);
+
+  const active = activeGame !== null && activeGame.status === "aiming"
+    ? activeGame.turn
+    : false;
+  const title = statusTitle(activeGame, activeAnimation, aiThinking);
+  const detail = statusDetail(activeGame, activeAnimation, aiThinking);
+  const queen = queenText(activeGame);
+  const queenPending = activeGame?.queen.status === "pending";
+  const modeLabel =
+    mode === "ai"
+      ? "Moon AI"
+      : mode === "online"
+        ? online.spectating
+          ? "Watching"
+          : "Online table"
+        : "Pass & play";
   const version = __MOONGAMES_GAME_VERSION__;
 
-  const scoreSummary = useMemo(
-    () =>
-      `${PLAYER_LABEL.white} ${game.scores.white}, ${PLAYER_LABEL.black} ${game.scores.black}`,
-    [game.scores.black, game.scores.white],
-  );
+  const scoreSummary = useMemo(() => {
+    if (onlineMode) {
+      return activeGame === null
+        ? "No table yet"
+        : (activeGame.players ?? [])
+            .map(
+              (player) =>
+                `${PLAYER_LABEL[player]} ${activeGame.scores[player] ?? 0}`,
+            )
+            .join(" · ");
+    }
+    return game.players
+      .map((player) => `${PLAYER_LABEL[player]} ${game.scores[player]}`)
+      .join(" · ");
+  }, [activeGame, game.players, game.scores, onlineMode]);
 
   return (
     <div className="app" ref={appRef}>
@@ -433,6 +517,16 @@ export default function App({ bridge }: AppProps) {
             >
               <Icon name="cpu" size={15} />
               vs AI
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === "online"}
+              className={`mode-switch__button${mode === "online" ? " mode-switch__button--active" : ""}`}
+              onClick={() => handleModeChange("online")}
+            >
+              <Icon name="users" size={15} />
+              Online
             </button>
           </div>
 
@@ -487,7 +581,7 @@ export default function App({ bridge }: AppProps) {
       <main className="game-layout">
         <section className="board-panel">
           <div className="turn-strip">
-            <span className={`turn-disc turn-disc--${game.turn}`} />
+            <span className={`turn-disc turn-disc--${activeGame?.turn ?? "white"}`} />
             <div className="turn-strip__copy">
               <span className="eyebrow">Current shot</span>
               <strong>{title}</strong>
@@ -497,9 +591,9 @@ export default function App({ bridge }: AppProps) {
 
           <div className="board-stage">
             <CarromBoard
-              state={game}
-              strikerX={strikerX}
-              animation={animation}
+              state={activeGame ?? game}
+              strikerPosition={strikerPosition}
+              animation={activeAnimation}
               disabled={!canShoot}
               theme={theme}
               aimMode={aimMode}
@@ -522,10 +616,10 @@ export default function App({ bridge }: AppProps) {
               </button>
               <input
                 type="range"
-                min={CARROM_BOARD.baselineMinX}
-                max={CARROM_BOARD.baselineMaxX}
+                min={CARROM_BOARD.baselineMin}
+                max={CARROM_BOARD.baselineMax}
                 step={0.005}
-                value={strikerX}
+                value={strikerPosition}
                 disabled={!canShoot}
                 aria-label="Striker position along the baseline"
                 onChange={(event) =>
@@ -589,20 +683,29 @@ export default function App({ bridge }: AppProps) {
               <span className="panel-heading__meta">{scoreSummary}</span>
             </div>
             <div className="score-list">
-              <ScoreCard
-                player="white"
-                score={game.scores.white}
-                active={active === "white"}
-                queen={game.queen}
-                ai={isAiPlayer(mode, "white")}
-              />
-              <ScoreCard
-                player="black"
-                score={game.scores.black}
-                active={active === "black"}
-                queen={game.queen}
-                ai={isAiPlayer(mode, "black")}
-              />
+              {onlineMode
+                ? online.seats.map((seat, seatIndex) => (
+                    <ScoreCard
+                      key={seat.user_id}
+                      player={seat.colour}
+                      score={activeGame?.scores[seat.colour] ?? 0}
+                      active={active === seat.colour}
+                      queen={activeGame?.queen ?? { status: "board" }}
+                      ai={false}
+                      seat={seatIndex + 1}
+                    />
+                  ))
+                : game.players.map((player, seat) => (
+                    <ScoreCard
+                      key={player}
+                      player={player}
+                      score={game.scores[player]}
+                      active={active === player}
+                      queen={game.queen}
+                      ai={isAiPlayer(mode, player)}
+                      seat={seat + 1}
+                    />
+                  ))}
             </div>
             <div className={`queen-row${queenPending ? " queen-row--pending" : ""}`}>
               <span className="queen-dot" />
@@ -615,7 +718,7 @@ export default function App({ bridge }: AppProps) {
             <div className="status-panel__icon">
               <Icon
                 name={
-                  game.status === "finished"
+                  activeGame?.status === "finished"
                     ? "trophy"
                     : queenPending
                       ? "sparkles"
@@ -630,6 +733,14 @@ export default function App({ bridge }: AppProps) {
               <p>{detail}</p>
             </div>
           </section>
+
+          {onlineMode ? (
+            <OnlinePanel
+              online={online}
+              seats={onlineSeats}
+              onSeatsChange={setOnlineSeats}
+            />
+          ) : null}
 
           <section className="panel tips-panel">
             <div className="panel-heading">

@@ -5,7 +5,7 @@ bundle with the same launch, packaging, signing, and hosting flow as Chess.
 
 ```text
 Carrom/
-├── manifest.json   # package metadata and capabilities (local, ai)
+├── manifest.json   # package metadata and capabilities (local, ai, online)
 ├── core/           # deterministic physics + rules engine (no UI, no network)
 │   ├── src/
 │   │   ├── types.ts
@@ -16,22 +16,53 @@ Carrom/
 │   │   └── ai.ts      # simulation-backed opponent search
 │   └── test/
 │       ├── carrom.test.ts
-│       └── match.test.ts
+│       ├── match.test.ts
+│       └── parity.test.ts
+├── server/         # authoritative Nakama runtime logic (Lua)
+│   ├── carrom_physics.lua
+│   ├── carrom_rules.lua
+│   ├── carrom_protocol.lua
+│   ├── carrom_match.lua
+│   ├── carrom_rpc.lua
+│   └── test/
+│       ├── carrom_rules_test.lua
+│       └── carrom_match_test.lua
 └── web/            # portable canvas board UI (React + Vite)
+    ├── scripts/online-smoke.mjs
     ├── src/
     │   ├── App.tsx
     │   ├── components/
     │   │   ├── CarromBoard.tsx   # canvas board, aiming, animation
+    │   │   ├── EmojiPicker.tsx
     │   │   ├── GameOverDialog.tsx
     │   │   ├── Icon.tsx
+    │   │   ├── OnlinePanel.tsx    # lobby, seats, table chat
     │   │   ├── RulesDialog.tsx
     │   │   └── ScoreCard.tsx
+    │   ├── hooks/
+    │   │   └── useOnlineCarrom.ts # Nakama client, seats, shots, chat
     │   └── lib/
     │       ├── aim.ts    # power curve, aim raycast, frame interpolation
     │       ├── audio.ts  # generated wooden shot sounds
     │       └── theme.ts
     └── test/aim.test.ts
 ```
+
+## Tables
+
+Two, three, and four player tables are supported. Each side of the board has
+its own baseline, so every player shoots from their own edge and the turn
+moves clockwise around the table:
+
+| Seat | Colour | Side |
+| --- | --- | --- |
+| 1 | Ivory | bottom |
+| 2 | Amber | left |
+| 3 | Onyx | top |
+| 4 | Jade | right |
+
+A two player table uses Ivory and Onyx. The room creator keeps the first
+colour, whoever joins first otherwise takes the next free colour.
 
 ## Board
 
@@ -104,14 +135,33 @@ pnpm build:carrom        # production build into Carrom/dist/
 pnpm package:carrom      # deterministic ZIP + signed descriptor
 pnpm --filter @moongames/carrom-core test
 pnpm --filter @moongames/carrom-web test
+pnpm smoke:carrom        # live two and four player tables against Nakama
 ```
 
 The packaged bundle is served by the managed stack at
 `http://localhost:4174/carrom/` and listed in `releases/games.json`.
 
+## Server
+
+`server/` is the authoritative Nakama backend. It owns the seats, the turn,
+the rules, and the result:
+
+- `carrom_physics.lua` and `carrom_rules.lua` are the Lua ports of the
+  TypeScript core. The same reference shot resolves to the same piece
+  positions on both sides, and both assert it.
+- `carrom_match.lua` assigns the seats, starts the table once every seat is
+  taken, simulates each shot itself, refuses out-of-turn shots, keeps a rate
+  limited table chat, and broadcasts the state with the shot so every client
+  replays the same animation.
+- `carrom_rpc.lua` creates private rooms, finds open quick tables, pairs the
+  atomic matchmaker, and registers the shared invite room hook.
+
+The Lua modules are copied to the local Nakama runtime with
+`pnpm stack sync`.
+
 ## Next
 
-- Authoritative Nakama server: a Lua port of the physics and rules, quick
-  match, private rooms, spectators, invites, and temporary match chat.
-- Shared parity vectors between the TypeScript core and the Lua server.
-- Four-player and three-player variants.
+- The in-game friend picker, the invite banner, and the shared chat emoji
+  picker for Carrom tables.
+- An offline four player table, ratings, and history.
+- A parity suite that replays whole matches on both sides.

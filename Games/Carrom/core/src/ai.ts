@@ -1,9 +1,10 @@
 import {
   CARROM_BOARD,
-  baselineY,
-  clampStrikerX,
-  nearestValidStrikerX,
-  oppositePlayer,
+  baselineOf,
+  clampStrikerPosition,
+  nearestValidStrikerPosition,
+  strikerPoint,
+  type CarromBaseline,
 } from "./board";
 import { validateShot } from "./physics";
 import { simulateShot } from "./shot";
@@ -31,7 +32,7 @@ function targetPower(distance: number): number {
 
 function candidateKey(shot: CarromShotInput): string {
   return [
-    shot.strikerX.toFixed(4),
+    shot.position.toFixed(4),
     shot.angle.toFixed(4),
     shot.power.toFixed(3),
   ].join(":");
@@ -44,7 +45,7 @@ function addCandidate(
   baseScore: number,
 ): void {
   if (
-    !Number.isFinite(shot.strikerX) ||
+    !Number.isFinite(shot.position) ||
     !Number.isFinite(shot.angle) ||
     !Number.isFinite(shot.power) ||
     shot.power < 0.02 ||
@@ -60,6 +61,40 @@ function addCandidate(
   candidates.push({ shot, index: candidates.length, baseScore });
 }
 
+/**
+ * Where the striker must sit so that the target is driven towards the
+ * pocket. The striker, the target, and the pocket have to share a line.
+ */
+function pocketLinePosition(
+  target: CarromDisc,
+  pocket: { x: number; y: number },
+  baseline: CarromBaseline,
+): number | null {
+  const along = baseline.slideAxis;
+  const across = baseline.lineAxis;
+  const targetAlong = target[along];
+  const targetAcross = target[across];
+  const pocketAlong = pocket[along];
+  const pocketAcross = pocket[across];
+  const acrossDelta = targetAcross - pocketAcross;
+  if (Math.abs(acrossDelta) < 0.025) {
+    return null;
+  }
+  const step = (baseline.linePosition - targetAcross) / acrossDelta;
+  const position = targetAlong + step * (targetAlong - pocketAlong);
+  if (!Number.isFinite(position)) {
+    return null;
+  }
+  return position;
+}
+
+function aimAngle(
+  striker: { x: number; y: number },
+  target: CarromDisc,
+): number {
+  return Math.atan2(target.y - striker.y, target.x - striker.x);
+}
+
 function addAimCandidates(
   state: CarromState,
   target: CarromDisc,
@@ -67,31 +102,36 @@ function addAimCandidates(
   seen: Set<string>,
   variants: number,
 ): void {
-  const baseline = baselineY(state.turn);
-  const distance = Math.hypot(target.x - 0.5, target.y - baseline);
-  const power = targetPower(distance);
-  const baseX = clampStrikerX(target.x);
-  const baseScore = 4 - distance * 2.5;
+  const baseline = baselineOf(state.turn);
+  const power = targetPower(
+    Math.hypot(target.x - 0.5, target.y - 0.5) + 0.2,
+  );
+  const base = clampStrikerPosition(target[baseline.slideAxis]);
   const positions =
     variants <= 0
-      ? [baseX]
-      : [baseX, clampStrikerX(baseX - 0.055), clampStrikerX(baseX + 0.055)];
-  for (const strikerX of positions) {
-    if (!Number.isFinite(strikerX)) {
+      ? [base]
+      : [
+          base,
+          clampStrikerPosition(base - 0.055),
+          clampStrikerPosition(base + 0.055),
+        ];
+  for (const position of positions) {
+    if (!Number.isFinite(position)) {
       continue;
     }
-    const angle = Math.atan2(target.y - baseline, target.x - strikerX);
-    addCandidate(candidates, seen, { strikerX, angle, power }, baseScore);
+    const striker = strikerPoint(state.turn, position);
+    const angle = aimAngle(striker, target);
+    addCandidate(candidates, seen, { position, angle, power }, 4);
     if (variants > 0) {
       addCandidate(
         candidates,
         seen,
         {
-          strikerX,
+          position,
           angle,
           power: Math.min(1, power + 0.08),
         },
-        baseScore - 0.4,
+        3.6,
       );
     }
   }
@@ -105,42 +145,41 @@ function addPocketCandidates(
   seen: Set<string>,
   variants: number,
 ): void {
-  const baseline = baselineY(state.turn);
+  const baseline = baselineOf(state.turn);
   const pockets = [...CARROM_BOARD.pocketCenters].sort(
     (left, right) =>
       Math.hypot(left.x - target.x, left.y - target.y) -
       Math.hypot(right.x - target.x, right.y - target.y),
   );
-  const distance = Math.hypot(target.x - 0.5, target.y - baseline);
-  const power = targetPower(distance);
+  const power = targetPower(
+    Math.hypot(target.x - 0.5, target.y - 0.5) + 0.2,
+  );
 
   for (const pocket of pockets.slice(0, pocketCount)) {
-    const deltaY = target.y - pocket.y;
-    if (Math.abs(deltaY) < 0.025) {
+    const projected = pocketLinePosition(target, pocket, baseline);
+    if (projected === null) {
       continue;
     }
-    const pocketDistance = Math.hypot(pocket.x - target.x, pocket.y - target.y);
-    const t = (baseline - target.y) / deltaY;
-    const projectedX = target.x + t * (target.x - pocket.x);
-    const baseX = clampStrikerX(projectedX);
-    const clampPenalty = Math.abs(projectedX - baseX) * 20;
-    const baseScore = 12 - pocketDistance * 7 - clampPenalty;
+    const base = clampStrikerPosition(projected);
+    const clampPenalty = Math.abs(projected - base) * 20;
+    const baseScore = 12 - clampPenalty;
     const positions =
       variants <= 0
-        ? [baseX]
+        ? [base]
         : [
-            baseX,
-            clampStrikerX(baseX - 0.04),
-            clampStrikerX(baseX + 0.04),
+            base,
+            clampStrikerPosition(base - 0.04),
+            clampStrikerPosition(base + 0.04),
           ];
-    for (const strikerX of positions) {
-      const angle = Math.atan2(target.y - baseline, target.x - strikerX);
-      addCandidate(candidates, seen, { strikerX, angle, power }, baseScore);
+    for (const position of positions) {
+      const striker = strikerPoint(state.turn, position);
+      const angle = aimAngle(striker, target);
+      addCandidate(candidates, seen, { position, angle, power }, baseScore);
       addCandidate(
         candidates,
         seen,
         {
-          strikerX,
+          position,
           angle,
           power: Math.min(1, power + 0.07),
         },
@@ -187,8 +226,12 @@ function shotScore(
     } else if (outcome.winner !== null) {
       score -= 1000;
     }
-    const opponent = oppositePlayer(player);
-    score += (state.scores[opponent] - result.state.scores[opponent]) * 2;
+    for (const opponent of state.players) {
+      if (opponent === player) {
+        continue;
+      }
+      score += (state.scores[opponent] - result.state.scores[opponent]) * 2;
+    }
     // Prefer a controlled shot when two candidates produce the same result.
     score += (1 - shot.power) * 0.01;
     return { score, result };
@@ -197,10 +240,6 @@ function shotScore(
   }
 }
 
-/**
- * A deterministic, simulation-backed opponent. It samples a small set of
- * plausible pocket lines and striker positions, then picks the best outcome.
- */
 interface AiPlan {
   ordered: Candidate[];
   limit: number;
@@ -216,8 +255,8 @@ function buildAiPlan(
     .filter((disc) => disc.kind === state.turn)
     .sort(
       (left, right) =>
-        Math.hypot(left.x - 0.5, left.y - baselineY(state.turn)) -
-        Math.hypot(right.x - 0.5, right.y - baselineY(state.turn)),
+        Math.hypot(left.x - 0.5, left.y - 0.5) -
+        Math.hypot(right.x - 0.5, right.y - 0.5),
     );
   const queen = active.find((disc) => disc.kind === "queen");
 
@@ -251,14 +290,20 @@ function buildAiPlan(
   }
 
   // A few neutral options keep the AI from freezing when the table is crowded.
-  const baseline = baselineY(state.turn);
-  for (const strikerX of [0.35, 0.5, 0.65]) {
+  const baseline = baselineOf(state.turn);
+  for (const raw of [0.35, 0.5, 0.65]) {
+    const position = clampStrikerPosition(raw);
+    const striker = strikerPoint(state.turn, position);
+    const straight =
+      baseline.slideAxis === "x"
+        ? { x: striker.x, y: baseline.inward > 0 ? 1 : 0 }
+        : { x: baseline.inward > 0 ? 1 : 0, y: striker.y };
     addCandidate(
       candidates,
       seen,
       {
-        strikerX,
-        angle: state.turn === "white" ? -Math.PI / 2 : Math.PI / 2,
+        position,
+        angle: Math.atan2(straight.y - striker.y, straight.x - striker.x),
         power: 0.58,
       },
       0,
@@ -268,8 +313,8 @@ function buildAiPlan(
         candidates,
         seen,
         {
-          strikerX,
-          angle: Math.atan2(own[0].y - baseline, own[0].x - strikerX),
+          position,
+          angle: aimAngle(striker, own[0]),
           power: 0.66,
         },
         1,
@@ -288,19 +333,25 @@ function buildAiPlan(
     fallback: () => {
       const fallbackTarget = own[0] ?? queen;
       if (fallbackTarget !== undefined) {
-        const strikerX = nearestValidStrikerX(state, fallbackTarget.x);
+        const position = nearestValidStrikerPosition(
+          state,
+          fallbackTarget[baseline.slideAxis],
+        );
+        const striker = strikerPoint(state.turn, position);
         return {
-          strikerX,
-          angle: Math.atan2(
-            fallbackTarget.y - baseline,
-            fallbackTarget.x - strikerX,
-          ),
+          position,
+          angle: aimAngle(striker, fallbackTarget),
           power: 0.62,
         };
       }
+      const position = nearestValidStrikerPosition(state, 0.5);
+      const direction =
+        baseline.lineAxis === "y"
+          ? { x: 0, y: baseline.inward }
+          : { x: baseline.inward, y: 0 };
       return {
-        strikerX: nearestValidStrikerX(state, 0.5),
-        angle: state.turn === "white" ? -Math.PI / 2 : Math.PI / 2,
+        position,
+        angle: Math.atan2(direction.y, direction.x),
         power: 0.5,
       };
     },

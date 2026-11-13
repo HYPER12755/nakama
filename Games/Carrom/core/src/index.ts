@@ -1,15 +1,27 @@
 export {
+  CARROM_BASELINES,
   CARROM_BOARD,
+  CARROM_SEATS,
+  PLAYER_COLOR,
   PLAYER_LABEL,
-  baselineY,
-  clampStrikerX,
+  baselineOf,
+  clampStrikerPosition,
   createInitialState,
   findOpenSpot,
-  nearestValidStrikerX,
-  oppositePlayer,
+  medallionRadii,
+  nearestValidStrikerPosition,
+  nextPlayerInTurnOrder,
+  playersInTurnOrder,
   strikerFits,
+  strikerPoint,
 } from "./board";
-export { CarromShotError, findPocketAt, simulatePhysics, validateShot } from "./physics";
+export type { CarromBaseline } from "./board";
+export {
+  CarromShotError,
+  findPocketAt,
+  simulatePhysics,
+  validateShot,
+} from "./physics";
 export { resolveShot, resolveShotRules } from "./rules";
 export { simulateShot } from "./shot";
 export { chooseAiShot, chooseAiShotAsync } from "./ai";

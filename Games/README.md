@@ -427,8 +427,9 @@ mobile QA, and real-device build validation:
   resignation, matchmaker pairing, delayed quick-table fallback, draw
   agreement, casual/rated persistence, Elo changes, history, and leaderboard
   records.
-- Carrom is the second official title and ships as a local-first release
-  (`0.2.0`, signed with `dev-1`) with the `local` and `ai` capabilities.
+- Carrom is the second official title and ships as a local and online
+  release (`0.3.0`, signed with `dev-1`) with the `local`, `ai`, `online`,
+  `private-match`, and `spectators` capabilities.
 - The Carrom board follows the International Carrom Federation standard for a
   74 cm playing surface: 3.1 cm men, a 4.13 cm striker weighing 15 g, 4.45 cm
   corner pockets, a baseline strip of two lines 3.8 cm apart closed by red
@@ -442,13 +443,14 @@ mobile QA, and real-device build validation:
   and striker collisions with the striker nearly three times heavier than a
   man, wall bounces, pocket capture, and friction, so an identical shot always
   produces an identical result. The same shot is used by the local UI, the AI
-  search, and the future authoritative server.
+  search, and the authoritative server.
 - Carrom rules cover turn continuation on an own pocket, opponent pockets,
   striker fouls with a returned piece, the queen pocket/cover cycle including
   the queen returning to the centre when it is not covered, protection of the
   last piece until the queen is covered, and the win condition. They are
-  covered by 17 core tests, including the ICF board proportions, the opening
-  medallion, and a full AI match that finishes with a winner and no deadlock.
+  covered by 24 core tests, including the ICF board proportions, the opening
+  medallion for two, three, and four players, the seating order around the
+  table, and a full AI match that finishes with a winner and no deadlock.
 - The Carrom AI is a simulation-backed opponent. It proposes pocket lines and
   striker positions, scores them by simulating each candidate, and plays the
   best one. The search yields between batches so a phone browser keeps
@@ -464,6 +466,24 @@ mobile QA, and real-device build validation:
   sounds, haptics, light/dark themes, fullscreen, and the shared lite paint
   path for low-memory devices. Its 6 tests cover the power curve, both aim
   styles, baselines, frame interpolation, and the aim raycast.
+- Carrom online runs on the launcher's Nakama server. A verified launch uses
+  the shared account session and the launcher's server address; a direct launch
+  falls back to a guest device identity on the same server. The web client
+  connects over the realtime socket, finds a table through the atomic
+  matchmaker, opens private rooms, joins by room code, and renders the
+  authoritative state.
+- The authoritative Carrom server is a Lua runtime module. It owns the seats,
+  the turn, the rules, and the result: it simulates every shot itself,
+  validates the striker placement, refuses out-of-turn shots, keeps a rate
+  limited table chat, and broadcasts the state with the shot so every client
+  replays the same animation. Two, three, and four player tables are
+  supported, and the room creator keeps the first colour.
+- The TypeScript core and the Lua server share the same rules and the same
+  physics. Both resolve the reference shot to the same piece positions, and
+  that vector is asserted on both sides. The live smoke test creates a room,
+  plays a shot, checks that the turn passes, checks that an out-of-turn shot
+  is refused, checks that the chat arrives, and starts a four player table
+  with 37 pieces.
 - The launcher no longer hardcodes games. Artwork resolves from the catalog:
   a registered motif when the catalog names one, otherwise a generated mark
   derived from the game id, so a new title never needs a launcher change. The
@@ -476,13 +496,14 @@ mobile QA, and real-device build validation:
   renders it as a normal catalog card next to Chess.
 
 Current local automation: 22 core + 26 web + 14 host-core + 42 launcher
-TypeScript tests, 17 Carrom core + 6 Carrom web tests, 11 tool tests, and 81
-Lua tests (219 passing tests total, excluding Flutter package tests that
+TypeScript tests, 24 Carrom core + 6 Carrom web tests, 11 tool tests, and 100
+Lua tests (245 passing tests total, excluding Flutter package tests that
 require the Flutter SDK). The launcher
-account, social, and invite smoke scripts also run against real local Nakama.
-Manual browser QA of the catalog menu, account/social/notification drawer,
-verified launch flow, AI, spectator, invite, replay, fullscreen board, the
-Carrom table, launcher
+account, social, and invite smoke scripts also run against real local Nakama,
+and the Carrom online smoke test runs two and four player tables against the
+same server. Manual browser QA of the catalog menu, account/social/notification
+drawer, verified launch flow, AI, spectator, invite, replay, fullscreen board,
+the Carrom table, launcher
 and match-chat emoji pickers, and online/profile flows, plus Android
 Chrome/Flutter/React Native device testing, is still required.
 
@@ -490,9 +511,10 @@ Current limitations:
 
 - The local Chess release is signed with the development key `dev-1`; pin and
   sign with a production Ed25519 key before public deployment.
-- Carrom is local and AI only for now. Its authoritative Nakama server, online
-  rooms, invites, and match chat are the next Carrom milestone, and the
-  catalog advertises only `local` and `ai` until that exists.
+- Carrom online tables work, but the in-game invite flow, the friend picker,
+  and the match chat are still limited to what the shared launcher services
+  already provide. Carrom has no ratings or history yet, and the four player
+  table is available online only.
 - The Flutter SDK is not installed in this environment, so full Flutter
   analysis/tests and native app builds remain outstanding even though the pure
   Dart proof and social harnesses pass.

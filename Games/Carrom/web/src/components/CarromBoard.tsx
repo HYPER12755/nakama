@@ -7,7 +7,9 @@ import {
 } from "react";
 import {
   CARROM_BOARD,
-  baselineY,
+  PLAYER_LABEL,
+  baselineOf,
+  strikerPoint,
   type CarromDiscKind,
   type CarromFrameDisc,
   type CarromPlayer,
@@ -45,7 +47,8 @@ interface AimState {
 
 export interface CarromBoardProps {
   state: CarromState;
-  strikerX: number;
+  /** Striker position along the current player's baseline. */
+  strikerPosition: number;
   animation: CarromShotResult | null;
   disabled: boolean;
   theme: Theme;
@@ -313,17 +316,33 @@ function drawMarkings(ctx: CanvasRenderingContext2D, turn: CarromPlayer): void {
   ctx.lineWidth = 2.4;
   ctx.stroke();
 
-  // Baseline strips: two parallel lines per side, 3.8 cm apart.
-  for (const player of ["white", "black"] as const) {
-    const y = toCanvasY(baselineY(player));
+  // Baseline strips: two parallel lines per side, 3.8 cm apart. Every side
+  // of the table has one, so four players can each play from their own edge.
+  for (const player of ["white", "yellow", "black", "green"] as const) {
+    const baseline = baselineOf(player);
     const half = scaleOf(CARROM_BOARD.baselineHalfWidth);
-    const start = toCanvasX(CARROM_BOARD.baselineMinX);
-    const end = toCanvasX(CARROM_BOARD.baselineMaxX);
+    const start =
+      baseline.slideAxis === "x"
+        ? toCanvasX(CARROM_BOARD.baselineMin)
+        : toCanvasY(CARROM_BOARD.baselineMin);
+    const end =
+      baseline.slideAxis === "x"
+        ? toCanvasX(CARROM_BOARD.baselineMax)
+        : toCanvasY(CARROM_BOARD.baselineMax);
+    const centre =
+      baseline.slideAxis === "x"
+        ? toCanvasY(baseline.linePosition)
+        : toCanvasX(baseline.linePosition);
     const active = player === turn;
     for (const offset of [-half, half]) {
       ctx.beginPath();
-      ctx.moveTo(start, y + offset);
-      ctx.lineTo(end, y + offset);
+      if (baseline.slideAxis === "x") {
+        ctx.moveTo(start, centre + offset);
+        ctx.lineTo(end, centre + offset);
+      } else {
+        ctx.moveTo(centre + offset, start);
+        ctx.lineTo(centre + offset, end);
+      }
       ctx.strokeStyle = active
         ? "rgba(38, 18, 10, 0.85)"
         : "rgba(38, 18, 10, 0.68)";
@@ -473,13 +492,29 @@ function drawPiece(
               rim: "#050607",
               ring: "rgba(226, 214, 186, 0.34)",
             }
-          : {
-              top: "#e4605a",
-              mid: QUEEN_RED,
-              low: "#74131c",
-              rim: "#4a0c12",
-              ring: "rgba(246, 206, 148, 0.6)",
-            };
+          : kind === "green"
+            ? {
+                top: "#7fd6ab",
+                mid: "#2f7d55",
+                low: "#14442c",
+                rim: "#0b2a1c",
+                ring: "rgba(214, 246, 226, 0.4)",
+              }
+            : kind === "yellow"
+              ? {
+                  top: "#f6d68c",
+                  mid: "#c9932c",
+                  low: "#8a5f12",
+                  rim: "#5d3d08",
+                  ring: "rgba(255, 244, 214, 0.45)",
+                }
+              : {
+                  top: "#e4605a",
+                  mid: QUEEN_RED,
+                  low: "#74131c",
+                  rim: "#4a0c12",
+                  ring: "rgba(246, 206, 148, 0.6)",
+                };
 
   ctx.save();
   ctx.translate(x, y);
@@ -665,7 +700,7 @@ function drawAim(
 
 export function CarromBoard({
   state,
-  strikerX,
+  strikerPosition,
   animation,
   disabled,
   theme,
@@ -786,12 +821,13 @@ export function CarromBoard({
     if (animation !== null) {
       return;
     }
+    const point = strikerPoint(state.turn, strikerPosition);
     drawScene(
       {
         discs: state.discs,
         striker: {
-          x: strikerX,
-          y: baselineY(state.turn),
+          x: point.x,
+          y: point.y,
           pocketed: false,
         },
         turn: state.turn,
@@ -799,7 +835,7 @@ export function CarromBoard({
       aim,
       false,
     );
-  }, [animation, state, strikerX, aim, drawScene]);
+  }, [animation, state, strikerPosition, aim, drawScene]);
 
   useEffect(() => {
     if (animation === null) {
@@ -868,9 +904,10 @@ export function CarromBoard({
   };
 
   const aimAt = (point: { x: number; y: number }): AimState => {
+    const origin = strikerPoint(state.turn, strikerPosition);
     const base = aimFromPoint(
-      strikerX,
-      baselineY(state.turn),
+      origin.x,
+      origin.y,
       point,
       aimMode,
     );
@@ -919,7 +956,7 @@ export function CarromBoard({
         const nextAim = aimAt(point);
         if (nextAim.power > 0.1) {
           onShoot({
-            strikerX,
+            position: strikerPosition,
             angle: nextAim.angle,
             power: nextAim.power,
           });

@@ -1,10 +1,11 @@
 import {
   CARROM_BOARD,
   PLAYER_LABEL,
-  baselineY,
   findOpenSpot,
-  nearestValidStrikerX,
-  oppositePlayer,
+  nextPlayerInTurnOrder,
+  nearestValidStrikerPosition,
+  playersInTurnOrder,
+  strikerPoint,
 } from "./board";
 import type {
   CarromDisc,
@@ -16,6 +17,8 @@ import type {
   CarromState,
   ShotOutcome,
 } from "./types";
+
+const ALL_PLAYERS: CarromPlayer[] = ["white", "black", "green", "yellow"];
 
 function countPocketed(discs: CarromDisc[], kind: CarromDiscKind): number {
   return discs.reduce(
@@ -73,11 +76,9 @@ function scoreState(state: CarromState): void {
   state.scores = {
     white: countPocketed(state.discs, "white"),
     black: countPocketed(state.discs, "black"),
+    green: countPocketed(state.discs, "green"),
+    yellow: countPocketed(state.discs, "yellow"),
   };
-}
-
-function finishMessage(winner: CarromPlayer): string {
-  return `${PLAYER_LABEL[winner]} clears the board and wins.`;
 }
 
 /**
@@ -91,12 +92,15 @@ export function resolveShotRules(
   shot: CarromShotInput,
 ): { state: CarromState; outcome: ShotOutcome } {
   const player = state.turn;
-  const opponent = oppositePlayer(player);
+  const seated = state.players.length > 0 ? state.players : [player];
   const ownPocketed = physics.pocketed.filter(
     (event) => event.kind === player,
   ).length;
   const opponentPocketed = physics.pocketed.filter(
-    (event) => event.kind === opponent,
+    (event) =>
+      event.kind !== "queen" &&
+      event.kind !== "striker" &&
+      event.kind !== player,
   ).length;
   const queenPocketedNow = physics.pocketed.some(
     (event) => event.kind === "queen",
@@ -107,6 +111,7 @@ export function resolveShotRules(
   const next: CarromState = {
     ...state,
     discs: physics.discs.map((disc) => ({ ...disc })),
+    players: [...seated],
     queen: { ...state.queen },
     scores: { ...state.scores },
     status: "aiming",
@@ -152,7 +157,7 @@ export function resolveShotRules(
   scoreState(next);
 
   const tryFinish = (candidate: CarromPlayer): boolean => {
-    if (next.scores[candidate] < 9) {
+    if (next.scores[candidate] < CARROM_BOARD.piecesPerPlayer) {
       return false;
     }
     if (next.queen.status === "covered") {
@@ -171,9 +176,16 @@ export function resolveShotRules(
     return false;
   };
 
-  // The shooter's action resolves first. If the opponent also reached nine,
-  // their last piece is protected by the same queen rule below.
-  const finished = tryFinish(player) || tryFinish(opponent);
+  // The shooter's action resolves first. Every seated player is then checked
+  // so a colour that was cleared by the same shot cannot slip through.
+  const order = playersInTurnOrder(seated);
+  let finished = false;
+  for (const candidate of [player, ...order.filter((entry) => entry !== player)]) {
+    if (tryFinish(candidate)) {
+      finished = true;
+      break;
+    }
+  }
 
   const queenPendingNow =
     next.queen.status === "pending" && !foul && !queenReturned;
@@ -183,17 +195,17 @@ export function resolveShotRules(
     !queenBlockedFinish &&
     (ownPocketed > 0 || (queenPocketedNow && queenPendingNow));
 
-  next.turn = turnContinued ? player : opponent;
-  const requestedStrikerX = turnContinued ? shot.strikerX : 0.5;
-  next.striker = {
-    x: nearestValidStrikerX(next, requestedStrikerX),
-    y: baselineY(next.turn),
-    pocketed: false,
-  };
+  next.turn = turnContinued
+    ? player
+    : nextPlayerInTurnOrder(seated, player);
+  const requestedPosition = turnContinued ? shot.position : 0.5;
+  const position = nearestValidStrikerPosition(next, requestedPosition);
+  const point = strikerPoint(next.turn, position);
+  next.striker = { x: point.x, y: point.y, pocketed: false };
 
   const parts: string[] = [];
   if (next.winner !== null) {
-    parts.push(finishMessage(next.winner));
+    parts.push(`${PLAYER_LABEL[next.winner]} clears the board and wins.`);
   } else {
     if (queenBlockedFinish) {
       parts.push("The queen must be covered before the final piece.");
@@ -203,7 +215,7 @@ export function resolveShotRules(
     }
     if (opponentPocketed > 0) {
       parts.push(
-        `Pocketed ${opponentPocketed} ${PLAYER_LABEL[opponent]} ${
+        `Pocketed ${opponentPocketed} opponent ${
           opponentPocketed === 1 ? "piece" : "pieces"
         } — foul.`,
       );
@@ -273,3 +285,5 @@ export function resolveShot(
     outcome: resolved.outcome,
   };
 }
+
+export { ALL_PLAYERS };

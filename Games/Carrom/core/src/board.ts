@@ -29,14 +29,10 @@ export const CARROM_BOARD = {
     { x: 0.036, y: 0.964 },
     { x: 0.964, y: 0.964 },
   ] as const,
-  baseline: {
-    white: 0.75,
-    black: 0.25,
-  } as const,
   /** Half of the 3.8 cm distance between the two baseline lines. */
   baselineHalfWidth: 0.0257,
-  baselineMinX: 0.25,
-  baselineMaxX: 0.75,
+  baselineMin: 0.25,
+  baselineMax: 0.75,
   /** Red base circles close the baseline strips on all four sides. */
   baseCircleRadius: 0.0257,
   baseCircles: [
@@ -49,9 +45,6 @@ export const CARROM_BOARD = {
   centerCircleRadius: 0.0215,
   /** The large decorative circle around the opening medallion. */
   outerCircleRadius: 0.321,
-  /** Opening medallion: six men around the queen, twelve men outside them. */
-  innerRingRadius: 0.0432,
-  outerRingRadius: 0.0864,
   friction: 1.45,
   wallRestitution: 0.86,
   discRestitution: 0.92,
@@ -65,35 +58,124 @@ export const CARROM_BOARD = {
   stepSeconds: 1 / 240,
   sampleSeconds: 1 / 60,
   maxSimulationSeconds: 9,
+  piecesPerPlayer: 9,
 } as const;
+
+/**
+ * Seating order around the table, clockwise: the bottom player, then the
+ * left, top, and right players. The turn always moves along this order.
+ */
+export const CARROM_SEATS: readonly CarromPlayer[] = [
+  "white",
+  "yellow",
+  "black",
+  "green",
+];
+
+export interface CarromBaseline {
+  /** Axis the striker slides along. */
+  slideAxis: "x" | "y";
+  /** Axis the baseline lines run along. */
+  lineAxis: "x" | "y";
+  /** Position of the baseline strip on that axis. */
+  linePosition: number;
+  /** Direction the striker travels when it shoots straight at the centre. */
+  inward: 1 | -1;
+  /** Angle from the board centre towards this player's side. */
+  axisAngle: number;
+}
+
+export const CARROM_BASELINES: Record<CarromPlayer, CarromBaseline> = {
+  white: {
+    slideAxis: "x",
+    lineAxis: "y",
+    linePosition: 0.75,
+    inward: -1,
+    axisAngle: Math.PI / 2,
+  },
+  yellow: {
+    slideAxis: "y",
+    lineAxis: "x",
+    linePosition: 0.25,
+    inward: 1,
+    axisAngle: Math.PI,
+  },
+  black: {
+    slideAxis: "x",
+    lineAxis: "y",
+    linePosition: 0.25,
+    inward: 1,
+    axisAngle: (Math.PI * 3) / 2,
+  },
+  green: {
+    slideAxis: "y",
+    lineAxis: "x",
+    linePosition: 0.75,
+    inward: -1,
+    axisAngle: 0,
+  },
+};
 
 export const PLAYER_LABEL: Record<CarromPlayer, string> = {
   white: "Ivory",
   black: "Onyx",
+  green: "Jade",
+  yellow: "Amber",
 };
 
-export function oppositePlayer(player: CarromPlayer): CarromPlayer {
-  return player === "white" ? "black" : "white";
+/** The colour used for each player's pieces in the interface. */
+export const PLAYER_COLOR: Record<CarromPlayer, string> = {
+  white: "#f3ead4",
+  black: "#22252a",
+  green: "#2f7d55",
+  yellow: "#c9932c",
+};
+
+export function baselineOf(player: CarromPlayer): CarromBaseline {
+  return CARROM_BASELINES[player];
 }
 
-export function baselineY(player: CarromPlayer): number {
-  return CARROM_BOARD.baseline[player];
+/** Seated players in turn order, clockwise around the table. */
+export function playersInTurnOrder(
+  players: readonly CarromPlayer[],
+): CarromPlayer[] {
+  return CARROM_SEATS.filter((player) => players.includes(player));
 }
 
-export function clampStrikerX(value: number): number {
-  return Math.min(
-    CARROM_BOARD.baselineMaxX,
-    Math.max(CARROM_BOARD.baselineMinX, value),
-  );
+export function nextPlayerInTurnOrder(
+  players: readonly CarromPlayer[],
+  current: CarromPlayer,
+): CarromPlayer {
+  const order = playersInTurnOrder(players);
+  const index = order.indexOf(current);
+  if (index < 0 || order.length === 0) {
+    return current;
+  }
+  return order[(index + 1) % order.length]!;
 }
 
-export function strikerFits(state: CarromState, strikerX: number): boolean {
-  const y = baselineY(state.turn);
+export function clampStrikerPosition(value: number): number {
+  return Math.min(CARROM_BOARD.baselineMax, Math.max(CARROM_BOARD.baselineMin, value));
+}
+
+/** The board position of a striker placed at `position` on a player's side. */
+export function strikerPoint(
+  player: CarromPlayer,
+  position: number,
+): CarromPoint {
+  const baseline = CARROM_BASELINES[player];
+  return baseline.slideAxis === "x"
+    ? { x: position, y: baseline.linePosition }
+    : { x: baseline.linePosition, y: position };
+}
+
+export function strikerFits(state: CarromState, position: number): boolean {
+  const point = strikerPoint(state.turn, position);
   const minimum = CARROM_BOARD.discRadius + CARROM_BOARD.strikerRadius + 0.002;
   return state.discs.every(
     (disc) =>
       disc.pocketed ||
-      Math.hypot(disc.x - strikerX, disc.y - y) >= minimum,
+      Math.hypot(disc.x - point.x, disc.y - point.y) >= minimum,
   );
 }
 
@@ -101,32 +183,61 @@ export function strikerFits(state: CarromState, strikerX: number): boolean {
  * Find the nearest legal striker position. This keeps the controls usable
  * when a returned carrom man happens to land near the baseline.
  */
-export function nearestValidStrikerX(
+export function nearestValidStrikerPosition(
   state: CarromState,
   requested: number,
 ): number {
-  const target = clampStrikerX(requested);
+  const target = clampStrikerPosition(requested);
   let best = target;
   let bestDistance = Number.POSITIVE_INFINITY;
   const step = 0.002;
   for (
-    let x = CARROM_BOARD.baselineMinX;
-    x <= CARROM_BOARD.baselineMaxX + 0.0001;
-    x += step
+    let position = CARROM_BOARD.baselineMin;
+    position <= CARROM_BOARD.baselineMax + 0.0001;
+    position += step
   ) {
-    if (!strikerFits(state, x)) {
+    if (!strikerFits(state, position)) {
       continue;
     }
-    const distance = Math.abs(x - target);
+    const distance = Math.abs(position - target);
     if (distance < bestDistance) {
-      best = x;
+      best = position;
       bestDistance = distance;
     }
   }
   return best;
 }
 
-export function createInitialState(): CarromState {
+/**
+ * Radii of the opening medallion. The inner ring always fits three men per
+ * player and the outer ring six, and both rings keep the men touching.
+ */
+export function medallionRadii(playerCount: number): {
+  inner: number;
+  outer: number;
+} {
+  const men = CARROM_BOARD.discRadius;
+  const inner = Math.max(
+    0.0432,
+    (3 * playerCount * men) / Math.PI,
+  );
+  const outer = Math.max(
+    inner + 2 * men,
+    (6 * playerCount * men) / Math.PI,
+  );
+  return { inner, outer };
+}
+
+/**
+ * The ICF opening layout: the queen on the centre spot, three men per player
+ * touching the centre circle, and six men per player touching that ring. The
+ * first player's axis carries one of their own men in each ring.
+ */
+export function createInitialState(
+  players: readonly CarromPlayer[] = ["white", "black"],
+): CarromState {
+  const seated = playersInTurnOrder(players);
+  const count = Math.max(2, seated.length);
   const discs: CarromDisc[] = [
     { id: "queen", kind: "queen", x: 0.5, y: 0.5, pocketed: false },
   ];
@@ -134,9 +245,10 @@ export function createInitialState(): CarromState {
   const counts: Record<CarromDiscKind, number> = {
     white: 0,
     black: 0,
+    green: 0,
+    yellow: 0,
     queen: 0,
   };
-
   const push = (kind: CarromDiscKind, x: number, y: number) => {
     counts[kind] += 1;
     discs.push({
@@ -148,40 +260,41 @@ export function createInitialState(): CarromState {
     });
   };
 
-  // Six men touch the centre circle and each other. White sits on the axis
-  // that points at the first player, matching the ICF opening layout.
-  for (let index = 0; index < 6; index += 1) {
-    const kind: CarromDiscKind = index % 2 === 0 ? "white" : "black";
-    const angle = (Math.PI / 2) + (index * Math.PI) / 3;
+  const radii = medallionRadii(count);
+  const first = seated[0] ?? "white";
+  const start = CARROM_BASELINES[first].axisAngle;
+
+  for (let index = 0; index < 3 * count; index += 1) {
+    const kind = seated[index % count]!;
+    const angle = start + (index * Math.PI * 2) / (3 * count);
     push(
       kind,
-      0.5 + Math.cos(angle) * CARROM_BOARD.innerRingRadius,
-      0.5 + Math.sin(angle) * CARROM_BOARD.innerRingRadius,
+      0.5 + Math.cos(angle) * radii.inner,
+      0.5 + Math.sin(angle) * radii.inner,
     );
   }
 
-  // Twelve men touch the inner ring. The white men form the three-armed
-  // shape that points at the first player.
-  for (let index = 0; index < 12; index += 1) {
-    const kind: CarromDiscKind = index % 2 === 1 ? "white" : "black";
-    const angle = (index * Math.PI) / 6;
+  for (let index = 0; index < 6 * count; index += 1) {
+    const kind = seated[index % count]!;
+    const angle = start + (index * Math.PI * 2) / (6 * count);
     push(
       kind,
-      0.5 + Math.cos(angle) * CARROM_BOARD.outerRingRadius,
-      0.5 + Math.sin(angle) * CARROM_BOARD.outerRingRadius,
+      0.5 + Math.cos(angle) * radii.outer,
+      0.5 + Math.sin(angle) * radii.outer,
     );
   }
 
   return {
     discs,
     striker: {
-      x: 0.5,
-      y: baselineY("white"),
+      x: strikerPoint(first, 0.5).x,
+      y: strikerPoint(first, 0.5).y,
       pocketed: false,
     },
-    turn: "white",
+    turn: first,
+    players: seated,
     queen: { status: "board" },
-    scores: { white: 0, black: 0 },
+    scores: { white: 0, black: 0, green: 0, yellow: 0 },
     status: "aiming",
     winner: null,
     shotNumber: 0,

@@ -1,6 +1,6 @@
 import {
   CARROM_BOARD,
-  baselineY,
+  strikerPoint as coreStrikerPoint,
   type CarromFrame,
   type CarromFrameDisc,
   type CarromPoint,
@@ -34,12 +34,7 @@ export function aimFromPoint(
   };
 }
 
-export function strikerPoint(
-  player: CarromPlayer,
-  strikerX: number,
-): CarromPoint {
-  return { x: strikerX, y: baselineY(player) };
-}
+export const strikerPoint = coreStrikerPoint;
 
 export interface AimHit {
   point: CarromPoint;

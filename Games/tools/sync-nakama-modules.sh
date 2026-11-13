@@ -4,6 +4,7 @@ set -euo pipefail
 
 GAMES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CHESS_DIR="$GAMES_DIR/Chess/server"
+CARROM_DIR="$GAMES_DIR/Carrom/server"
 SHARED_DIR="$GAMES_DIR/shared/server"
 DESTINATION="${MOONGAMES_NAKAMA_MODULES:-$GAMES_DIR/runtime/modules}"
 
@@ -27,4 +28,15 @@ for module in \
   fi
 done
 
-printf 'Synced shared and Chess Lua modules to %s\n' "$DESTINATION"
+for module in \
+  carrom_physics.lua \
+  carrom_rules.lua \
+  carrom_protocol.lua \
+  carrom_match.lua \
+  carrom_rpc.lua; do
+  if [[ -f "$CARROM_DIR/$module" ]]; then
+    cp "$CARROM_DIR/$module" "$DESTINATION/$module"
+  fi
+done
+
+printf 'Synced shared, Chess, and Carrom Lua modules to %s\n' "$DESTINATION"

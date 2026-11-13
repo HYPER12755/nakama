@@ -1,0 +1,358 @@
+-- MoonGames Carrom physics.
+--
+-- This is the authoritative port of Carrom/core/src/physics.ts. The step
+-- order, constants, and collision rules match the TypeScript core so the
+-- client animation and the server result agree.
+--
+-- The module has no Nakama dependencies so it can be tested with plain Lua.
+
+local physics = {}
+
+physics.DISC_RADIUS = 0.0216
+physics.STRIKER_RADIUS = 0.0279
+physics.POCKET_RADIUS = 0.0301
+physics.POCKETS = {
+  { x = 0.036, y = 0.036 },
+  { x = 0.964, y = 0.036 },
+  { x = 0.036, y = 0.964 },
+  { x = 0.964, y = 0.964 },
+}
+physics.BASELINE_MIN = 0.25
+physics.BASELINE_MAX = 0.75
+physics.FRICTION = 1.45
+physics.WALL_RESTITUTION = 0.86
+physics.DISC_RESTITUTION = 0.92
+physics.STRIKER_RESTITUTION = 0.95
+physics.STRIKER_MASS = 2.8
+physics.DISC_MASS = 1
+physics.MIN_SHOT_SPEED = 1
+physics.MAX_SHOT_SPEED = 4.6
+physics.STOP_SPEED = 0.02
+physics.STEP_SECONDS = 1 / 240
+physics.MAX_SIMULATION_SECONDS = 9
+physics.PIECES_PER_PLAYER = 9
+
+-- Seating order around the table, clockwise.
+physics.SEATS = { "white", "yellow", "black", "green" }
+
+physics.BASELINES = {
+  white = {
+    slide_axis = "x",
+    line_axis = "y",
+    line_position = 0.75,
+    inward = -1,
+    axis_angle = math.pi / 2,
+  },
+  yellow = {
+    slide_axis = "y",
+    line_axis = "x",
+    line_position = 0.25,
+    inward = 1,
+    axis_angle = math.pi,
+  },
+  black = {
+    slide_axis = "x",
+    line_axis = "y",
+    line_position = 0.25,
+    inward = 1,
+    axis_angle = math.pi * 1.5,
+  },
+  green = {
+    slide_axis = "y",
+    line_axis = "x",
+    line_position = 0.75,
+    inward = -1,
+    axis_angle = 0,
+  },
+}
+
+physics.PLAYER_LABEL = {
+  white = "Ivory",
+  black = "Onyx",
+  green = "Jade",
+  yellow = "Amber",
+}
+
+function physics.striker_point(player, position)
+  local baseline = physics.BASELINES[player]
+  if baseline.slide_axis == "x" then
+    return position, baseline.line_position
+  end
+  return baseline.line_position, position
+end
+
+function physics.find_pocket(x, y)
+  for _, pocket in ipairs(physics.POCKETS) do
+    local dx = x - pocket.x
+    local dy = y - pocket.y
+    if math.sqrt(dx * dx + dy * dy) <= physics.POCKET_RADIUS then
+      return pocket
+    end
+  end
+  return nil
+end
+
+local function copy_discs(discs)
+  local copy = {}
+  for index, disc in ipairs(discs or {}) do
+    copy[index] = {
+      id = disc.id,
+      kind = disc.kind,
+      x = disc.x,
+      y = disc.y,
+      pocketed = disc.pocketed == true,
+    }
+  end
+  return copy
+end
+
+local function resolve_wall(body)
+  local minimum = body.r
+  local maximum = 1 - body.r
+  if body.x < minimum then
+    body.x = minimum
+    body.vx = math.abs(body.vx) * physics.WALL_RESTITUTION
+  elseif body.x > maximum then
+    body.x = maximum
+    body.vx = -math.abs(body.vx) * physics.WALL_RESTITUTION
+  end
+  if body.y < minimum then
+    body.y = minimum
+    body.vy = math.abs(body.vy) * physics.WALL_RESTITUTION
+  elseif body.y > maximum then
+    body.y = maximum
+    body.vy = -math.abs(body.vy) * physics.WALL_RESTITUTION
+  end
+end
+
+local function collide(left, right, time, events)
+  if not left.active or not right.active then
+    return
+  end
+  local dx = right.x - left.x
+  local dy = right.y - left.y
+  local distance_squared = dx * dx + dy * dy
+  local minimum = left.r + right.r
+  if distance_squared >= minimum * minimum then
+    return
+  end
+
+  local distance = math.sqrt(distance_squared)
+  local nx, ny
+  if distance < 0.0000001 then
+    nx, ny = 1, 0
+  else
+    nx = dx / distance
+    ny = dy / distance
+  end
+
+  local overlap = minimum - (distance > 0 and distance or 0)
+  local inverse_total = left.im + right.im
+  if inverse_total > 0 then
+    local left_share = left.im / inverse_total
+    local right_share = right.im / inverse_total
+    left.x = left.x - nx * overlap * left_share
+    left.y = left.y - ny * overlap * left_share
+    right.x = right.x + nx * overlap * right_share
+    right.y = right.y + ny * overlap * right_share
+  end
+
+  local relative_x = right.vx - left.vx
+  local relative_y = right.vy - left.vy
+  local normal_velocity = relative_x * nx + relative_y * ny
+  if normal_velocity >= 0 then
+    return
+  end
+
+  local restitution = physics.DISC_RESTITUTION
+  if left.kind == "striker" or right.kind == "striker" then
+    restitution = physics.STRIKER_RESTITUTION
+  end
+  local impulse = (-(1 + restitution) * normal_velocity) / inverse_total
+  left.vx = left.vx - impulse * nx * left.im
+  left.vy = left.vy - impulse * ny * left.im
+  right.vx = right.vx + impulse * nx * right.im
+  right.vy = right.vy + impulse * ny * right.im
+
+  if math.abs(normal_velocity) > 0.16 and #events < 48 then
+    events[#events + 1] = {
+      type = "impact",
+      time = time,
+      strength = math.min(1, math.abs(normal_velocity) / 2.4),
+    }
+  end
+end
+
+local function max_speed(bodies)
+  local maximum = 0
+  for _, body in ipairs(bodies) do
+    if body.active then
+      local speed = math.sqrt(body.vx * body.vx + body.vy * body.vy)
+      if speed > maximum then
+        maximum = speed
+      end
+    end
+  end
+  return maximum
+end
+
+-- Run one authoritative shot. Returns the new disc positions, the pocket
+-- events, and whether the striker was pocketed.
+function physics.simulate(state, shot)
+  local bodies = {}
+  for index, disc in ipairs(state.discs) do
+    bodies[index] = {
+      index = index,
+      id = disc.id,
+      kind = disc.kind,
+      x = disc.x,
+      y = disc.y,
+      vx = 0,
+      vy = 0,
+      r = physics.DISC_RADIUS,
+      im = 1 / physics.DISC_MASS,
+      active = not disc.pocketed,
+      pocketed = disc.pocketed == true,
+    }
+  end
+
+  local sx, sy = physics.striker_point(state.turn, shot.position)
+  local speed = physics.MIN_SHOT_SPEED
+    + (physics.MAX_SHOT_SPEED - physics.MIN_SHOT_SPEED) * shot.power
+  local striker = {
+    index = #bodies + 1,
+    id = "striker",
+    kind = "striker",
+    x = sx,
+    y = sy,
+    vx = math.cos(shot.angle) * speed,
+    vy = math.sin(shot.angle) * speed,
+    r = physics.STRIKER_RADIUS,
+    im = 1 / physics.STRIKER_MASS,
+    active = true,
+    pocketed = false,
+  }
+  bodies[#bodies + 1] = striker
+
+  local events = {}
+  local pocketed = {}
+  local time = 0
+  local striker_pocketed = false
+  local damping = math.exp(-physics.FRICTION * physics.STEP_SECONDS)
+  local maximum_steps = math.ceil(physics.MAX_SIMULATION_SECONDS / physics.STEP_SECONDS)
+
+  local function pocket_body(body, pocket)
+    body.active = false
+    body.pocketed = true
+    body.vx = 0
+    body.vy = 0
+    body.x = pocket.x
+    body.y = pocket.y
+    events[#events + 1] = {
+      type = "pocket",
+      time = time,
+      id = body.id,
+      kind = body.kind,
+      pocket = { x = pocket.x, y = pocket.y },
+    }
+    pocketed[#pocketed + 1] = {
+      time = time,
+      id = body.id,
+      kind = body.kind,
+      x = pocket.x,
+      y = pocket.y,
+    }
+    if body.kind == "striker" then
+      striker_pocketed = true
+    end
+  end
+
+  for _ = 1, maximum_steps do
+    time = time + physics.STEP_SECONDS
+
+    for _, body in ipairs(bodies) do
+      if body.active then
+        body.vx = body.vx * damping
+        body.vy = body.vy * damping
+        body.x = body.x + body.vx * physics.STEP_SECONDS
+        body.y = body.y + body.vy * physics.STEP_SECONDS
+      end
+    end
+
+    for _, body in ipairs(bodies) do
+      if body.active then
+        local pocket = physics.find_pocket(body.x, body.y)
+        if pocket then
+          pocket_body(body, pocket)
+        end
+      end
+    end
+
+    for _, body in ipairs(bodies) do
+      if body.active then
+        resolve_wall(body)
+      end
+    end
+
+    -- The pair order matches the TypeScript core exactly: the broad phase is
+    -- an inline overlap test so only touching pairs pay for a function call.
+    for _ = 1, 3 do
+      for left_index = 1, #bodies do
+        local left = bodies[left_index]
+        if left.active then
+          for right_index = left_index + 1, #bodies do
+            local right = bodies[right_index]
+            if right.active then
+              local dx = right.x - left.x
+              local dy = right.y - left.y
+              local minimum = left.r + right.r
+              if dx * dx + dy * dy < minimum * minimum then
+                collide(left, right, time, events)
+              end
+            end
+          end
+        end
+      end
+    end
+
+    for _, body in ipairs(bodies) do
+      if body.active then
+        local pocket = physics.find_pocket(body.x, body.y)
+        if pocket then
+          pocket_body(body, pocket)
+        end
+      end
+    end
+
+    if max_speed(bodies) < physics.STOP_SPEED then
+      break
+    end
+  end
+
+  local discs = {}
+  for index, disc in ipairs(state.discs) do
+    local body = bodies[index]
+    discs[index] = {
+      id = disc.id,
+      kind = disc.kind,
+      x = body.x,
+      y = body.y,
+      pocketed = body.pocketed,
+    }
+  end
+
+  return {
+    discs = discs,
+    striker_pocketed = striker_pocketed,
+    striker = { x = striker.x, y = striker.y, pocketed = striker.pocketed },
+    pocketed = pocketed,
+    events = events,
+    duration = time,
+  }
+end
+
+function physics.copy_discs(discs)
+  return copy_discs(discs)
+end
+
+return physics

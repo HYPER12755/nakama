@@ -8,9 +8,11 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "smoke:online": "node scripts/online-smoke.mjs"
   },
   "dependencies": {
+    "@heroiclabs/nakama-js": "^2.8.0",
     "@moongames/carrom-core": "workspace:*",
     "@moongames/game-sdk": "workspace:*",
     "react": "19.3.1",

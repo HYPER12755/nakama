@@ -1,4 +1,4 @@
-export type CarromPlayer = "white" | "black";
+export type CarromPlayer = "white" | "black" | "green" | "yellow";
 export type CarromDiscKind = CarromPlayer | "queen";
 export type CarromPocketKind = CarromDiscKind | "striker";
 export type QueenStatus = "board" | "pending" | "covered";
@@ -28,8 +28,12 @@ export interface CarromQueen {
 }
 
 export interface CarromShotInput {
-  /** Position of the striker centre along the current player's baseline. */
-  strikerX: number;
+  /**
+   * Position of the striker along the current player's baseline. The axis is
+   * the one the player's baseline runs along: `x` for the top and bottom
+   * players, `y` for the left and right players.
+   */
+  position: number;
   /** Direction in radians, with 0 pointing right and positive values down. */
   angle: number;
   /** Normalized shot strength in the range 0..1. */
@@ -40,6 +44,8 @@ export interface CarromState {
   discs: CarromDisc[];
   striker: CarromStriker;
   turn: CarromPlayer;
+  /** Seated players, in seating order around the table. */
+  players: CarromPlayer[];
   queen: CarromQueen;
   scores: Record<CarromPlayer, number>;
   status: "aiming" | "finished";

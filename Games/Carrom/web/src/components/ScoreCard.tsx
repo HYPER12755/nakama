@@ -11,6 +11,7 @@ interface ScoreCardProps {
   active: boolean;
   queen: CarromQueen;
   ai: boolean;
+  seat: number;
 }
 
 export function ScoreCard({
@@ -19,6 +20,7 @@ export function ScoreCard({
   active,
   queen,
   ai,
+  seat,
 }: ScoreCardProps) {
   return (
     <div
@@ -28,7 +30,7 @@ export function ScoreCard({
         <span className={`score-card__swatch score-card__swatch--${player}`} />
         <div className="score-card__identity">
           <strong>{PLAYER_LABEL[player]}</strong>
-          <span>{ai ? "Moon AI" : player === "white" ? "Player 1" : "Player 2"}</span>
+          <span>{ai ? "Moon AI" : `Player ${seat}`}</span>
         </div>
         {active ? (
           <span className="score-card__turn">
