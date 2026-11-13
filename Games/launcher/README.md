@@ -198,6 +198,18 @@ regenerate the catalog, and run `build:web`. The assembler copies every
 available game it can find; missing builds are reported but do not break the
 menu.
 
+Nothing else is required. The launcher reads the catalog and renders any game
+it finds:
+
+- Artwork comes from the catalog. A registered `icon` key uses its motif, and
+  any other key falls back to a mark generated from the game id, so a new
+  title never needs a launcher change.
+- The play button runs one pipeline for every game: verify the signed
+  release, make sure a shared account exists, hand the session over, and open
+  the game. Each phase has its own label, so the button always says what it is
+  doing.
+- A time control is offered when the catalog marks the game as `timed`.
+
 ## Design notes
 
 - The UI is purely local React/CSS; there are no external fonts, images, or

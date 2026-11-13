@@ -481,6 +481,49 @@ button {
   opacity: 0.45;
 }
 
+.aim-mode {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.aim-mode__label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.aim-mode__switch {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel-raised);
+}
+
+.aim-mode__button {
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.aim-mode__button--active {
+  color: var(--text);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(72, 201, 176, 0.32);
+}
+
 .aim-hint {
   display: inline-flex;
   align-items: center;

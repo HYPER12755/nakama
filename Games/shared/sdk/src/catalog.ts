@@ -36,6 +36,8 @@ export interface GameCatalogEntry {
   accent: string;
   /** Stable icon key, for example `chess`; hosts map it to their SVG set. */
   icon: string;
+  /** True when the game runs on a clock, so invites may carry a time control. */
+  timed?: boolean;
   featured: boolean;
   sortOrder: number;
   /** Relative to the catalog URL, or an absolute http(s) URL. */
@@ -195,6 +197,9 @@ export function assertGameCatalogEntry(
     throw new Error(`games.${entry.id}.accent must be a #rrggbb color.`);
   }
   requireSingleLine(entry.icon, `games.${entry.id}.icon`);
+  if (entry.timed !== undefined && typeof entry.timed !== "boolean") {
+    throw new Error(`games.${entry.id}.timed must be a boolean.`);
+  }
   if (typeof entry.featured !== "boolean") {
     throw new Error(`games.${entry.id}.featured must be a boolean.`);
   }

@@ -5,11 +5,8 @@ export type LauncherIconName =
   | "arrow-left"
   | "arrow-up-right"
   | "bell"
-  | "carrom"
-  | "cards"
   | "chat"
   | "check"
-  | "chess"
   | "chevron-right"
   | "clock"
   | "eye"
@@ -19,7 +16,6 @@ export type LauncherIconName =
   | "lock"
   | "log-in"
   | "log-out"
-  | "ludo"
   | "mail"
   | "moon"
   | "plus"
@@ -39,17 +35,6 @@ interface IconProps {
   className?: string;
   style?: CSSProperties;
   strokeWidth?: number;
-}
-
-const gameIcons: Record<string, LauncherIconName> = {
-  carrom: "carrom",
-  cards: "cards",
-  chess: "chess",
-  ludo: "ludo",
-};
-
-export function gameIconName(id: string): LauncherIconName {
-  return gameIcons[id] ?? "gamepad";
 }
 
 export function Icon({
@@ -128,64 +113,6 @@ export function Icon({
           <path d="m9.5 14.5 5-5" />
           <path d="m7.3 16.7-1 .9a3.7 3.7 0 0 1-5.2-5.2l3-3a3.7 3.7 0 0 1 5.2 0" />
           <path d="m16.7 7.3 1-.9a3.7 3.7 0 0 1 5.2 5.2l-3 3a3.7 3.7 0 0 1-5.2 0" />
-        </>
-      )}
-      {name === "chess" && (
-        <>
-          <path
-            d="M7 20.2h10M8.1 20.2v-3.4c0-1.8.9-3.4 2.4-4.4l1.9-1.2-3-2.7 1.2-4.1c.22-.75 1.2-.9 1.63-.25l2.25 3.35 1.14 2.1c.75 1.45 1.15 3.05 1.15 4.7V20.2"
-            fill="currentColor"
-            fillOpacity="0.12"
-          />
-          <path d="M9.4 8.4 12 7.1" />
-          <circle cx="12.7" cy="9.7" r=".45" fill="currentColor" stroke="none" />
-        </>
-      )}
-      {name === "cards" && (
-        <>
-          <rect
-            x="6.2"
-            y="3.8"
-            width="11.6"
-            height="16.4"
-            rx="2.2"
-            transform="rotate(-8 12 12)"
-            fill="currentColor"
-            fillOpacity="0.1"
-          />
-          <rect
-            x="6.2"
-            y="3.8"
-            width="11.6"
-            height="16.4"
-            rx="2.2"
-            transform="rotate(8 12 12)"
-          />
-          <path
-            d="M12 8.1 14 12l-2 3.9-2-3.9Z"
-            fill="currentColor"
-            fillOpacity="0.2"
-          />
-        </>
-      )}
-      {name === "ludo" && (
-        <>
-          <rect x="3.4" y="3.4" width="17.2" height="17.2" rx="3.2" />
-          <path d="M12 3.4v17.2M3.4 12h17.2" />
-          <circle cx="7.7" cy="7.7" r="1.5" fill="currentColor" fillOpacity="0.32" />
-          <circle cx="16.3" cy="7.7" r="1.5" fill="currentColor" fillOpacity="0.16" />
-          <circle cx="7.7" cy="16.3" r="1.5" fill="currentColor" fillOpacity="0.16" />
-          <circle cx="16.3" cy="16.3" r="1.5" fill="currentColor" fillOpacity="0.32" />
-        </>
-      )}
-      {name === "carrom" && (
-        <>
-          <circle cx="12" cy="12" r="8.4" fill="currentColor" fillOpacity="0.08" />
-          <circle cx="12" cy="12" r="2.25" />
-          <circle cx="8.2" cy="9.2" r="1.15" fill="currentColor" stroke="none" />
-          <circle cx="15.5" cy="8.4" r="1.15" fill="currentColor" stroke="none" />
-          <circle cx="15.2" cy="15.6" r="1.15" fill="currentColor" stroke="none" />
-          <path d="m4.9 17.1 1.9 1.9" />
         </>
       )}
       {name === "arrow-left" && (

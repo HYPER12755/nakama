@@ -209,14 +209,21 @@ hosts are file-backed and should load only the single-entry subset.
   frames, elastic disc collisions, pocket capture, deterministic replay).
 - [x] Carrom rules layer (turn continuation, opponent pockets, striker foul
   with a returned piece, queen pocket/cover cycle, last-piece protection, win
-  condition) with 15 core tests including a full AI match.
-- [x] Carrom web UI (canvas board, aim guide with first-contact ghost, power
-  ring, baseline striker slider, score board, rules dialog, generated sound,
-  haptics, light/dark theme, fullscreen, lite paint path) with 5 web tests.
+  condition) with 17 core tests including a full AI match.
+- [x] Carrom web UI (canvas board drawn to the ICF board spec: 74 cm surface,
+  4.45 cm pockets, baseline strips with red base circles, diagonal foul lines,
+  centre and outer circles, procedural wood, painted men), pull-back and
+  direct aiming, score board, rules dialog, generated sound, haptics,
+  light/dark theme, fullscreen, lite paint path) with 6 web tests.
 - [x] Carrom simulation-backed AI that yields between candidate batches so a
   phone browser keeps painting.
-- [x] Carrom `0.1.0` signed release, catalog entry, and launcher card.
+- [x] Carrom `0.2.0` signed release, catalog entry, and launcher card.
+- [x] Launcher rebuilt around catalog data: generated artwork for unknown
+  games, a real launch phase pipeline for the play button, no hardcoded game
+  list, and a data driven time control.
 - [ ] Carrom authoritative Nakama server (Lua port of the physics and rules,
   quick match, private rooms, spectators, invites, match chat).
 - [ ] Carrom four-player and three-player variants.
 - [ ] Carrom rules and physics parity vectors shared with the Lua server.
+- [ ] Generated artwork for unknown games in the native React Native and
+  Flutter launchers (both currently fall back to a generic board icon).

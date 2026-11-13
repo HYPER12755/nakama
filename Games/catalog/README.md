@@ -156,6 +156,7 @@ The React Native host re-exports the catalog types and helpers from
 | `capabilities` | Shared capability names such as `local`, `ai`, `online`, `spectators`, `invite-links`, `replay`. |
 | `orientation` | `portrait`, `landscape`, or `any`. Hosts may ignore it until they support locking. |
 | `tags`, `accent`, `icon`, `featured`, `sortOrder` | Menu presentation hints. `icon` is a stable key such as `chess`; map it to your app's SVG or icon set instead of rendering it as text. |
+| `timed` | Optional boolean. Present and `true` when the game runs on a clock, so a menu may offer a time control when inviting a player. |
 | `webPath` | Browser-only path relative to the catalog URL. Do not use as a native bundle URL. |
 | `cover`, `screenshots` | Optional artwork paths/URLs for richer menus. Today these are empty unless a game manifest supplies them. |
 

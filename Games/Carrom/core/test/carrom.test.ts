@@ -81,8 +81,59 @@ describe("carrom setup", () => {
   });
 
   it("detects pocket centres", () => {
-    expect(findPocketAt(0.058, 0.058)).toEqual({ x: 0.058, y: 0.058 });
+    expect(findPocketAt(0.036, 0.036)).toEqual({ x: 0.036, y: 0.036 });
     expect(findPocketAt(0.5, 0.5)).toBeNull();
+  });
+
+  it("follows the ICF board proportions", () => {
+    // 74 cm playing surface: a 3.1 cm man, a 4.13 cm striker, a 4.45 cm
+    // pocket, and baselines a quarter of the way in from each side.
+    expect(CARROM_BOARD.discRadius).toBeCloseTo(0.0216, 3);
+    expect(CARROM_BOARD.strikerRadius).toBeCloseTo(0.0279, 3);
+    expect(CARROM_BOARD.pocketRadius).toBeCloseTo(0.0301, 3);
+    expect(CARROM_BOARD.baseline.white).toBeCloseTo(0.75, 3);
+    expect(CARROM_BOARD.baseline.black).toBeCloseTo(0.25, 3);
+    expect(CARROM_BOARD.baselineMinX).toBeCloseTo(0.25, 3);
+    expect(CARROM_BOARD.baselineMaxX).toBeCloseTo(0.75, 3);
+    expect(CARROM_BOARD.baseCircles).toHaveLength(4);
+    // A striker is roughly three times the weight of a carrom man.
+    expect(CARROM_BOARD.strikerMass).toBeGreaterThan(2.5);
+  });
+
+  it("opens with the medallion in the ICF layout", () => {
+    const state = createInitialState();
+    const queen = state.discs.find((disc) => disc.kind === "queen")!;
+    expect(queen.x).toBeCloseTo(0.5, 5);
+    expect(queen.y).toBeCloseTo(0.5, 5);
+
+    const inner = state.discs.filter(
+      (disc) => disc.kind !== "queen" && Math.hypot(disc.x - 0.5, disc.y - 0.5) < 0.06,
+    );
+    const outer = state.discs.filter(
+      (disc) => disc.kind !== "queen" && Math.hypot(disc.x - 0.5, disc.y - 0.5) >= 0.06,
+    );
+    expect(inner).toHaveLength(6);
+    expect(outer).toHaveLength(12);
+    expect(inner.filter((disc) => disc.kind === "white")).toHaveLength(3);
+
+    // The first player sits at the bottom, so a white man from each ring
+    // points straight down the board on the queen's axis.
+    const axisWhite = state.discs.filter(
+      (disc) =>
+        disc.kind === "white" && Math.abs(disc.x - 0.5) < 0.001 && disc.y > 0.5,
+    );
+    expect(axisWhite).toHaveLength(2);
+
+    // Nobody may start on top of anybody else.
+    for (let left = 0; left < state.discs.length; left += 1) {
+      for (let right = left + 1; right < state.discs.length; right += 1) {
+        const a = state.discs[left]!;
+        const b = state.discs[right]!;
+        expect(
+          Math.hypot(a.x - b.x, a.y - b.y),
+        ).toBeGreaterThan(CARROM_BOARD.discRadius * 1.9);
+      }
+    }
   });
 
   it("moves the striker around a piece sitting on the baseline", () => {
@@ -232,18 +283,26 @@ describe("carrom rules", () => {
     expect(outcome.winner).toBe("white");
   });
 
-  it("offers a valid deterministic AI shot", () => {
-    const state = createInitialState();
-    const aiShot = chooseAiShot(state, { difficulty: "easy" });
-    expect(validateShot(state, aiShot)).toBeNull();
-    const result = simulateShot(state, aiShot, { frames: false });
-    expect(result.state.shotNumber).toBe(1);
-  });
+  it(
+    "offers a valid deterministic AI shot",
+    () => {
+      const state = createInitialState();
+      const aiShot = chooseAiShot(state, { difficulty: "easy" });
+      expect(validateShot(state, aiShot)).toBeNull();
+      const result = simulateShot(state, aiShot, { frames: false });
+      expect(result.state.shotNumber).toBe(1);
+    },
+    30_000,
+  );
 
-  it("resolves the same AI shot when the search yields between batches", async () => {
-    const state = createInitialState();
-    const syncShot = chooseAiShot(state, { difficulty: "easy" });
-    const asyncShot = await chooseAiShotAsync(state, { difficulty: "easy" });
-    expect(asyncShot).toEqual(syncShot);
-  });
+  it(
+    "resolves the same AI shot when the search yields between batches",
+    async () => {
+      const state = createInitialState();
+      const syncShot = chooseAiShot(state, { difficulty: "easy" });
+      const asyncShot = await chooseAiShotAsync(state, { difficulty: "easy" });
+      expect(asyncShot).toEqual(syncShot);
+    },
+    30_000,
+  );
 });

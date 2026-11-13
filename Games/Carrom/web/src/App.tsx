@@ -24,6 +24,7 @@ import { GameOverDialog } from "./components/GameOverDialog";
 import { Icon } from "./components/Icon";
 import { RulesDialog } from "./components/RulesDialog";
 import { ScoreCard } from "./components/ScoreCard";
+import { type AimMode } from "./lib/aim";
 import {
   playFoul,
   playPocket,
@@ -40,12 +41,21 @@ import {
 type Mode = "local" | "ai";
 
 const SOUND_KEY = "moongames.carrom.sound";
+const AIM_KEY = "moongames.carrom.aim";
 
 function storedSound(): boolean {
   try {
     return window.localStorage.getItem(SOUND_KEY) !== "off";
   } catch {
     return true;
+  }
+}
+
+function storedAimMode(): AimMode {
+  try {
+    return window.localStorage.getItem(AIM_KEY) === "direct" ? "direct" : "pull";
+  } catch {
+    return "pull";
   }
 }
 
@@ -119,6 +129,7 @@ export default function App({ bridge }: AppProps) {
   const [animation, setAnimation] = useState<CarromShotResult | null>(null);
   const [theme, setTheme] = useState<Theme>(storedTheme);
   const [soundOn, setSoundOn] = useState(storedSound);
+  const [aimMode, setAimMode] = useState<AimMode>(storedAimMode);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -143,6 +154,14 @@ export default function App({ bridge }: AppProps) {
   useEffect(() => {
     persistSound(soundOn);
   }, [soundOn]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(AIM_KEY, aimMode);
+    } catch {
+      // Storage can be unavailable in private or embedded contexts.
+    }
+  }, [aimMode]);
 
   useEffect(() => {
     return bridge.onMessage((message) => {
@@ -483,6 +502,7 @@ export default function App({ bridge }: AppProps) {
               animation={animation}
               disabled={!canShoot}
               theme={theme}
+              aimMode={aimMode}
               onShoot={handleShoot}
               onAnimationComplete={handleAnimationComplete}
             />
@@ -522,10 +542,39 @@ export default function App({ bridge }: AppProps) {
                 <Icon name="chevron-right" size={16} strokeWidth={2.2} />
               </button>
             </div>
+            <div className="aim-mode">
+              <span className="aim-mode__label">Aim</span>
+              <div
+                className="aim-mode__switch"
+                role="radiogroup"
+                aria-label="Aim style"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={aimMode === "pull"}
+                  className={`aim-mode__button${aimMode === "pull" ? " aim-mode__button--active" : ""}`}
+                  onClick={() => setAimMode("pull")}
+                >
+                  Pull back
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={aimMode === "direct"}
+                  className={`aim-mode__button${aimMode === "direct" ? " aim-mode__button--active" : ""}`}
+                  onClick={() => setAimMode("direct")}
+                >
+                  Direct
+                </button>
+              </div>
+            </div>
             <p className="aim-hint">
               <Icon name="target" size={16} />
-              Drag across the board and release to shoot. Drag farther for more
-              power.
+              {aimMode === "pull"
+                ? "Pull back from your target to load the striker, then release to launch."
+                : "Drag from the striker toward your target and release to shoot."}{" "}
+              Pull farther for more power.
             </p>
           </div>
         </section>

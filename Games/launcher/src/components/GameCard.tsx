@@ -5,6 +5,11 @@ import {
   gameWebUrl,
   statusLabel,
 } from "../lib/catalog";
+import {
+  isLaunchBusy,
+  launchButtonShortLabel,
+  type LaunchPhase,
+} from "../lib/launchPhase";
 import { GameArt } from "./GameArt";
 import { Icon } from "./Icon";
 
@@ -13,7 +18,7 @@ interface GameCardProps {
   catalogUrl: string;
   nativeLaunch: boolean;
   official: boolean;
-  launching: boolean;
+  phase: LaunchPhase;
   onPlay: (game: GameCatalogEntry, url: string | null) => void;
 }
 
@@ -22,13 +27,14 @@ export function GameCard({
   catalogUrl,
   nativeLaunch,
   official,
-  launching,
+  phase,
   onPlay,
 }: GameCardProps) {
   const url = gameWebUrl(game, catalogUrl);
   const canLaunch =
     game.status === "available" && (url !== null || nativeLaunch);
   const status = statusLabel(game);
+  const busy = isLaunchBusy(phase);
   const style = { "--accent": game.accent } as CSSProperties;
   return (
     <article className="game-card" style={style}>
@@ -69,14 +75,14 @@ export function GameCard({
             <button
               className="button button--play"
               type="button"
-              disabled={launching}
+              disabled={busy}
               onClick={() => onPlay(game, url)}
             >
-              {launching ? (
-                "Opening…"
+              {busy ? (
+                launchButtonShortLabel(phase)
               ) : (
                 <>
-                  Play{" "}
+                  {launchButtonShortLabel(phase)}{" "}
                   <Icon name="arrow-up-right" size={13} strokeWidth={2.2} />
                 </>
               )}

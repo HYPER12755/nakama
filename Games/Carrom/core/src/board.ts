@@ -6,36 +6,65 @@ import type {
   CarromState,
 } from "./types";
 
+/**
+ * Board geometry follows the International Carrom Federation standard for a
+ * 74 cm square playing surface. Every length below is that measurement
+ * divided by 74, so the numbers stay directly comparable to the real board.
+ *
+ * - playing surface: 74 x 74 cm (ICF allows 73.5 to 74)
+ * - carrom man: 3.02 to 3.18 cm across, 5.0 to 5.5 g
+ * - striker: up to 4.13 cm across, 15 g
+ * - pocket: 4.45 cm across
+ * - baseline strip: two lines 3.8 cm apart, closed by red base circles of
+ *   3.8 cm, one quarter of the board in from each side
+ * - centre circle: one piece wide (3.18 cm); outer circle: 47.5 cm across
+ */
 export const CARROM_BOARD = {
-  discRadius: 0.0225,
-  strikerRadius: 0.03,
-  pocketRadius: 0.043,
+  discRadius: 0.0216,
+  strikerRadius: 0.0279,
+  pocketRadius: 0.0301,
   pocketCenters: [
-    { x: 0.058, y: 0.058 },
-    { x: 0.942, y: 0.058 },
-    { x: 0.058, y: 0.942 },
-    { x: 0.942, y: 0.942 },
+    { x: 0.036, y: 0.036 },
+    { x: 0.964, y: 0.036 },
+    { x: 0.036, y: 0.964 },
+    { x: 0.964, y: 0.964 },
   ] as const,
   baseline: {
-    white: 0.805,
-    black: 0.195,
+    white: 0.75,
+    black: 0.25,
   } as const,
-  baselineMinX: 0.24,
-  baselineMaxX: 0.76,
-  queenRingRadius: 0.075,
-  outerRingRadius: 0.132,
-  friction: 1.75,
-  wallRestitution: 0.82,
-  discRestitution: 0.9,
-  strikerRestitution: 0.93,
-  strikerMass: 1.35,
+  /** Half of the 3.8 cm distance between the two baseline lines. */
+  baselineHalfWidth: 0.0257,
+  baselineMinX: 0.25,
+  baselineMaxX: 0.75,
+  /** Red base circles close the baseline strips on all four sides. */
+  baseCircleRadius: 0.0257,
+  baseCircles: [
+    { x: 0.25, y: 0.25 },
+    { x: 0.75, y: 0.25 },
+    { x: 0.25, y: 0.75 },
+    { x: 0.75, y: 0.75 },
+  ] as const,
+  /** Red centre circle the size of one piece. */
+  centerCircleRadius: 0.0215,
+  /** The large decorative circle around the opening medallion. */
+  outerCircleRadius: 0.321,
+  /** Opening medallion: six men around the queen, twelve men outside them. */
+  innerRingRadius: 0.0432,
+  outerRingRadius: 0.0864,
+  friction: 1.45,
+  wallRestitution: 0.86,
+  discRestitution: 0.92,
+  strikerRestitution: 0.95,
+  /** A striker is 15 g against 5.0 to 5.5 g for a carrom man. */
+  strikerMass: 2.8,
   discMass: 1,
-  minShotSpeed: 0.9,
-  maxShotSpeed: 3.6,
-  stopSpeed: 0.012,
+  minShotSpeed: 1,
+  maxShotSpeed: 4.6,
+  stopSpeed: 0.02,
   stepSeconds: 1 / 240,
   sampleSeconds: 1 / 60,
-  maxSimulationSeconds: 12,
+  maxSimulationSeconds: 9,
 } as const;
 
 export const PLAYER_LABEL: Record<CarromPlayer, string> = {
@@ -102,58 +131,45 @@ export function createInitialState(): CarromState {
     { id: "queen", kind: "queen", x: 0.5, y: 0.5, pocketed: false },
   ];
 
-  const innerKinds: CarromDiscKind[] = [
-    "white",
-    "black",
-    "white",
-    "black",
-    "white",
-    "black",
-  ];
-  const outerKinds: CarromDiscKind[] = [
-    "black",
-    "white",
-    "black",
-    "white",
-    "black",
-    "white",
-    "black",
-    "white",
-    "black",
-    "white",
-    "black",
-    "white",
-  ];
   const counts: Record<CarromDiscKind, number> = {
     white: 0,
     black: 0,
     queen: 0,
   };
 
-  for (let index = 0; index < innerKinds.length; index += 1) {
-    const kind = innerKinds[index]!;
-    const angle = -Math.PI / 2 + (index * Math.PI) / 3;
+  const push = (kind: CarromDiscKind, x: number, y: number) => {
     counts[kind] += 1;
     discs.push({
       id: `${kind[0]}${counts[kind]}`,
       kind,
-      x: 0.5 + Math.cos(angle) * CARROM_BOARD.queenRingRadius,
-      y: 0.5 + Math.sin(angle) * CARROM_BOARD.queenRingRadius,
+      x,
+      y,
       pocketed: false,
     });
+  };
+
+  // Six men touch the centre circle and each other. White sits on the axis
+  // that points at the first player, matching the ICF opening layout.
+  for (let index = 0; index < 6; index += 1) {
+    const kind: CarromDiscKind = index % 2 === 0 ? "white" : "black";
+    const angle = (Math.PI / 2) + (index * Math.PI) / 3;
+    push(
+      kind,
+      0.5 + Math.cos(angle) * CARROM_BOARD.innerRingRadius,
+      0.5 + Math.sin(angle) * CARROM_BOARD.innerRingRadius,
+    );
   }
 
-  for (let index = 0; index < outerKinds.length; index += 1) {
-    const kind = outerKinds[index]!;
-    const angle = -Math.PI / 2 + Math.PI / 12 + (index * Math.PI) / 6;
-    counts[kind] += 1;
-    discs.push({
-      id: `${kind[0]}${counts[kind]}`,
+  // Twelve men touch the inner ring. The white men form the three-armed
+  // shape that points at the first player.
+  for (let index = 0; index < 12; index += 1) {
+    const kind: CarromDiscKind = index % 2 === 1 ? "white" : "black";
+    const angle = (index * Math.PI) / 6;
+    push(
       kind,
-      x: 0.5 + Math.cos(angle) * CARROM_BOARD.outerRingRadius,
-      y: 0.5 + Math.sin(angle) * CARROM_BOARD.outerRingRadius,
-      pocketed: false,
-    });
+      0.5 + Math.cos(angle) * CARROM_BOARD.outerRingRadius,
+      0.5 + Math.sin(angle) * CARROM_BOARD.outerRingRadius,
+    );
   }
 
   return {
@@ -179,12 +195,15 @@ function isOpenSpot(
   radius: number,
   ignoreId?: string,
 ): boolean {
-  const edge = radius + 0.035;
+  const edge = radius + 0.03;
   if (x < edge || x > 1 - edge || y < edge || y > 1 - edge) {
     return false;
   }
   for (const pocket of CARROM_BOARD.pocketCenters) {
-    if (Math.hypot(x - pocket.x, y - pocket.y) < CARROM_BOARD.pocketRadius + radius) {
+    if (
+      Math.hypot(x - pocket.x, y - pocket.y) <
+      CARROM_BOARD.pocketRadius + radius
+    ) {
       return false;
     }
   }
@@ -212,7 +231,7 @@ export function findOpenSpot(
     return preferred;
   }
 
-  const ringRadii = [0.045, 0.08, 0.115, 0.15, 0.185, 0.22, 0.26, 0.3];
+  const ringRadii = [0.04, 0.07, 0.1, 0.13, 0.16, 0.19, 0.22, 0.26, 0.3];
   for (const ringRadius of ringRadii) {
     for (let index = 0; index < 24; index += 1) {
       const angle = -Math.PI / 2 + (index * Math.PI) / 12;

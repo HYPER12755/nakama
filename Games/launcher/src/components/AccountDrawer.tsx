@@ -29,7 +29,8 @@ import {
   type SocialMessage,
 } from "../lib/social";
 import { EmojiPicker, EmojiTriggerIcon } from "./EmojiPicker";
-import { Icon, gameIconName } from "./Icon";
+import { Icon } from "./Icon";
+import { GameIdMark } from "./gameArt/GameIdMark";
 
 export type AccountDrawerTab = "account" | "alerts" | "friends" | "chats";
 
@@ -1328,7 +1329,12 @@ function InviteCard({
     <div className={`invite-card invite-card--${status}`}>
       <div className="invite-card__topline">
         <span className="invite-card__mark" aria-hidden="true">
-          <Icon name={gameIconName(invite.gameId)} size={20} />
+          <GameIdMark
+            id={invite.gameId}
+            name={invite.gameTitle}
+            size={20}
+            className="icon"
+          />
         </span>
         <span className="invite-card__identity">
           <strong>{invite.gameTitle}</strong>

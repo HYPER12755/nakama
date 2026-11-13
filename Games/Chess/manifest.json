@@ -15,6 +15,7 @@
     "invite-links",
     "replay"
   ],
+  "timed": true,
   "orientation": "any",
   "description": "Standard chess with local, AI, online, private-match, spectator, invite-link, replay, fullscreen, temporary match-chat, friend invites with persistent chat cards, in-game invite alerts, launcher notifications, and a shared MoonGames account when launched from the verified web menu.",
   "tagline": "Classic chess. Local, AI, or rated online.",

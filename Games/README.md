@@ -428,40 +428,56 @@ mobile QA, and real-device build validation:
   agreement, casual/rated persistence, Elo changes, history, and leaderboard
   records.
 - Carrom is the second official title and ships as a local-first release
-  (`0.1.0`, signed with `dev-1`) with the `local` and `ai` capabilities.
+  (`0.2.0`, signed with `dev-1`) with the `local` and `ai` capabilities.
+- The Carrom board follows the International Carrom Federation standard for a
+  74 cm playing surface: 3.1 cm men, a 4.13 cm striker weighing 15 g, 4.45 cm
+  corner pockets, a baseline strip of two lines 3.8 cm apart closed by red
+  base circles of 3.8 cm, diagonal foul lines with arrows running to each
+  pocket, a red centre circle the size of one piece, and the 47.5 cm outer
+  circle around the opening medallion. The 19 pieces open in the ICF layout:
+  the queen on the centre spot, six men touching it, and twelve men touching
+  the inner ring, with white men on the axis of the first player.
 - The Carrom core is a deterministic fixed-step physics engine (240 Hz, with
-  60 Hz capture frames) plus a separate rules layer. It models the standard
-  19-piece opening, four pockets, per-player baselines, the striker, elastic
-  disc collisions, wall bounces, pocket capture, and friction, so an identical
-  shot always produces an identical result. The same shot is used by the local
-  UI, the AI search, and the future authoritative server.
+  60 Hz capture frames) plus a separate rules layer. It models elastic disc
+  and striker collisions with the striker nearly three times heavier than a
+  man, wall bounces, pocket capture, and friction, so an identical shot always
+  produces an identical result. The same shot is used by the local UI, the AI
+  search, and the future authoritative server.
 - Carrom rules cover turn continuation on an own pocket, opponent pockets,
   striker fouls with a returned piece, the queen pocket/cover cycle including
   the queen returning to the centre when it is not covered, protection of the
   last piece until the queen is covered, and the win condition. They are
-  covered by 15 core tests, including a full AI match that finishes with a
-  winner and no deadlock.
+  covered by 17 core tests, including the ICF board proportions, the opening
+  medallion, and a full AI match that finishes with a winner and no deadlock.
 - The Carrom AI is a simulation-backed opponent. It proposes pocket lines and
   striker positions, scores them by simulating each candidate, and plays the
   best one. The search yields between batches so a phone browser keeps
   painting, and the synchronous variant returns the identical shot for tests
   and server use.
-- The Carrom web client is a canvas board with a warm wood surface, brass
-  inlay, centre rosette, pocket wells, baseline rails, per-piece gradients,
-  contact shadows, an aim guide with a first-contact ghost, and a power ring
-  around the striker. Dragging anywhere on the board aims and shoots; the
-  striker is placed on a baseline slider. It ships a rules dialog, a score
-  board with per-piece pips, turn and queen status, generated wooden sound
-  effects, haptics, light/dark themes, fullscreen, and the shared lite paint
-  path for low-memory devices. Its 5 tests cover the power curve, aim angle,
-  baselines, frame interpolation, and the aim raycast.
-- Carrom is listed in the catalog as `available` at `0.1.0`, and the signed
-  release manifest indexes 12 bundles (11 Chess, 1 Carrom). The launcher
+- The Carrom web client renders the board procedurally on a canvas: a rosewood
+  frame with streaks and a bevel, a mango playing surface with wood grain,
+  knots, a varnish sheen and powder speckle, the ICF markings, and painted
+  wooden men with bevelled rims, engraved rings, and contact shadows. Aiming
+  supports pull-back (slingshot) and direct styles, both with a launch arrow,
+  a first-contact ghost, and a power ring. It also ships a rules dialog, a
+  score board with per-piece pips, turn and queen status, generated wooden
+  sounds, haptics, light/dark themes, fullscreen, and the shared lite paint
+  path for low-memory devices. Its 6 tests cover the power curve, both aim
+  styles, baselines, frame interpolation, and the aim raycast.
+- The launcher no longer hardcodes games. Artwork resolves from the catalog:
+  a registered motif when the catalog names one, otherwise a generated mark
+  derived from the game id, so a new title never needs a launcher change. The
+  play button runs a real launch pipeline (verifying, account, preparing,
+  opening, error) with a label for each phase, the hardcoded fallback game
+  list is gone, and the invite composer asks for a time control only when the
+  catalog marks a game as timed.
+- Carrom is listed in the catalog as `available` at `0.2.0`, and the signed
+  release manifest indexes 13 bundles (11 Chess, 2 Carrom). The launcher
   renders it as a normal catalog card next to Chess.
 
-Current local automation: 22 core + 26 web + 14 host-core + 35 launcher
-TypeScript tests, 15 Carrom core + 5 Carrom web tests, 11 tool tests, and 81
-Lua tests (209 passing tests total, excluding Flutter package tests that
+Current local automation: 22 core + 26 web + 14 host-core + 42 launcher
+TypeScript tests, 17 Carrom core + 6 Carrom web tests, 11 tool tests, and 81
+Lua tests (219 passing tests total, excluding Flutter package tests that
 require the Flutter SDK). The launcher
 account, social, and invite smoke scripts also run against real local Nakama.
 Manual browser QA of the catalog menu, account/social/notification drawer,

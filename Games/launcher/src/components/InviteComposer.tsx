@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { GameCatalogEntry } from "@moongames/game-sdk";
-import { Icon, gameIconName } from "./Icon";
+import { Icon } from "./Icon";
+import { GameMark } from "./gameArt/GameMark";
 
 export interface InviteComposerTarget {
   userId: string;
@@ -13,7 +14,11 @@ export interface InviteComposerInput {
   message?: string;
 }
 
-const CHESS_TIME_CONTROLS = [
+/**
+ * Time controls are offered for games the catalog marks as timed. The list
+ * itself is generic, so a new timed game only needs catalog data.
+ */
+const TIME_CONTROLS = [
   { id: "5+0", label: "5 min" },
   { id: "10+0", label: "10 min" },
   { id: "15+10", label: "15 | 10" },
@@ -43,7 +48,7 @@ export function InviteComposer({
     () => games.filter((game) => game.status === "available"),
     [games],
   );
-  const [gameId, setGameId] = useState(available[0]?.id ?? "chess");
+  const [gameId, setGameId] = useState(available[0]?.id ?? "");
   const [timeControl, setTimeControl] = useState("5+0");
   const [message, setMessage] = useState("");
 
@@ -71,7 +76,7 @@ export function InviteComposer({
     }
     void onSend({
       gameId: selected.id,
-      ...(selected.id === "chess" ? { timeControl } : {}),
+      ...(selected.timed === true ? { timeControl } : {}),
       ...(message.trim().length > 0 ? { message: message.trim() } : {}),
     });
   };
@@ -131,7 +136,7 @@ export function InviteComposer({
                       onChange={() => setGameId(game.id)}
                     />
                     <span className="invite-game-option__icon" aria-hidden="true">
-                      <Icon name={gameIconName(game.icon)} size={22} />
+                      <GameMark game={game} size={22} className="icon" />
                     </span>
                     <span>
                       <strong>{game.name}</strong>
@@ -142,11 +147,11 @@ export function InviteComposer({
               </div>
             </fieldset>
 
-            {selected?.id === "chess" ? (
+            {selected?.timed === true ? (
               <fieldset className="invite-composer__time">
                 <legend>Time control</legend>
                 <div className="invite-time-grid">
-                  {CHESS_TIME_CONTROLS.map((control) => (
+                  {TIME_CONTROLS.map((control) => (
                     <label
                       className={
                         control.id === timeControl

@@ -52,10 +52,11 @@ export function RulesDialog({ open, onClose }: RulesDialogProps) {
           <article className="rule">
             <span className="rule__number">01</span>
             <div>
-              <h3>Place, aim, flick</h3>
+              <h3>Place, pull, flick</h3>
               <p>
-                Move the striker along your baseline, then drag across the board
-                toward your target. The distance of the drag sets the power.
+                Slide the striker along your baseline between the two lines.
+                Pull back from your target and release: the striker launches
+                away from the pull, with more pull meaning more power.
               </p>
             </div>
           </article>

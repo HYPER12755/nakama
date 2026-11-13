@@ -7,19 +7,29 @@ import {
   type CarromPlayer,
 } from "@moongames/carrom-core";
 
+export type AimMode = "pull" | "direct";
+
 export function powerFromDistance(distance: number): number {
   return Math.min(1, Math.max(0.08, distance / 0.38));
 }
 
+/**
+ * Turn a pointer position into a launch direction.
+ *
+ * - "pull" behaves like a slingshot: the pointer is dragged back from the
+ *   striker and the striker launches away from the pull.
+ * - "direct" behaves like a flick: the striker launches toward the pointer.
+ */
 export function aimFromPoint(
   strikerX: number,
   strikerY: number,
   point: CarromPoint,
+  mode: AimMode = "direct",
 ): { angle: number; power: number } {
   const dx = point.x - strikerX;
   const dy = point.y - strikerY;
   return {
-    angle: Math.atan2(dy, dx),
+    angle: mode === "pull" ? Math.atan2(-dy, -dx) : Math.atan2(dy, dx),
     power: powerFromDistance(Math.hypot(dx, dy)),
   };
 }

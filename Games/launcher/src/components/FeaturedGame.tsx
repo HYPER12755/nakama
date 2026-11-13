@@ -6,6 +6,11 @@ import {
   gameWebUrl,
   statusLabel,
 } from "../lib/catalog";
+import {
+  isLaunchBusy,
+  launchButtonLabel,
+  type LaunchPhase,
+} from "../lib/launchPhase";
 import { GameArt } from "./GameArt";
 import { Icon } from "./Icon";
 
@@ -14,7 +19,7 @@ interface FeaturedGameProps {
   catalogUrl: string;
   nativeLaunch: boolean;
   official: boolean;
-  launching: boolean;
+  phase: LaunchPhase;
   onPlay: (game: GameCatalogEntry, url: string | null) => void;
 }
 
@@ -23,11 +28,12 @@ export function FeaturedGame({
   catalogUrl,
   nativeLaunch,
   official,
-  launching,
+  phase,
   onPlay,
 }: FeaturedGameProps) {
   const url = gameWebUrl(game, catalogUrl);
   const canLaunch = url !== null || nativeLaunch;
+  const busy = isLaunchBusy(phase);
   const style = { "--accent": game.accent } as CSSProperties;
   return (
     <article className="featured-game" style={style}>
@@ -67,14 +73,14 @@ export function FeaturedGame({
             <button
               className="button button--primary"
               type="button"
-              disabled={launching}
+              disabled={busy}
               onClick={() => onPlay(game, url)}
             >
-              {launching ? (
-                "Preparing shared account…"
+              {busy ? (
+                launchButtonLabel(phase, game.name)
               ) : (
                 <>
-                  Play {game.name}{" "}
+                  {launchButtonLabel(phase, game.name)}{" "}
                   <Icon name="arrow-up-right" size={15} strokeWidth={2.2} />
                 </>
               )}

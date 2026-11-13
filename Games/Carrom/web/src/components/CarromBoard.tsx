@@ -7,10 +7,8 @@ import {
 } from "react";
 import {
   CARROM_BOARD,
-  PLAYER_LABEL,
   baselineY,
   type CarromDiscKind,
-  type CarromFrame,
   type CarromFrameDisc,
   type CarromPlayer,
   type CarromShotInput,
@@ -22,14 +20,15 @@ import {
   raycastBoard,
   sampleFrame,
   type AimHit,
+  type AimMode,
 } from "../lib/aim";
 import type { Theme } from "../lib/theme";
 
 const LOGICAL_SIZE = 1000;
-const PLAY_INSET = 64;
+const PLAY_INSET = 62;
 const PLAY_SIZE = LOGICAL_SIZE - PLAY_INSET * 2;
 const ACCENT = "#48c9b0";
-const QUEEN_ACCENT = "#e25b55";
+const QUEEN_RED = "#b3202b";
 
 interface DisplayState {
   discs: readonly (CarromFrameDisc | CarromState["discs"][number])[];
@@ -40,6 +39,8 @@ interface DisplayState {
 interface AimState {
   angle: number;
   power: number;
+  /** Pointer position in board coordinates, used to draw the pull band. */
+  pointer: { x: number; y: number };
 }
 
 export interface CarromBoardProps {
@@ -48,6 +49,7 @@ export interface CarromBoardProps {
   animation: CarromShotResult | null;
   disabled: boolean;
   theme: Theme;
+  aimMode: AimMode;
   onShoot: (shot: CarromShotInput) => void;
   onAnimationComplete: () => void;
 }
@@ -78,272 +80,356 @@ function toCanvasY(value: number): number {
   return PLAY_INSET + value * PLAY_SIZE;
 }
 
-function drawBoard(
-  ctx: CanvasRenderingContext2D,
-  theme: Theme,
-  lite: boolean,
-  turn: CarromPlayer,
-): void {
-  ctx.clearRect(0, 0, LOGICAL_SIZE, LOGICAL_SIZE);
+function scaleOf(value: number): number {
+  return value * PLAY_SIZE;
+}
 
-  // Outer wooden frame.
+/** Deterministic pseudo random source so the texture never flickers. */
+function random(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+function drawFrame(ctx: CanvasRenderingContext2D, lite: boolean): void {
   const frame = ctx.createLinearGradient(0, 0, LOGICAL_SIZE, LOGICAL_SIZE);
-  if (theme === "light") {
-    frame.addColorStop(0, "#8d5c35");
-    frame.addColorStop(0.45, "#6c4227");
-    frame.addColorStop(1, "#472718");
-  } else {
-    frame.addColorStop(0, "#6d4329");
-    frame.addColorStop(0.45, "#47291a");
-    frame.addColorStop(1, "#26140c");
-  }
-  roundedRect(ctx, 14, 14, 972, 972, 52);
+  frame.addColorStop(0, "#6b4429");
+  frame.addColorStop(0.35, "#4a2d1b");
+  frame.addColorStop(0.72, "#331d12");
+  frame.addColorStop(1, "#1d110a");
+  roundedRect(ctx, 8, 8, LOGICAL_SIZE - 16, LOGICAL_SIZE - 16, 46);
   ctx.fillStyle = frame;
   ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "rgba(225, 184, 112, 0.5)";
-  ctx.stroke();
-
-  // Inner bevel.
-  roundedRect(ctx, 43, 43, 914, 914, 35);
-  ctx.fillStyle = theme === "light" ? "#3c2418" : "#1d100a";
-  ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "rgba(255, 222, 165, 0.18)";
-  ctx.stroke();
-
-  // Playing surface.
-  const surface = ctx.createLinearGradient(PLAY_INSET, PLAY_INSET, 900, 900);
-  if (theme === "light") {
-    surface.addColorStop(0, "#efc887");
-    surface.addColorStop(0.4, "#dfa95f");
-    surface.addColorStop(0.75, "#cc8e46");
-    surface.addColorStop(1, "#b97838");
-  } else {
-    surface.addColorStop(0, "#d9a461");
-    surface.addColorStop(0.4, "#c88c4a");
-    surface.addColorStop(0.75, "#ad7138");
-    surface.addColorStop(1, "#8d572b");
-  }
-  roundedRect(ctx, PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE, 20);
-  ctx.fillStyle = surface;
-  ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "rgba(78, 39, 17, 0.55)";
-  ctx.stroke();
 
   ctx.save();
-  roundedRect(ctx, PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE, 20);
+  roundedRect(ctx, 8, 8, LOGICAL_SIZE - 16, LOGICAL_SIZE - 16, 46);
   ctx.clip();
 
-  // Deterministic wood grain.
-  const grainLines = lite ? 10 : 24;
-  ctx.lineWidth = 1;
-  for (let index = 0; index < grainLines; index += 1) {
-    const y = PLAY_INSET + ((index + 0.5) / grainLines) * PLAY_SIZE;
+  // Rosewood streaks along the frame.
+  const streaks = lite ? 26 : 58;
+  const rng = random(0x5eed);
+  for (let index = 0; index < streaks; index += 1) {
+    const alongTop = index % 2 === 0;
+    const position = rng();
+    const length = 120 + rng() * 620;
+    const start = rng() * (LOGICAL_SIZE - length);
+    const offset = alongTop ? 14 + rng() * 34 : 14 + rng() * 34;
     ctx.beginPath();
-    ctx.moveTo(PLAY_INSET - 10, y);
-    ctx.bezierCurveTo(
-      PLAY_INSET + PLAY_SIZE * 0.28,
-      y + (index % 2 === 0 ? 7 : -6),
-      PLAY_INSET + PLAY_SIZE * 0.7,
-      y + (index % 3 === 0 ? -8 : 5),
-      PLAY_INSET + PLAY_SIZE + 10,
-      y,
-    );
+    if (alongTop) {
+      ctx.moveTo(start, offset);
+      ctx.bezierCurveTo(
+        start + length * 0.3,
+        offset + (rng() - 0.5) * 10,
+        start + length * 0.7,
+        offset + (rng() - 0.5) * 10,
+        start + length,
+        offset,
+      );
+    } else {
+      ctx.moveTo(offset, start);
+      ctx.bezierCurveTo(
+        offset + (rng() - 0.5) * 10,
+        start + length * 0.3,
+        offset + (rng() - 0.5) * 10,
+        start + length * 0.7,
+        offset,
+        start + length,
+      );
+    }
     ctx.strokeStyle =
-      index % 4 === 0
-        ? "rgba(255, 231, 190, 0.09)"
-        : "rgba(83, 44, 20, 0.075)";
+      rng() > 0.5
+        ? "rgba(255, 226, 186, 0.07)"
+        : "rgba(24, 12, 6, 0.22)";
+    ctx.lineWidth = 0.8 + rng() * 1.6;
     ctx.stroke();
   }
 
-  // Subtle vignette.
-  const vignette = ctx.createRadialGradient(
-    LOGICAL_SIZE / 2,
-    LOGICAL_SIZE / 2,
-    PLAY_SIZE * 0.24,
-    LOGICAL_SIZE / 2,
-    LOGICAL_SIZE / 2,
-    PLAY_SIZE * 0.75,
-  );
-  vignette.addColorStop(0, "rgba(255, 246, 220, 0.04)");
-  vignette.addColorStop(1, "rgba(54, 23, 8, 0.2)");
-  ctx.fillStyle = vignette;
-  ctx.fillRect(PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE);
+  // Bevel: light on the top left, dark on the bottom right.
+  const bevel = ctx.createLinearGradient(0, 0, LOGICAL_SIZE, LOGICAL_SIZE);
+  bevel.addColorStop(0, "rgba(255, 232, 196, 0.18)");
+  bevel.addColorStop(0.5, "rgba(255, 232, 196, 0)");
+  bevel.addColorStop(1, "rgba(0, 0, 0, 0.3)");
+  ctx.fillStyle = bevel;
+  ctx.fillRect(0, 0, LOGICAL_SIZE, LOGICAL_SIZE);
+  ctx.restore();
 
-  const centre = LOGICAL_SIZE / 2;
-  const rosette = PLAY_SIZE * 0.116;
-
-  // Centre rosette.
-  ctx.strokeStyle = "rgba(105, 34, 31, 0.54)";
+  // Inner bead that separates the frame from the playing surface.
+  roundedRect(ctx, PLAY_INSET - 9, PLAY_INSET - 9, PLAY_SIZE + 18, PLAY_SIZE + 18, 26);
+  ctx.strokeStyle = "rgba(233, 199, 143, 0.35)";
   ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(centre, centre, rosette, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.lineWidth = 1.4;
-  ctx.beginPath();
-  ctx.arc(centre, centre, rosette * 0.74, 0, Math.PI * 2);
+  roundedRect(ctx, PLAY_INSET - 14, PLAY_INSET - 14, PLAY_SIZE + 28, PLAY_SIZE + 28, 30);
+  ctx.strokeStyle = "rgba(12, 7, 4, 0.45)";
+  ctx.lineWidth = 6;
   ctx.stroke();
 
-  ctx.fillStyle = "rgba(105, 34, 31, 0.1)";
-  ctx.strokeStyle = "rgba(105, 34, 31, 0.38)";
-  ctx.lineWidth = 1.2;
-  for (let index = 0; index < 8; index += 1) {
-    const angle = (index * Math.PI) / 4;
-    ctx.save();
-    ctx.translate(centre, centre);
-    ctx.rotate(angle);
-    ctx.beginPath();
-    ctx.ellipse(0, -rosette * 0.48, rosette * 0.105, rosette * 0.34, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  }
-  ctx.beginPath();
-  ctx.arc(centre, centre, rosette * 0.17, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(105, 34, 31, 0.72)";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255, 226, 173, 0.28)";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  // Pockets.
-  const pocketRadius = CARROM_BOARD.pocketRadius * PLAY_SIZE;
-  for (const pocket of CARROM_BOARD.pocketCenters) {
-    const x = toCanvasX(pocket.x);
-    const y = toCanvasY(pocket.y);
-
-    ctx.beginPath();
-    ctx.arc(x, y, pocketRadius + 7, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(226, 181, 103, 0.55)";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    const hole = ctx.createRadialGradient(
-      x - pocketRadius * 0.28,
-      y - pocketRadius * 0.28,
-      pocketRadius * 0.05,
-      x,
-      y,
-      pocketRadius,
-    );
-    hole.addColorStop(0, "#0a0806");
-    hole.addColorStop(0.62, "#050403");
-    hole.addColorStop(1, "#1c0f08");
-    ctx.beginPath();
-    ctx.arc(x, y, pocketRadius, 0, Math.PI * 2);
-    ctx.fillStyle = hole;
-    ctx.fill();
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = "rgba(255, 218, 155, 0.18)";
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(x, y, pocketRadius + 1.5, Math.PI * 1.08, Math.PI * 1.78);
-    ctx.strokeStyle = "rgba(255, 230, 178, 0.16)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-
-  // Base lines and end circles.
-  const lineStart = toCanvasX(CARROM_BOARD.baselineMinX);
-  const lineEnd = toCanvasX(CARROM_BOARD.baselineMaxX);
-  for (const player of ["white", "black"] as const) {
-    const y = toCanvasY(baselineY(player));
-    const active = player === turn;
-    if (active) {
-      ctx.beginPath();
-      ctx.moveTo(lineStart, y);
-      ctx.lineTo(lineEnd, y);
-      ctx.strokeStyle = "rgba(72, 201, 176, 0.24)";
-      ctx.lineWidth = 12;
-      ctx.stroke();
-    }
-    for (const offset of [-0.012, 0.012]) {
-      ctx.beginPath();
-      ctx.moveTo(lineStart, y + offset * PLAY_SIZE);
-      ctx.lineTo(lineEnd, y + offset * PLAY_SIZE);
-      ctx.strokeStyle = active
-        ? "rgba(72, 201, 176, 0.7)"
-        : "rgba(102, 36, 30, 0.64)";
-      ctx.lineWidth = 2.2;
-      ctx.stroke();
-    }
-    const endRadius = PLAY_SIZE * 0.012;
-    for (const x of [lineStart, lineEnd]) {
-      ctx.beginPath();
-      ctx.arc(x, y, endRadius, 0, Math.PI * 2);
-      ctx.strokeStyle = active
-        ? "rgba(72, 201, 176, 0.72)"
-        : "rgba(102, 36, 30, 0.62)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-  }
-
-  // Small brass screws in the frame.
+  // Corner screws.
   for (const [x, y] of [
-    [31, 31],
-    [969, 31],
-    [31, 969],
-    [969, 969],
+    [26, 26],
+    [LOGICAL_SIZE - 26, 26],
+    [26, LOGICAL_SIZE - 26],
+    [LOGICAL_SIZE - 26, LOGICAL_SIZE - 26],
   ] as const) {
     ctx.beginPath();
-    ctx.arc(x, y, 4, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(230, 191, 121, 0.55)";
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(214, 176, 112, 0.6)";
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(x - 1, y - 1, 1.4, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255, 241, 200, 0.55)";
+    ctx.arc(x - 1.4, y - 1.6, 2, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 244, 214, 0.55)";
+    ctx.fill();
+  }
+}
+
+function drawSurface(ctx: CanvasRenderingContext2D, lite: boolean): void {
+  const surface = ctx.createLinearGradient(
+    PLAY_INSET,
+    PLAY_INSET,
+    PLAY_INSET + PLAY_SIZE,
+    PLAY_INSET + PLAY_SIZE,
+  );
+  surface.addColorStop(0, "#e8c286");
+  surface.addColorStop(0.35, "#dcae6d");
+  surface.addColorStop(0.72, "#cb9553");
+  surface.addColorStop(1, "#b87f42");
+  roundedRect(ctx, PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE, 18);
+  ctx.fillStyle = surface;
+  ctx.fill();
+
+  ctx.save();
+  roundedRect(ctx, PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE, 18);
+  ctx.clip();
+
+  // Mango wood grain.
+  const streaks = lite ? 26 : 74;
+  const rng = random(0xc0ffee);
+  for (let index = 0; index < streaks; index += 1) {
+    const horizontal = index % 3 !== 0;
+    const position = rng();
+    const length = 180 + rng() * 900;
+    const start = PLAY_INSET - 60 + rng() * (PLAY_SIZE + 120 - length);
+    const offset = horizontal
+      ? PLAY_INSET + position * PLAY_SIZE
+      : PLAY_INSET + position * PLAY_SIZE;
+    const width = 0.7 + rng() * 2.4;
+    ctx.beginPath();
+    if (horizontal) {
+      ctx.moveTo(start, offset);
+      ctx.bezierCurveTo(
+        start + length * 0.28,
+        offset + (rng() - 0.5) * 16,
+        start + length * 0.66,
+        offset + (rng() - 0.5) * 16,
+        start + length,
+        offset + (rng() - 0.5) * 6,
+      );
+    } else {
+      ctx.moveTo(offset, start);
+      ctx.bezierCurveTo(
+        offset + (rng() - 0.5) * 16,
+        start + length * 0.28,
+        offset + (rng() - 0.5) * 16,
+        start + length * 0.66,
+        offset + (rng() - 0.5) * 6,
+        start + length,
+      );
+    }
+    const dark = rng() > 0.45;
+    ctx.strokeStyle = dark
+      ? `rgba(122, 74, 32, ${0.05 + rng() * 0.09})`
+      : `rgba(255, 233, 195, ${0.05 + rng() * 0.08})`;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  }
+
+  // A couple of knots.
+  for (let index = 0; index < (lite ? 1 : 3); index += 1) {
+    const x = PLAY_INSET + (0.18 + index * 0.31) * PLAY_SIZE;
+    const y = PLAY_INSET + (0.62 - index * 0.24) * PLAY_SIZE;
+    for (let ring = 0; ring < 4; ring += 1) {
+      ctx.beginPath();
+      ctx.ellipse(
+        x,
+        y,
+        6 + ring * 7,
+        3 + ring * 3.4,
+        0.4,
+        0,
+        Math.PI * 2,
+      );
+      ctx.strokeStyle = `rgba(112, 66, 28, ${0.13 - ring * 0.025})`;
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+    }
+  }
+
+  // Satin varnish sheen.
+  const sheen = ctx.createLinearGradient(
+    PLAY_INSET,
+    PLAY_INSET,
+    PLAY_INSET + PLAY_SIZE * 0.85,
+    PLAY_INSET + PLAY_SIZE,
+  );
+  sheen.addColorStop(0, "rgba(255, 250, 232, 0.16)");
+  sheen.addColorStop(0.45, "rgba(255, 250, 232, 0.02)");
+  sheen.addColorStop(1, "rgba(74, 40, 14, 0.1)");
+  ctx.fillStyle = sheen;
+  ctx.fillRect(PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE);
+
+  // Boric powder speckle keeps the surface from looking plastic.
+  const speckles = lite ? 90 : 320;
+  for (let index = 0; index < speckles; index += 1) {
+    const x = PLAY_INSET + rng() * PLAY_SIZE;
+    const y = PLAY_INSET + rng() * PLAY_SIZE;
+    ctx.beginPath();
+    ctx.arc(x, y, rng() * 0.9 + 0.3, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 248, 232, ${0.05 + rng() * 0.09})`;
     ctx.fill();
   }
 
-  // Frame lettering.
-  if (!lite) {
-    ctx.fillStyle = "rgba(244, 216, 166, 0.52)";
-    ctx.font = "600 13px Inter, system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("MOONGAMES  ·  CARROM", LOGICAL_SIZE / 2, 976);
-  }
-
+  // Inner shadow along the frame edge.
+  const inner = ctx.createLinearGradient(
+    PLAY_INSET,
+    PLAY_INSET,
+    PLAY_INSET + 46,
+    PLAY_INSET + 46,
+  );
+  inner.addColorStop(0, "rgba(66, 32, 10, 0.28)");
+  inner.addColorStop(1, "rgba(66, 32, 10, 0)");
+  ctx.fillStyle = inner;
+  ctx.fillRect(PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE);
   ctx.restore();
 }
 
-function discPalette(kind: CarromDiscKind): {
-  outer: string;
-  middle: string;
-  inner: string;
-  rim: string;
-  detail: string;
-} {
-  switch (kind) {
-    case "white":
-      return {
-        outer: "#fffdf4",
-        middle: "#e8d8ba",
-        inner: "#b59b74",
-        rim: "#7d674b",
-        detail: "rgba(88, 67, 40, 0.48)",
-      };
-    case "black":
-      return {
-        outer: "#5e5d56",
-        middle: "#282927",
-        inner: "#101110",
-        rim: "#080908",
-        detail: "rgba(224, 211, 184, 0.42)",
-      };
-    case "queen":
-      return {
-        outer: "#f07368",
-        middle: "#b62a30",
-        inner: "#73151c",
-        rim: "#551017",
-        detail: "rgba(255, 214, 161, 0.58)",
-      };
+function drawMarkings(ctx: CanvasRenderingContext2D, turn: CarromPlayer): void {
+  const centre = LOGICAL_SIZE / 2;
+
+  // Large outer circle around the opening medallion.
+  ctx.beginPath();
+  ctx.arc(centre, centre, scaleOf(CARROM_BOARD.outerCircleRadius), 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(92, 34, 22, 0.28)";
+  ctx.lineWidth = 2.4;
+  ctx.stroke();
+
+  // Baseline strips: two parallel lines per side, 3.8 cm apart.
+  for (const player of ["white", "black"] as const) {
+    const y = toCanvasY(baselineY(player));
+    const half = scaleOf(CARROM_BOARD.baselineHalfWidth);
+    const start = toCanvasX(CARROM_BOARD.baselineMinX);
+    const end = toCanvasX(CARROM_BOARD.baselineMaxX);
+    const active = player === turn;
+    for (const offset of [-half, half]) {
+      ctx.beginPath();
+      ctx.moveTo(start, y + offset);
+      ctx.lineTo(end, y + offset);
+      ctx.strokeStyle = active
+        ? "rgba(38, 18, 10, 0.85)"
+        : "rgba(38, 18, 10, 0.68)";
+      ctx.lineWidth = active ? 2.6 : 2.1;
+      ctx.stroke();
+    }
   }
+
+  // Red base circles closing the strips.
+  for (const circle of CARROM_BOARD.baseCircles) {
+    const x = toCanvasX(circle.x);
+    const y = toCanvasY(circle.y);
+    const radius = scaleOf(CARROM_BOARD.baseCircleRadius);
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(150, 40, 34, 0.2)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(126, 32, 26, 0.8)";
+    ctx.lineWidth = 2.4;
+    ctx.stroke();
+  }
+
+  // Diagonal foul lines running from each base circle to its pocket, with a
+  // 5 cm clearance from the pocket edge and an arrow head.
+  for (const circle of CARROM_BOARD.baseCircles) {
+    const pocket = CARROM_BOARD.pocketCenters.reduce((best, candidate) =>
+      Math.hypot(candidate.x - circle.x, candidate.y - circle.y) <
+      Math.hypot(best.x - circle.x, best.y - circle.y)
+        ? candidate
+        : best,
+    );
+    const dx = pocket.x - circle.x;
+    const dy = pocket.y - circle.y;
+    const length = Math.hypot(dx, dy);
+    const ux = dx / length;
+    const uy = dy / length;
+    const clearance = CARROM_BOARD.pocketRadius + 0.0676;
+    const stop = Math.max(0, length - clearance);
+
+    const fromX = toCanvasX(circle.x);
+    const fromY = toCanvasY(circle.y);
+    const toX = fromX + ux * scaleOf(stop);
+    const toY = fromY + uy * scaleOf(stop);
+
+    ctx.beginPath();
+    ctx.moveTo(fromX, fromY);
+    ctx.lineTo(toX, toY);
+    ctx.strokeStyle = "rgba(40, 20, 12, 0.5)";
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    // Arrow head pointing at the pocket.
+    const head = 9;
+    ctx.beginPath();
+    ctx.moveTo(toX, toY);
+    ctx.lineTo(
+      toX - ux * head - uy * head * 0.55,
+      toY - uy * head + ux * head * 0.55,
+    );
+    ctx.lineTo(
+      toX - ux * head + uy * head * 0.55,
+      toY - uy * head - ux * head * 0.55,
+    );
+    ctx.closePath();
+    ctx.fillStyle = "rgba(40, 20, 12, 0.55)";
+    ctx.fill();
+
+    // Decorative arch at the start of the arrow.
+    ctx.beginPath();
+    ctx.arc(
+      fromX,
+      fromY,
+      scaleOf(0.043),
+      Math.atan2(uy, ux) - Math.PI / 2,
+      Math.atan2(uy, ux) + Math.PI / 2,
+    );
+    ctx.strokeStyle = "rgba(40, 20, 12, 0.32)";
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+  }
+
+  // Red centre circle the size of one piece.
+  ctx.beginPath();
+  ctx.arc(
+    centre,
+    centre,
+    scaleOf(CARROM_BOARD.centerCircleRadius),
+    0,
+    Math.PI * 2,
+  );
+  ctx.fillStyle = "rgba(150, 40, 34, 0.22)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(126, 32, 26, 0.85)";
+  ctx.lineWidth = 2.2;
+  ctx.stroke();
+
+  // Cross hair on the exact centre spot.
+  const tick = scaleOf(0.012);
+  ctx.beginPath();
+  ctx.moveTo(centre - tick, centre);
+  ctx.lineTo(centre + tick, centre);
+  ctx.moveTo(centre, centre - tick);
+  ctx.lineTo(centre, centre + tick);
+  ctx.strokeStyle = "rgba(126, 32, 26, 0.75)";
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
 }
 
 function drawPiece(
@@ -359,88 +445,120 @@ function drawPiece(
   if (pocketed && !animating) {
     return;
   }
-  const scale = pocketed ? 0.48 : 1;
-  const alpha = pocketed ? 0.45 : 1;
+  const scale = pocketed ? 0.42 : 1;
+  const alpha = pocketed ? 0.4 : 1;
+
   const palette =
     kind === "striker"
       ? {
-          outer: "#fffaf0",
-          middle: "#e4dac7",
-          inner: "#bcae92",
-          rim: "#7d745f",
-          detail: "rgba(75, 67, 48, 0.46)",
+          top: "#fffaf0",
+          mid: "#eadfc9",
+          low: "#b8ab90",
+          rim: "#6f6551",
+          ring: "rgba(96, 86, 66, 0.45)",
         }
-      : discPalette(kind);
+      : kind === "white"
+        ? {
+            top: "#fffdf4",
+            mid: "#efe3c9",
+            low: "#c3ab84",
+            rim: "#8a7452",
+            ring: "rgba(120, 96, 60, 0.4)",
+          }
+        : kind === "black"
+          ? {
+              top: "#4b4d50",
+              mid: "#22252a",
+              low: "#0d0f11",
+              rim: "#050607",
+              ring: "rgba(226, 214, 186, 0.34)",
+            }
+          : {
+              top: "#e4605a",
+              mid: QUEEN_RED,
+              low: "#74131c",
+              rim: "#4a0c12",
+              ring: "rgba(246, 206, 148, 0.6)",
+            };
 
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(scale, scale);
   ctx.globalAlpha = alpha;
 
-  // Contact shadow. The lite path avoids a second blurred ellipse.
+  // Contact shadow on the wood.
   ctx.beginPath();
   ctx.ellipse(
-    radius * 0.12,
-    radius * 0.34,
-    radius * 0.95,
-    radius * 0.58,
+    radius * 0.16,
+    radius * 0.4,
+    radius * 0.98,
+    radius * 0.52,
     0,
     0,
     Math.PI * 2,
   );
-  ctx.fillStyle = "rgba(43, 21, 7, 0.32)";
+  ctx.fillStyle = "rgba(48, 24, 8, 0.34)";
   ctx.fill();
 
-  const gradient = ctx.createRadialGradient(
-    -radius * 0.35,
-    -radius * 0.4,
-    radius * 0.08,
+  // Painted face with a soft top light.
+  const face = ctx.createRadialGradient(
+    -radius * 0.32,
+    -radius * 0.38,
+    radius * 0.06,
     0,
     0,
     radius,
   );
-  gradient.addColorStop(0, palette.outer);
-  gradient.addColorStop(0.58, palette.middle);
-  gradient.addColorStop(1, palette.inner);
+  face.addColorStop(0, palette.top);
+  face.addColorStop(0.52, palette.mid);
+  face.addColorStop(1, palette.low);
   ctx.beginPath();
   ctx.arc(0, 0, radius, 0, Math.PI * 2);
-  ctx.fillStyle = gradient;
+  ctx.fillStyle = face;
   ctx.fill();
-  ctx.lineWidth = Math.max(1, radius * 0.085);
+
+  // Bevelled rim.
+  ctx.lineWidth = Math.max(1, radius * 0.1);
   ctx.strokeStyle = palette.rim;
   ctx.stroke();
-
   ctx.beginPath();
-  ctx.arc(0, 0, radius * 0.69, 0, Math.PI * 2);
-  ctx.lineWidth = Math.max(0.8, radius * 0.055);
-  ctx.strokeStyle = palette.detail;
+  ctx.arc(0, 0, radius * 0.9, 0, Math.PI * 2);
+  ctx.lineWidth = Math.max(0.7, radius * 0.05);
+  ctx.strokeStyle = palette.ring;
   ctx.stroke();
+
+  // Engraved concentric rings.
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 0.62, 0, Math.PI * 2);
+  ctx.lineWidth = Math.max(0.6, radius * 0.045);
+  ctx.strokeStyle = palette.ring;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 0.3, 0, Math.PI * 2);
+  ctx.fillStyle = palette.ring;
+  ctx.fill();
+
+  if (kind === "queen") {
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.46, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(246, 214, 152, 0.85)";
+    ctx.lineWidth = Math.max(0.9, radius * 0.06);
+    ctx.stroke();
+  }
 
   if (kind === "striker") {
     ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.82, 0, Math.PI * 2);
-    ctx.lineWidth = Math.max(1.2, radius * 0.075);
-    ctx.strokeStyle = "rgba(72, 201, 176, 0.88)";
+    ctx.arc(0, 0, radius * 0.78, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(72, 201, 176, 0.9)";
+    ctx.lineWidth = Math.max(1.1, radius * 0.075);
     ctx.stroke();
+  } else if (!lite) {
+    // Worn highlight on the upper rim.
     ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.34, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(72, 201, 176, 0.2)";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(72, 201, 176, 0.8)";
-    ctx.lineWidth = Math.max(0.8, radius * 0.05);
+    ctx.arc(0, 0, radius * 0.78, Math.PI * 1.08, Math.PI * 1.72);
+    ctx.strokeStyle = "rgba(255, 250, 234, 0.34)";
+    ctx.lineWidth = Math.max(0.6, radius * 0.05);
     ctx.stroke();
-  } else {
-    ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.16, 0, Math.PI * 2);
-    ctx.fillStyle = palette.detail;
-    ctx.fill();
-    if (!lite) {
-      ctx.beginPath();
-      ctx.arc(0, 0, radius * 0.74, Math.PI * 1.08, Math.PI * 1.68);
-      ctx.strokeStyle = "rgba(255, 249, 226, 0.38)";
-      ctx.lineWidth = Math.max(0.8, radius * 0.06);
-      ctx.stroke();
-    }
   }
 
   ctx.restore();
@@ -450,19 +568,30 @@ function drawAim(
   ctx: CanvasRenderingContext2D,
   display: DisplayState,
   aim: AimState,
+  mode: AimMode,
   hit: AimHit,
   lite: boolean,
 ): void {
   const originX = toCanvasX(display.striker.x);
   const originY = toCanvasY(display.striker.y);
-  const strikerRadius = CARROM_BOARD.strikerRadius * PLAY_SIZE;
+  const strikerRadius = scaleOf(CARROM_BOARD.strikerRadius);
   const hitX = toCanvasX(hit.point.x);
   const hitY = toCanvasY(hit.point.y);
 
   ctx.save();
   ctx.lineCap = "round";
 
-  // Soft direction wash.
+  // Pull band: where the finger pulled the striker back from.
+  if (mode === "pull") {
+    ctx.beginPath();
+    ctx.moveTo(originX, originY);
+    ctx.lineTo(toCanvasX(aim.pointer.x), toCanvasY(aim.pointer.y));
+    ctx.strokeStyle = "rgba(255, 236, 196, 0.28)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+
+  // Direction wash.
   ctx.beginPath();
   ctx.moveTo(originX, originY);
   ctx.lineTo(hitX, hitY);
@@ -470,30 +599,45 @@ function drawAim(
   ctx.lineWidth = 13;
   ctx.stroke();
 
-  // Dashed guide.
+  // Dashed guide along the launch direction.
   ctx.setLineDash([10, 11]);
   ctx.beginPath();
   ctx.moveTo(originX, originY);
   ctx.lineTo(hitX, hitY);
-  ctx.strokeStyle = "rgba(100, 236, 208, 0.92)";
-  ctx.lineWidth = 2.6;
+  ctx.strokeStyle = "rgba(108, 238, 212, 0.95)";
+  ctx.lineWidth = 2.8;
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Contact ghost.
+  // Arrow head at the end of the guide.
+  const dx = hitX - originX;
+  const dy = hitY - originY;
+  const length = Math.hypot(dx, dy) || 1;
+  const ux = dx / length;
+  const uy = dy / length;
+  const head = 15;
+  ctx.beginPath();
+  ctx.moveTo(hitX, hitY);
+  ctx.lineTo(hitX - ux * head - uy * head * 0.5, hitY - uy * head + ux * head * 0.5);
+  ctx.lineTo(hitX - ux * head + uy * head * 0.5, hitY - uy * head - ux * head * 0.5);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(108, 238, 212, 0.92)";
+  ctx.fill();
+
+  // First contact ghost.
   ctx.beginPath();
   ctx.arc(hitX, hitY, strikerRadius, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(72, 201, 176, 0.09)";
+  ctx.fillStyle = "rgba(72, 201, 176, 0.1)";
   ctx.fill();
-  ctx.strokeStyle = "rgba(100, 236, 208, 0.72)";
+  ctx.strokeStyle = "rgba(108, 238, 212, 0.78)";
   ctx.lineWidth = 2;
   ctx.stroke();
 
   // Power ring around the striker.
-  const ringRadius = strikerRadius * 2.2;
+  const ringRadius = strikerRadius * 2.1;
   ctx.beginPath();
   ctx.arc(originX, originY, ringRadius, 0, Math.PI * 2);
-  ctx.strokeStyle = "rgba(8, 17, 18, 0.42)";
+  ctx.strokeStyle = "rgba(12, 22, 22, 0.4)";
   ctx.lineWidth = 7;
   ctx.stroke();
   ctx.beginPath();
@@ -525,6 +669,7 @@ export function CarromBoard({
   animation,
   disabled,
   theme,
+  aimMode,
   onShoot,
   onAnimationComplete,
 }: CarromBoardProps) {
@@ -581,9 +726,13 @@ export function CarromBoard({
         return;
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawBoard(ctx, theme, lite, display.turn);
+      ctx.clearRect(0, 0, LOGICAL_SIZE, LOGICAL_SIZE);
 
-      const radius = CARROM_BOARD.discRadius * PLAY_SIZE;
+      drawFrame(ctx, lite);
+      drawSurface(ctx, lite);
+      drawMarkings(ctx, display.turn);
+
+      const radius = scaleOf(CARROM_BOARD.discRadius);
       for (const disc of display.discs) {
         if (disc.kind === "queen") {
           continue;
@@ -618,22 +767,19 @@ export function CarromBoard({
         "striker",
         toCanvasX(display.striker.x),
         toCanvasY(display.striker.y),
-        CARROM_BOARD.strikerRadius * PLAY_SIZE,
+        scaleOf(CARROM_BOARD.strikerRadius),
         display.striker.pocketed,
         animating,
         lite,
       );
 
       if (aimState !== null && !animating && !disabled) {
-        const origin = {
-          x: display.striker.x,
-          y: display.striker.y,
-        };
+        const origin = { x: display.striker.x, y: display.striker.y };
         const hit = raycastBoard(origin, aimState.angle, display.discs);
-        drawAim(ctx, display, aimState, hit, lite);
+        drawAim(ctx, display, aimState, aimMode, hit, lite);
       }
     },
-    [dpr, theme, lite, disabled],
+    [dpr, lite, disabled, aimMode],
   );
 
   useEffect(() => {
@@ -721,6 +867,16 @@ export function CarromBoard({
     return { x, y };
   };
 
+  const aimAt = (point: { x: number; y: number }): AimState => {
+    const base = aimFromPoint(
+      strikerX,
+      baselineY(state.turn),
+      point,
+      aimMode,
+    );
+    return { angle: base.angle, power: base.power, pointer: point };
+  };
+
   const handlePointerDown = (
     event: ReactPointerEvent<HTMLCanvasElement>,
   ) => {
@@ -733,11 +889,7 @@ export function CarromBoard({
     }
     event.currentTarget.setPointerCapture(event.pointerId);
     draggingRef.current = event.pointerId;
-    const origin = {
-      x: strikerX,
-      y: baselineY(state.turn),
-    };
-    setAim(aimFromPoint(origin.x, origin.y, point));
+    setAim(aimAt(point));
   };
 
   const handlePointerMove = (
@@ -750,13 +902,7 @@ export function CarromBoard({
     if (point === null) {
       return;
     }
-    setAim(
-      aimFromPoint(
-        strikerX,
-        baselineY(state.turn),
-        point,
-      ),
-    );
+    setAim(aimAt(point));
   };
 
   const finishPointer = (
@@ -770,11 +916,7 @@ export function CarromBoard({
     if (shoot) {
       const point = pointFromEvent(event, true);
       if (point !== null) {
-        const nextAim = aimFromPoint(
-          strikerX,
-          baselineY(state.turn),
-          point,
-        );
+        const nextAim = aimAt(point);
         if (nextAim.power > 0.1) {
           onShoot({
             strikerX,
@@ -792,7 +934,7 @@ export function CarromBoard({
       ref={canvasRef}
       className="carrom-canvas"
       role="img"
-      aria-label="Carrom board. Drag across the board to aim and release to shoot."
+      aria-label="Carrom board. Drag to pull the striker back and release to shoot."
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={(event) => finishPointer(event, true)}

@@ -33,12 +33,36 @@ Carrom/
     └── test/aim.test.ts
 ```
 
+## Board
+
+The board follows the International Carrom Federation standard for a 74 cm
+square playing surface. Every measurement in `core/src/board.ts` is that size
+divided by 74, so the numbers stay comparable to a real table:
+
+| Feature | Real board | Normalized |
+| --- | --- | --- |
+| Carrom man | 3.02 to 3.18 cm across | radius 0.0216 |
+| Striker | 4.13 cm across, 15 g | radius 0.0279, 2.8x a man |
+| Pocket | 4.45 cm across | radius 0.0301 |
+| Baseline strip | two lines 3.8 cm apart | half width 0.0257 |
+| Base circles | red, 3.8 cm across | radius 0.0257 |
+| Centre circle | 3.18 cm across | radius 0.0215 |
+| Outer circle | 47.5 cm across | radius 0.321 |
+
+The baseline strips sit a quarter of the way in from each side, closed by red
+base circles at the four inner corners, and diagonal foul lines with arrows
+run from each circle to its pocket. The 19 pieces open in the ICF layout: the
+queen on the centre spot, six men touching the centre circle, and twelve men
+touching the inner ring, with white men on the axis of the first player.
+
 ## Rules
 
 Two players, ivory and onyx, with nine men each plus the red queen.
 
-- Place the striker on your baseline, drag across the board toward your
-  target, and release. Drag distance sets the shot power.
+- Place the striker on your baseline between the two lines.
+- Pull back from your target and release: the striker launches away from the
+  pull, with a longer pull meaning a harder shot. A direct style, where the
+  striker launches toward your pointer, is available in the aim switch.
 - Pocketing your own colour scores a piece and keeps you at the table.
 - Pocketing an opponent's piece is a foul and ends your turn.
 - A striker in a pocket is a foul: one of your pocketed men returns to the
@@ -55,11 +79,12 @@ Two players, ivory and onyx, with nine men each plus the red queen.
 `core/src/physics.ts` runs a fixed 240 Hz step with 60 Hz capture frames:
 
 - Elastic disc and striker collisions with mass-weighted impulses and
-  positional correction.
-- Wall bounces with restitution, and friction applied per step.
-- Pocket capture when a piece centre reaches a pocket.
-- The striker is heavier than a carrom man, so a firm shot scatters the
-  cluster instead of tapping it.
+  positional correction. The striker is nearly three times heavier than a car
+  man, so a firm shot scatters the cluster instead of tapping it.
+- Wall bounces with restitution, and friction applied per step. A maximum
+  strength shot runs about three board lengths, matching the ICF requirement
+  that a striker must be able to travel three and a half runs.
+- Pocket capture when a piece centre reaches the pocket.
 
 The step is deterministic: the same state and shot always produce the same
 positions, pockets, and frames. That is what lets the local UI, the AI search,

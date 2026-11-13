@@ -209,6 +209,9 @@ function normalizeManifest(manifest, release, index) {
       optionalText(manifest.webPath, `games.${id}.webPath`) ??
       `${id}/`,
   };
+  if (manifest.timed === true) {
+    entry.timed = true;
+  }
   if (version !== undefined) {
     entry.version = version;
   }

@@ -25,7 +25,8 @@ import {
 } from "./components/AccountDrawer";
 import { FeaturedGame } from "./components/FeaturedGame";
 import { GameCard } from "./components/GameCard";
-import { Icon, gameIconName } from "./components/Icon";
+import { Icon } from "./components/Icon";
+import { GameMark } from "./components/gameArt/GameMark";
 import {
   InviteComposer,
   type InviteComposerInput,
@@ -43,6 +44,11 @@ import {
   hasLauncherBridge,
   launchCatalogGame,
 } from "./lib/host";
+import {
+  isLaunchBusy,
+  launchPhaseFor,
+  type LaunchState,
+} from "./lib/launchPhase";
 import { useLauncherSocial } from "./hooks/useLauncherSocial";
 import { useOfficialRegistry } from "./hooks/useOfficialRegistry";
 import { applyTheme, initialTheme, type ThemeChoice } from "./lib/theme";
@@ -61,13 +67,6 @@ const filters: Array<{ id: CatalogFilter; label: string }> = [
   { id: "available", label: "Ready to play" },
   { id: "coming-soon", label: "Coming soon" },
   { id: "online", label: "Online" },
-];
-
-const fallbackOrbit = [
-  { id: "chess", icon: "chess", accent: "#e5b85c" },
-  { id: "cards", icon: "cards", accent: "#ff6b6b" },
-  { id: "ludo", icon: "ludo", accent: "#9b8cff" },
-  { id: "carrom", icon: "carrom", accent: "#48c9b0" },
 ];
 
 function formatUpdatedAt(value: string): string {
@@ -90,7 +89,7 @@ function App() {
   const [theme, setTheme] = useState<ThemeChoice>(() => initialTheme());
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState<AccountDrawerTab>("account");
-  const [launchingId, setLaunchingId] = useState<string | null>(null);
+  const [launch, setLaunch] = useState<LaunchState | null>(null);
   const [launchNotice, setLaunchNotice] = useState<string | null>(null);
   const [inviteTarget, setInviteTarget] = useState<InviteComposerTarget | null>(null);
   const [inviteSending, setInviteSending] = useState(false);
@@ -165,14 +164,7 @@ function App() {
   const onlineCount = games.filter((game) =>
     game.capabilities.includes("online"),
   ).length;
-  const orbitGames =
-    games.length === 0
-      ? fallbackOrbit
-      : games.slice(0, 4).map((game) => ({
-          id: game.id,
-          icon: game.icon,
-          accent: game.accent,
-        }));
+  const orbitGames = games.slice(0, 4);
   const nativeLaunch = useMemo(
     () => hasLauncherBridge(currentLauncherWindow()),
     [],
@@ -180,10 +172,11 @@ function App() {
 
   const playGame = useCallback(
     async (game: GameCatalogEntry, url: string | null) => {
-      if (launchingId !== null) {
+      if (launch !== null && isLaunchBusy(launch.phase)) {
         return;
       }
       if (officialLoading) {
+        setLaunch({ gameId: game.id, phase: "verifying" });
         setLaunchNotice("Verifying this release before opening it…");
         return;
       }
@@ -193,22 +186,32 @@ function App() {
       if (official === undefined) {
         // Independent games never receive the launcher session.
         clearAllLauncherHandoffs();
-        launchCatalogGame(game.id, url, windowLike, {
+        setLaunch({ gameId: game.id, phase: "opening" });
+        const independent = launchCatalogGame(game.id, url, windowLike, {
           accountMode: "per-game",
         });
+        if (independent === "unavailable") {
+          setLaunch({ gameId: game.id, phase: "error" });
+          setLaunchNotice(`${game.name} could not be opened in this browser.`);
+          return;
+        }
+        if (independent !== "navigate") {
+          setLaunch(null);
+        }
         return;
       }
 
       if (social.connection !== "online" || social.nakama === null) {
+        setLaunch({ gameId: game.id, phase: "account" });
         setDrawerTab("account");
         setDrawerOpen(true);
         setLaunchNotice(
-          "Connect your MoonGames account before opening a verified game.",
+          `Connect your MoonGames account to open ${game.name}.`,
         );
         return;
       }
 
-      setLaunchingId(game.id);
+      setLaunch({ gameId: game.id, phase: "preparing" });
       setLaunchNotice(null);
       try {
         const session = await social.prepareSession();
@@ -248,16 +251,21 @@ function App() {
             "This browser could not hand off your shared account safely.",
           );
         }
+        setLaunch({ gameId: game.id, phase: "opening" });
         const result = launchCatalogGame(game.id, url, windowLike, {
           accountMode: "shared",
           session,
           nakama: social.nakama,
         });
         if (result === "unavailable") {
-          throw new Error("This game could not be opened in this browser.");
+          throw new Error(`${game.name} could not be opened in this browser.`);
+        }
+        if (result !== "navigate") {
+          setLaunch(null);
         }
       } catch (cause) {
         clearLauncherHandoff(game.id);
+        setLaunch({ gameId: game.id, phase: "error" });
         setDrawerTab("account");
         setDrawerOpen(true);
         setLaunchNotice(
@@ -265,12 +273,10 @@ function App() {
             ? cause.message
             : "The shared account could not be prepared.",
         );
-      } finally {
-        setLaunchingId(null);
       }
     },
     [
-      launchingId,
+      launch,
       nativeLaunch,
       officialLoading,
       officialRegistry.games,
@@ -522,10 +528,11 @@ function App() {
                   style={{ "--accent": game.accent } as CSSProperties}
                   key={game.id}
                 >
-                  <Icon
-                    name={gameIconName(game.icon)}
+                  <GameMark
+                    game={game}
                     size={34}
                     strokeWidth={1.45}
+                    className="icon"
                   />
                 </span>
               ))}
@@ -614,7 +621,7 @@ function App() {
                   catalogUrl={catalogUrl}
                   nativeLaunch={nativeLaunch}
                   official={officialRegistry.games.has(featured.id)}
-                  launching={launchingId === featured.id}
+                  phase={launchPhaseFor(launch, featured.id)}
                   onPlay={playGame}
                 />
               )}
@@ -628,7 +635,7 @@ function App() {
                       catalogUrl={catalogUrl}
                       nativeLaunch={nativeLaunch}
                       official={officialRegistry.games.has(game.id)}
-                      launching={launchingId === game.id}
+                      phase={launchPhaseFor(launch, game.id)}
                       onPlay={playGame}
                     />
                   ))}
