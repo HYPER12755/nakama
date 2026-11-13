@@ -1,6 +1,7 @@
 # MoonGames
 
-Portable games that share one Nakama backend. The first game is **Chess**.
+Portable games that share one Nakama backend. The first games are **Chess** and
+**Carrom**.
 
 ## Ownership model
 
@@ -22,6 +23,11 @@ Chess/
 ├── server/                # authoritative Nakama runtime logic (Lua)
 └── tests/                 # shared rules/parity vectors
 
+Carrom/
+├── manifest.json          # package metadata and capabilities
+├── core/                  # deterministic physics + rules engine (no UI, no network)
+└── web/                   # portable canvas board UI (React + Vite)
+
 shared/sdk/                # bridge, manifest, protocol, catalog, and bundle contracts
 catalog/                   # public games.json metadata for menus and native apps
 launcher/                  # browser game menu (React + Vite)
@@ -39,7 +45,9 @@ contain game rules.
 The important separation is deliberate:
 
 - **Rules** live in `Chess/core/` for local play and in `Chess/server/` for
-  authoritative online play.
+  authoritative online play. The Carrom rules and physics live in
+  `Carrom/core/`, split into a deterministic physics step and a rules layer so
+  the same behaviour can later move into an authoritative Lua server.
 - **UI components** live in `Chess/web/src/components/`, one component per file.
 - **Backend logic** lives in separate Lua modules, never inside UI code.
 - **Shared contracts** live in `shared/sdk/`.
@@ -190,6 +198,7 @@ pnpm stack stop --all      # also stop PostgreSQL if it was started elsewhere
 
 # Focused development servers
 pnpm dev:chess
+pnpm dev:carrom
 
 # Local multi-game web menu.
 # Run dev:chess in another terminal, then open http://localhost:5174/.
@@ -197,6 +206,7 @@ pnpm dev:web
 
 # Production web bundle
 pnpm build:chess
+pnpm build:carrom
 
 # Host-mode browser preview of the production bundle.
 # Open http://localhost:4173/?hostPreview=1 after starting this.
@@ -233,6 +243,7 @@ pnpm test:all
 
 # Signed release packaging and verification
 pnpm package:chess
+pnpm package:carrom
 pnpm release:manifest
 pnpm verify:bundle \
   releases/chess/0.7.0/chess-0.7.0.bundle.json \
@@ -416,13 +427,46 @@ mobile QA, and real-device build validation:
   resignation, matchmaker pairing, delayed quick-table fallback, draw
   agreement, casual/rated persistence, Elo changes, history, and leaderboard
   records.
+- Carrom is the second official title and ships as a local-first release
+  (`0.1.0`, signed with `dev-1`) with the `local` and `ai` capabilities.
+- The Carrom core is a deterministic fixed-step physics engine (240 Hz, with
+  60 Hz capture frames) plus a separate rules layer. It models the standard
+  19-piece opening, four pockets, per-player baselines, the striker, elastic
+  disc collisions, wall bounces, pocket capture, and friction, so an identical
+  shot always produces an identical result. The same shot is used by the local
+  UI, the AI search, and the future authoritative server.
+- Carrom rules cover turn continuation on an own pocket, opponent pockets,
+  striker fouls with a returned piece, the queen pocket/cover cycle including
+  the queen returning to the centre when it is not covered, protection of the
+  last piece until the queen is covered, and the win condition. They are
+  covered by 15 core tests, including a full AI match that finishes with a
+  winner and no deadlock.
+- The Carrom AI is a simulation-backed opponent. It proposes pocket lines and
+  striker positions, scores them by simulating each candidate, and plays the
+  best one. The search yields between batches so a phone browser keeps
+  painting, and the synchronous variant returns the identical shot for tests
+  and server use.
+- The Carrom web client is a canvas board with a warm wood surface, brass
+  inlay, centre rosette, pocket wells, baseline rails, per-piece gradients,
+  contact shadows, an aim guide with a first-contact ghost, and a power ring
+  around the striker. Dragging anywhere on the board aims and shoots; the
+  striker is placed on a baseline slider. It ships a rules dialog, a score
+  board with per-piece pips, turn and queen status, generated wooden sound
+  effects, haptics, light/dark themes, fullscreen, and the shared lite paint
+  path for low-memory devices. Its 5 tests cover the power curve, aim angle,
+  baselines, frame interpolation, and the aim raycast.
+- Carrom is listed in the catalog as `available` at `0.1.0`, and the signed
+  release manifest indexes 12 bundles (11 Chess, 1 Carrom). The launcher
+  renders it as a normal catalog card next to Chess.
 
 Current local automation: 22 core + 26 web + 14 host-core + 35 launcher
-TypeScript tests, 11 tool tests, and 81 Lua tests (189 passing tests total,
-excluding Flutter package tests that require the Flutter SDK). The launcher
+TypeScript tests, 15 Carrom core + 5 Carrom web tests, 11 tool tests, and 81
+Lua tests (209 passing tests total, excluding Flutter package tests that
+require the Flutter SDK). The launcher
 account, social, and invite smoke scripts also run against real local Nakama.
 Manual browser QA of the catalog menu, account/social/notification drawer,
-verified launch flow, AI, spectator, invite, replay, fullscreen board, launcher
+verified launch flow, AI, spectator, invite, replay, fullscreen board, the
+Carrom table, launcher
 and match-chat emoji pickers, and online/profile flows, plus Android
 Chrome/Flutter/React Native device testing, is still required.
 
@@ -430,6 +474,9 @@ Current limitations:
 
 - The local Chess release is signed with the development key `dev-1`; pin and
   sign with a production Ed25519 key before public deployment.
+- Carrom is local and AI only for now. Its authoritative Nakama server, online
+  rooms, invites, and match chat are the next Carrom milestone, and the
+  catalog advertises only `local` and `ai` until that exists.
 - The Flutter SDK is not installed in this environment, so full Flutter
   analysis/tests and native app builds remain outstanding even though the pure
   Dart proof and social harnesses pass.

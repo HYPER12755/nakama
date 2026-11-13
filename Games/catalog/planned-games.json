@@ -31,22 +31,6 @@
       "icon": "ludo",
       "featured": false,
       "sortOrder": 30
-    },
-    {
-      "id": "carrom",
-      "name": "Carrom",
-      "tagline": "A precision board game of angles, pockets, and clever shots.",
-      "description": "A tactile carrom table designed for touch and mouse play, with local and online matches planned. In development.",
-      "status": "coming-soon",
-      "minPlayers": 2,
-      "maxPlayers": 4,
-      "capabilities": [],
-      "orientation": "any",
-      "tags": ["board", "precision", "classic"],
-      "accent": "#48c9b0",
-      "icon": "carrom",
-      "featured": false,
-      "sortOrder": 40
     }
   ]
 }

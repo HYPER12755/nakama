@@ -1,6 +1,7 @@
 packages:
   - "shared/*"
   - "Chess/*"
+  - "Carrom/*"
   - "launcher"
   - "hosts/*"
 

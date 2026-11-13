@@ -9,8 +9,9 @@ instead of embedding this menu. The launcher is the ready-made option.
 
 ## Development
 
-The launcher proxies `/chess/` to the Chess Vite dev server on port `5173` and
-proxies `/release-manifest.json` to the local release server on port `8099` for
+The launcher proxies `/chess/` to the Chess Vite dev server on port `5173`,
+`/carrom/` to the Carrom Vite dev server on port `5175`, and
+`/release-manifest.json` to the local release server on port `8099` for
 official-proof testing. Run the release server once with `pnpm stack start` (or
 `pnpm serve:releases`), then run the two frontend processes in separate
 terminals:
@@ -18,6 +19,11 @@ terminals:
 ```bash
 cd Games
 pnpm dev:chess
+```
+
+```bash
+cd Games
+pnpm dev:carrom
 ```
 
 ```bash
@@ -66,11 +72,11 @@ those builds on one Nakama server; an email identity is unique per server.
 
 `build:web`:
 
-1. builds the self-contained Chess bundle
+1. builds the self-contained Chess and Carrom bundles
 2. regenerates the catalog
 3. builds the launcher
 4. copies every available game's `dist/` into the launcher output at its
-   `webPath` (currently `/chess/`)
+   `webPath` (currently `/chess/` and `/carrom/`)
 5. copies `games.json` and the signed `release-manifest.json` beside the
    launcher
 

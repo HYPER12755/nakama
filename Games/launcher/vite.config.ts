@@ -14,6 +14,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/chess/, "/"),
       },
+      "/carrom": {
+        target: "http://127.0.0.1:5175",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/carrom/, "/"),
+      },
       "/release-manifest.json": {
         target: "http://127.0.0.1:8099",
         changeOrigin: true,

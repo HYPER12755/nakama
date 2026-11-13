@@ -205,4 +205,18 @@ hosts are file-backed and should load only the single-entry subset.
 
 - [ ] Uno-style original card game (core, UI, Lua server).
 - [ ] Ludo (core, UI, Lua server).
-- [ ] Carrom (deterministic physics core, UI, Lua server).
+- [x] Carrom deterministic physics core (240 Hz fixed step, 60 Hz capture
+  frames, elastic disc collisions, pocket capture, deterministic replay).
+- [x] Carrom rules layer (turn continuation, opponent pockets, striker foul
+  with a returned piece, queen pocket/cover cycle, last-piece protection, win
+  condition) with 15 core tests including a full AI match.
+- [x] Carrom web UI (canvas board, aim guide with first-contact ghost, power
+  ring, baseline striker slider, score board, rules dialog, generated sound,
+  haptics, light/dark theme, fullscreen, lite paint path) with 5 web tests.
+- [x] Carrom simulation-backed AI that yields between candidate batches so a
+  phone browser keeps painting.
+- [x] Carrom `0.1.0` signed release, catalog entry, and launcher card.
+- [ ] Carrom authoritative Nakama server (Lua port of the physics and rules,
+  quick match, private rooms, spectators, invites, match chat).
+- [ ] Carrom four-player and three-player variants.
+- [ ] Carrom rules and physics parity vectors shared with the Lua server.

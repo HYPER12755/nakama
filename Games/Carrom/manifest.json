@@ -1,0 +1,20 @@
+{
+  "id": "carrom",
+  "name": "Carrom",
+  "version": "0.1.0",
+  "sdkVersion": "0.1.0",
+  "entry": "index.html",
+  "minPlayers": 2,
+  "maxPlayers": 2,
+  "capabilities": ["local", "ai"],
+  "orientation": "any",
+  "description": "A tactile carrom table with deterministic pocket physics, local pass-and-play, a simulation-backed AI opponent, precise touch and mouse aiming, and a polished board that scales from phones to desktop.",
+  "tagline": "Flick, bank, and pocket your way to the queen.",
+  "status": "available",
+  "tags": ["board", "precision", "classic", "local", "ai"],
+  "accent": "#48c9b0",
+  "icon": "carrom",
+  "featured": false,
+  "sortOrder": 40,
+  "webPath": "carrom/"
+}
