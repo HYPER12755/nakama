@@ -127,7 +127,13 @@ function serverAddress(fallback?: {
   port?: string;
   useSSL?: boolean;
   serverKey?: string;
-}): { host: string; port: string; useSSL: boolean; serverKey: string } {
+}): {
+  host: string;
+  port: string;
+  useSSL: boolean;
+  serverKey: string;
+  label: string;
+} {
   const params = new URLSearchParams(window.location.search);
   const host =
     fallback?.host ??
@@ -137,14 +143,21 @@ function serverAddress(fallback?: {
   const port = Number(rawPort);
   const useSSL =
     fallback?.useSSL ?? params.get("nakamaSSL") === "1";
+  const resolvedHost = host.length > 0 ? host : "127.0.0.1";
+  const resolvedPort = String(
+    Number.isFinite(port) && port > 0 ? port : DEFAULT_PORT,
+  );
   return {
-    host: host.length > 0 ? host : "127.0.0.1",
-    port: String(Number.isFinite(port) && port > 0 ? port : DEFAULT_PORT),
+    host: resolvedHost,
+    port: resolvedPort,
     useSSL,
     serverKey:
       fallback?.serverKey ??
       (import.meta.env.VITE_NAKAMA_SERVER_KEY as string | undefined) ??
       SERVER_KEY,
+    // The launcher labels a server the same way, so both find the same stored
+    // email session.
+    label: `${useSSL ? "https" : "http"}://${resolvedHost}:${resolvedPort}`,
   };
 }
 
@@ -345,10 +358,26 @@ export function useOnlineCarrom(
         address.useSSL,
       );
       let session: Session;
+      let accountKind: OnlineAuthAccount["kind"] = "guest";
+      let accountEmail: string | null = null;
+      const storedEmail = readStoredEmailSession(address.label);
       if (hostSession !== null) {
         session = hostSession;
+        accountKind = "host";
         if (session.isexpired(Date.now() / 1000) && session.refresh_token.length > 0) {
           session = await client.sessionRefresh(hostSession);
+        }
+      } else if (storedEmail !== null) {
+        // The shared account the launcher signed in with.
+        try {
+          session = Session.restore(storedEmail.token, storedEmail.refreshToken);
+          if (session.isexpired(Date.now() / 1000) && session.refresh_token.length > 0) {
+            session = await client.sessionRefresh(session);
+          }
+          accountKind = "email";
+          accountEmail = storedEmail.email;
+        } catch {
+          session = await client.authenticateDevice(deviceId(), true);
         }
       } else {
         session = await client.authenticateDevice(deviceId(), true);
@@ -357,6 +386,27 @@ export function useOnlineCarrom(
       // The socket has to be connected before anything can be sent: the
       // matchmaker, the room join, and the shot requests all travel on it.
       await socket.connect(session, true);
+
+      // Show the identity the table is really using: the shared account, the
+      // signed-in email account, or a guest profile.
+      const accountInfo = (await client.getAccount(session).catch(() => null)) as
+        | { user?: { id?: string; username?: string } }
+        | null;
+      setAccount({
+        kind: accountKind,
+        username:
+          accountInfo?.user?.username ?? session.user_id ?? "Player",
+        userId: accountInfo?.user?.id ?? session.user_id ?? "",
+        email: accountEmail,
+      });
+      if (accountKind === "email" && accountEmail !== null) {
+        storeEmailSession({
+          server: address.label,
+          email: accountEmail,
+          token: session.token,
+          refreshToken: session.refresh_token,
+        });
+      }
 
       socket.onmatchdata = (matchData: {
         match_id: string;

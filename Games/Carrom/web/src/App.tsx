@@ -27,6 +27,7 @@ import { GameOverDialog } from "./components/GameOverDialog";
 import { Icon } from "./components/Icon";
 import { OnlinePanel } from "./components/OnlinePanel";
 import { PocketBox } from "./components/PocketBox";
+import { PointsBar } from "./components/PointsBar";
 import { RulesDialog } from "./components/RulesDialog";
 import { ScoreCard } from "./components/ScoreCard";
 import { useOnlineCarrom } from "./hooks/useOnlineCarrom";
@@ -54,6 +55,20 @@ import {
 } from "./lib/theme";
 
 type Mode = "local" | "ai" | "online";
+
+/** The tables a game can be played at, in seating order. */
+const LOCAL_TABLES: CarromPlayer[][] = [
+  ["white", "black"],
+  ["white", "black", "green"],
+  ["white", "black", "green", "yellow"],
+];
+
+const DEFAULT_POSITIONS: Record<CarromPlayer, number> = {
+  white: 0.5,
+  black: 0.5,
+  green: 0.5,
+  yellow: 0.5,
+};
 
 const SOUND_KEY = "moongames.carrom.sound";
 const AIM_KEY = "moongames.carrom.aim";
@@ -148,8 +163,13 @@ export interface AppProps {
 
 export default function App({ bridge }: AppProps) {
   const [mode, setMode] = useState<Mode>("local");
-  const [game, setGame] = useState<CarromState>(() => createInitialState());
-  const [strikerPosition, setStrikerPosition] = useState(0.5);
+  const [localTable, setLocalTable] = useState(2);
+  const [game, setGame] = useState<CarromState>(() =>
+    createInitialState(LOCAL_TABLES[1]),
+  );
+  const [positions, setPositions] = useState<Record<CarromPlayer, number>>({
+    ...DEFAULT_POSITIONS,
+  });
   const [animation, setAnimation] = useState<CarromShotResult | null>(null);
   const [theme, setTheme] = useState<Theme>(storedTheme);
   const [soundOn, setSoundOn] = useState(storedSound);
@@ -190,6 +210,15 @@ export default function App({ bridge }: AppProps) {
   const activeAnimation: CarromShotResult | null = onlineMode
     ? online.animation
     : animation;
+  // Every seat keeps its own striker spot, so a table played on one device
+  // gives each player their own place to flick from.
+  const activeTurn: CarromPlayer = onlineMode
+    ? (activeGame?.turn ?? "white")
+    : game.turn;
+  const strikerPosition = positions[activeTurn] ?? 0.5;
+  const seatedPlayers = onlineMode
+    ? (activeGame?.players ?? [])
+    : game.players;
 
   useEffect(() => {
     modeRef.current = mode;
@@ -311,7 +340,10 @@ export default function App({ bridge }: AppProps) {
       const result = simulateShot(game, shot);
       animationRef.current = result;
       setAnimation(result);
-      setStrikerPosition(shot.position);
+      setPositions((current) => ({
+        ...current,
+        [game.turn]: shot.position,
+      }));
       setAiThinking(false);
       scheduleSounds(result);
     },
@@ -330,12 +362,6 @@ export default function App({ bridge }: AppProps) {
     animationRef.current = null;
     setAnimation(null);
     setGame(result.state);
-    setStrikerPosition(
-      nearestValidStrikerPosition(
-        result.state,
-        result.state.striker[baselineOf(result.state.turn).slideAxis],
-      ),
-    );
     setToast(result.outcome.message);
     if (result.outcome.winner !== null) {
       setResultOpen(true);
@@ -354,13 +380,17 @@ export default function App({ bridge }: AppProps) {
       clearSoundTimers();
       animationRef.current = null;
       setAnimation(null);
-      setGame(createInitialState());
-      setStrikerPosition(0.5);
+      setGame(
+        createInitialState(
+          mode === "ai" ? LOCAL_TABLES[1] : LOCAL_TABLES[localTable - 1],
+        ),
+      );
+      setPositions({ ...DEFAULT_POSITIONS });
       setAiThinking(false);
       setResultOpen(false);
       setToast(message);
     },
-    [clearSoundTimers],
+    [clearSoundTimers, localTable, mode],
   );
 
   const handleNewGame = useCallback(() => {
@@ -383,22 +413,26 @@ export default function App({ bridge }: AppProps) {
   );
 
   const handleStrikerChange = useCallback(
-    (value: number) => {
-      setStrikerPosition(nearestValidStrikerPosition(activeGame ?? game, value));
+    (value: number, player: CarromPlayer) => {
+      setPositions((current) => ({
+        ...current,
+        [player]: nearestValidStrikerPosition(activeGame ?? game, value),
+      }));
     },
     [activeGame, game],
   );
 
   const nudgeStriker = useCallback(
-    (direction: -1 | 1) => {
-      setStrikerPosition(
-        nearestValidStrikerPosition(
+    (direction: -1 | 1, player: CarromPlayer) => {
+      setPositions((current) => ({
+        ...current,
+        [player]: nearestValidStrikerPosition(
           activeGame ?? game,
-          strikerPosition + direction * 0.025,
+          (current[player] ?? 0.5) + direction * 0.025,
         ),
-      );
+      }));
     },
-    [activeGame, game, strikerPosition],
+    [activeGame, game],
   );
 
   useEffect(() => {
@@ -590,6 +624,11 @@ export default function App({ bridge }: AppProps) {
 
       <main className="game-layout">
         <section className="board-panel">
+          <PointsBar
+            players={seatedPlayers}
+            scores={activeGame?.scores ?? game.scores}
+            active={activeGame?.turn ?? game.turn}
+          />
           <div className="turn-strip">
             <span className={`turn-disc turn-disc--${activeGame?.turn ?? "white"}`} />
             <div className="turn-strip__copy">
@@ -613,38 +652,73 @@ export default function App({ bridge }: AppProps) {
           </div>
 
           <div className="board-controls">
+            {mode === "local" ? (
+              <div className="table-size">
+                <span className="table-size__label">Table</span>
+                <div className="table-size__options" role="radiogroup">
+                  {LOCAL_TABLES.map((table, index) => (
+                    <button
+                      key={table.length}
+                      type="button"
+                      role="radio"
+                      aria-checked={localTable === table.length}
+                      className={`table-size__option${
+                        localTable === table.length
+                          ? " table-size__option--active"
+                          : ""
+                      }`}
+                      onClick={() => {
+                        setLocalTable(table.length);
+                        resetBoard(
+                          `${table.length} player table ready. Ivory to shoot.`,
+                        );
+                      }}
+                    >
+                      {table.length}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div className="striker-control">
               <span className="striker-control__label">Striker</span>
-              <button
-                type="button"
-                className="stepper"
-                onClick={() => nudgeStriker(-1)}
-                disabled={!canShoot}
-                aria-label="Move striker left"
-              >
-                <Icon name="chevron-left" size={16} strokeWidth={2.2} />
-              </button>
-              <input
-                type="range"
-                min={CARROM_BOARD.baselineMin}
-                max={CARROM_BOARD.baselineMax}
-                step={0.005}
-                value={strikerPosition}
-                disabled={!canShoot}
-                aria-label="Striker position along the baseline"
-                onChange={(event) =>
-                  handleStrikerChange(Number(event.target.value))
-                }
-              />
-              <button
-                type="button"
-                className="stepper"
-                onClick={() => nudgeStriker(1)}
-                disabled={!canShoot}
-                aria-label="Move striker right"
-              >
-                <Icon name="chevron-right" size={16} strokeWidth={2.2} />
-              </button>
+              {seatedPlayers.map((player) => (
+                <span className="striker-seat" key={player}>
+                  <span className="striker-seat__name">
+                    {PLAYER_LABEL[player]}
+                  </span>
+                  <button
+                    type="button"
+                    className="stepper"
+                    onClick={() => nudgeStriker(-1, player)}
+                    disabled={!canShoot}
+                    aria-label={`Move the ${PLAYER_LABEL[player]} striker left`}
+                  >
+                    <Icon name="chevron-left" size={15} strokeWidth={2.2} />
+                  </button>
+                  <input
+                    type="range"
+                    min={CARROM_BOARD.baselineMin}
+                    max={CARROM_BOARD.baselineMax}
+                    step={0.005}
+                    value={positions[player] ?? 0.5}
+                    disabled={!canShoot}
+                    aria-label={`${PLAYER_LABEL[player]} striker position along the baseline`}
+                    onChange={(event) =>
+                      handleStrikerChange(Number(event.target.value), player)
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="stepper"
+                    onClick={() => nudgeStriker(1, player)}
+                    disabled={!canShoot}
+                    aria-label={`Move the ${PLAYER_LABEL[player]} striker right`}
+                  >
+                    <Icon name="chevron-right" size={15} strokeWidth={2.2} />
+                  </button>
+                </span>
+              ))}
             </div>
             <div className="aim-mode">
               <span className="aim-mode__label">Aim</span>
@@ -912,6 +986,15 @@ export default function App({ bridge }: AppProps) {
         <GameOverDialog
           winner={game.winner}
           onNewGame={handleNewGame}
+          onRematch={
+            onlineMode
+              ? () => {
+                  void online.leaveMatch().then(() =>
+                    online.createPrivateRoom(onlineSeats),
+                  );
+                }
+              : undefined
+          }
           onClose={() => setResultOpen(false)}
         />
       ) : null}

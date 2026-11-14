@@ -18,7 +18,7 @@ import {
   type CarromState,
 } from "@moongames/carrom-core";
 import {
-  aimFromPoint,
+  aimFromGesture,
   raycastBoard,
   sampleFrame,
   type AimHit,
@@ -775,6 +775,7 @@ export function CarromBoard({
 }: CarromBoardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const draggingRef = useRef<number | null>(null);
+  const dragAnchorRef = useRef<{ x: number; y: number } | null>(null);
   const completedRef = useRef<CarromShotResult | null>(null);
   const [aim, setAim] = useState<AimState | null>(null);
   const [dpr, setDpr] = useState(1);
@@ -943,9 +944,12 @@ export function CarromBoard({
     };
   }, [animation, drawScene, onAnimationComplete]);
 
+  /**
+   * The pointer is read in board coordinates and never clamped: the aim has
+   * to keep following the finger when it leaves the table.
+   */
   const pointFromEvent = (
     event: ReactPointerEvent<HTMLCanvasElement>,
-    clamp: boolean,
   ): { x: number; y: number } | null => {
     const canvas = canvasRef.current;
     if (canvas === null) {
@@ -955,27 +959,18 @@ export function CarromBoard({
     if (rect.width <= 0 || rect.height <= 0) {
       return null;
     }
-    let x = ((event.clientX - rect.left) / rect.width) * LOGICAL_SIZE;
-    let y = ((event.clientY - rect.top) / rect.height) * LOGICAL_SIZE;
-    x = (x - PLAY_INSET) / PLAY_SIZE;
-    y = (y - PLAY_INSET) / PLAY_SIZE;
-    if (clamp) {
-      x = Math.min(1, Math.max(0, x));
-      y = Math.min(1, Math.max(0, y));
-    } else if (x < 0 || x > 1 || y < 0 || y > 1) {
-      return null;
-    }
-    return { x, y };
+    const x =
+      ((event.clientX - rect.left) / rect.width) * LOGICAL_SIZE -
+      PLAY_INSET;
+    const y =
+      ((event.clientY - rect.top) / rect.height) * LOGICAL_SIZE - PLAY_INSET;
+    return { x: x / PLAY_SIZE, y: y / PLAY_SIZE };
   };
 
   const aimAt = (point: { x: number; y: number }): AimState => {
     const origin = strikerPoint(state.turn, strikerPosition);
-    const base = aimFromPoint(
-      origin.x,
-      origin.y,
-      point,
-      aimMode,
-    );
+    const anchor = dragAnchorRef.current ?? origin;
+    const base = aimFromGesture(anchor, point, origin, aimMode);
     return { angle: base.angle, power: base.power, pointer: point };
   };
 
@@ -985,12 +980,15 @@ export function CarromBoard({
     if (disabled || animation !== null) {
       return;
     }
-    const point = pointFromEvent(event, false);
+    const point = pointFromEvent(event);
     if (point === null) {
       return;
     }
     event.currentTarget.setPointerCapture(event.pointerId);
     draggingRef.current = event.pointerId;
+    // The gesture is anchored where the finger went down, so pulling back and
+    // then re-aiming both feel right.
+    dragAnchorRef.current = point;
     setAim(aimAt(point));
   };
 
@@ -1000,7 +998,7 @@ export function CarromBoard({
     if (draggingRef.current !== event.pointerId) {
       return;
     }
-    const point = pointFromEvent(event, true);
+    const point = pointFromEvent(event);
     if (point === null) {
       return;
     }
@@ -1016,7 +1014,7 @@ export function CarromBoard({
     }
     draggingRef.current = null;
     if (shoot) {
-      const point = pointFromEvent(event, true);
+      const point = pointFromEvent(event);
       if (point !== null) {
         const nextAim = aimAt(point);
         if (nextAim.power > 0.1) {
@@ -1028,6 +1026,7 @@ export function CarromBoard({
         }
       }
     }
+    dragAnchorRef.current = null;
     setAim(null);
   };
 

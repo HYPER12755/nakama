@@ -14,12 +14,37 @@ export function powerFromDistance(distance: number): number {
 }
 
 /**
- * Turn a pointer position into a launch direction.
+ * Turn a gesture into a launch direction.
  *
- * - "pull" behaves like a slingshot: the pointer is dragged back from the
- *   striker and the striker launches away from the pull.
- * - "direct" behaves like a flick: the striker launches toward the pointer.
+ * - "direct" behaves like a flick: the striker launches toward the finger.
+ * - "pull" behaves like a slingshot: the gesture is anchored where the
+ *   finger went down, and the striker launches back toward that anchor.
+ *
+ * The points are never clamped to the board, so the aim keeps following the
+ * finger when it leaves the table.
  */
+export function aimFromGesture(
+  anchor: CarromPoint,
+  current: CarromPoint,
+  origin: CarromPoint,
+  mode: AimMode = "direct",
+): { angle: number; power: number } {
+  if (mode === "pull") {
+    const ax = anchor.x - current.x;
+    const ay = anchor.y - current.y;
+    return {
+      angle: Math.atan2(ay, ax),
+      power: powerFromDistance(Math.hypot(ax, ay)),
+    };
+  }
+  const dx = current.x - origin.x;
+  const dy = current.y - origin.y;
+  return {
+    angle: Math.atan2(dy, dx),
+    power: powerFromDistance(Math.hypot(dx, dy)),
+  };
+}
+
 export function aimFromPoint(
   strikerX: number,
   strikerY: number,

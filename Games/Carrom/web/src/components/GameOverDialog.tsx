@@ -5,12 +5,15 @@ interface GameOverDialogProps {
   winner: CarromPlayer;
   onNewGame: () => void;
   onClose: () => void;
+  /** Offers a rematch, which is how every carrom app handles a finished board. */
+  onRematch?: () => void;
 }
 
 export function GameOverDialog({
   winner,
   onNewGame,
   onClose,
+  onRematch,
 }: GameOverDialogProps) {
   return (
     <div className="dialog-backdrop" onClick={onClose}>
@@ -47,6 +50,12 @@ export function GameOverDialog({
             <Icon name="refresh" size={17} />
             New board
           </button>
+          {onRematch !== undefined ? (
+            <button type="button" className="button button--ghost" onClick={onRematch}>
+              <Icon name="sparkles" size={17} />
+              Rematch
+            </button>
+          ) : null}
           <button type="button" className="button button--ghost" onClick={onClose}>
             View board
           </button>
