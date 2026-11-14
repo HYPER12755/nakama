@@ -478,12 +478,19 @@ mobile QA, and real-device build validation:
   limited table chat, and broadcasts the state with the shot so every client
   replays the same animation. Two, three, and four player tables are
   supported, and the room creator keeps the first colour.
+- Nakama keeps a single matchmaker callback, so the shared module owns it and
+  routes a ticket to the game that asked for it. Chess and Carrom therefore
+  pair their own tables instead of overwriting each other, and the matchmaker
+  query is scoped to the game and table size.
+- A table's label follows its state, so the quick table lookup only ever
+  hands out a table that has not started yet.
 - The TypeScript core and the Lua server share the same rules and the same
   physics. Both resolve the reference shot to the same piece positions, and
   that vector is asserted on both sides. The live smoke test creates a room,
   plays a shot, checks that the turn passes, checks that an out-of-turn shot
-  is refused, checks that the chat arrives, and starts a four player table
-  with 37 pieces.
+  is refused, checks that the chat arrives, starts a four player table with
+  37 pieces, opens a quick table, and pairs two players through the atomic
+  matchmaker.
 - The launcher no longer hardcodes games. Artwork resolves from the catalog:
   a registered motif when the catalog names one, otherwise a generated mark
   derived from the game id, so a new title never needs a launcher change. The
@@ -496,8 +503,8 @@ mobile QA, and real-device build validation:
   renders it as a normal catalog card next to Chess.
 
 Current local automation: 22 core + 26 web + 14 host-core + 42 launcher
-TypeScript tests, 24 Carrom core + 6 Carrom web tests, 11 tool tests, and 100
-Lua tests (245 passing tests total, excluding Flutter package tests that
+TypeScript tests, 24 Carrom core + 6 Carrom web tests, 11 tool tests, and 102
+Lua tests (247 passing tests total, excluding Flutter package tests that
 require the Flutter SDK). The launcher
 account, social, and invite smoke scripts also run against real local Nakama,
 and the Carrom online smoke test runs two and four player tables against the

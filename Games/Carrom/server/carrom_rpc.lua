@@ -79,7 +79,7 @@ local function attach_private_room(context, params)
   end
 
   local spectate = spectate_requested(params)
-  if not spectate and status ~= "open" then
+  if not spectate and status ~= "open" and status ~= "closed" then
     error("match is no longer accepting players")
   end
 
@@ -217,7 +217,7 @@ nk.register_rpc(create_private_match, "carrom_create_private_match")
 
 -- The atomic matchmaker pairs players who asked for the same table size.
 local function matchmaker_matched(context, matched)
-  if #matched ~= 2 then
+  if #matched < 2 then
     return nil
   end
 
@@ -260,4 +260,6 @@ local function matchmaker_matched(context, matched)
     },
   })
 end
-nk.register_matchmaker_matched(matchmaker_matched)
+-- The shared module owns the single Nakama matchmaker callback and routes a
+-- ticket to the game that asked for it.
+social.register_matchmaker_game("carrom", matchmaker_matched)

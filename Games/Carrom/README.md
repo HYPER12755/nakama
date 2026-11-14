@@ -159,6 +159,11 @@ the rules, and the result:
 The Lua modules are copied to the local Nakama runtime with
 `pnpm stack sync`.
 
+Nakama keeps a single matchmaker callback, so the shared module owns it and
+routes a ticket to the game that asked for it. The matchmaker query is scoped
+to the game and the table size, and a table's label follows its state so the
+quick table lookup never hands out a table that has already started.
+
 ## Next
 
 - The in-game friend picker, the invite banner, and the shared chat emoji

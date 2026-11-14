@@ -216,6 +216,41 @@ function social.game_handler(game_id)
   return games[game_id]
 end
 
+-- Nakama keeps a single matchmaker callback, so the last module that
+-- registers one wins. The shared module loads last and dispatches a ticket to
+-- the game that owns it, so every title can pair its own tables.
+local matchmaker_games = {}
+
+function social.register_matchmaker_game(game_id, handler)
+  if type(game_id) ~= "string" or type(handler) ~= "function" then
+    error("register_matchmaker_game requires a game id and a handler function")
+  end
+  matchmaker_games[game_id] = handler
+end
+
+local function matchmaker_matched(context, matched)
+  if #matched < 2 then
+    return nil
+  end
+  local first = matched[1]
+  local properties = first.properties or {}
+  local game_id = properties.game
+  if type(game_id) ~= "string" then
+    return nil
+  end
+  local handler = matchmaker_games[game_id]
+  if handler == nil then
+    return nil
+  end
+  return handler(context, matched)
+end
+
+-- Nakama exposes this hook on every supported version, but the call stays
+-- defensive so the shared module still loads on a runtime without it.
+if type(nk.register_matchmaker_matched) == "function" then
+  nk.register_matchmaker_matched(matchmaker_matched)
+end
+
 local function token_hash(token)
   return nk.sha256_hash(token)
 end

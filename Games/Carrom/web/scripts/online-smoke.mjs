@@ -142,7 +142,7 @@ async function playTwoPlayerTable(runId) {
 
     const started = await aliceEvents.waitFor(
       (message) =>
-        message.op === OP.STATE && message.data?.game !== null,
+        message.op === OP.STATE && message.data?.game?.discs?.length > 0,
       "the table to start",
     );
     const seats = started.data.seats ?? [];
@@ -273,10 +273,99 @@ async function playFourPlayerTable(runId) {
   }
 }
 
+async function playQuickTable(runId) {
+  const alice = await authenticate(`moongames-carrom-${runId}-quick-a`);
+  const bob = await authenticate(`moongames-carrom-${runId}-quick-b`);
+  try {
+    const aliceEvents = createCollector(alice.socket, "quick-a");
+    const bobEvents = createCollector(bob.socket, "quick-b");
+
+    const response = await alice.client.rpc(alice.session, "carrom_quick_match", {
+      seats: 2,
+    });
+    const payload = response.payload ?? {};
+    assert(
+      payload.ok === true && typeof payload.matchId === "string",
+      `quick match RPC failed: ${JSON.stringify(payload)}`,
+    );
+    console.log(`[ok] the quick match RPC opened a table: ${payload.matchId}`);
+
+    await bob.socket.joinMatch(payload.matchId);
+    await alice.socket.joinMatch(payload.matchId);
+
+    const started = await aliceEvents.waitFor(
+      (message) => message.op === OP.STATE && message.data?.game?.discs?.length > 0,
+      "the quick table to start",
+    );
+    assert(
+      started.data.seats.length === 2,
+      `expected two seats, got ${started.data.seats.length}`,
+    );
+    console.log("[ok] the quick table started for two players");
+  } finally {
+    close(alice);
+    close(bob);
+  }
+}
+
+async function playMatchmakerTable(runId) {
+  const alice = await authenticate(`moongames-carrom-${runId}-mm-a`);
+  const bob = await authenticate(`moongames-carrom-${runId}-mm-b`);
+  try {
+    const aliceEvents = createCollector(alice.socket, "mm-a");
+    const bobEvents = createCollector(bob.socket, "mm-b");
+
+    const aliceMatched = new Promise((resolve) => {
+      alice.socket.onmatchmakermatched = resolve;
+    });
+    const bobMatched = new Promise((resolve) => {
+      bob.socket.onmatchmakermatched = resolve;
+    });
+
+    const query = `+properties.game:carrom +properties.seats:2`;
+    await alice.socket.addMatchmaker(query, 2, 2, {
+      game: "carrom",
+      seats: "2",
+    });
+    await bob.socket.addMatchmaker(query, 2, 2, {
+      game: "carrom",
+      seats: "2",
+    });
+
+    const [aliceMatch, bobMatch] = await Promise.all([
+      aliceMatched,
+      bobMatched,
+    ]);
+    assert(
+      typeof aliceMatch.match_id === "string" &&
+        aliceMatch.match_id === bobMatch.match_id,
+      "the matchmaker did not pair the two players",
+    );
+
+    await alice.socket.joinMatch(aliceMatch.match_id, aliceMatch.token);
+    await bob.socket.joinMatch(bobMatch.match_id, bobMatch.token);
+
+    const started = await aliceEvents.waitFor(
+      (message) => message.op === OP.STATE && message.data?.game?.discs?.length > 0,
+      "the matched table to start",
+    );
+    assert(
+      started.data.seats.length === 2,
+      `expected two seats, got ${started.data.seats.length}`,
+    );
+    console.log("[ok] the matchmaker paired two players at one table");
+  } finally {
+    close(alice);
+    close(bob);
+  }
+}
+
 async function main() {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   await playTwoPlayerTable(runId);
   await playFourPlayerTable(runId);
+  await playQuickTable(runId);
+  await playMatchmakerTable(runId);
   console.log("carrom online smoke test passed");
 }
 

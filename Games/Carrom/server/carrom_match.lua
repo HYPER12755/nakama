@@ -81,6 +81,24 @@ local function colour_index(colour)
   return 99
 end
 
+local function label_status(state)
+  if state.result then
+    return "finished"
+  end
+  if state.started_at then
+    return "closed"
+  end
+  return "open"
+end
+
+-- The label is how the quick table lookup finds an open table, so it has to
+-- follow the table state.
+local function refresh_label(state, dispatcher)
+  dispatcher.match_label_update(
+    protocol.label(state.mode, state.seats, label_status(state))
+  )
+end
+
 local function seat_payload(state)
   local seats = {}
   for _, user_id in ipairs(state.player_order) do
@@ -193,6 +211,7 @@ local function maybe_start(context, dispatcher, state, now)
   broadcast(dispatcher, OP.MATCH_STARTED, {
     seatsCount = state.seats,
   })
+  refresh_label(state, dispatcher)
   return true
 end
 
@@ -471,6 +490,7 @@ local function handle_shot(context, dispatcher, state, message, payload, now)
       endedAt = now,
     }
     broadcast(dispatcher, OP.GAME_OVER, state.result)
+    refresh_label(state, dispatcher)
   end
 
   broadcast_state(context, dispatcher, state)

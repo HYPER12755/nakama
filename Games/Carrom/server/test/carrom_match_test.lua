@@ -129,6 +129,9 @@ local function new_dispatcher()
   dispatcher.match_kick = function(request)
     kicked[#kicked + 1] = request
   end
+  dispatcher.match_label_update = function(label)
+    dispatcher.label = label
+  end
   return dispatcher
 end
 

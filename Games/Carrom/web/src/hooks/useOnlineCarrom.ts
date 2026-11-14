@@ -260,7 +260,8 @@ export function useOnlineCarrom(
       ...payload,
       chat: Array.isArray(payload.chat) ? payload.chat : [],
       spectators: Array.isArray(payload.spectators) ? payload.spectators : [],
-      seats: Array.isArray(payload.seats) ? payload.seats : [],
+      game: payload.game ?? null,
+    seats: Array.isArray(payload.seats) ? payload.seats : [],
     });
   }, []);
 
@@ -397,10 +398,17 @@ export function useOnlineCarrom(
       setError(null);
       setSearching(true);
       try {
-        const ticket = await socket.addMatchmaker("carrom", seats, seats, {
-          game: "carrom",
-          seats: String(seats),
-        });
+        // The matchmaker query is scoped to the properties, so only players
+        // who asked for the same game and table size are paired.
+        const ticket = await socket.addMatchmaker(
+          `+properties.game:carrom +properties.seats:${seats}`,
+          seats,
+          seats,
+          {
+            game: "carrom",
+            seats: String(seats),
+          },
+        );
         ticketRef.current = ticket.ticket;
         // The atomic matchmaker pairs players who asked for the same size.
         // A table that is already open is used when nobody pairs in time.

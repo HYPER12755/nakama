@@ -11,6 +11,7 @@ local storage = {}
 local notifications = {}
 local friends = {}
 local rpc_handlers = {}
+local matchmaker_handler = nil
 local users = {
   {
     user_id = "user-a",
@@ -108,6 +109,9 @@ local fake_nk = {
   logger_error = function() end,
   register_rpc = function(handler, id)
     rpc_handlers[id] = handler
+  end,
+  register_matchmaker_matched = function(handler)
+    matchmaker_handler = handler
   end,
   users_get_id = function(ids)
     local result = {}
@@ -563,6 +567,47 @@ test("RPC wrappers forward authenticated context and reject missing users", func
   assert_equal(denied.ok, false)
   assert_equal(denied.error.code, "unauthenticated")
 end)
+
+tests[#tests + 1] = {
+  name = "the matchmaker hook routes a ticket to the game that owns it",
+  fn = function()
+    local called = false
+    social.register_matchmaker_game("carromtest", function(context, matched)
+      called = true
+      assert_equal(#matched, 2, "matched entries")
+      return "carrom-match-id"
+    end)
+    local result = matchmaker_handler({}, {
+      {
+        properties = { game = "carromtest" },
+        presence = { user_id = "user-a", username = "A" },
+      },
+      {
+        properties = { game = "carromtest" },
+        presence = { user_id = "user-b", username = "B" },
+      },
+    })
+    assert_equal(called, true, "the game handler ran")
+    assert_equal(result, "carrom-match-id", "the handler result was returned")
+  end,
+}
+
+tests[#tests + 1] = {
+  name = "the matchmaker hook ignores a ticket for an unknown game",
+  fn = function()
+    local result = matchmaker_handler({}, {
+      {
+        properties = { game = "not-a-game" },
+        presence = { user_id = "user-a", username = "A" },
+      },
+      {
+        properties = { game = "not-a-game" },
+        presence = { user_id = "user-b", username = "B" },
+      },
+    })
+    assert_equal(result, nil, "no match was created")
+  end,
+}
 
 for _, entry in ipairs(tests) do
   local ok, error_value = pcall(entry.fn)

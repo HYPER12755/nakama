@@ -315,7 +315,9 @@ local function matchmaker_matched(context, matched)
     },
   })
 end
-nk.register_matchmaker_matched(matchmaker_matched)
+-- The shared module owns the single Nakama matchmaker callback and routes a
+-- ticket to the game that asked for it.
+social.register_matchmaker_game("chess", matchmaker_matched)
 
 local function get_profile(context, payload)
   return nk.json_encode(progression.profile_payload(context))
