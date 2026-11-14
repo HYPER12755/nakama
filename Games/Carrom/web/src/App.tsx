@@ -9,11 +9,13 @@ import type { GameBridge } from "@moongames/game-sdk";
 import {
   CARROM_BOARD,
   PLAYER_LABEL,
+  TABLE_PLAYERS,
   chooseAiShotAsync,
   baselineOf,
   createInitialState,
   nearestValidStrikerPosition,
   simulateShot,
+  tablePlayers,
   validateShot,
   type CarromAiDifficulty,
   type CarromPlayer,
@@ -57,11 +59,7 @@ import {
 type Mode = "local" | "ai" | "online";
 
 /** The tables a game can be played at, in seating order. */
-const LOCAL_TABLES: CarromPlayer[][] = [
-  ["white", "black"],
-  ["white", "black", "green"],
-  ["white", "black", "green", "yellow"],
-];
+const LOCAL_TABLE_SIZES = TABLE_PLAYERS.map((table) => table.length);
 
 const DEFAULT_POSITIONS: Record<CarromPlayer, number> = {
   white: 0.5,
@@ -165,7 +163,7 @@ export default function App({ bridge }: AppProps) {
   const [mode, setMode] = useState<Mode>("local");
   const [localTable, setLocalTable] = useState(2);
   const [game, setGame] = useState<CarromState>(() =>
-    createInitialState(LOCAL_TABLES[1]),
+    createInitialState(tablePlayers(2)),
   );
   const [positions, setPositions] = useState<Record<CarromPlayer, number>>({
     ...DEFAULT_POSITIONS,
@@ -382,7 +380,7 @@ export default function App({ bridge }: AppProps) {
       setAnimation(null);
       setGame(
         createInitialState(
-          mode === "ai" ? LOCAL_TABLES[1] : LOCAL_TABLES[localTable - 1],
+          mode === "ai" ? tablePlayers(2) : tablePlayers(localTable),
         ),
       );
       setPositions({ ...DEFAULT_POSITIONS });
@@ -624,6 +622,17 @@ export default function App({ bridge }: AppProps) {
 
       <main className="game-layout">
         <section className="board-panel">
+          {isFullscreen ? (
+            <button
+              type="button"
+              className="fullscreen-exit"
+              onClick={() => void toggleFullscreen()}
+              aria-label="Exit fullscreen"
+              title="Exit fullscreen"
+            >
+              <Icon name="minimize" size={18} strokeWidth={2} />
+            </button>
+          ) : null}
           <PointsBar
             players={seatedPlayers}
             scores={activeGame?.scores ?? game.scores}
@@ -656,25 +665,23 @@ export default function App({ bridge }: AppProps) {
               <div className="table-size">
                 <span className="table-size__label">Table</span>
                 <div className="table-size__options" role="radiogroup">
-                  {LOCAL_TABLES.map((table, index) => (
+                  {LOCAL_TABLE_SIZES.map((size) => (
                     <button
-                      key={table.length}
+                      key={size}
                       type="button"
                       role="radio"
-                      aria-checked={localTable === table.length}
+                      aria-checked={localTable === size}
                       className={`table-size__option${
-                        localTable === table.length
-                          ? " table-size__option--active"
-                          : ""
+                        localTable === size ? " table-size__option--active" : ""
                       }`}
                       onClick={() => {
-                        setLocalTable(table.length);
+                        setLocalTable(size);
                         resetBoard(
-                          `${table.length} player table ready. Ivory to shoot.`,
+                          `${size} player table ready. Ivory to shoot.`,
                         );
                       }}
                     >
-                      {table.length}
+                      {size}
                     </button>
                   ))}
                 </div>

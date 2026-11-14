@@ -316,10 +316,14 @@ function drawMarkings(ctx: CanvasRenderingContext2D, turn: CarromPlayer): void {
   ctx.lineWidth = 2.4;
   ctx.stroke();
 
-  // Pockets. The hole is cut into the corner of the frame, so it is drawn a
-  // little wider than the capture radius, with a deep well and a brass rim
-  // that stay readable on a phone.
-  const pocketRadius = scaleOf(CARROM_BOARD.pocketRadius) * 1.25;
+  // Pockets. They are cut into the corners of the frame, so the hole is
+  // clipped by the playing surface and can never float outside the table.
+  // The drawn size is the real 4.45 cm hole, and a piece only drops when its
+  // centre passes the rim.
+  const pocketRadius = scaleOf(CARROM_BOARD.pocketRadius);
+  ctx.save();
+  roundedRect(ctx, PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE, 18);
+  ctx.clip();
   for (const pocket of CARROM_BOARD.pocketCenters) {
     const x = toCanvasX(pocket.x);
     const y = toCanvasY(pocket.y);
@@ -331,20 +335,20 @@ function drawMarkings(ctx: CanvasRenderingContext2D, turn: CarromPlayer): void {
       pocketRadius * 0.45,
       x,
       y,
-      pocketRadius * 2,
+      pocketRadius * 1.7,
     );
-    shadow.addColorStop(0, "rgba(40, 19, 6, 0.46)");
+    shadow.addColorStop(0, "rgba(40, 19, 6, 0.4)");
     shadow.addColorStop(1, "rgba(40, 19, 6, 0)");
     ctx.beginPath();
-    ctx.arc(x, y, pocketRadius * 2, 0, Math.PI * 2);
+    ctx.arc(x, y, pocketRadius * 1.7, 0, Math.PI * 2);
     ctx.fillStyle = shadow;
     ctx.fill();
 
     // Brass rim around the hole.
     ctx.beginPath();
-    ctx.arc(x, y, pocketRadius + 8, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(228, 184, 106, 0.8)";
-    ctx.lineWidth = 4;
+    ctx.arc(x, y, pocketRadius + 7, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(228, 184, 106, 0.85)";
+    ctx.lineWidth = 5;
     ctx.stroke();
 
     // The hole itself.
@@ -364,7 +368,7 @@ function drawMarkings(ctx: CanvasRenderingContext2D, turn: CarromPlayer): void {
     ctx.fillStyle = hole;
     ctx.fill();
     ctx.lineWidth = 2;
-    ctx.strokeStyle = "rgba(255, 228, 176, 0.26)";
+    ctx.strokeStyle = "rgba(255, 228, 176, 0.3)";
     ctx.stroke();
 
     // Light catching the far wall of the well.
@@ -380,6 +384,7 @@ function drawMarkings(ctx: CanvasRenderingContext2D, turn: CarromPlayer): void {
     ctx.lineWidth = 3;
     ctx.stroke();
   }
+  ctx.restore();
 
   // Baseline strips: two parallel lines per side, 3.8 cm apart. Every side
   // of the table has one, so four players can each play from their own edge.

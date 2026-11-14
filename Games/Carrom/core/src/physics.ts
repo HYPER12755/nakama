@@ -49,7 +49,7 @@ const SAMPLE_EVERY = Math.max(
 export function findPocketAt(x: number, y: number): CarromPoint | null {
   for (const pocket of CARROM_BOARD.pocketCenters) {
     if (
-      Math.hypot(x - pocket.x, y - pocket.y) <= CARROM_BOARD.pocketRadius
+      Math.hypot(x - pocket.x, y - pocket.y) <= CARROM_BOARD.captureRadius
     ) {
       return { x: pocket.x, y: pocket.y };
     }

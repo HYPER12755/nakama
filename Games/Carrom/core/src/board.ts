@@ -22,7 +22,14 @@ import type {
 export const CARROM_BOARD = {
   discRadius: 0.0216,
   strikerRadius: 0.0279,
+  /** The hole in the frame: 4.45 cm across. */
   pocketRadius: 0.0301,
+  /**
+   * A piece drops when its centre passes the edge of the hole. The capture
+   * radius is the hole minus half a piece, so a piece has to be over the
+   * hole and not merely resting on its rim.
+   */
+  captureRadius: 0.0193,
   pocketCenters: [
     { x: 0.036, y: 0.036 },
     { x: 0.964, y: 0.036 },
@@ -122,6 +129,27 @@ export const PLAYER_LABEL: Record<CarromPlayer, string> = {
   green: "Jade",
   yellow: "Amber",
 };
+
+/**
+ * The tables a game can be played at, in seating order. Every title reads the
+ * list from here instead of repeating it.
+ */
+export const TABLE_PLAYERS: readonly (readonly CarromPlayer[])[] = [
+  ["white", "black"],
+  ["white", "black", "green"],
+  ["white", "black", "green", "yellow"],
+];
+
+export function tablePlayers(count: number): CarromPlayer[] {
+  const clamped = Math.max(2, Math.min(TABLE_PLAYERS.length, Math.floor(count)));
+  return [...(TABLE_PLAYERS[clamped - 1] ?? TABLE_PLAYERS[0]!)];
+}
+
+/**
+ * The longest drag that still means full power. The aim uses it, so the
+ * gesture feels the same everywhere.
+ */
+export const AIM_MAX_DISTANCE = 0.38;
 
 /** The colour used for each player's pieces in the interface. */
 export const PLAYER_COLOR: Record<CarromPlayer, string> = {

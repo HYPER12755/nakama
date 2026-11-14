@@ -10,7 +10,8 @@ local physics = {}
 
 physics.DISC_RADIUS = 0.0216
 physics.STRIKER_RADIUS = 0.0279
-physics.POCKET_RADIUS = 0.0301
+physics.POCKET_RADIUS = 0.0193
+physics.POCKET_HOLE_RADIUS = 0.0301
 physics.POCKETS = {
   { x = 0.036, y = 0.036 },
   { x = 0.964, y = 0.036 },

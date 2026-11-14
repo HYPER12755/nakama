@@ -1,4 +1,5 @@
 import {
+  AIM_MAX_DISTANCE,
   CARROM_BOARD,
   strikerPoint as coreStrikerPoint,
   type CarromFrame,
@@ -10,7 +11,7 @@ import {
 export type AimMode = "pull" | "direct";
 
 export function powerFromDistance(distance: number): number {
-  return Math.min(1, Math.max(0.08, distance / 0.38));
+  return Math.min(1, Math.max(0.08, distance / AIM_MAX_DISTANCE));
 }
 
 /**

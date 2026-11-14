@@ -1,9 +1,11 @@
 export {
+  AIM_MAX_DISTANCE,
   CARROM_BASELINES,
   CARROM_BOARD,
   CARROM_SEATS,
   PLAYER_COLOR,
   PLAYER_LABEL,
+  TABLE_PLAYERS,
   baselineOf,
   clampStrikerPosition,
   createInitialState,
@@ -14,7 +16,9 @@ export {
   playersInTurnOrder,
   strikerFits,
   strikerPoint,
+  tablePlayers,
 } from "./board";
+export { CARROM_OP, type CarromOpCode } from "./protocol";
 export type { CarromBaseline } from "./board";
 export {
   CarromShotError,

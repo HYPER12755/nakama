@@ -1,12 +1,16 @@
 import { useState } from "react";
-import { PLAYER_LABEL, type CarromPlayer } from "@moongames/carrom-core";
+import {
+  PLAYER_LABEL,
+  TABLE_PLAYERS,
+  type CarromPlayer,
+} from "@moongames/carrom-core";
 import type {
   CarromSeat,
   OnlineCarromController,
 } from "../hooks/useOnlineCarrom";
 import { Icon } from "./Icon";
 
-const TABLE_SIZES = [2, 3, 4];
+const TABLE_SIZES = TABLE_PLAYERS.map((table) => table.length);
 
 export interface OnlinePanelProps {
   online: OnlineCarromController;

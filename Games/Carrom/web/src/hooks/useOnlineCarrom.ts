@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Client, Session, type Socket } from "@heroiclabs/nakama-js";
 import {
+  CARROM_OP,
   simulateShot,
+  type CarromAiDifficulty,
   type CarromPlayer,
   type CarromShotInput,
   type CarromShotResult,
@@ -23,26 +25,10 @@ import {
 } from "@moongames/game-ui";
 
 /**
- * The Carrom wire protocol. It mirrors Carrom/server/carrom_protocol.lua so
- * the client and the authoritative server agree on every opcode.
+ * The wire protocol comes from the core so the client, the authoritative
+ * server, and the tests all read the same opcodes.
  */
-export const CARROM_OP = {
-  STATE: 1,
-  SHOT: 2,
-  GAME_OVER: 3,
-  ERROR: 4,
-  PLAYER_JOINED: 5,
-  PLAYER_LEFT: 6,
-  MATCH_STARTED: 7,
-  CHAT: 8,
-  SPECTATOR_JOINED: 9,
-  SPECTATOR_LEFT: 10,
-  PONG: 15,
-  SHOT_REQUEST: 101,
-  REQUEST_STATE: 102,
-  CHAT_SEND: 103,
-  PING: 104,
-} as const;
+export { CARROM_OP };
 
 export interface CarromSeat {
   user_id: string;
