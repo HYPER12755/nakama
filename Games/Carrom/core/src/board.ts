@@ -133,8 +133,7 @@ export const PLAYER_LABEL: Record<CarromPlayer, string> = {
 };
 
 /**
- * The tables a game can be played at, in seating order. Every title reads the
- * list from here instead of repeating it.
+ * The tables a game can be played at, from the smallest to the largest.
  */
 export const TABLE_PLAYERS: readonly (readonly CarromPlayer[])[] = [
   ["white", "black"],
@@ -142,9 +141,28 @@ export const TABLE_PLAYERS: readonly (readonly CarromPlayer[])[] = [
   ["white", "black", "green", "yellow"],
 ];
 
+/** The seat counts the tables above offer. */
+export const TABLE_SIZES: readonly number[] = TABLE_PLAYERS.map(
+  (table) => table.length,
+);
+
+/**
+ * The seats of a table. The count is the number of players at the table, so
+ * two players get two seats and four players get four. A count that no table
+ * offers takes the nearest table that fits.
+ */
 export function tablePlayers(count: number): CarromPlayer[] {
-  const clamped = Math.max(2, Math.min(TABLE_PLAYERS.length, Math.floor(count)));
-  return [...(TABLE_PLAYERS[clamped - 1] ?? TABLE_PLAYERS[0]!)];
+  const wanted = Math.floor(count);
+  const exact = TABLE_SIZES.indexOf(wanted);
+  if (exact >= 0) {
+    return [...TABLE_PLAYERS[exact]!];
+  }
+  // The nearest table that fits, and the largest one when nothing fits.
+  const size =
+    TABLE_SIZES.find((entry) => entry >= wanted) ??
+    TABLE_SIZES[TABLE_SIZES.length - 1]!;
+  const index = TABLE_SIZES.indexOf(size);
+  return [...(TABLE_PLAYERS[index] ?? TABLE_PLAYERS[0]!)];
 }
 
 /**

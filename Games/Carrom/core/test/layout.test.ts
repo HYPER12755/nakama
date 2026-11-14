@@ -3,6 +3,7 @@ import {
   CARROM_BOARD,
   createInitialState,
   medallionRadii,
+  tablePlayers,
 } from "../src";
 
 const LOGICAL = 1000;
@@ -41,13 +42,7 @@ describe("carrom layout", () => {
     for (const count of [2, 3, 4]) {
       const radii = medallionRadii(count);
       expect(radii.outer * PLAY).toBeLessThan(PLAY / 2);
-      const state = createInitialState(
-        count === 2
-          ? ["white", "black"]
-          : count === 3
-            ? ["white", "black", "green"]
-            : ["white", "black", "green", "yellow"],
-      );
+      const state = createInitialState(tablePlayers(count));
       expect(state.discs).toHaveLength(count * 9 + 1);
     }
   });

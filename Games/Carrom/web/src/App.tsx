@@ -10,7 +10,7 @@ import {
   CARROM_BOARD,
   CARROM_STRIKERS,
   PLAYER_LABEL,
-  TABLE_PLAYERS,
+  TABLE_SIZES,
   baselineOf,
   challengeById,
   challengeProgress,
@@ -72,7 +72,7 @@ import { gameStorageKey } from "./lib/storage";
 type Mode = "local" | "ai" | "online";
 
 /** The tables a game can be played at, in seating order. */
-const LOCAL_TABLE_SIZES = TABLE_PLAYERS.map((table) => table.length);
+const LOCAL_TABLE_SIZES = TABLE_SIZES;
 
 /** How long a message stays on the table. */
 const TOAST_MS = 5200;

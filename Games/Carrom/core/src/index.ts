@@ -10,6 +10,7 @@ export {
   PLAYER_COLOR,
   PLAYER_LABEL,
   TABLE_PLAYERS,
+  TABLE_SIZES,
   baselineOf,
   clampStrikerPosition,
   createInitialState,

@@ -1080,6 +1080,37 @@ export function CarromBoard({
     };
   }, []);
 
+  /**
+   * A canvas that changes size is cleared by the browser, and the table would
+   * go black until the next shot. The board is painted again whenever the
+   * canvas is resized, which happens when the layout changes, for example
+   * when a scrollbar appears because the sidebar grew.
+   */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas === null || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      const scene = sceneRef.current;
+      if (scene !== null) {
+        drawScene(scene.display, scene.aimState, scene.animating);
+      }
+    });
+    observer.observe(canvas);
+    const repaint = () => {
+      const scene = sceneRef.current;
+      if (scene !== null) {
+        drawScene(scene.display, scene.aimState, scene.animating);
+      }
+    };
+    window.addEventListener("resize", repaint);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", repaint);
+    };
+  }, [drawScene]);
+
   useEffect(() => {
     if (animation !== null) {
       return;

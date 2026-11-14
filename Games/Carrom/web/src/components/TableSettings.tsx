@@ -8,7 +8,7 @@ import { Icon } from "./Icon";
 
 export interface TableSettingsProps {
   /** The table sizes the game can be played at. */
-  tableSizes: number[];
+  tableSizes: readonly number[];
   tableSize: number;
   onTableSizeChange: (size: number) => void;
   /** Whether the table size can still be changed. */

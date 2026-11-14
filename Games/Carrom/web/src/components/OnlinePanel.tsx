@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   PLAYER_LABEL,
-  TABLE_PLAYERS,
+  TABLE_SIZES as CORE_TABLE_SIZES,
   type CarromPlayer,
 } from "@moongames/carrom-core";
 import { FriendInviteDialog, buildMatchInviteUrl } from "@moongames/game-ui";
@@ -13,7 +13,7 @@ import type {
 } from "../hooks/useOnlineCarrom";
 import { Icon } from "./Icon";
 
-const TABLE_SIZES = TABLE_PLAYERS.map((table) => table.length);
+const TABLE_SIZES = CORE_TABLE_SIZES;
 
 export interface OnlinePanelProps {
   online: OnlineCarromController;
