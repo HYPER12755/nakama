@@ -316,6 +316,71 @@ function drawMarkings(ctx: CanvasRenderingContext2D, turn: CarromPlayer): void {
   ctx.lineWidth = 2.4;
   ctx.stroke();
 
+  // Pockets. The hole is cut into the corner of the frame, so it is drawn a
+  // little wider than the capture radius, with a deep well and a brass rim
+  // that stay readable on a phone.
+  const pocketRadius = scaleOf(CARROM_BOARD.pocketRadius) * 1.25;
+  for (const pocket of CARROM_BOARD.pocketCenters) {
+    const x = toCanvasX(pocket.x);
+    const y = toCanvasY(pocket.y);
+
+    // The shadow the well casts on the board.
+    const shadow = ctx.createRadialGradient(
+      x,
+      y,
+      pocketRadius * 0.45,
+      x,
+      y,
+      pocketRadius * 2,
+    );
+    shadow.addColorStop(0, "rgba(40, 19, 6, 0.46)");
+    shadow.addColorStop(1, "rgba(40, 19, 6, 0)");
+    ctx.beginPath();
+    ctx.arc(x, y, pocketRadius * 2, 0, Math.PI * 2);
+    ctx.fillStyle = shadow;
+    ctx.fill();
+
+    // Brass rim around the hole.
+    ctx.beginPath();
+    ctx.arc(x, y, pocketRadius + 8, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(228, 184, 106, 0.8)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // The hole itself.
+    const hole = ctx.createRadialGradient(
+      x - pocketRadius * 0.28,
+      y - pocketRadius * 0.28,
+      pocketRadius * 0.08,
+      x,
+      y,
+      pocketRadius,
+    );
+    hole.addColorStop(0, "#0b0806");
+    hole.addColorStop(0.6, "#040302");
+    hole.addColorStop(1, "#24130a");
+    ctx.beginPath();
+    ctx.arc(x, y, pocketRadius, 0, Math.PI * 2);
+    ctx.fillStyle = hole;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(255, 228, 176, 0.26)";
+    ctx.stroke();
+
+    // Light catching the far wall of the well.
+    ctx.beginPath();
+    ctx.arc(
+      x,
+      y,
+      pocketRadius * 0.8,
+      Math.PI * 0.85,
+      Math.PI * 1.78,
+    );
+    ctx.strokeStyle = "rgba(255, 216, 154, 0.16)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+
   // Baseline strips: two parallel lines per side, 3.8 cm apart. Every side
   // of the table has one, so four players can each play from their own edge.
   for (const player of ["white", "yellow", "black", "green"] as const) {
