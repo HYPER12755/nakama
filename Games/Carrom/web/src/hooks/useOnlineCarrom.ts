@@ -833,7 +833,12 @@ export function useOnlineCarrom(
         return;
       }
       setProfile(profilePayload.profile ?? null);
-      setHistory(profilePayload.history ?? []);
+      // Nakama encodes an empty Lua table as an object, so a player with no
+      // finished games sends back `{}` instead of a list. Reading it as a
+      // list would break the profile panel.
+      setHistory(
+        Array.isArray(profilePayload.history) ? profilePayload.history : [],
+      );
 
       const leaderboardResponse = await client.rpc(
         session,
@@ -845,7 +850,9 @@ export function useOnlineCarrom(
         entries?: GameLeaderboardEntry[];
         me?: GameLeaderboardEntry | null;
       };
-      setLeaderboard(leaderboardPayload.entries ?? []);
+      setLeaderboard(
+        Array.isArray(leaderboardPayload.entries) ? leaderboardPayload.entries : [],
+      );
       setMyLeaderboard(leaderboardPayload.me ?? null);
     } catch (cause) {
       setProfileError(
@@ -1124,9 +1131,11 @@ export function useOnlineCarrom(
     matchId,
     state,
     game: state?.game ?? null,
-    seats: state?.seats ?? [],
-    spectators: state?.spectators ?? [],
-    chat: state?.chat ?? [],
+    // Nakama sends an empty list as an empty object, so every list is only
+    // used when it really is a list.
+    seats: Array.isArray(state?.seats) ? state.seats : [],
+    spectators: Array.isArray(state?.spectators) ? state.spectators : [],
+    chat: Array.isArray(state?.chat) ? state.chat : [],
     result: state?.result ?? null,
     error,
     notice,

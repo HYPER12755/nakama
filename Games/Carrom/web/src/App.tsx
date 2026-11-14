@@ -278,7 +278,7 @@ export default function App({ bridge }: AppProps) {
     ? (activeGame?.turn ?? "white")
     : game.turn;
   const seatedPlayers = onlineMode
-    ? (activeGame?.players ?? [])
+    ? (Array.isArray(activeGame?.players) ? activeGame.players : [])
     : game.players;
   const tableRules = rulesOf(activeGame ?? game);
 
@@ -907,7 +907,9 @@ export default function App({ bridge }: AppProps) {
         : "Pass & play";
   const version = __MOONGAMES_GAME_VERSION__;
 
-  const shots = online.state?.shots ?? [];
+  // Nakama sends an empty list as an empty object, so the shot log is only
+  // read as a list when it really is one.
+  const shots = Array.isArray(online.state?.shots) ? online.state.shots : [];
   const recentShots = shots.slice(-8).reverse();
   const pocketed = useMemo(() => {
     const counts = { white: 0, black: 0, green: 0, yellow: 0 };

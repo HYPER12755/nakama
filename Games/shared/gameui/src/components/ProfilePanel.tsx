@@ -127,10 +127,15 @@ export function ProfilePanel({
 
   const labels = { ...DEFAULT_RESULT_LABELS, ...resultLabels };
   const shortLabels = DEFAULT_RESULT_SHORT;
+  // A server sends an empty list as an empty object, so the lists are only
+  // trusted when they really are lists. A broken list must never take the
+  // whole page down.
+  const historyRows = Array.isArray(history) ? history : [];
+  const leaderboardRows = Array.isArray(leaderboard) ? leaderboard : [];
   const meInTop =
     myLeaderboard !== null &&
-    leaderboard.some((entry) => entry.userId === myLeaderboard.userId);
-  const recent = history.slice(0, 6);
+    leaderboardRows.some((entry) => entry.userId === myLeaderboard.userId);
+  const recent = historyRows.slice(0, 6);
 
   return (
     <section className="panel profile-panel">
@@ -194,13 +199,13 @@ export function ProfilePanel({
       <div className="profile-section">
         <div className="profile-section-heading">
           <h3>Leaderboard</h3>
-          <span>{leaderboard.length > 0 ? `Top ${leaderboard.length}` : "—"}</span>
+          <span>{leaderboardRows.length > 0 ? `Top ${leaderboardRows.length}` : "—"}</span>
         </div>
-        {leaderboard.length === 0 ? (
+        {leaderboardRows.length === 0 ? (
           <p className="empty-state">{emptyLeaderboardText}</p>
         ) : (
           <ul className="leaderboard-list">
-            {leaderboard.map((entry) => leaderboardRow(entry, userId))}
+            {leaderboardRows.map((entry) => leaderboardRow(entry, userId))}
             {myLeaderboard !== null && !meInTop && (
               <li className="leaderboard-divider" />
             )}
@@ -214,7 +219,7 @@ export function ProfilePanel({
       <div className="profile-section">
         <div className="profile-section-heading">
           <h3>Recent games</h3>
-          <span>{history.length > 0 ? `${history.length} saved` : "—"}</span>
+          <span>{historyRows.length > 0 ? `${historyRows.length} saved` : "—"}</span>
         </div>
         {recent.length === 0 ? (
           <p className="empty-state">{emptyHistoryText}</p>
