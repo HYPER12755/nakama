@@ -498,6 +498,8 @@ export default function App({ bridge }: AppProps) {
       .join(" · ");
   }, [activeGame, game.players, game.scores, onlineMode]);
 
+  const shots = online.state?.shots ?? [];
+  const recentShots = shots.slice(-8).reverse();
   const pocketed = useMemo(() => {
     const counts = { white: 0, black: 0, green: 0, yellow: 0 };
     for (const disc of activeGame?.discs ?? []) {
@@ -755,6 +757,35 @@ export default function App({ bridge }: AppProps) {
                 seats={onlineSeats}
                 onSeatsChange={setOnlineSeats}
               />
+              {recentShots.length > 0 ? (
+                <section className="panel shot-list">
+                  <div className="panel-heading">
+                    <div>
+                      <p className="eyebrow">Table log</p>
+                      <h2>Shots</h2>
+                    </div>
+                    <span className="panel-heading__meta">{shots.length}</span>
+                  </div>
+                  <ol className="shot-list__items">
+                    {recentShots.map((shot, index) => (
+                      <li key={`${shots.length - index}`}>
+                        <span
+                          className={`shot-list__disc shot-list__disc--${shot.colour}`}
+                        />
+                        <span className="shot-list__text">
+                          {PLAYER_LABEL[shot.colour]} shot
+                          {shot.pocketed_count > 0
+                            ? ` and pocketed ${shot.pocketed_count}`
+                            : " and missed"}
+                        </span>
+                        <span className="shot-list__power">
+                          {Math.round(shot.power * 100)}%
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              ) : null}
               <MatchChat
                 matchId={online.matchId}
                 messages={online.chat}

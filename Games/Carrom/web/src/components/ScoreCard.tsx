@@ -51,6 +51,12 @@ export function ScoreCard({
           />
         ))}
       </div>
+      <div className="score-card__bar">
+        <span
+          className={`score-card__bar-fill score-card__bar-fill--${player}`}
+          style={{ width: `${Math.min(100, (score / 9) * 100)}%` }}
+        />
+      </div>
       {queen.owner === player ? (
         <span className="score-card__queen">
           <span className="queen-dot" />

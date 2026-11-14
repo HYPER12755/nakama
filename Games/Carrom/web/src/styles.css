@@ -711,6 +711,37 @@ button {
   background: var(--border);
 }
 
+.score-card__bar {
+  height: 5px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.score-card__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.35s ease;
+}
+
+.score-card__bar-fill--white {
+  background: linear-gradient(90deg, var(--ivory-deep), var(--ivory));
+}
+
+.score-card__bar-fill--black {
+  background: linear-gradient(90deg, #4a4d52, #20242a);
+}
+
+.score-card__bar-fill--green {
+  background: linear-gradient(90deg, #2f7d55, #63c79b);
+}
+
+.score-card__bar-fill--yellow {
+  background: linear-gradient(90deg, #b6841f, #f0c463);
+}
+
 .score-pip--filled {
   background: var(--accent);
 }
@@ -1086,6 +1117,67 @@ button {
   min-height: 100%;
   flex-direction: column;
   justify-content: center;
+}
+
+.shot-list__items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shot-list__items li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel-soft);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.shot-list__disc {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35);
+}
+
+.shot-list__disc--white {
+  background: radial-gradient(circle at 32% 24%, #fffdf5, var(--ivory) 54%, var(--ivory-deep));
+}
+
+.shot-list__disc--black {
+  background: radial-gradient(circle at 32% 24%, #64666a, var(--onyx) 48%, var(--onyx-deep));
+}
+
+.shot-list__disc--green {
+  background: radial-gradient(circle at 32% 24%, #6fc79b, #2f7d55 52%, #17452d);
+}
+
+.shot-list__disc--yellow {
+  background: radial-gradient(circle at 32% 24%, #f2cf7c, #c9932c 52%, #8a5f12);
+}
+
+.shot-list__text {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shot-list__power {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 9px;
+  font-weight: 800;
 }
 
 .ai-panel__options {
@@ -1826,7 +1918,7 @@ html[data-moonperf="lite"] .online-chat__list {
   max-height: 150px;
 }
 
-
+@media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {

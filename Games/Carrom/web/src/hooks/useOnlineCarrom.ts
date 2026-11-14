@@ -64,6 +64,15 @@ export interface CarromChatMessage {
   sentAt: number;
 }
 
+/** One shot at the table, as the server recorded it. */
+export interface CarromShotSummary {
+  by: string;
+  colour: CarromPlayer;
+  position: number;
+  power: number;
+  pocketed_count: number;
+}
+
 export interface CarromMatchResult {
   status: string;
   winnerColour?: CarromPlayer;
@@ -79,6 +88,8 @@ export interface CarromServerState {
   result: CarromMatchResult | null;
   seatsCount: number;
   shotSerial: number;
+  /** Every shot played at the table, oldest first. */
+  shots: CarromShotSummary[];
   lastShot: {
     user_id: string;
     position: number;
@@ -307,8 +318,9 @@ export function useOnlineCarrom(
       ...payload,
       chat: Array.isArray(payload.chat) ? payload.chat : [],
       spectators: Array.isArray(payload.spectators) ? payload.spectators : [],
+      shots: Array.isArray(payload.shots) ? payload.shots : [],
       game: payload.game ?? null,
-    seats: Array.isArray(payload.seats) ? payload.seats : [],
+      seats: Array.isArray(payload.seats) ? payload.seats : [],
     });
   }, []);
 
@@ -342,6 +354,9 @@ export function useOnlineCarrom(
         session = await client.authenticateDevice(deviceId(), true);
       }
       const socket = client.createSocket(address.useSSL, false);
+      // The socket has to be connected before anything can be sent: the
+      // matchmaker, the room join, and the shot requests all travel on it.
+      await socket.connect(session, true);
 
       socket.onmatchdata = (matchData: {
         match_id: string;

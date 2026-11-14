@@ -141,6 +141,7 @@ local function state_payload(context, state, now)
     seats = seat_payload(state),
     spectators = spectator_payload(state),
     chat = state.chat,
+    shots = state.shots or {},
     result = state.result,
     mode = state.mode,
     seatsCount = state.seats,
