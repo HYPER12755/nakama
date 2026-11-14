@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { gameMotif, gameMotifs } from "../src/components/gameArt/motifs";
-import { monogramInitials, monogramSeed } from "../src/components/gameArt/monogram";
+import {
+  gameMotif,
+  gameMotifs,
+  monogramInitials,
+  monogramSeed,
+} from "@moongames/game-ui";
 
 describe("game artwork", () => {
   it("resolves known motif keys", () => {

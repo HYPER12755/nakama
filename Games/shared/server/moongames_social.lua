@@ -339,60 +339,75 @@ local function create_token_index(record, token)
   })
 end
 
-local function room_code_key(code)
-  return ROOM_CODE_PREFIX .. code
+local function room_code_key(game_id, code)
+  return ROOM_CODE_PREFIX .. game_id .. "_" .. code
 end
 
 -- A code is made from the hash of a fresh uuid, so two tables never get the
 -- same code. The characters are taken from an alphabet without the letters
 -- and numbers people confuse with one another.
+--
+-- The bytes are taken from across the whole hash, not from its first few, so
+-- a code really does change for every table.
 local function make_room_code()
   local alphabet = social.ROOM_CODE_ALPHABET
   local digest = nk.sha256_hash(nk.uuid_v4() .. nk.uuid_v4())
   local characters = {}
-  local index = 0
-  while #characters < social.ROOM_CODE_LENGTH do
-    index = index + 1
+  for index = 1, social.ROOM_CODE_LENGTH do
     -- The digest is read as pairs of hex digits, so every character of the
-    -- alphabet is equally likely.
-    local pair = digest:sub((index - 1) * 2 + 1, (index - 1) * 2 + 2)
+    -- alphabet is equally likely. The pairs are spread across the hash, so
+    -- two codes are never built from the same bytes.
+    local offset = (index - 1) * 5
+    local pair = digest:sub(offset + 1, offset + 2)
     local value = tonumber(pair, 16)
     if value == nil then
-      value = digest:byte(index) or 65
+      value = digest:byte(offset + 1) or 65
     end
     local position = (value % #alphabet) + 1
-    characters[#characters + 1] = alphabet:sub(position, position)
+    characters[index] = alphabet:sub(position, position)
   end
   return table.concat(characters)
 end
 
 -- Register a table under a short code, so the player can read the code out
 -- to their friend instead of a long match id.
+--
+-- The write uses the "only if it is not there yet" version, so two tables
+-- can never be handed the same code, even when they are created at the same
+-- moment. The code space belongs to one game, so the same code may name a
+-- table in another game without any conflict.
 function social.create_room_code(match_id, game_id, seats)
   if type(match_id) ~= "string" or match_id == "" then
     return nil
   end
-  for _ = 1, 5 do
+  if type(game_id) ~= "string" or game_id == "" then
+    return nil
+  end
+  for _ = 1, 12 do
     local code = make_room_code()
-    local key = room_code_key(code)
-    local existing = nk.storage_read({
-      { collection = social.ROOM_CODE_COLLECTION, key = key },
-    })
-    if not existing or not existing[1] then
-      nk.storage_write({
+    local key = room_code_key(game_id, code)
+    local written = false
+    local ok = pcall(function()
+      local acks = nk.storage_write({
         {
           collection = social.ROOM_CODE_COLLECTION,
           key = key,
           value = {
             matchId = match_id,
-            gameId = game_id or "",
+            gameId = game_id,
             seats = tonumber(seats) or 0,
             createdAt = nk.time(),
           },
+          -- The star version only writes when the code is still free, so a
+          -- code is never handed out twice.
+          version = "*",
           permission_read = 0,
           permission_write = 0,
         },
       })
+      written = acks ~= nil and #acks > 0
+    end)
+    if ok and written then
       return code
     end
   end
@@ -407,14 +422,20 @@ function social.resolve_room_code(code, game_id)
     return nil, "room_not_found"
   end
   normalised = normalised:upper()
+  if type(game_id) ~= "string" or game_id == "" then
+    return nil, "room_not_found"
+  end
   local objects = nk.storage_read({
-    { collection = social.ROOM_CODE_COLLECTION, key = room_code_key(normalised) },
+    {
+      collection = social.ROOM_CODE_COLLECTION,
+      key = room_code_key(game_id, normalised),
+    },
   })
   local record = objects and objects[1] and objects[1].value
   if type(record) ~= "table" or type(record.matchId) ~= "string" then
     return nil, "room_not_found"
   end
-  if game_id and record.gameId ~= "" and record.gameId ~= game_id then
+  if record.gameId ~= game_id then
     return nil, "room_not_found"
   end
   local created_at = tonumber(record.createdAt) or 0
@@ -435,6 +456,7 @@ local function public_invite(record)
     gameTitle = record.gameTitle,
     mode = record.mode,
     matchId = record.matchId,
+    roomCode = record.roomCode,
     sender = record.sender,
     recipient = record.recipient,
     status = record.status,
@@ -594,6 +616,14 @@ function social.create_invite(context, params)
     message = message:sub(1, social.MAX_INVITE_MESSAGE)
   end
 
+  -- The table behind an invite also gets a short code, so a player can read
+  -- it out to someone who is not on the platform yet.
+  local room_code = social.create_room_code(
+    room.matchId,
+    game_id,
+    tonumber(room.seats) or tonumber(room.metadata and room.metadata.seats) or 0
+  )
+
   local record = {
     inviteId = invite_id,
     tokenHash = token_hash(token),
@@ -601,6 +631,7 @@ function social.create_invite(context, params)
     gameTitle = text(room.gameTitle, game_id),
     mode = text(room.mode or params.mode, "private"),
     matchId = room.matchId,
+    roomCode = room_code,
     sender = public_user({
       user_id = user_id,
       username = context.username or "Player",

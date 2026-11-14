@@ -59,6 +59,27 @@ fake_nk = {
   logger_warn = function() end,
   logger_info = function() end,
   logger_error = function() end,
+  -- A room code is made from a fresh uuid, so the fake has to hand out one.
+  uuid_v4 = function()
+    fake_nk.uuid_counter = (fake_nk.uuid_counter or 0) + 1
+    return string.format(
+      "00000000-0000-4000-8000-%012d",
+      fake_nk.uuid_counter
+    )
+  end,
+  -- A real hash is a hex string, and every value hashes differently.
+  sha256_hash = function(value)
+    local hex = ""
+    local seed = 0
+    for index = 1, #tostring(value) do
+      seed = (seed * 31 + string.byte(tostring(value), index)) % 4294967296
+    end
+    for _ = 1, 8 do
+      seed = (seed * 1103515245 + 12345) % 4294967296
+      hex = hex .. string.format("%08x", seed)
+    end
+    return hex
+  end,
   match_list_result = {},
   match_creates = {},
   next_match_id = "created-match",
@@ -87,7 +108,13 @@ fake_nk = {
     for _, write in ipairs(writes) do
       local key = storage_key(write.user_id, write.collection, write.key)
       local current = fake_nk.storage_records[key]
-      if write.version and (not current or current.version ~= write.version) then
+      -- The star version means "only if it is not there yet", the way
+      -- Nakama writes a row that must not already exist.
+      if write.version == "*" then
+        if current then
+          error("storage version conflict")
+        end
+      elseif write.version and (not current or current.version ~= write.version) then
         error("storage version conflict")
       end
       fake_nk.storage_records[key] = {

@@ -16,6 +16,8 @@ export type IconName =
   | "skip-back"
   | "smile"
   | "skip-forward"
+  | "sparkle"
+  | "arrow-up-right"
   | "sun"
   | "user";
 
@@ -135,6 +137,15 @@ export function Icon({
         </>
       )}
       {name === "check" && <path d="m5 12 4 4L19 6" />}
+      {name === "sparkle" && (
+        <path d="M12 3.5 13.7 9l5.5 1.7-5.5 1.7L12 17l-1.7-4.6L4.8 10.7 10.3 9 12 3.5Z" />
+      )}
+      {name === "arrow-up-right" && (
+        <>
+          <path d="M7 17 17 7" />
+          <path d="M9 7h8v8" />
+        </>
+      )}
     </svg>
   );
 }

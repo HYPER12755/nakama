@@ -229,9 +229,14 @@ local function create_private_match(context, payload)
     lobby_timeout_ms = PRIVATE_LOBBY_TIMEOUT_MS,
   })
 
+  -- The room code is what the player reads out to their friend. The match id
+  -- behind it still joins the table.
+  local room_code = social.create_room_code(match_id, "chess", 2)
+
   return nk.json_encode({
     ok = true,
     matchId = match_id,
+    roomCode = room_code,
     mode = "private",
     timeControl = protocol.time_control_wire(time_control),
   })

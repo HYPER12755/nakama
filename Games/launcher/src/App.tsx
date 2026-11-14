@@ -20,13 +20,16 @@ import {
   type MoonGamesInvite,
 } from "@moongames/game-sdk";
 import {
+  GameArt,
+  GameCard,
+  capabilityLabels,
+} from "@moongames/game-ui";
+import {
   AccountDrawer,
   type AccountDrawerTab,
 } from "./components/AccountDrawer";
-import { FeaturedGame } from "./components/FeaturedGame";
-import { GameCard } from "./components/GameCard";
 import { Icon } from "./components/Icon";
-import { GameMark } from "./components/gameArt/GameMark";
+import { GameMark } from "@moongames/game-ui";
 import {
   InviteComposer,
   type InviteComposerInput,
@@ -34,8 +37,8 @@ import {
 } from "./components/InviteComposer";
 import {
   defaultCatalogUrl,
-  featuredGame,
   filterCatalog,
+  gameCoverUrl,
   gameWebUrl,
   type CatalogFilter,
 } from "./lib/catalog";
@@ -46,6 +49,7 @@ import {
 } from "./lib/host";
 import {
   isLaunchBusy,
+  launchButtonShortLabel,
   launchPhaseFor,
   type LaunchState,
 } from "./lib/launchPhase";
@@ -148,13 +152,6 @@ function App() {
     () => filterCatalog(games, filter, query),
     [games, filter, query],
   );
-  const featured = useMemo(
-    () => featuredGame(visibleGames),
-    [visibleGames],
-  );
-  const gridGames = featured
-    ? visibleGames.filter((game) => game.id !== featured.id)
-    : visibleGames;
   const availableCount = games.filter(
     (game) => game.status === "available",
   ).length;
@@ -303,19 +300,24 @@ function App() {
         return;
       }
       setInviteSending(true);
-      const invite = await social.createInvite({
-        gameId: input.gameId,
-        mode: "private",
-        recipientId: inviteTarget.userId,
-        recipientUsername: inviteTarget.username,
-        message: input.message,
-        timeControl: input.timeControl,
-      });
-      setInviteSending(false);
-      if (invite !== null) {
-        setInviteTarget(null);
-        setDrawerTab("alerts");
-        setDrawerOpen(true);
+      try {
+        const invite = await social.createInvite({
+          gameId: input.gameId,
+          mode: "private",
+          recipientId: inviteTarget.userId,
+          recipientUsername: inviteTarget.username,
+          message: input.message,
+          timeControl: input.timeControl,
+        });
+        if (invite !== null) {
+          setInviteTarget(null);
+          setDrawerTab("alerts");
+          setDrawerOpen(true);
+        }
+      } finally {
+        // A failed invite must not leave the composer busy, or the cancel
+        // button stops working and the form cannot be sent again.
+        setInviteSending(false);
       }
     },
     [inviteTarget, social.createInvite],
@@ -642,30 +644,34 @@ function App() {
 
           {state.phase === "ready" ? (
             <>
-              {featured === null ? null : (
-                <FeaturedGame
-                  game={featured}
-                  catalogUrl={catalogUrl}
-                  nativeLaunch={nativeLaunch}
-                  official={officialRegistry.games.has(featured.id)}
-                  phase={launchPhaseFor(launch, featured.id)}
-                  onPlay={playGame}
-                />
-              )}
-
-              {gridGames.length > 0 ? (
+              {visibleGames.length > 0 ? (
                 <div className="game-grid">
-                  {gridGames.map((game: GameCatalogEntry) => (
-                    <GameCard
-                      key={game.id}
-                      game={game}
-                      catalogUrl={catalogUrl}
-                      nativeLaunch={nativeLaunch}
-                      official={officialRegistry.games.has(game.id)}
-                      phase={launchPhaseFor(launch, game.id)}
-                      onPlay={playGame}
-                    />
-                  ))}
+                  {visibleGames.map((game: GameCatalogEntry) => {
+                    const url = gameWebUrl(game, catalogUrl);
+                    const phase = launchPhaseFor(launch, game.id);
+                    const busy = isLaunchBusy(phase);
+                    return (
+                      <GameCard
+                        key={game.id}
+                        game={game}
+                        art={
+                          <GameArt
+                            game={game}
+                            coverUrl={gameCoverUrl(game, catalogUrl)}
+                          />
+                        }
+                        official={officialRegistry.games.has(game.id)}
+                        canLaunch={
+                          game.status === "available" &&
+                          (url !== null || nativeLaunch)
+                        }
+                        busy={busy}
+                        actionLabel={launchButtonShortLabel(phase)}
+                        capabilityLabels={capabilityLabels}
+                        onPlay={() => playGame(game, url)}
+                      />
+                    );
+                  })}
                 </div>
               ) : null}
 

@@ -184,6 +184,17 @@ export interface OnlineCarromOptions {
   /** Start searching for a table as soon as the client connects. */
   autoJoinMatchId?: string | null;
   autoSpectate?: boolean;
+  /**
+   * The account and server the launcher handed over. A game opened from the
+   * MoonGames menu uses the shared account; a game opened on its own falls
+   * back to a guest device identity on the same server.
+   */
+  hostConfig?: GameHostConfig | null;
+  /**
+   * False while the launcher is still handing over its account. The table
+   * waits instead of connecting as a guest and reconnecting later.
+   */
+  ready?: boolean;
 }
 
 /**
@@ -277,6 +288,7 @@ export interface OnlineCarromController {
 export function useOnlineCarrom(
   options: OnlineCarromOptions = {},
 ): OnlineCarromController {
+  const ready = options.ready !== false;
   const [connection, setConnection] = useState<CarromConnection>("offline");
   const [matchId, setMatchId] = useState<string | null>(null);
   const [state, setState] = useState<CarromServerState | null>(null);
@@ -319,6 +331,10 @@ export function useOnlineCarrom(
   const fallbackRef = useRef<number | null>(null);
   const connectingRef = useRef(false);
   const refreshProfileRef = useRef<(() => Promise<void>) | null>(null);
+  // The account and server the launcher handed over. It is read through a
+  // ref so a new handover never restarts a shot that is already running.
+  const hostConfigRef = useRef<GameHostConfig | null>(options.hostConfig ?? null);
+  hostConfigRef.current = options.hostConfig ?? null;
 
   const requireSocket = useCallback(async (): Promise<Socket> => {
     const socket = socketRef.current;
@@ -449,11 +465,11 @@ export function useOnlineCarrom(
     setConnection("connecting");
     setError(null);
     try {
-      const handoff = readLauncherHandoff(GAME_ID);
-      const hostSession = sessionFromConfig(handoff);
       // The launcher owns the account and the server. A verified launch uses
       // the shared session and the launcher's Nakama address; a direct launch
       // falls back to a guest device identity on the same server.
+      const handoff = hostConfigRef.current ?? readLauncherHandoff(GAME_ID);
+      const hostSession = sessionFromConfig(handoff);
       const address = serverAddress(handoff?.nakama);
       serverLabelRef.current = address.host;
       const client = new Client(
@@ -847,10 +863,16 @@ export function useOnlineCarrom(
    * The table connects by itself. A player should never have to press a
    * button to get into the game, so the connection is opened as soon as the
    * client loads and the account is picked up from the shared session.
+   *
+   * `ready` is false while the launcher is still handing over its account,
+   * so the table never connects as a guest and then has to reconnect.
    */
   useEffect(() => {
+    if (!ready) {
+      return;
+    }
     void connect();
-  }, [connect]);
+  }, [connect, ready]);
 
   useEffect(() => {
     return () => {

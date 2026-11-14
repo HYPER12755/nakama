@@ -106,6 +106,10 @@ export interface OnlineChessController {
   setTimeControlId: (value: string) => void;
   timeControl: OnlineTimeControl;
   matchId: string | null;
+  /** The short code of the table this player is sitting at. */
+  roomCode: string | null;
+  /** Join a table by the short code the host read out. */
+  joinByRoomCode: (code: string) => Promise<boolean>;
   serverState: OnlineStatePayload | null;
   myColor: Color | null;
   players: OnlineStatePayload["players"];
@@ -333,6 +337,8 @@ export function useOnlineChess(
     return readStorage(TIME_CONTROL_KEY) ?? "5+0";
   });
   const [matchId, setMatchId] = useState<string | null>(null);
+  // The short code a player reads out to their friend.
+  const [roomCode, setRoomCode] = useState<string | null>(null);
   const [serverState, setServerState] =
     useState<OnlineStatePayload | null>(null);
   const [drawOffer, setDrawOffer] = useState<OnlineDrawOffer | null>(null);
@@ -1278,7 +1284,10 @@ export function useOnlineChess(
 
   const callRpc = useCallback(
     async (
-      id: "chess_quick_match" | "chess_create_private_match",
+      id:
+        | "chess_quick_match"
+        | "chess_create_private_match"
+        | "moongames_room_code_resolve",
       input: object,
     ): Promise<OnlineRpcResponse> => {
       const client = clientRef.current;
@@ -1785,6 +1794,8 @@ export function useOnlineChess(
           result.error?.message ?? "Could not create a private match.",
         );
       }
+      // The room code is what the player reads out to their friend.
+      setRoomCode(typeof result.roomCode === "string" ? result.roomCode : null);
       await joinMatch(result.matchId);
       return result.matchId;
     } catch (cause) {
@@ -1792,6 +1803,40 @@ export function useOnlineChess(
       return null;
     }
   }, [callRpc, joinMatch, requireSocket, timeControl]);
+
+  /**
+   * Join a table by the short code the host read out. The server knows which
+   * table the code names, so the client never has to know a match id.
+   */
+  const joinByRoomCode = useCallback(
+    async (code: string): Promise<boolean> => {
+      const trimmed = code.trim();
+      if (trimmed.length === 0) {
+        setError("Enter a room code.");
+        return false;
+      }
+      try {
+        await requireSocket();
+        setError(null);
+        const result = await callRpc("moongames_room_code_resolve", {
+          code: trimmed,
+          gameId: GAME_ID,
+        });
+        if (!result.ok || !result.matchId) {
+          throw new Error(
+            result.error?.message ?? "That room code was not found.",
+          );
+        }
+        setRoomCode(typeof result.code === "string" ? result.code : trimmed.toUpperCase());
+        await joinMatch(result.matchId);
+        return true;
+      } catch (cause) {
+        setError(errorMessage(cause, "Could not join that room."));
+        return false;
+      }
+    },
+    [callRpc, joinMatch, requireSocket],
+  );
 
   const leaveMatch = useCallback(async () => {
     const pending = matchmakerRef.current;
@@ -1825,6 +1870,7 @@ export function useOnlineChess(
 
     matchIdRef.current = null;
     setMatchId(null);
+    setRoomCode(null);
     setServerState(null);
     rememberMatchId(null);
     rememberSpectating(false);
@@ -2064,6 +2110,8 @@ export function useOnlineChess(
     setTimeControlId,
     timeControl,
     matchId,
+    roomCode,
+    joinByRoomCode,
     serverState,
     myColor,
     players: serverState?.players ?? [],

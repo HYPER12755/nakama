@@ -118,6 +118,12 @@ export interface OnlineRpcResponse {
   matchId?: string;
   mode?: "quick" | "private";
   timeControl?: OnlineTimeControl;
+  /** The short code a player reads out to their friend. */
+  roomCode?: string | null;
+  /** The code the server resolved a room with. */
+  code?: string;
+  /** How many players the table behind the code is for. */
+  seats?: number;
   error?: OnlineRpcError;
 }
 

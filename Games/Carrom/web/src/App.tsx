@@ -7,6 +7,11 @@ import {
 } from "react";
 import type { GameBridge } from "@moongames/game-sdk";
 import {
+  GAME_PROTOCOL_VERSION,
+  readLauncherHandoff,
+  type GameHostConfig,
+} from "@moongames/game-sdk";
+import {
   CARROM_BOARD,
   CARROM_STRIKERS,
   PLAYER_LABEL,
@@ -255,9 +260,26 @@ export default function App({ bridge }: AppProps) {
     }
     return new URLSearchParams(window.location.search).get("spectate") === "1";
   }, []);
+  /**
+   * The account and server the launcher handed over. A game opened from the
+   * MoonGames menu plays with the shared account; a game opened on its own
+   * is a guest on the same server.
+   */
+  const [handoff] = useState<GameHostConfig | null>(() =>
+    readLauncherHandoff(__MOONGAMES_GAME_ID__),
+  );
+  const [hostConfig, setHostConfig] = useState<GameHostConfig | null>(handoff);
+  const [hostInitReceived, setHostInitReceived] = useState(handoff !== null);
+  const [hostInitTimedOut, setHostInitTimedOut] = useState(false);
+  // The launcher hands over its account a moment after the game loads. The
+  // table waits for that handover, so it never plays as a guest first.
+  const hostReady =
+    !bridge.isHosted || hostInitReceived || hostInitTimedOut;
   const online = useOnlineCarrom({
     autoJoinMatchId: inviteMatchId,
     autoSpectate: inviteSpectate,
+    hostConfig,
+    ready: hostReady,
   });
   /**
    * The online controller is a new object on every render. The callbacks
@@ -389,7 +411,21 @@ export default function App({ bridge }: AppProps) {
   useEffect(() => {
     return bridge.onMessage((message) => {
       if (message.type === "init") {
+        // The launcher hands over the shared account and the server, so the
+        // table plays as the same player the menu used.
+        setHostConfig(message.config);
+        setHostInitReceived(true);
         setTheme(resolveGameTheme(message.config.theme));
+      } else if (message.type === "session") {
+        setHostConfig((current) => ({
+          protocol: current?.protocol ?? GAME_PROTOCOL_VERSION,
+          gameId: current?.gameId ?? __MOONGAMES_GAME_ID__,
+          locale: current?.locale ?? "en",
+          theme: current?.theme ?? { mode: "dark" },
+          nakama: current?.nakama,
+          ...current,
+          session: message.session,
+        }));
       } else if (message.type === "theme") {
         setTheme(resolveGameTheme(message.theme));
       } else if (message.type === "pause") {
@@ -403,6 +439,17 @@ export default function App({ bridge }: AppProps) {
   useEffect(() => {
     bridge.ready(__MOONGAMES_GAME_ID__, __MOONGAMES_GAME_VERSION__);
   }, [bridge]);
+
+  useEffect(() => {
+    // A host that never hands over its account must not keep the table
+    // waiting. The game then plays as a guest on the same server.
+    if (!bridge.isHosted || hostInitReceived) {
+      setHostInitTimedOut(true);
+      return;
+    }
+    const timer = window.setTimeout(() => setHostInitTimedOut(true), 750);
+    return () => window.clearTimeout(timer);
+  }, [bridge, hostInitReceived]);
 
   useEffect(() => {
     const update = () => setIsFullscreen(Boolean(document.fullscreenElement));

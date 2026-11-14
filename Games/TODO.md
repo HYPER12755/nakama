@@ -265,3 +265,19 @@ hosts are file-backed and should load only the single-entry subset.
   teams.
 - [ ] Generated artwork for unknown games in the native React Native and
   Flutter launchers (both currently fall back to a generic board icon).
+- [ ] The cancel button in a persisted chat invite card does nothing. The
+  card in the chat keeps the invite it was sent with, so the server changes
+  the invite when it is cancelled but the card still shows a pending invite
+  and offers to cancel it again. The chat message has to be given the
+  invite the server returns, so the card shows the new state.
+- [ ] The launcher invite composer can get stuck busy. If sending the
+  invite throws, the busy flag is never cleared, so the cancel button stops
+  working and the send button stays disabled. The busy flag has to be
+  cleared when the send fails.
+- [ ] Chess and Carrom private rooms keep their room code after the table
+  is left, so a code can be read for a table that no longer exists. The
+  code has to be dropped with the table.
+- [ ] The Chess online smoke test fails on "alice history should include
+  replay SANs". The failure is there before this round, so the replay steps
+  a finished Chess game writes are not reaching the history the client
+  reads back.

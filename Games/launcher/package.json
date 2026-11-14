@@ -16,6 +16,7 @@
   "dependencies": {
     "@heroiclabs/nakama-js": "^2.8.0",
     "@moongames/game-sdk": "workspace:*",
+    "@moongames/game-ui": "workspace:*",
     "@moongames/host-core": "workspace:*",
     "@moongames/social": "workspace:*",
     "react": "19.3.1",

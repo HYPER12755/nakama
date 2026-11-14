@@ -34,6 +34,7 @@ function resultText(controller: OnlineChessController): string {
 
 export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
   const [joinId, setJoinId] = useState("");
+  const [roomCodeInput, setRoomCodeInput] = useState("");
   const [joinAsSpectator, setJoinAsSpectator] = useState(false);
   const [creatingPrivate, setCreatingPrivate] = useState(false);
   const [inviteTarget, setInviteTarget] = useState<{
@@ -48,6 +49,7 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
     timeControlId,
     setTimeControlId,
     matchId,
+    roomCode,
     serverState,
     players,
     spectators,
@@ -76,6 +78,7 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
     cancelQuickMatch,
     createPrivateMatch,
     joinMatch,
+    joinByRoomCode,
     leaveMatch,
     acceptDraw,
     declineDraw,
@@ -92,6 +95,25 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
     }
     const copied = await copyText(matchId);
     onNotify(copied ? "Match ID copied" : "Could not copy the match ID");
+  };
+
+  const copyRoomCode = async () => {
+    if (roomCode === null) {
+      return;
+    }
+    const copied = await copyText(roomCode);
+    onNotify(copied ? "Room code copied" : "Could not copy the room code");
+  };
+
+  const joinByCode = async () => {
+    const code = roomCodeInput.trim();
+    if (code.length === 0) {
+      return;
+    }
+    const joined = await joinByRoomCode(code);
+    if (joined) {
+      setRoomCodeInput("");
+    }
   };
 
   const copyInvite = async (spectate: boolean) => {
@@ -268,6 +290,22 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
           </div>
 
           <div className="match-code">
+            <span className="field-label">Room code</span>
+            <div className="match-code-row">
+              <code>{roomCode ?? "—"}</code>
+              <button
+                type="button"
+                className="mini-button"
+                disabled={roomCode === null}
+                onClick={() => void copyRoomCode()}
+              >
+                Copy
+              </button>
+            </div>
+            <p className="online-copy online-copy--compact">
+              Read this code out to the other player so they can join this
+              table.
+            </p>
             <span className="field-label">Match ID</span>
             <div className="match-code-row">
               <code>{matchId}</code>
@@ -479,6 +517,29 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
           )}
 
           <form className="join-form" onSubmit={(event) => void submitJoin(event)}>
+            <label className="field">
+              <span>Join with room code</span>
+              <input
+                type="text"
+                value={roomCodeInput}
+                onChange={(event) => setRoomCodeInput(event.target.value)}
+                placeholder="Paste a room code"
+                spellCheck={false}
+                disabled={matchmaking || matchId !== null}
+              />
+            </label>
+            <button
+              type="button"
+              className="action-button"
+              disabled={
+                roomCodeInput.trim().length === 0 ||
+                matchmaking ||
+                matchId !== null
+              }
+              onClick={() => void joinByCode()}
+            >
+              Join by code
+            </button>
             <label className="field">
               <span>Join with match ID</span>
               <input

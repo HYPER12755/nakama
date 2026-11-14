@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { applyPerformanceMode } from "@moongames/game-sdk";
 import App from "./App";
 import { applyTheme, initialTheme } from "./lib/theme";
+import "@moongames/game-ui/styles.css";
 import "./styles.css";
 
 applyPerformanceMode();

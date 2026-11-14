@@ -2357,3 +2357,308 @@
   
 }
 }
+
+/* The one game card ------------------------------------------------------- */
+
+.mg-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(700px 400px at 0% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%),
+    var(--panel);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(18px);
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.mg-card:hover {
+  transform: translateY(-5px);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.3);
+}
+
+.mg-card__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 18px;
+}
+
+.mg-card__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mg-status,
+.mg-version {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mg-status--available {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success) 28%, transparent);
+}
+
+.mg-status--coming-soon {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 11%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning) 26%, transparent);
+}
+
+.mg-status--hidden {
+  color: var(--muted);
+}
+
+.mg-version {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  border: 1px solid var(--border);
+}
+
+.mg-verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mg-card__players {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mg-card__title {
+  margin-top: 14px;
+  font-size: 21px;
+  letter-spacing: -0.035em;
+}
+
+.mg-card__tagline {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.mg-card__description {
+  margin-top: 9px;
+  color: var(--muted-strong);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.mg-card__capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.mg-capability {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--panel-solid) 70%, transparent);
+  color: var(--muted-strong);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mg-capability .icon {
+  color: var(--accent);
+}
+
+.mg-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.mg-tag {
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.mg-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+.mg-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 35px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--panel-raised);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mg-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.mg-button--play {
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.mg-button--play:hover:not(:disabled) {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.mg-card__soon {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* The artwork behind a card */
+
+.mg-art {
+  position: relative;
+  overflow: hidden;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 28% 18%, color-mix(in srgb, var(--accent) 45%, transparent), transparent 55%),
+    linear-gradient(145deg, color-mix(in srgb, var(--accent) 18%, #101523), #0b0e17);
+}
+
+:root[data-theme="light"] .mg-art {
+  background:
+    radial-gradient(circle at 28% 18%, color-mix(in srgb, var(--accent) 46%, transparent), transparent 55%),
+    linear-gradient(145deg, color-mix(in srgb, var(--accent) 18%, #f5f6fb), #e7eaf3);
+}
+
+.mg-art--card {
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.mg-art--featured {
+  height: 100%;
+  min-height: 370px;
+  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
+}
+
+.mg-art__grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.55;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(145deg, transparent 5%, black 75%);
+}
+
+.mg-art__orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(1px);
+  opacity: 0.8;
+}
+
+.mg-art__orb--one {
+  width: 55%;
+  aspect-ratio: 1;
+  right: -12%;
+  bottom: -32%;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 70%);
+}
+
+.mg-art__orb--two {
+  width: 34%;
+  aspect-ratio: 1;
+  top: -12%;
+  left: -7%;
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.mg-art__cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mg-art__glyph {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+
+.mg-art__glyph .icon {
+  filter: drop-shadow(0 12px 30px rgba(0, 0, 0, 0.45));
+}
+
+.mg-art__edge {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+}
+
+.mg-art__ring {
+  position: absolute;
+  inset: 12%;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border-radius: 50%;
+}

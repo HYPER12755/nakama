@@ -30,7 +30,7 @@ import {
 } from "../lib/social";
 import { EmojiPicker, EmojiTriggerIcon } from "./EmojiPicker";
 import { Icon } from "./Icon";
-import { GameIdMark } from "./gameArt/GameIdMark";
+import { GameIdMark } from "@moongames/game-ui";
 
 export type AccountDrawerTab = "account" | "alerts" | "friends" | "chats";
 

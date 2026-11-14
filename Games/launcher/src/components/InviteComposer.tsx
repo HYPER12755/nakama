@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { GameCatalogEntry } from "@moongames/game-sdk";
 import { Icon } from "./Icon";
-import { GameMark } from "./gameArt/GameMark";
+import { GameMark } from "@moongames/game-ui";
 
 export interface InviteComposerTarget {
   userId: string;

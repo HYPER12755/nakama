@@ -194,6 +194,38 @@ async function main() {
     assert(privateMatch?.ok, "create private match RPC failed");
     console.log(`[ok] private match created: ${privateMatch.matchId}`);
 
+    // The host is given a short code to read out, and that code is what the
+    // other player joins with.
+    assert(
+      typeof privateMatch.roomCode === "string" &&
+        privateMatch.roomCode.length > 0,
+      `the host was not given a room code: ${JSON.stringify(privateMatch)}`,
+    );
+    console.log(`[ok] the host was given the room code: ${privateMatch.roomCode}`);
+
+    const resolved = await bob.client.rpc(
+      bob.session,
+      "moongames_room_code_resolve",
+      { code: privateMatch.roomCode, gameId: "chess" },
+    );
+    assert(
+      resolved.payload?.ok === true &&
+        resolved.payload.matchId === privateMatch.matchId,
+      `the room code did not resolve: ${JSON.stringify(resolved.payload)}`,
+    );
+    console.log("[ok] the room code resolves to the table it was made for");
+
+    const unknown = await bob.client.rpc(
+      bob.session,
+      "moongames_room_code_resolve",
+      { code: "ZZZZZZ", gameId: "chess" },
+    );
+    assert(
+      unknown.payload?.ok === false,
+      `an unknown room code was accepted: ${JSON.stringify(unknown.payload)}`,
+    );
+    console.log("[ok] an unknown room code is refused");
+
     // The opponent joins first; white must stay reserved for the creator.
     await bob.socket.joinMatch(privateMatch.matchId);
     await alice.socket.joinMatch(privateMatch.matchId);

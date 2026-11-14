@@ -294,6 +294,37 @@ export function useLauncherSocial(): LauncherSocialController {
     [],
   );
 
+  /**
+   * Put a changed invite back into the chat it was sent in.
+   *
+   * A chat card keeps the invite it was sent with. When the invite is
+   * accepted, declined, or cancelled, the server answers with the new state
+   * of the invite, and the card in the chat has to be given it, or the card
+   * still offers the action that was just taken.
+   */
+  const updateChatInvite = useCallback((invite: MoonGamesInvite) => {
+    setMessagesByFriend((current) => {
+      const next: Record<string, SocialMessage[]> = {};
+      let changed = false;
+      for (const [friendId, messages] of Object.entries(current)) {
+        let touched = false;
+        const updated = messages.map((message) => {
+          if (
+            message.invite === null ||
+            message.invite.inviteId !== invite.inviteId
+          ) {
+            return message;
+          }
+          touched = true;
+          return { ...message, invite };
+        });
+        next[friendId] = touched ? updated : messages;
+        changed = changed || touched;
+      }
+      return changed ? next : current;
+    });
+  }, []);
+
   const handleChannelMessage = useCallback(
     (message: ChannelMessage) => {
       const channelId = message.channel_id;
@@ -773,6 +804,7 @@ export function useLauncherSocial(): LauncherSocialController {
         const next = await social.acceptInvite({ inviteId: invite.inviteId });
         setInviteNotice(`You accepted ${next.sender.username}'s invite.`);
         setSelectedInvite(resolveInviteView(next, next.recipient.userId));
+        updateChatInvite(next);
         await markInviteNotificationRead(next.inviteId);
         await refreshNotifications();
       } catch (cause) {
@@ -783,7 +815,7 @@ export function useLauncherSocial(): LauncherSocialController {
         setInviteBusy(null);
       }
     },
-    [markInviteNotificationRead, refreshNotifications],
+    [markInviteNotificationRead, refreshNotifications, updateChatInvite],
   );
 
   const declineInvite = useCallback(
@@ -800,6 +832,7 @@ export function useLauncherSocial(): LauncherSocialController {
         const next = await social.declineInvite({ inviteId: invite.inviteId });
         setInviteNotice("Invite declined.");
         setSelectedInvite(resolveInviteView(next, next.recipient.userId));
+        updateChatInvite(next);
         await markInviteNotificationRead(next.inviteId);
         await refreshNotifications();
       } catch (cause) {
@@ -810,7 +843,7 @@ export function useLauncherSocial(): LauncherSocialController {
         setInviteBusy(null);
       }
     },
-    [markInviteNotificationRead, refreshNotifications],
+    [markInviteNotificationRead, refreshNotifications, updateChatInvite],
   );
 
   const cancelInvite = useCallback(
@@ -827,6 +860,9 @@ export function useLauncherSocial(): LauncherSocialController {
         const next = await social.cancelInvite({ inviteId: invite.inviteId });
         setInviteNotice("Invite cancelled.");
         setSelectedInvite(resolveInviteView(next, next.sender.userId));
+        // The card in the chat has to show the cancelled invite, or it
+        // still offers to cancel it.
+        updateChatInvite(next);
         await markInviteNotificationRead(next.inviteId);
         await refreshNotifications();
       } catch (cause) {
@@ -837,7 +873,7 @@ export function useLauncherSocial(): LauncherSocialController {
         setInviteBusy(null);
       }
     },
-    [markInviteNotificationRead, refreshNotifications],
+    [markInviteNotificationRead, refreshNotifications, updateChatInvite],
   );
 
   const clearInviteFeedback = useCallback(() => {

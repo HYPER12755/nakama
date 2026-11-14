@@ -97,7 +97,18 @@ local fake_nk = {
     return string.format("00000000-0000-4000-8000-%012d", uuid_counter)
   end,
   sha256_hash = function(value)
-    return "hash:" .. tostring(value)
+    -- A real hash is a hex string, and every value hashes differently. The
+    -- code builder reads it as hex, so the mock has to look the same.
+    local hex = ""
+    local seed = 0
+    for index = 1, #tostring(value) do
+      seed = (seed * 31 + string.byte(tostring(value), index)) % 4294967296
+    end
+    for _ = 1, 8 do
+      seed = (seed * 1103515245 + 12345) % 4294967296
+      hex = hex .. string.format("%08x", seed)
+    end
+    return hex
   end,
   json_encode = function(value)
     return value
@@ -155,7 +166,13 @@ local fake_nk = {
     for _, write in ipairs(writes) do
       local key = storage_key(write.user_id, write.collection, write.key)
       local current = storage[key]
-      if write.version and (not current or current.version ~= write.version) then
+      -- The star version means "only if it is not there yet", the way
+      -- Nakama writes a row that must not already exist.
+      if write.version == "*" then
+        if current then
+          error("storage version conflict")
+        end
+      elseif write.version and (not current or current.version ~= write.version) then
         error("storage version conflict")
       end
       local version = tostring((tonumber(current and current.version) or 0) + 1)
@@ -664,7 +681,10 @@ tests[#tests + 1] = {
     local room = social.resolve_room_code(code, "carrom")
     assert_equal(room.seats, 4, "the seat count")
     local handler = rpc_handlers["moongames_room_code_resolve"]
-    local result = handler({ user_id = "user-b", username = "B" }, { code = code })
+    local result = handler(
+      { user_id = "user-b", username = "B" },
+      { code = code, gameId = "carrom" }
+    )
     assert_equal(result.seats, 4, "the seat count over the wire")
   end,
 }
@@ -676,11 +696,35 @@ tests[#tests + 1] = {
     local code = social.create_room_code("match-abc", "carrom")
     local handler = rpc_handlers["moongames_room_code_resolve"]
     assert_equal(type(handler), "function", "the RPC is registered")
-    local result = handler({ user_id = "user-b", username = "B" }, { code = code })
+    local result = handler(
+      { user_id = "user-b", username = "B" },
+      { code = code, gameId = "carrom" }
+    )
     assert_equal(result.ok, true, "the code was accepted")
     assert_equal(result.matchId, "match-abc", "the table behind the code")
-    local refused = handler({ user_id = "user-b", username = "B" }, { code = "ZZZZZZ" })
+    local refused = handler(
+      { user_id = "user-b", username = "B" },
+      { code = "ZZZZZZ", gameId = "carrom" }
+    )
     assert_equal(refused.ok, false, "an unknown code is refused")
+  end,
+}
+
+tests[#tests + 1] = {
+  name = "the same code can name a table in another game",
+  fn = function()
+    reset()
+    local carrom_code = social.create_room_code("match-carrom", "carrom")
+    local chess_code = social.create_room_code("match-chess", "chess")
+    -- The code space belongs to one game, so the two never collide.
+    assert_equal(chess_code ~= nil, true, "the chess code was made")
+    local carrom = social.resolve_room_code(carrom_code, "carrom")
+    local chess = social.resolve_room_code(chess_code, "chess")
+    assert_equal(carrom.matchId, "match-carrom", "the carrom table")
+    assert_equal(chess.matchId, "match-chess", "the chess table")
+    -- A carrom code must not open a chess table.
+    local wrong = social.resolve_room_code(carrom_code, "chess")
+    assert_equal(wrong, nil, "the code did not open the other game")
   end,
 }
 
