@@ -68,6 +68,7 @@ import {
   type Theme,
 } from "./lib/theme";
 import { gameStorageKey } from "./lib/storage";
+import { playbackTime } from "./lib/playback";
 
 type Mode = "local" | "ai" | "online";
 
@@ -78,7 +79,7 @@ const LOCAL_TABLE_SIZES = TABLE_SIZES;
 const TOAST_MS = 5200;
 
 /** How long the computer thinks before it shoots. */
-const AI_THINK_MS = 260;
+const AI_THINK_MS = 900;
 
 /** How far one press of a stepper moves the striker along the baseline. */
 const STRIKER_STEP = 0.025;
@@ -330,8 +331,8 @@ export default function App({ bridge }: AppProps) {
 
   /**
    * The name a player is known by. Online that is the account name, the
-   * computer opponent is called Computer, and a table on one device names
-   * the seats.
+   * computer opponent is called Computer, and a table played on one device
+   * numbers its seats.
    */
   const accountName =
     online.account !== null && online.account.kind !== "guest"
@@ -346,7 +347,8 @@ export default function App({ bridge }: AppProps) {
       if (isAiPlayer(mode, player)) {
         return "Computer";
       }
-      if (player === "white") {
+      if (mode === "ai") {
+        // The player has the table to themselves against the computer.
         return accountName ?? "You";
       }
       const index = game.players.indexOf(player);
@@ -448,21 +450,26 @@ export default function App({ bridge }: AppProps) {
       for (const event of result.pocketed) {
         const timer = window.setTimeout(
           () => playPocket(event.kind === "queen"),
-          Math.max(0, event.time * 1000),
+          // The sound is heard when the piece reaches the pocket, which is
+          // when the shot is played back to that moment.
+          playbackTime(event.time, result.duration) * 1000,
         );
         soundTimers.current.push(timer);
       }
       if (result.outcome.foul) {
         const timer = window.setTimeout(
           playFoul,
-          Math.max(80, result.duration * 1000),
+          Math.max(80, playbackTime(result.duration, result.duration) * 1000),
         );
         soundTimers.current.push(timer);
       }
       if (result.outcome.winner !== null) {
         const timer = window.setTimeout(
           playWin,
-          Math.max(120, result.duration * 1000 + 140),
+          Math.max(
+            120,
+            playbackTime(result.duration, result.duration) * 1000 + 140,
+          ),
         );
         soundTimers.current.push(timer);
       }
@@ -589,7 +596,9 @@ export default function App({ bridge }: AppProps) {
   const handleNewGame = useCallback(() => {
     // A challenge survives a new board: it starts again from the opening.
     resetBoard(
-      challengeId !== null ? "Challenge restarted." : "Fresh board. Ivory to shoot.",
+      challengeId !== null
+        ? "Challenge restarted."
+        : `Fresh board. ${PLAYER_LABEL.white} to shoot.`,
       { solo: challengeId !== null },
     );
   }, [challengeId, resetBoard]);
@@ -622,7 +631,7 @@ export default function App({ bridge }: AppProps) {
       }
       resetBoard(
         next === "ai"
-          ? "You are Ivory. Computer takes Onyx."
+          ? `You are ${PLAYER_LABEL.white}. Computer takes ${PLAYER_LABEL.black}.`
           : next === "online"
             ? "Open a table to play online."
             : "Pass-and-play board ready.",
@@ -1192,7 +1201,7 @@ export default function App({ bridge }: AppProps) {
                 return;
               }
               setLocalTable(size);
-              resetBoard(`${size} player table ready. Ivory to shoot.`, {
+              resetBoard(`${size} player table ready. ${PLAYER_LABEL.white} to shoot.`, {
                 tableSize: size,
               });
             }}

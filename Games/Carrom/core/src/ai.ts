@@ -360,6 +360,10 @@ function buildAiPlan(
 
 function defaultYield(): Promise<void> {
   return new Promise((resolve) => {
+    if (typeof requestIdleCallback === "function") {
+      requestIdleCallback(() => resolve(), { timeout: 50 });
+      return;
+    }
     if (typeof setTimeout === "function") {
       setTimeout(resolve, 0);
       return;
@@ -455,14 +459,14 @@ export async function chooseAiShotAsync(
   const plan = buildAiPlan(state, difficulty);
   const ranked: { shot: CarromShotInput; score: number }[] = [];
   const batch = plan.ordered.slice(0, plan.limit);
-  for (let index = 0; index < batch.length; index += 3) {
-    for (const candidate of batch.slice(index, index + 3)) {
-      const evaluation = shotScore(state, candidate.shot);
-      if (evaluation === null) {
-        continue;
-      }
-      ranked.push({ shot: candidate.shot, score: evaluation.score });
+  // One candidate at a time, so the table keeps painting while the computer
+  // thinks and the page never freezes.
+  for (const candidate of batch) {
+    const evaluation = shotScore(state, candidate.shot);
+    if (evaluation === null) {
+      continue;
     }
+    ranked.push({ shot: candidate.shot, score: evaluation.score });
     await yieldControl();
   }
   ranked.sort((left, right) => right.score - left.score);

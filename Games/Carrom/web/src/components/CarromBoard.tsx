@@ -31,6 +31,7 @@ import {
   PLAY_SIZE,
   screenToBoard,
 } from "../lib/view";
+import { shotPlaybackSeconds } from "../lib/playback";
 import type { Theme } from "../lib/theme";
 
 const ACCENT = "#48c9b0";
@@ -769,75 +770,80 @@ function drawAim(
   const strikerRadius = scaleOf(CARROM_BOARD.strikerRadius);
   const hitX = toCanvasX(hit.point.x);
   const hitY = toCanvasY(hit.point.y);
+  const pointerX = toCanvasX(aim.pointer.x);
+  const pointerY = toCanvasY(aim.pointer.y);
 
   ctx.save();
   ctx.lineCap = "round";
+  ctx.lineJoin = "round";
 
-  // Pull band: the line the finger is pulling along. It starts where the
-  // finger went down and ends under the finger, so the shot leaves along
-  // exactly this line.
+  /**
+   * One straight line, and only one.
+   *
+   * - A direct flick draws the line from the striker through the first
+   *   contact and on to the finger, so the finger is always on the line the
+   *   shot follows.
+   * - A pull draws the line from the finger through the point the finger
+   *   went down at, because the shot leaves in the exact opposite
+   *   direction: the far end of that line is where the striker goes.
+   */
+  let startX = originX;
+  let startY = originY;
+  let endX = pointerX;
+  let endY = pointerY;
   if (mode === "pull" && aim.anchor !== null) {
-    ctx.beginPath();
-    ctx.moveTo(toCanvasX(aim.anchor.x), toCanvasY(aim.anchor.y));
-    ctx.lineTo(toCanvasX(aim.pointer.x), toCanvasY(aim.pointer.y));
-    ctx.strokeStyle = "rgba(255, 236, 196, 0.34)";
-    ctx.lineWidth = 3;
-    ctx.stroke();
+    startX = pointerX;
+    startY = pointerY;
+    endX = toCanvasX(aim.anchor.x);
+    endY = toCanvasY(aim.anchor.y);
+  } else {
+    endX = pointerX;
+    endY = pointerY;
   }
 
-  // Direction wash.
+  // The soft wash under the line.
   ctx.beginPath();
-  ctx.moveTo(originX, originY);
-  ctx.lineTo(hitX, hitY);
+  ctx.moveTo(startX, startY);
+  ctx.lineTo(endX, endY);
   ctx.strokeStyle = "rgba(72, 201, 176, 0.16)";
   ctx.lineWidth = 13;
   ctx.stroke();
 
-  // In a direct flick the finger is further along the same line than the
-  // first contact, so the rest of the line is drawn faintly. The finger is
-  // then always on the line the shot follows.
-  if (mode === "direct") {
-    ctx.beginPath();
-    ctx.moveTo(hitX, hitY);
-    ctx.lineTo(toCanvasX(aim.pointer.x), toCanvasY(aim.pointer.y));
-    ctx.strokeStyle = "rgba(108, 238, 212, 0.28)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-
-  // Dashed guide along the launch direction.
+  // The line itself.
   ctx.setLineDash([10, 11]);
   ctx.beginPath();
-  ctx.moveTo(originX, originY);
-  ctx.lineTo(hitX, hitY);
+  ctx.moveTo(startX, startY);
+  ctx.lineTo(endX, endY);
   ctx.strokeStyle = "rgba(108, 238, 212, 0.95)";
   ctx.lineWidth = 2.8;
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Arrow head at the end of the guide.
-  const dx = hitX - originX;
-  const dy = hitY - originY;
+  // Arrow head at the end the shot travels to.
+  const dx = endX - startX;
+  const dy = endY - startY;
   const length = Math.hypot(dx, dy) || 1;
   const ux = dx / length;
   const uy = dy / length;
   const head = 15;
   ctx.beginPath();
-  ctx.moveTo(hitX, hitY);
-  ctx.lineTo(hitX - ux * head - uy * head * 0.5, hitY - uy * head + ux * head * 0.5);
-  ctx.lineTo(hitX - ux * head + uy * head * 0.5, hitY - uy * head - ux * head * 0.5);
+  ctx.moveTo(endX, endY);
+  ctx.lineTo(endX - ux * head - uy * head * 0.5, endY - uy * head + ux * head * 0.5);
+  ctx.lineTo(endX - ux * head + uy * head * 0.5, endY - uy * head - ux * head * 0.5);
   ctx.closePath();
   ctx.fillStyle = "rgba(108, 238, 212, 0.92)";
   ctx.fill();
 
-  // First contact ghost.
-  ctx.beginPath();
-  ctx.arc(hitX, hitY, strikerRadius, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(72, 201, 176, 0.1)";
-  ctx.fill();
-  ctx.strokeStyle = "rgba(108, 238, 212, 0.78)";
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  // First contact ghost, where the striker meets the first piece.
+  if (mode === "direct") {
+    ctx.beginPath();
+    ctx.arc(hitX, hitY, strikerRadius, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(72, 201, 176, 0.1)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(108, 238, 212, 0.78)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
 
   // Power ring around the striker.
   const ringRadius = strikerRadius * 2.1;
@@ -869,6 +875,44 @@ function drawAim(
   ctx.restore();
 }
 
+/**
+ * The table itself: the frame, the wood, and the markings. It is always
+ * painted the same way, whether it goes straight onto the canvas or into the
+ * cached layer.
+ */
+function paintTable(
+  ctx: CanvasRenderingContext2D,
+  turn: CarromPlayer,
+  lite: boolean,
+): void {
+  drawFrame(ctx, lite);
+  drawSurface(ctx, lite);
+  drawMarkings(ctx, turn);
+}
+
+/**
+ * The frame, the wood, and the markings never change during a shot, so they
+ * are painted once into an offscreen canvas and then copied onto the table.
+ * Painting them again for every animation frame is what made the table lag.
+ */
+function renderBoardLayer(
+  layer: HTMLCanvasElement,
+  turn: CarromPlayer,
+  lite: boolean,
+  dpr: number,
+): void {
+  const ctx = layer.getContext("2d");
+  if (ctx === null) {
+    return;
+  }
+  // The layer is painted in the same logical units as the table, so it has
+  // to carry the same pixel ratio as the canvas it is copied onto.
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, layer.width, layer.height);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  paintTable(ctx, turn, lite);
+}
+
 export function CarromBoard({
   state,
   strikerPosition,
@@ -897,6 +941,9 @@ export function CarromBoard({
     aimState: AimState | null;
     animating: boolean;
   } | null>(null);
+  /** The painted table, copied onto the canvas for every frame. */
+  const boardLayerRef = useRef<HTMLCanvasElement | null>(null);
+  const boardLayerKeyRef = useRef<string>("");
   // The shot callback is read through a ref so that a new callback never
   // restarts a shot that is already running.
   const onCompleteRef = useRef(onAnimationComplete);
@@ -967,9 +1014,14 @@ export function CarromBoard({
       ctx.rotate(rotationRef.current);
       ctx.translate(-centre, -centre);
 
-      drawFrame(ctx, lite);
-      drawSurface(ctx, lite);
-      drawMarkings(ctx, display.turn);
+      // The wood is copied from the cached layer, so a shot does not repaint
+      // the grain of the table sixty times a second.
+      const layer = boardLayerRef.current;
+      if (layer !== null && layer.width === pixelSize) {
+        ctx.drawImage(layer, 0, 0, LOGICAL_SIZE, LOGICAL_SIZE);
+      } else {
+        paintTable(ctx, display.turn, lite);
+      }
 
       const radius = scaleOf(CARROM_BOARD.discRadius);
       for (const disc of display.discs) {
@@ -1081,6 +1133,41 @@ export function CarromBoard({
   }, []);
 
   /**
+   * The table is painted once and kept, until the turn changes or the
+   * device pixel ratio does.
+   */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas === null) {
+      return;
+    }
+    const pixelSize = Math.round(LOGICAL_SIZE * dpr);
+    const key = `${lite}:${dpr}:${state.turn}`;
+    if (boardLayerKeyRef.current === key && boardLayerRef.current !== null) {
+      return;
+    }
+    let layer = boardLayerRef.current;
+    if (layer === null) {
+      layer = document.createElement("canvas");
+      boardLayerRef.current = layer;
+    }
+    layer.width = pixelSize;
+    layer.height = pixelSize;
+    const ctx = layer.getContext("2d");
+    if (ctx === null) {
+      return;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    renderBoardLayer(layer, state.turn, lite, dpr);
+    boardLayerKeyRef.current = key;
+    // The table on the screen is now one layer behind.
+    const scene = sceneRef.current;
+    if (scene !== null) {
+      drawScene(scene.display, scene.aimState, scene.animating);
+    }
+  }, [dpr, lite, state.turn, drawScene]);
+
+  /**
    * A canvas that changes size is cleared by the browser, and the table would
    * go black until the next shot. The board is painted again whenever the
    * canvas is resized, which happens when the layout changes, for example
@@ -1141,11 +1228,16 @@ export function CarromBoard({
     let frameId = 0;
     let cancelled = false;
     const started = performance.now();
+    // The shot is played slower than it happens, so the striker can be seen.
+    const total = shotPlaybackSeconds(animation.duration);
     const tick = (now: number) => {
       if (cancelled) {
         return;
       }
-      const elapsed = Math.min((now - started) / 1000, animation.duration);
+      const elapsed = Math.min(
+        ((now - started) / 1000) * (animation.duration / total),
+        animation.duration,
+      );
       const frame = sampleFrame(animation.frames, elapsed);
       if (frame !== null) {
         drawScene(

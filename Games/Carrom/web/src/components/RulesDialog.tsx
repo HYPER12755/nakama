@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { PLAYER_LABEL } from "@moongames/carrom-core";
 import { Icon } from "./Icon";
 
 interface RulesDialogProps {
@@ -65,8 +66,10 @@ export function RulesDialog({ open, onClose }: RulesDialogProps) {
             <div>
               <h3>Pocket your colour</h3>
               <p>
-                Ivory pockets ivory. Onyx pockets onyx. A pocket of your own
-                colour keeps you at the table for another shot.
+                {PLAYER_LABEL.white} pockets {PLAYER_LABEL.white.toLowerCase()}.{" "}
+                {PLAYER_LABEL.black} pockets {PLAYER_LABEL.black.toLowerCase()}. A
+                pocket of your own colour keeps you at the table for another
+                shot.
               </p>
             </div>
           </article>
