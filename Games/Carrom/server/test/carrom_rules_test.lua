@@ -241,6 +241,61 @@ test("declares a winner once the queen is covered and the colour is clear", func
   assert_equal(outcome.winner, "white", "outcome winner")
 end)
 
+test("a game type keeps its rules", function()
+  local state = rules.create_initial_state({ "white", "black" }, {
+    variant = "freestyle",
+  })
+  assert_equal(state.rules.id, "freestyle", "variant id")
+  assert_equal(state.rules.coverQueen, false, "cover queen")
+
+  local queen_id = nil
+  for _, disc in ipairs(state.discs) do
+    if disc.kind == "queen" then
+      queen_id = disc.id
+    end
+  end
+  local next_state = rules.resolve(
+    state,
+    fabricate(state, { queen_id }),
+    { position = 0.5, angle = -math.pi / 2, power = 0.8 }
+  )
+  assert_equal(next_state.queen.status, "covered", "queen status")
+  assert_equal(next_state.queen.owner, "white", "queen owner")
+  assert_equal(rules.points_for(next_state, "white"), 3, "points")
+end)
+
+test("a practice table does not punish a foul", function()
+  local state = rules.create_initial_state({ "white", "black" }, {
+    variant = "practice",
+  })
+  local black_id = nil
+  for _, disc in ipairs(state.discs) do
+    if disc.kind == "black" then
+      black_id = disc.id
+      break
+    end
+  end
+  local next_state, outcome = rules.resolve(
+    state,
+    fabricate(state, { black_id }, true),
+    { position = 0.5, angle = -math.pi / 2, power = 0.8 }
+  )
+  assert_equal(outcome.foul, false, "foul")
+  assert_equal(next_state.scores.black, 1, "score")
+end)
+
+test("a solo table keeps the turn", function()
+  local state = rules.create_initial_state({ "white", "black" }, {
+    solo = true,
+  })
+  local next_state = rules.resolve(
+    state,
+    fabricate(state, {}),
+    { position = 0.5, angle = -math.pi / 2, power = 0.8 }
+  )
+  assert_equal(next_state.turn, "white", "turn")
+end)
+
 if failures > 0 then
   print(failures .. " carrom rule test(s) failed")
   os.exit(1)

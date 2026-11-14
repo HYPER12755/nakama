@@ -6,12 +6,14 @@ import {
   nearestValidStrikerPosition,
   playersInTurnOrder,
   strikerPoint,
+  variantRules,
 } from "./board";
 import type {
   CarromDisc,
   CarromDiscKind,
   CarromPhysicsResult,
   CarromPlayer,
+  CarromRuleSet,
   CarromShotInput,
   CarromShotResult,
   CarromState,
@@ -93,6 +95,7 @@ export function resolveShotRules(
 ): { state: CarromState; outcome: ShotOutcome } {
   const player = state.turn;
   const seated = state.players.length > 0 ? state.players : [player];
+  const rules = state.rules ?? variantRules("classic");
   const ownPocketed = physics.pocketed.filter(
     (event) => event.kind === player,
   ).length;
@@ -106,17 +109,22 @@ export function resolveShotRules(
     (event) => event.kind === "queen",
   );
   const strikerPocketed = physics.strikerPocketed;
-  const foul = strikerPocketed || opponentPocketed > 0;
+  // A table without fouls never punishes a shot, it only costs the turn.
+  const foul = rules.fouls && (strikerPocketed || opponentPocketed > 0);
 
   const next: CarromState = {
     ...state,
     discs: physics.discs.map((disc) => ({ ...disc })),
     players: [...seated],
+    rules,
     queen: { ...state.queen },
     scores: { ...state.scores },
     status: "aiming",
     winner: null,
     shotNumber: state.shotNumber + 1,
+    // The clock belongs to whoever holds the table, so the deadline is
+    // cleared here and set again by the table that owns the turn.
+    turnDeadline: null,
   };
 
   let queenCoveredThisShot = false;
@@ -124,29 +132,36 @@ export function resolveShotRules(
   let returnedDisc: CarromPlayer | null = null;
   let queenBlockedFinish = false;
 
-  // A queen pocketed on a previous shot is waiting to be covered.
-  if (state.queen.status === "pending") {
-    if (ownPocketed > 0 && !foul) {
-      next.queen = { status: "covered", owner: player };
-      queenCoveredThisShot = true;
-    } else {
-      returnQueenToCentre(next);
-      queenReturned = true;
+  if (rules.coverQueen) {
+    // A queen pocketed on a previous shot is waiting to be covered.
+    if (state.queen.status === "pending") {
+      if (ownPocketed > 0 && !foul) {
+        next.queen = { status: "covered", owner: player };
+        queenCoveredThisShot = true;
+      } else {
+        returnQueenToCentre(next);
+        queenReturned = true;
+      }
+    } else if (state.queen.status === "board" && queenPocketedNow) {
+      if (foul) {
+        returnQueenToCentre(next);
+        queenReturned = true;
+      } else if (ownPocketed > 0) {
+        next.queen = { status: "covered", owner: player };
+        queenCoveredThisShot = true;
+      } else {
+        next.queen = { status: "pending", owner: player };
+      }
     }
-  } else if (state.queen.status === "board" && queenPocketedNow) {
-    if (foul) {
-      returnQueenToCentre(next);
-      queenReturned = true;
-    } else if (ownPocketed > 0) {
-      next.queen = { status: "covered", owner: player };
-      queenCoveredThisShot = true;
-    } else {
-      next.queen = { status: "pending", owner: player };
-    }
+  } else if (state.queen.status === "board" && queenPocketedNow && !foul) {
+    // Without the covering rule the queen is an ordinary piece: it belongs to
+    // whoever pocketed it and it is worth its points straight away.
+    next.queen = { status: "covered", owner: player };
+    queenCoveredThisShot = true;
   }
 
   // A striker pocket is a foul: return one of the shooter's pocketed men.
-  if (strikerPocketed) {
+  if (strikerPocketed && rules.fouls) {
     const penalty = lastPocketedDisc(next, physics, player);
     if (penalty !== undefined) {
       returnDiscToBoard(next, penalty);
@@ -160,7 +175,7 @@ export function resolveShotRules(
     if (next.scores[candidate] < CARROM_BOARD.piecesPerPlayer) {
       return false;
     }
-    if (next.queen.status === "covered") {
+    if (!rules.coverQueen || next.queen.status === "covered") {
       next.status = "finished";
       next.winner = candidate;
       return true;
@@ -195,7 +210,9 @@ export function resolveShotRules(
     !queenBlockedFinish &&
     (ownPocketed > 0 || (queenPocketedNow && queenPendingNow));
 
-  next.turn = turnContinued
+  // A solo table belongs to one player, so the turn never leaves them.
+  const keepsTurn = turnContinued || state.solo === true;
+  next.turn = keepsTurn
     ? player
     : nextPlayerInTurnOrder(seated, player);
   const requestedPosition = turnContinued ? shot.position : 0.5;
@@ -221,7 +238,9 @@ export function resolveShotRules(
       );
     }
     if (queenCoveredThisShot) {
-      parts.push("Queen covered.");
+      parts.push(
+        rules.coverQueen ? "Queen covered." : "Queen taken.",
+      );
     } else if (next.queen.status === "pending") {
       parts.push("Queen pocketed — cover it with one of your pieces.");
     }
@@ -238,7 +257,7 @@ export function resolveShotRules(
         }.`,
       );
     }
-    if (turnContinued) {
+    if (keepsTurn) {
       parts.push("Shoot again.");
     } else {
       parts.push("Turn passes.");
@@ -284,6 +303,62 @@ export function resolveShot(
     state: resolved.state,
     outcome: resolved.outcome,
   };
+}
+
+/** The rules of a table, with a safe fallback for an older state. */
+export function rulesOf(state: CarromState): CarromRuleSet {
+  return state.rules ?? variantRules("classic");
+}
+
+/**
+ * Hand the turn to the next player without a shot. The shot clock uses this
+ * when a player runs out of time.
+ */
+export function passTurn(state: CarromState): CarromState {
+  const seated = state.players.length > 0 ? state.players : [state.turn];
+  const next = nextPlayerInTurnOrder(seated, state.turn);
+  const withNext = { ...state, turn: next };
+  const position = nearestValidStrikerPosition(withNext, 0.5);
+  const point = strikerPoint(next, position);
+  return {
+    ...state,
+    turn: next,
+    striker: { x: point.x, y: point.y, pocketed: false },
+    turnDeadline: null,
+  };
+}
+
+/**
+ * The pieces of a colour still on the board. A player wins by clearing them
+ * all, so this is the number that matters at the table.
+ */
+export function piecesLeft(
+  state: CarromState,
+  player: CarromPlayer,
+): number {
+  return Math.max(
+    0,
+    CARROM_BOARD.piecesPerPlayer - (state.scores[player] ?? 0),
+  );
+}
+
+/**
+ * The points of a colour, counted the way the carrom apps count them: a man
+ * is worth one point and the queen is worth three.
+ */
+export function pointsFor(state: CarromState, player: CarromPlayer): number {
+  const rules = rulesOf(state);
+  const men = state.scores[player] ?? 0;
+  const queen =
+    state.queen.status === "covered" && state.queen.owner === player
+      ? rules.queenPoints
+      : 0;
+  return men * rules.manPoints + queen;
+}
+
+/** The points a player can reach: every man plus the queen. */
+export function maximumPoints(rules: CarromRuleSet): number {
+  return CARROM_BOARD.piecesPerPlayer * rules.manPoints + rules.queenPoints;
 }
 
 export { ALL_PLAYERS };

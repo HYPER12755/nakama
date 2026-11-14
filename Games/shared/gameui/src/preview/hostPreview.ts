@@ -31,7 +31,7 @@ export class BrowserPreviewHost implements HostTransport {
   private readonly logs: PreviewLogEntry[] = [];
   private nextLogId = 1;
   private ready = false;
-  private gameId = "chess";
+  private gameId: string;
   private gameVersion = "unknown";
   private theme: GameTheme;
   private session: GameSession | undefined;
@@ -40,10 +40,13 @@ export class BrowserPreviewHost implements HostTransport {
     locale?: string;
     theme?: GameTheme;
     session?: GameSession;
+    /** The game the host is showing, until the game says so itself. */
+    gameId?: string;
   } = {}) {
     this.locale = options.locale ?? "en";
     this.theme = options.theme ?? { mode: "dark" };
     this.session = options.session;
+    this.gameId = options.gameId ?? "unknown";
   }
 
   get currentGameId(): string {

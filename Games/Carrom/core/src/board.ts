@@ -3,7 +3,9 @@ import type {
   CarromDiscKind,
   CarromPlayer,
   CarromPoint,
+  CarromRuleSet,
   CarromState,
+  GameVariant,
 } from "./types";
 
 /**
@@ -25,11 +27,11 @@ export const CARROM_BOARD = {
   /** The hole in the frame: 4.45 cm across. */
   pocketRadius: 0.0301,
   /**
-   * A piece drops when its centre passes the edge of the hole. The capture
-   * radius is the hole minus half a piece, so a piece has to be over the
-   * hole and not merely resting on its rim.
+   * A piece drops when its centre passes over the hole, so the capture radius
+   * is the hole itself. The hole is drawn at this same size, so what a player
+   * aims at is what the table does.
    */
-  captureRadius: 0.0193,
+  captureRadius: 0.0301,
   pocketCenters: [
     { x: 0.036, y: 0.036 },
     { x: 0.964, y: 0.036 },
@@ -151,6 +153,155 @@ export function tablePlayers(count: number): CarromPlayer[] {
  */
 export const AIM_MAX_DISTANCE = 0.38;
 
+/**
+ * The game types. Every title picks one of these instead of writing its own
+ * rules, so "classic" means the same thing everywhere.
+ */
+export const CARROM_VARIANTS: Record<GameVariant, CarromRuleSet> = {
+  classic: {
+    id: "classic",
+    label: "Classic",
+    fouls: true,
+    coverQueen: true,
+    queenPoints: 3,
+    manPoints: 1,
+  },
+  freestyle: {
+    id: "freestyle",
+    label: "Freestyle",
+    fouls: true,
+    coverQueen: false,
+    queenPoints: 3,
+    manPoints: 1,
+  },
+  practice: {
+    id: "practice",
+    label: "Practice",
+    fouls: false,
+    coverQueen: false,
+    queenPoints: 0,
+    manPoints: 0,
+  },
+};
+
+export function variantRules(variant: GameVariant): CarromRuleSet {
+  return CARROM_VARIANTS[variant] ?? CARROM_VARIANTS.classic;
+}
+
+/** The edge of the table a player sits at. */
+export type CarromSide = "bottom" | "top" | "left" | "right";
+
+/** The edge a player's baseline is on. */
+export function sideOf(player: CarromPlayer): CarromSide {
+  switch (player) {
+    case "white":
+      return "bottom";
+    case "yellow":
+      return "left";
+    case "black":
+      return "top";
+    case "green":
+      return "right";
+  }
+}
+
+/**
+ * The rotation that turns the table so a player sits at the bottom of the
+ * screen, the way they sit at a real table. The board is a square, so the
+ * rotation is always a quarter turn.
+ */
+export function viewRotation(player: CarromPlayer): number {
+  switch (player) {
+    case "white":
+      return 0;
+    case "black":
+      return Math.PI;
+    case "yellow":
+      return -Math.PI / 2;
+    case "green":
+      return Math.PI / 2;
+  }
+}
+
+const SIDE_VECTOR: Record<CarromSide, { x: number; y: number }> = {
+  bottom: { x: 0, y: 1 },
+  top: { x: 0, y: -1 },
+  left: { x: -1, y: 0 },
+  right: { x: 1, y: 0 },
+};
+
+/**
+ * The edge a player is seen at from another player's side of the table. A
+ * player at the top of the table sees the player on the left of the table on
+ * their own right.
+ */
+export function sideForViewer(
+  player: CarromPlayer,
+  viewer: CarromPlayer,
+): CarromSide {
+  const theta = viewRotation(viewer);
+  const vector = SIDE_VECTOR[sideOf(player)];
+  const cos = Math.cos(theta);
+  const sin = Math.sin(theta);
+  const x = vector.x * cos - vector.y * sin;
+  const y = vector.x * sin + vector.y * cos;
+  if (Math.abs(x) > Math.abs(y)) {
+    return x > 0 ? "right" : "left";
+  }
+  return y > 0 ? "bottom" : "top";
+}
+
+/**
+ * The strikers a player can bring to the table. A striker is a real choice in
+ * carrom: a heavier striker sends the men further, a lighter one is easier to
+ * place. The power is a multiplier on the launch speed.
+ */
+export interface CarromStrikerSkin {
+  id: string;
+  label: string;
+  /** Multiplier on the striker's launch speed. */
+  power: number;
+  /** One line the picker shows under the name. */
+  note: string;
+}
+
+export const CARROM_STRIKERS: readonly CarromStrikerSkin[] = [
+  {
+    id: "classic",
+    label: "Classic",
+    power: 1,
+    note: "The standard 15 g striker.",
+  },
+  {
+    id: "heavy",
+    label: "Heavy",
+    power: 1.14,
+    note: "Hits harder and travels further.",
+  },
+  {
+    id: "light",
+    label: "Light",
+    power: 0.86,
+    note: "A softer touch, easier to control.",
+  },
+  {
+    id: "swift",
+    label: "Swift",
+    power: 1.05,
+    note: "Quick off the line, less weight behind it.",
+  },
+];
+
+export function strikerSkin(id: string | undefined): CarromStrikerSkin {
+  return CARROM_STRIKERS.find((skin) => skin.id === id) ?? CARROM_STRIKERS[0]!;
+}
+
+/** The shot clocks a table can use. Zero means the table has no clock. */
+export const CARROM_CLOCKS: readonly number[] = [0, 15, 30, 60];
+
+/** How long a turn takes when the table has no clock. */
+export const DEFAULT_TURN_SECONDS = 0;
+
 /** The colour used for each player's pieces in the interface. */
 export const PLAYER_COLOR: Record<CarromPlayer, string> = {
   white: "#f3ead4",
@@ -256,6 +407,21 @@ export function medallionRadii(playerCount: number): {
   return { inner, outer };
 }
 
+export interface CarromStateOptions {
+  /** The game type. Defaults to the ICF game. */
+  variant?: GameVariant;
+  /** The rules to use instead of the variant's. */
+  rules?: CarromRuleSet;
+  /** The striker skin each colour brought. */
+  strikers?: Partial<Record<CarromPlayer, string>>;
+  /** Seconds allowed for one shot. Zero means no clock. */
+  turnSeconds?: number;
+  /** Epoch milliseconds when the first shot clock runs out. */
+  turnDeadline?: number | null;
+  /** A solo table: the player keeps the turn for every shot. */
+  solo?: boolean;
+}
+
 /**
  * The ICF opening layout: the queen on the centre spot, three men per player
  * touching the centre circle, and six men per player touching that ring. The
@@ -263,9 +429,11 @@ export function medallionRadii(playerCount: number): {
  */
 export function createInitialState(
   players: readonly CarromPlayer[] = ["white", "black"],
+  options: CarromStateOptions = {},
 ): CarromState {
   const seated = playersInTurnOrder(players);
   const count = Math.max(2, seated.length);
+  const rules = options.rules ?? variantRules(options.variant ?? "classic");
   const discs: CarromDisc[] = [
     { id: "queen", kind: "queen", x: 0.5, y: 0.5, pocketed: false },
   ];
@@ -321,6 +489,16 @@ export function createInitialState(
     },
     turn: first,
     players: seated,
+    rules,
+    strikers: {
+      white: options.strikers?.white ?? CARROM_STRIKERS[0]!.id,
+      black: options.strikers?.black ?? CARROM_STRIKERS[0]!.id,
+      green: options.strikers?.green ?? CARROM_STRIKERS[0]!.id,
+      yellow: options.strikers?.yellow ?? CARROM_STRIKERS[0]!.id,
+    },
+    turnSeconds: options.turnSeconds ?? DEFAULT_TURN_SECONDS,
+    turnDeadline: options.turnDeadline ?? null,
+    solo: options.solo ?? false,
     queen: { status: "board" },
     scores: { white: 0, black: 0, green: 0, yellow: 0 },
     status: "aiming",

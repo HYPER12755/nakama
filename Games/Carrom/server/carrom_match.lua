@@ -96,7 +96,12 @@ end
 -- follow the table state.
 local function refresh_label(state, dispatcher)
   dispatcher.match_label_update(
-    protocol.label(state.mode, state.seats, label_status(state))
+    protocol.label(
+      state.mode,
+      state.seats,
+      label_status(state),
+      state.variant
+    )
   )
 end
 
@@ -209,7 +214,11 @@ local function maybe_start(context, dispatcher, state, now)
     return false
   end
   state.started_at = now
-  state.game = rules.create_initial_state(table_colours(state.seats))
+  state.game = rules.create_initial_state(table_colours(state.seats), {
+    variant = state.variant,
+    turnSeconds = state.turn_seconds,
+  })
+  state.game.turnDeadline = rules.deadline(state.game, now)
   broadcast(dispatcher, OP.MATCH_STARTED, {
     seatsCount = state.seats,
   })
@@ -251,6 +260,8 @@ local function match_init(context, params)
     mode = mode,
     seats = seats,
     rated = params.rated == true,
+    variant = protocol.clamp_variant(params.variant),
+    turn_seconds = protocol.clamp_turn_seconds(params.turnSeconds or params.turn_seconds),
     expected_by_user = expected_by_user,
     expected_count = expected_count,
     reserved_colours = reserved_colours,
@@ -269,7 +280,7 @@ local function match_init(context, params)
     result = nil,
   }
 
-  return state, TICK_RATE, protocol.label(mode, seats, "open")
+  return state, TICK_RATE, protocol.label(mode, seats, "open", state.variant)
 end
 
 local function match_join_attempt(context, dispatcher, tick, state, presence, metadata)
@@ -470,10 +481,23 @@ local function handle_shot(context, dispatcher, state, message, payload, now)
     return
   end
 
+  -- The striker the player brought to the table is part of the shot. The
+  -- server checks it against the list it knows, so a client cannot invent a
+  -- striker that is not on the table.
+  local striker = protocol.clamp_striker(payload.striker)
+  if payload.striker ~= nil and striker == nil then
+    send_error(dispatcher, message.sender, "That striker is not on the table")
+    return
+  end
+  if striker ~= nil then
+    state.game.strikers[player.colour] = striker
+  end
+
   local shot = { position = position, angle = angle, power = power }
   local result = physics.simulate(state.game, shot)
   local next_game, outcome = rules.resolve(state.game, result, shot)
   state.game = next_game
+  state.game.turnDeadline = rules.deadline(state.game, now)
   state.last_activity = now
 
   -- The shot list is the replay: it is stored with the finished game so the
@@ -500,12 +524,16 @@ local function handle_shot(context, dispatcher, state, message, payload, now)
   }
 
   -- The shot is shared so every client can replay the same deterministic
-  -- animation that the server just resolved.
+  -- animation that the server just resolved. The striker and the colour
+  -- travel with it, because the striker changes how hard the shot leaves
+  -- the baseline.
   state.last_shot = {
     user_id = message.sender.user_id,
+    colour = player.colour,
     position = position,
     angle = angle,
     power = power,
+    striker = state.game.strikers[player.colour],
   }
   state.shot_serial = (state.shot_serial or 0) + 1
 
@@ -626,6 +654,24 @@ local function match_loop(context, dispatcher, tick, state, messages)
   end
 
   check_disconnects(context, dispatcher, state, now)
+
+  -- The shot clock. When a player runs out of time the turn is handed on
+  -- without a shot, and the table carries on.
+  if state.game and state.game.status == "aiming" then
+    local deadline = state.game.turnDeadline
+    if deadline and now >= deadline then
+      local timed_out = state.game.turn
+      state.game = rules.pass_turn(state.game)
+      state.game.turnDeadline = rules.deadline(state.game, now)
+      broadcast(dispatcher, OP.SHOT, {
+        timedOut = true,
+        colour = timed_out,
+        message = physics.PLAYER_LABEL[timed_out]
+          .. " ran out of time. The turn passes.",
+      })
+      broadcast_state(context, dispatcher, state)
+    end
+  end
 
   return state
 end

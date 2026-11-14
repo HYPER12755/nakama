@@ -7,63 +7,75 @@ import { Icon } from "./Icon";
 
 interface ScoreCardProps {
   player: CarromPlayer;
-  score: number;
+  /** The name the player is known by: the account name or the seat name. */
+  name: string;
+  /** The pieces of this colour that are still on the board. */
+  left: number;
   active: boolean;
   queen: CarromQueen;
   ai: boolean;
   seat: number;
+  /** The striker this player brought to the table. */
+  striker?: string;
 }
 
+/**
+ * A seat at the table. It says who is playing and how much is left of their
+ * colour; the score itself lives in the points bar above the board, so the
+ * table only carries one score display.
+ */
 export function ScoreCard({
   player,
-  score,
+  name,
+  left,
   active,
   queen,
   ai,
   seat,
+  striker,
 }: ScoreCardProps) {
+  const holdsQueen = queen.status === "covered" && queen.owner === player;
+  const waiting = queen.status === "pending" && queen.owner === player;
   return (
     <div
-      className={`score-card score-card--${player}${active ? " score-card--active" : ""}`}
+      className={`seat-row seat-row--${player}${active ? " seat-row--active" : ""}`}
     >
-      <div className="score-card__top">
-        <span className={`score-card__swatch score-card__swatch--${player}`} />
-        <div className="score-card__identity">
-          <strong>{PLAYER_LABEL[player]}</strong>
-          <span>{ai ? "Moon AI" : `Player ${seat}`}</span>
-        </div>
-        {active ? (
-          <span className="score-card__turn">
-            <span className="live-dot" />
-            To shoot
-          </span>
-        ) : null}
-        <span className="score-card__count">
-          {score}
-          <small>/ 9</small>
+      <span className={`seat-row__swatch seat-row__swatch--${player}`} />
+      <div className="seat-row__identity">
+        <strong>{name}</strong>
+        <span>
+          {ai ? "Computer" : PLAYER_LABEL[player]}
+          {ai ? "" : ` · Seat ${seat}`}
         </span>
       </div>
-      <div className="score-card__pips" aria-label={`${score} of 9 pieces pocketed`}>
-        {Array.from({ length: 9 }, (_, index) => (
-          <span
-            key={index}
-            className={`score-pip score-pip--${player}${index < score ? " score-pip--filled" : ""}`}
-          />
-        ))}
-      </div>
-      <div className="score-card__bar">
-        <span
-          className={`score-card__bar-fill score-card__bar-fill--${player}`}
-          style={{ width: `${Math.min(100, (score / 9) * 100)}%` }}
-        />
-      </div>
-      {queen.owner === player ? (
-        <span className="score-card__queen">
-          <span className="queen-dot" />
-          Queen covered
-          <Icon name="check" size={12} strokeWidth={2.4} />
+      {striker !== undefined ? (
+        <span className="seat-row__striker" title="The striker at this table">
+          <Icon name="target" size={12} strokeWidth={2} />
+          {striker}
         </span>
       ) : null}
+      {holdsQueen ? (
+        <span className="seat-row__queen">
+          <span className="queen-dot" />
+          Queen
+          <Icon name="check" size={12} strokeWidth={2.4} />
+        </span>
+      ) : waiting ? (
+        <span className="seat-row__queen seat-row__queen--waiting">
+          <span className="queen-dot" />
+          To cover
+        </span>
+      ) : null}
+      {active ? (
+        <span className="seat-row__turn">
+          <span className="live-dot" />
+          Shooting
+        </span>
+      ) : null}
+      <span className="seat-row__left">
+        {left}
+        <small>left</small>
+      </span>
     </div>
   );
 }

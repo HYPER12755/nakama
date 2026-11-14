@@ -40,12 +40,44 @@ export interface CarromShotInput {
   power: number;
 }
 
+export type GameVariant = "classic" | "freestyle" | "practice";
+
+/**
+ * The rules of one game type.
+ *
+ * - Classic is the ICF game: fouls cost you a piece, the queen has to be
+ *   covered, a man is worth a point and the queen is worth three.
+ * - Freestyle keeps the fouls but plays the queen as an ordinary piece.
+ * - Practice drops the penalties and the scoring, so the table is a practice
+ *   table.
+ */
+export interface CarromRuleSet {
+  id: GameVariant;
+  label: string;
+  /** A foul returns a piece and ends the turn. */
+  fouls: boolean;
+  /** The queen has to be covered before the board can be won. */
+  coverQueen: boolean;
+  queenPoints: number;
+  manPoints: number;
+}
+
 export interface CarromState {
   discs: CarromDisc[];
   striker: CarromStriker;
   turn: CarromPlayer;
   /** Seated players, in seating order around the table. */
   players: CarromPlayer[];
+  /** The rules of this game type. */
+  rules: CarromRuleSet;
+  /** The striker skin each player picked, keyed by colour. */
+  strikers: Record<CarromPlayer, string>;
+  /** Seconds allowed for one shot. Zero means the table has no clock. */
+  turnSeconds: number;
+  /** Epoch milliseconds when the current shot clock runs out. */
+  turnDeadline: number | null;
+  /** A solo table: the player keeps the turn for every shot. */
+  solo: boolean;
   queen: CarromQueen;
   scores: Record<CarromPlayer, number>;
   status: "aiming" | "finished";

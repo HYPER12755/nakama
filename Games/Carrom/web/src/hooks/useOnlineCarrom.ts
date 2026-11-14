@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Client, Session, type Socket } from "@heroiclabs/nakama-js";
+import { MoonGamesSocialClient } from "@moongames/social";
 import {
   CARROM_OP,
   simulateShot,
@@ -8,8 +9,10 @@ import {
   type CarromShotInput,
   type CarromShotResult,
   type CarromState,
+  type GameVariant,
 } from "@moongames/carrom-core";
 import { readLauncherHandoff, type GameHostConfig } from "@moongames/game-sdk";
+import type { SocialFriend } from "@moongames/game-sdk";
 import {
   authErrorMessage,
   clearStoredEmailSession,
@@ -64,6 +67,8 @@ export interface CarromMatchResult {
   winnerColour?: CarromPlayer;
   winnerUserId?: string;
   reason?: string;
+  /** When the table finished, in epoch milliseconds. */
+  endedAt?: number;
 }
 
 export interface CarromServerState {
@@ -78,9 +83,13 @@ export interface CarromServerState {
   shots: CarromShotSummary[];
   lastShot: {
     user_id: string;
+    /** The colour that shot, so a client can replay the shot exactly. */
+    colour?: CarromPlayer;
     position: number;
     angle: number;
     power: number;
+    /** The striker that was used. */
+    striker?: string;
   } | null;
 }
 
@@ -90,7 +99,12 @@ export type CarromConnection =
   | "connected"
   | "error";
 
-const DEVICE_KEY = "moongames.carrom.device";
+/**
+ * The identifiers of this title come from the build, so the client never
+ * carries a game id of its own.
+ */
+const GAME_ID = __MOONGAMES_GAME_ID__;
+const DEVICE_KEY = `moongames.${GAME_ID}.device`;
 const SERVER_KEY = "defaultkey";
 const DEFAULT_PORT = 7350;
 
@@ -100,11 +114,11 @@ function deviceId(): string {
     if (existing !== null && existing.length > 0) {
       return existing;
     }
-    const created = `carrom-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+    const created = `${GAME_ID}-${Math.random().toString(36).slice(2)}-${Date.now()}`;
     window.localStorage.setItem(DEVICE_KEY, created);
     return created;
   } catch {
-    return `carrom-${Date.now()}`;
+    return `${GAME_ID}-${Date.now()}`;
   }
 }
 
@@ -172,6 +186,24 @@ export interface OnlineCarromOptions {
   autoSpectate?: boolean;
 }
 
+/**
+ * The settings a table is created with. The server keeps them, so both
+ * players play the same game type under the same clock.
+ */
+export interface CarromTableSettings {
+  variant?: GameVariant;
+  turnSeconds?: number;
+}
+
+/** A friend to invite to the table. */
+export interface CarromFriendInviteInput {
+  userId: string;
+  username: string;
+  /** The friendship state, so an accepted request can be taken at once. */
+  state?: number;
+  spectate?: boolean;
+}
+
 export interface OnlineCarromController {
   connection: CarromConnection;
   matchId: string | null;
@@ -202,6 +234,15 @@ export interface OnlineCarromController {
   opponentLeft: string | null;
   dismissOpponentLeft: () => void;
   clearAuthFeedback: () => void;
+  friends: SocialFriend[];
+  friendsLoading: boolean;
+  friendsError: string | null;
+  inviteSendingId: string | null;
+  inviteError: string | null;
+  inviteNotice: string | null;
+  loadFriends: () => Promise<void>;
+  inviteFriend: (input: CarromFriendInviteInput) => Promise<boolean>;
+  clearInviteFeedback: () => void;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (
     email: string,
@@ -210,11 +251,17 @@ export interface OnlineCarromController {
   ) => Promise<void>;
   signOut: () => Promise<void>;
   connect: () => Promise<void>;
-  quickMatch: (seats: number) => Promise<void>;
-  createPrivateRoom: (seats: number) => Promise<void>;
+  quickMatch: (
+    seats: number,
+    options?: CarromTableSettings,
+  ) => Promise<void>;
+  createPrivateRoom: (
+    seats: number,
+    options?: CarromTableSettings,
+  ) => Promise<void>;
   joinMatch: (matchId: string, options?: { spectator?: boolean }) => Promise<void>;
   leaveMatch: () => Promise<void>;
-  sendShot: (shot: CarromShotInput) => void;
+  sendShot: (shot: CarromShotInput, striker?: string) => void;
   sendChat: (text: string) => void;
   requestState: () => void;
   clearAnimation: () => void;
@@ -244,6 +291,12 @@ export function useOnlineCarrom(
   const [authError, setAuthError] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [opponentLeft, setOpponentLeft] = useState<string | null>(null);
+  const [friends, setFriends] = useState<SocialFriend[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState(false);
+  const [friendsError, setFriendsError] = useState<string | null>(null);
+  const [inviteSendingId, setInviteSendingId] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
 
   const clientRef = useRef<Client | null>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -254,6 +307,8 @@ export function useOnlineCarrom(
   const gameRef = useRef<CarromState | null>(null);
   const ticketRef = useRef<string | null>(null);
   const fallbackRef = useRef<number | null>(null);
+  const connectingRef = useRef(false);
+  const refreshProfileRef = useRef<(() => Promise<void>) | null>(null);
 
   const requireSocket = useCallback(async (): Promise<Socket> => {
     const socket = socketRef.current;
@@ -298,9 +353,20 @@ export function useOnlineCarrom(
 
     if (isNewShot && previous !== null && shot !== null) {
       // The server owns the result. The client replays the same deterministic
-      // shot locally so the table animates exactly as it was resolved.
+      // shot locally so the table animates exactly as it was resolved. The
+      // striker travels with the shot, because it changes the power.
       try {
-        const result = simulateShot(previous, {
+        const board =
+          shot.colour !== undefined && shot.striker !== undefined
+            ? {
+                ...previous,
+                strikers: {
+                  ...previous.strikers,
+                  [shot.colour]: shot.striker,
+                },
+              }
+            : previous;
+        const result = simulateShot(board, {
           position: shot.position,
           angle: shot.angle,
           power: shot.power,
@@ -324,13 +390,14 @@ export function useOnlineCarrom(
   }, []);
 
   const connect = useCallback(async (): Promise<void> => {
-    if (socketRef.current !== null) {
+    if (socketRef.current !== null || connectingRef.current) {
       return;
     }
+    connectingRef.current = true;
     setConnection("connecting");
     setError(null);
     try {
-      const handoff = readLauncherHandoff("carrom");
+      const handoff = readLauncherHandoff(GAME_ID);
       const hostSession = sessionFromConfig(handoff);
       // The launcher owns the account and the server. A verified launch uses
       // the shared session and the launcher's Nakama address; a direct launch
@@ -378,10 +445,23 @@ export function useOnlineCarrom(
       const accountInfo = (await client.getAccount(session).catch(() => null)) as
         | { user?: { id?: string; username?: string } }
         | null;
+      // A guest device account is born with a name like "Player-1a2b3c". That
+      // name is what the other player sees, so it is given a friendly one.
+      if (
+        accountKind === "guest" &&
+        typeof accountInfo?.user?.username === "string" &&
+        accountInfo.user.username.startsWith("Player-")
+      ) {
+        const friendly = `Guest${Math.random().toString(36).slice(2, 6)}`;
+        await client
+          .updateAccount(session, { username: friendly })
+          .catch(() => undefined);
+        accountInfo.user.username = friendly;
+      }
       setAccount({
         kind: accountKind,
         username:
-          accountInfo?.user?.username ?? session.user_id ?? "Player",
+          accountInfo?.user?.username ?? session.username ?? "Guest",
         userId: accountInfo?.user?.id ?? session.user_id ?? "",
         email: accountEmail,
       });
@@ -417,6 +497,14 @@ export function useOnlineCarrom(
           setError(typeof message.message === "string" ? message.message : "The server refused that request.");
           return;
         }
+        if (matchData.op_code === CARROM_OP.SHOT) {
+          // The server sends this when the shot clock runs out.
+          const notice = message as { message?: string };
+          if (typeof notice.message === "string") {
+            setNotice(notice.message);
+          }
+          return;
+        }
         if (matchData.op_code === CARROM_OP.CHAT) {
           const entry = message as {
             id?: string;
@@ -450,6 +538,11 @@ export function useOnlineCarrom(
           if (left.userId !== undefined && left.userId !== sessionRef.current?.user_id) {
             setOpponentLeft(left.username ?? "Your opponent");
           }
+          return;
+        }
+        if (matchData.op_code === CARROM_OP.PLAYER_JOINED) {
+          const joined = message as { username?: string };
+          setNotice(`${joined.username ?? "A player"} joined the table.`);
           return;
         }
         if (matchData.op_code === CARROM_OP.MATCH_STARTED) {
@@ -491,6 +584,9 @@ export function useOnlineCarrom(
       socketRef.current = socket;
       sessionRef.current = session;
       setConnection("connected");
+      // The rating, the history, and the leaderboard are loaded with the
+      // connection, so a player never has to ask for their own profile.
+      void refreshProfileRef.current?.();
 
       if (options.autoJoinMatchId) {
         await socket.joinMatch(
@@ -505,11 +601,16 @@ export function useOnlineCarrom(
     } catch (cause) {
       setConnection("error");
       setError(cause instanceof Error ? cause.message : "The realtime connection failed.");
+    } finally {
+      connectingRef.current = false;
     }
   }, [applyServerState, options.autoJoinMatchId, options.autoSpectate]);
 
   const quickMatch = useCallback(
-    async (seats: number): Promise<void> => {
+    async (
+      seats: number,
+      settings: CarromTableSettings = {},
+    ): Promise<void> => {
       let socket = socketRef.current;
       if (socket === null) {
         await connect();
@@ -523,14 +624,16 @@ export function useOnlineCarrom(
       setSearching(true);
       try {
         // The matchmaker query is scoped to the properties, so only players
-        // who asked for the same game and table size are paired.
+        // who asked for the same game, table size, and game type are paired.
+        const variant = settings.variant ?? "classic";
         const ticket = await socket.addMatchmaker(
-          `+properties.game:carrom +properties.seats:${seats}`,
+          `+properties.game:carrom +properties.seats:${seats} +properties.variant:${variant}`,
           seats,
           seats,
           {
-            game: "carrom",
+            game: GAME_ID,
             seats: String(seats),
+            variant,
           },
         );
         ticketRef.current = ticket.ticket;
@@ -546,6 +649,8 @@ export function useOnlineCarrom(
               }
               const response = await client.rpc(session, "carrom_quick_match", {
                 seats,
+                variant: settings.variant,
+                turnSeconds: settings.turnSeconds,
               });
               const parsed = (response.payload ?? {}) as {
                 ok?: boolean;
@@ -571,7 +676,10 @@ export function useOnlineCarrom(
   );
 
   const createPrivateRoom = useCallback(
-    async (seats: number): Promise<void> => {
+    async (
+      seats: number,
+      settings: CarromTableSettings = {},
+    ): Promise<void> => {
       const client = clientRef.current;
       const session = sessionRef.current;
       if (client === null || session === null) {
@@ -583,7 +691,11 @@ export function useOnlineCarrom(
         const response = await client.rpc(
           session,
           "carrom_create_private_match",
-          { seats },
+          {
+            seats,
+            variant: settings.variant,
+            turnSeconds: settings.turnSeconds,
+          },
         );
         const parsed = (response.payload ?? {}) as {
           ok?: boolean;
@@ -619,26 +731,30 @@ export function useOnlineCarrom(
     gameRef.current = null;
   }, []);
 
-  const sendShot = useCallback((shot: CarromShotInput): void => {
-    const socket = socketRef.current;
-    const current = matchIdRef.current;
-    if (socket === null || current === null) {
-      return;
-    }
-    void socket
-      .sendMatchState(
-        current,
-        CARROM_OP.SHOT_REQUEST,
-        JSON.stringify({
-          position: shot.position,
-          angle: shot.angle,
-          power: shot.power,
-        }),
-      )
-      .catch(() => {
-        setError("The shot could not be sent.");
-      });
-  }, []);
+  const sendShot = useCallback(
+    (shot: CarromShotInput, striker?: string): void => {
+      const socket = socketRef.current;
+      const current = matchIdRef.current;
+      if (socket === null || current === null) {
+        return;
+      }
+      void socket
+        .sendMatchState(
+          current,
+          CARROM_OP.SHOT_REQUEST,
+          JSON.stringify({
+            position: shot.position,
+            angle: shot.angle,
+            power: shot.power,
+            striker,
+          }),
+        )
+        .catch(() => {
+          setError("The shot could not be sent.");
+        });
+    },
+    [],
+  );
 
   const sendChat = useCallback((text: string): void => {
     const socket = socketRef.current;
@@ -669,6 +785,15 @@ export function useOnlineCarrom(
   const clearAnimation = useCallback((): void => {
     setAnimation(null);
   }, []);
+
+  /**
+   * The table connects by itself. A player should never have to press a
+   * button to get into the game, so the connection is opened as soon as the
+   * client loads and the account is picked up from the shared session.
+   */
+  useEffect(() => {
+    void connect();
+  }, [connect]);
 
   useEffect(() => {
     return () => {
@@ -731,14 +856,146 @@ export function useOnlineCarrom(
     }
   }, []);
 
+  useEffect(() => {
+    refreshProfileRef.current = refreshProfile;
+  }, [refreshProfile]);
+
   const clearAuthFeedback = useCallback((): void => {
     setAuthError(null);
     setAuthNotice(null);
   }, []);
-
   const dismissOpponentLeft = useCallback((): void => {
     setOpponentLeft(null);
   }, []);
+
+  /**
+   * The friend list for the invite picker. Each relationship state is loaded
+   * on its own, so a failure in one of them never hides the friends a player
+   * already has.
+   */
+  const loadFriends = useCallback(async (): Promise<void> => {
+    const client = clientRef.current;
+    const session = sessionRef.current;
+    if (client === null || session === null) {
+      setFriendsError("Connect to MoonGames before inviting a friend.");
+      return;
+    }
+    setFriendsLoading(true);
+    setFriendsError(null);
+    try {
+      const social = new MoonGamesSocialClient({ client, session });
+      const responses = await Promise.allSettled([
+        social.listFriends(0),
+        social.listFriends(1),
+        social.listFriends(2),
+      ]);
+      const groups = responses.flatMap((result) =>
+        result.status === "fulfilled" ? [result.value] : [],
+      );
+      if (groups.length === 0) {
+        const rejected = responses.find(
+          (result): result is PromiseRejectedResult =>
+            result.status === "rejected",
+        );
+        throw rejected?.reason ?? new Error("The friend list is unavailable.");
+      }
+      const byId = new Map<string, SocialFriend>();
+      for (const group of groups) {
+        for (const friend of group) {
+          byId.set(friend.userId, friend);
+        }
+      }
+      const rank = (state: number) =>
+        state === 0 ? 0 : state === 2 ? 1 : state === 1 ? 2 : 3;
+      setFriends(
+        [...byId.values()].sort(
+          (left, right) =>
+            rank(left.state) - rank(right.state) ||
+            left.username.localeCompare(right.username, undefined, {
+              sensitivity: "base",
+            }),
+        ),
+      );
+    } catch (cause) {
+      setFriendsError(
+        cause instanceof Error
+          ? cause.message
+          : "The friend list could not be loaded.",
+      );
+    } finally {
+      setFriendsLoading(false);
+    }
+  }, []);
+
+  const clearInviteFeedback = useCallback((): void => {
+    setInviteError(null);
+    setInviteNotice(null);
+  }, []);
+
+  /** Invite a friend to the table the player is sitting at. */
+  const inviteFriend = useCallback(
+    async (input: CarromFriendInviteInput): Promise<boolean> => {
+      const client = clientRef.current;
+      const session = sessionRef.current;
+      const targetMatchId = (matchIdRef.current ?? "").trim();
+      if (client === null || session === null) {
+        setInviteError("Connect to MoonGames before inviting a friend.");
+        return false;
+      }
+      if (targetMatchId.length === 0) {
+        setInviteError("Open a private table before inviting a friend.");
+        return false;
+      }
+      setInviteSendingId(input.userId);
+      setInviteError(null);
+      setInviteNotice(null);
+      try {
+        const socket = socketRef.current;
+        const social = new MoonGamesSocialClient({
+          client,
+          session,
+          socket,
+          selfUserId: session.user_id,
+        });
+        if (input.state === 1) {
+          throw new Error(
+            "That player still needs to accept your friend request. Once they do, they will appear here as a friend.",
+          );
+        }
+        if (input.state === 2) {
+          // An incoming request can be accepted from the picker.
+          await social.acceptFriend({ userId: input.userId });
+        }
+        const invite = await social.createInvite({
+          gameId: GAME_ID,
+          mode: "private",
+          matchId: targetMatchId,
+          recipientId: input.userId,
+          recipientUsername: input.username,
+          metadata: { spectate: input.spectate === true },
+        });
+        if (socket !== null) {
+          try {
+            await social.sendInviteMessage(input.userId, invite);
+          } catch {
+            // The notification is still delivered even without the chat card.
+          }
+        }
+        setInviteNotice(`Invite sent to ${input.username}.`);
+        return true;
+      } catch (cause) {
+        setInviteError(
+          cause instanceof Error
+            ? cause.message
+            : "The invitation could not be sent.",
+        );
+        return false;
+      } finally {
+        setInviteSendingId(null);
+      }
+    },
+    [],
+  );
 
   const signIn = useCallback(
     async (email: string, password: string): Promise<void> => {
@@ -768,11 +1025,16 @@ export function useOnlineCarrom(
           token: session.token,
           refreshToken: session.refresh_token,
         });
+        // The player is known by the name on the account, not by the email
+        // they signed in with.
+        const info = (await client.getAccount(session).catch(() => null)) as
+          | { user?: { id?: string; username?: string } }
+          | null;
         setAccount({
           kind: "email",
-          username: email,
+          username: info?.user?.username ?? email,
           email,
-          userId: session.user_id ?? email,
+          userId: info?.user?.id ?? session.user_id ?? email,
         });
         setAuthNotice("Signed in. Your shared account is ready.");
         await refreshProfile();
@@ -887,6 +1149,15 @@ export function useOnlineCarrom(
     opponentLeft,
     dismissOpponentLeft,
     clearAuthFeedback,
+    friends,
+    friendsLoading,
+    friendsError,
+    inviteSendingId,
+    inviteError,
+    inviteNotice,
+    loadFriends,
+    inviteFriend,
+    clearInviteFeedback,
     signIn,
     signUp,
     signOut,

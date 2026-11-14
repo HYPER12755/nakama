@@ -13,6 +13,43 @@ local ALL_PLAYERS = { "white", "black", "green", "yellow" }
 rules.ALL_PLAYERS = ALL_PLAYERS
 rules.PLAYER_LABEL = physics.PLAYER_LABEL
 
+-- The game types. They mirror Carrom/core/src/board.ts, and the keys are the
+-- ones the client reads, so the table and the interface always agree.
+rules.VARIANTS = {
+  classic = {
+    id = "classic",
+    label = "Classic",
+    fouls = true,
+    coverQueen = true,
+    queenPoints = 3,
+    manPoints = 1,
+  },
+  freestyle = {
+    id = "freestyle",
+    label = "Freestyle",
+    fouls = true,
+    coverQueen = false,
+    queenPoints = 3,
+    manPoints = 1,
+  },
+  practice = {
+    id = "practice",
+    label = "Practice",
+    fouls = false,
+    coverQueen = false,
+    queenPoints = 0,
+    manPoints = 0,
+  },
+}
+
+function rules.variant_rules(variant)
+  return rules.VARIANTS[variant] or rules.VARIANTS.classic
+end
+
+function rules.rules_of(state)
+  return (state and state.rules) or rules.VARIANTS.classic
+end
+
 function rules.players_in_turn_order(players)
   local order = {}
   local seated = {}
@@ -57,6 +94,22 @@ function rules.score_state(state)
     green = rules.count_pocketed(state.discs, "green"),
     yellow = rules.count_pocketed(state.discs, "yellow"),
   }
+end
+
+-- The pieces of a colour still on the board.
+function rules.pieces_left(state, player)
+  return math.max(0, physics.PIECES_PER_PLAYER - (state.scores[player] or 0))
+end
+
+-- The points of a colour: a man is worth one point and the queen is worth
+-- three, the way the carrom apps count them.
+function rules.points_for(state, player)
+  local ruleset = rules.rules_of(state)
+  local points = (state.scores[player] or 0) * (ruleset.manPoints or 0)
+  if state.queen.status == "covered" and state.queen.owner == player then
+    points = points + (ruleset.queenPoints or 0)
+  end
+  return points
 end
 
 function rules.striker_fits(state, position)
@@ -188,9 +241,13 @@ end
 
 -- The ICF opening layout: the queen on the centre spot, three men per player
 -- touching the centre circle, and six men per player touching that ring.
-function rules.create_initial_state(players)
+function rules.create_initial_state(players, options)
+  options = options or {}
   local seated = rules.players_in_turn_order(players or { "white", "black" })
   local count = math.max(2, #seated)
+  local ruleset = options.rules
+    or rules.variant_rules(options.variant or "classic")
+  local strikers = options.strikers or {}
 
   local men = physics.DISC_RADIUS
   local inner = math.max(0.0432, (3 * count * men) / math.pi)
@@ -234,6 +291,16 @@ function rules.create_initial_state(players)
     striker = { x = x, y = y, pocketed = false },
     turn = first,
     players = seated,
+    rules = ruleset,
+    strikers = {
+      white = strikers.white or physics.STRIKERS[1].id,
+      black = strikers.black or physics.STRIKERS[1].id,
+      green = strikers.green or physics.STRIKERS[1].id,
+      yellow = strikers.yellow or physics.STRIKERS[1].id,
+    },
+    turnSeconds = options.turnSeconds or 0,
+    turnDeadline = options.turnDeadline,
+    solo = options.solo == true,
     queen = { status = "board" },
     scores = { white = 0, black = 0, green = 0, yellow = 0 },
     status = "aiming",
@@ -260,6 +327,7 @@ end
 function rules.resolve(state, result, shot)
   local player = state.turn
   local seated = state.players or { player }
+  local ruleset = rules.rules_of(state)
   local own_pocketed = 0
   local opponent_pocketed = 0
   local queen_pocketed = false
@@ -273,13 +341,20 @@ function rules.resolve(state, result, shot)
     end
   end
   local striker_pocketed = result.striker_pocketed == true
-  local foul = striker_pocketed or opponent_pocketed > 0
+  -- A table without fouls never punishes a shot, it only costs the turn.
+  local foul = ruleset.fouls == true
+    and (striker_pocketed or opponent_pocketed > 0)
 
   local next_state = {
     discs = copy_discs(result.discs),
     striker = { x = 0, y = 0, pocketed = false },
     turn = player,
     players = {},
+    rules = ruleset,
+    strikers = {},
+    turnSeconds = state.turnSeconds or 0,
+    turnDeadline = nil,
+    solo = state.solo == true,
     queen = { status = state.queen.status },
     scores = { white = 0, black = 0, green = 0, yellow = 0 },
     status = "aiming",
@@ -288,6 +363,10 @@ function rules.resolve(state, result, shot)
   }
   for _, seat in ipairs(seated) do
     next_state.players[#next_state.players + 1] = seat
+  end
+  for _, seat in ipairs(rules.ALL_PLAYERS) do
+    next_state.strikers[seat] = (state.strikers or {})[seat]
+      or physics.STRIKERS[1].id
   end
   if state.queen.owner ~= nil then
     next_state.queen.owner = state.queen.owner
@@ -298,27 +377,34 @@ function rules.resolve(state, result, shot)
   local returned_disc = nil
   local queen_blocked_finish = false
 
-  if state.queen.status == "pending" then
-    if own_pocketed > 0 and not foul then
-      next_state.queen = { status = "covered", owner = player }
-      queen_covered_this_shot = true
-    else
-      rules.return_queen_to_centre(next_state)
-      queen_returned = true
+  if ruleset.coverQueen then
+    if state.queen.status == "pending" then
+      if own_pocketed > 0 and not foul then
+        next_state.queen = { status = "covered", owner = player }
+        queen_covered_this_shot = true
+      else
+        rules.return_queen_to_centre(next_state)
+        queen_returned = true
+      end
+    elseif state.queen.status == "board" and queen_pocketed then
+      if foul then
+        rules.return_queen_to_centre(next_state)
+        queen_returned = true
+      elseif own_pocketed > 0 then
+        next_state.queen = { status = "covered", owner = player }
+        queen_covered_this_shot = true
+      else
+        next_state.queen = { status = "pending", owner = player }
+      end
     end
-  elseif state.queen.status == "board" and queen_pocketed then
-    if foul then
-      rules.return_queen_to_centre(next_state)
-      queen_returned = true
-    elseif own_pocketed > 0 then
-      next_state.queen = { status = "covered", owner = player }
-      queen_covered_this_shot = true
-    else
-      next_state.queen = { status = "pending", owner = player }
-    end
+  elseif state.queen.status == "board" and queen_pocketed and not foul then
+    -- Without the covering rule the queen is an ordinary piece: it belongs to
+    -- whoever pocketed it and it is worth its points straight away.
+    next_state.queen = { status = "covered", owner = player }
+    queen_covered_this_shot = true
   end
 
-  if striker_pocketed then
+  if striker_pocketed and ruleset.fouls then
     local penalty = rules.last_pocketed_disc(next_state, result, player)
     if penalty then
       rules.return_disc_to_board(next_state, penalty)
@@ -332,7 +418,7 @@ function rules.resolve(state, result, shot)
     if next_state.scores[candidate] < physics.PIECES_PER_PLAYER then
       return false
     end
-    if next_state.queen.status == "covered" then
+    if ruleset.coverQueen ~= true or next_state.queen.status == "covered" then
       next_state.status = "finished"
       next_state.winner = candidate
       return true
@@ -370,7 +456,9 @@ function rules.resolve(state, result, shot)
     and not queen_blocked_finish
     and (own_pocketed > 0 or (queen_pocketed and queen_pending_now))
 
-  next_state.turn = turn_continued and player
+  -- A solo table belongs to one player, so the turn never leaves them.
+  local keeps_turn = turn_continued or state.solo == true
+  next_state.turn = keeps_turn and player
     or rules.next_player(seated, player)
 
   local requested = turn_continued and shot.position or 0.5
@@ -395,7 +483,11 @@ function rules.resolve(state, result, shot)
         .. " — foul."
     end
     if queen_covered_this_shot then
-      parts[#parts + 1] = "Queen covered."
+      if ruleset.coverQueen then
+        parts[#parts + 1] = "Queen covered."
+      else
+        parts[#parts + 1] = "Queen taken."
+      end
     elseif next_state.queen.status == "pending" then
       parts[#parts + 1] = "Queen pocketed — cover it with one of your pieces."
     end
@@ -411,7 +503,7 @@ function rules.resolve(state, result, shot)
         .. physics.PLAYER_LABEL[player] .. " "
         .. (own_pocketed == 1 and "piece." or "pieces.")
     end
-    if turn_continued then
+    if keeps_turn then
       parts[#parts + 1] = "Shoot again."
     else
       parts[#parts + 1] = "Turn passes."
@@ -440,6 +532,38 @@ function rules.resolve(state, result, shot)
   next_state.lastOutcome = outcome
 
   return next_state, outcome
+end
+
+-- The moment the current shot clock runs out, in epoch milliseconds. A table
+-- without a clock has no deadline.
+function rules.deadline(state, now)
+  local seconds = (state and state.turnSeconds) or 0
+  if seconds <= 0 then
+    return nil
+  end
+  return now + seconds * 1000
+end
+
+-- Hand the turn to the next player without a shot. The shot clock uses this
+-- when a player runs out of time.
+function rules.pass_turn(state)
+  local seated = state.players or { state.turn }
+  local next_turn = rules.next_player(seated, state.turn)
+  local moved = {
+    discs = state.discs,
+    turn = next_turn,
+    striker = { x = 0, y = 0, pocketed = false },
+  }
+  local position = rules.nearest_valid_position(moved, 0.5)
+  local x, y = physics.striker_point(next_turn, position)
+  local next_state = {}
+  for key, value in pairs(state) do
+    next_state[key] = value
+  end
+  next_state.turn = next_turn
+  next_state.striker = { x = x, y = y, pocketed = false }
+  next_state.turnDeadline = nil
+  return next_state
 end
 
 return rules

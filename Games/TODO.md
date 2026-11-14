@@ -219,6 +219,25 @@ hosts are file-backed and should load only the single-entry subset.
 - [x] Carrom simulation-backed AI that yields between candidate batches so a
   phone browser keeps painting.
 - [x] Carrom `0.4.0` signed release, catalog entry, and launcher card.
+- [x] Carrom `0.5.0`: one points bar above the table with the standard count
+  (a man is one point, the queen three), a striker control that sits on the
+  board on the side of the player whose turn it is, the table chat reachable
+  in fullscreen, and the table settings moved out of the board controls.
+- [x] Carrom game types (Classic, Freestyle, Practice), striker skins that
+  change how hard a shot leaves the baseline, and a shot clock, all kept by
+  the authoritative server so both players play the same table.
+- [x] Carrom challenge tables: a solo table with a target, the trick shot mode
+  the mobile carrom apps are built around.
+- [x] The Carrom table turns for a player who is sitting at their own
+  screen, so their striker is always at hand level. A table played on one
+  device is shared, so it is never turned.
+- [x] The Carrom client speaks for itself: it connects on its own, it knows
+  the player by their account name, it says and sounds every shot, and it
+  says when it is your turn.
+- [x] The hardcoding sweep across the platform: the shared host preview no
+  longer claims to be Chess, both titles take their game id and their
+  storage keys from the build, and the shared profile panel shows the
+  counters under the names the title gives them.
 - [x] Launcher rebuilt around catalog data: generated artwork for unknown
   games, a real launch phase pipeline for the play button, no hardcoded game
   list, and a data driven time control.
@@ -239,8 +258,10 @@ hosts are file-backed and should load only the single-entry subset.
   authoritative shot.
 - [x] Carrom rules and physics parity vectors shared with the Lua server, and
   a live smoke test for two and four player tables.
-- [ ] Carrom in-game friend picker, invite banner, and the shared chat
+- [x] Carrom in-game friend picker, invite banner, and the shared chat
   emoji picker.
 - [ ] Carrom offline four player table and ratings or history.
+- [ ] Carrom two against two team mode, where the turn order crosses the
+  teams.
 - [ ] Generated artwork for unknown games in the native React Native and
   Flutter launchers (both currently fall back to a generic board icon).

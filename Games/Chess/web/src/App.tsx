@@ -51,6 +51,9 @@ type Theme = "dark" | "light";
  */
 const launcherHandoff = readLauncherHandoff(__MOONGAMES_GAME_ID__);
 
+/** The identifiers of this title come from the build. */
+const GAME_ID = __MOONGAMES_GAME_ID__;
+
 export interface AppProps {
   bridge: GameBridge;
 }
@@ -180,7 +183,7 @@ export default function App({ bridge }: AppProps) {
         case "session":
           setHostConfig((current) => ({
             protocol: current?.protocol ?? GAME_PROTOCOL_VERSION,
-            gameId: current?.gameId ?? "chess",
+            gameId: current?.gameId ?? GAME_ID,
             locale: current?.locale ?? "en",
             theme: current?.theme ?? { mode: "dark" },
             nakama: current?.nakama,

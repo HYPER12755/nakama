@@ -8,23 +8,34 @@ import {
 import type { GameBridge } from "@moongames/game-sdk";
 import {
   CARROM_BOARD,
+  CARROM_STRIKERS,
   PLAYER_LABEL,
   TABLE_PLAYERS,
-  chooseAiShotAsync,
   baselineOf,
+  challengeById,
+  challengeProgress,
+  chooseAiShotAsync,
   createInitialState,
   nearestValidStrikerPosition,
+  passTurn,
+  piecesLeft,
+  rulesOf,
+  sideOf,
   simulateShot,
   tablePlayers,
   validateShot,
+  variantRules,
   type CarromAiDifficulty,
+  type CarromChallenge,
   type CarromPlayer,
   type CarromShotInput,
   type CarromShotResult,
+  type CarromSide,
   type CarromState,
+  type GameVariant,
 } from "@moongames/carrom-core";
 import { CarromBoard } from "./components/CarromBoard";
-import { EmojiPicker } from "./components/EmojiPicker";
+import { ChallengePanel } from "./components/ChallengePanel";
 import { GameOverDialog } from "./components/GameOverDialog";
 import { Icon } from "./components/Icon";
 import { OnlinePanel } from "./components/OnlinePanel";
@@ -32,6 +43,8 @@ import { PocketBox } from "./components/PocketBox";
 import { PointsBar } from "./components/PointsBar";
 import { RulesDialog } from "./components/RulesDialog";
 import { ScoreCard } from "./components/ScoreCard";
+import { StrikerDock } from "./components/StrikerDock";
+import { TableSettings } from "./components/TableSettings";
 import { useOnlineCarrom } from "./hooks/useOnlineCarrom";
 import { type AimMode } from "./lib/aim";
 import {
@@ -39,7 +52,6 @@ import {
   MatchChat,
   ModeSwitch,
   OpponentLeftDialog,
-  PlayerCard,
   ProfilePanel,
   type GameHistoryEntry,
 } from "@moongames/game-ui";
@@ -55,11 +67,21 @@ import {
   storedTheme,
   type Theme,
 } from "./lib/theme";
+import { gameStorageKey } from "./lib/storage";
 
 type Mode = "local" | "ai" | "online";
 
 /** The tables a game can be played at, in seating order. */
 const LOCAL_TABLE_SIZES = TABLE_PLAYERS.map((table) => table.length);
+
+/** How long a message stays on the table. */
+const TOAST_MS = 5200;
+
+/** How long the computer thinks before it shoots. */
+const AI_THINK_MS = 260;
+
+/** How far one press of a stepper moves the striker along the baseline. */
+const STRIKER_STEP = 0.025;
 
 const DEFAULT_POSITIONS: Record<CarromPlayer, number> = {
   white: 0.5,
@@ -68,8 +90,9 @@ const DEFAULT_POSITIONS: Record<CarromPlayer, number> = {
   yellow: 0.5,
 };
 
-const SOUND_KEY = "moongames.carrom.sound";
-const AIM_KEY = "moongames.carrom.aim";
+const SOUND_KEY = gameStorageKey("sound");
+const AIM_KEY = gameStorageKey("aim");
+const VARIANT_KEY = gameStorageKey("variant");
 
 function storedSound(): boolean {
   try {
@@ -87,6 +110,18 @@ function storedAimMode(): AimMode {
   }
 }
 
+function storedVariant(): GameVariant {
+  try {
+    const value = window.localStorage.getItem(VARIANT_KEY);
+    if (value === "freestyle" || value === "practice" || value === "classic") {
+      return value;
+    }
+  } catch {
+    // Storage can be unavailable in private or embedded contexts.
+  }
+  return "classic";
+}
+
 function persistSound(enabled: boolean): void {
   try {
     window.localStorage.setItem(SOUND_KEY, enabled ? "on" : "off");
@@ -95,12 +130,14 @@ function persistSound(enabled: boolean): void {
   }
 }
 
-function queenText(state: CarromState | null): string {
+function queenText(state: CarromState | null, rules: ReturnType<typeof rulesOf>): string {
   if (state === null) {
     return "Waiting";
   }
   if (state.queen.status === "covered" && state.queen.owner !== undefined) {
-    return `${PLAYER_LABEL[state.queen.owner]} covered`;
+    return rules.coverQueen
+      ? `${PLAYER_LABEL[state.queen.owner]} covered`
+      : `${PLAYER_LABEL[state.queen.owner]} took it`;
   }
   if (state.queen.status === "pending" && state.queen.owner !== undefined) {
     return `${PLAYER_LABEL[state.queen.owner]} to cover`;
@@ -112,38 +149,44 @@ function statusTitle(
   state: CarromState | null,
   animation: CarromShotResult | null,
   aiThinking: boolean,
+  nameOf: (player: CarromPlayer) => string,
+  myTurn: boolean,
 ): string {
   if (state === null) {
     return "Waiting for the table";
   }
   if (state.status === "finished" && state.winner !== null) {
-    return `${PLAYER_LABEL[state.winner]} wins`;
+    return `${nameOf(state.winner)} wins`;
   }
   if (animation !== null) {
     return "Shot in motion";
   }
   if (aiThinking) {
-    return "Onyx is lining up";
+    return `${nameOf(state.turn)} is lining up`;
   }
   if (state.queen.status === "pending") {
     return "Cover the queen";
   }
-  return `${PLAYER_LABEL[state.turn]} to shoot`;
+  if (myTurn) {
+    return "Your turn";
+  }
+  return `${nameOf(state.turn)} to shoot`;
 }
 
 function statusDetail(
   state: CarromState | null,
   animation: CarromShotResult | null,
   aiThinking: boolean,
+  nameOf: (player: CarromPlayer) => string,
 ): string {
   if (state === null) {
-    return "Connect to MoonGames and open a table to play online.";
+    return "Open a table to play online. The board is ready while you wait.";
   }
   if (animation !== null) {
     return "The table is settling. The next turn starts automatically.";
   }
   if (aiThinking) {
-    return "Onyx is reading the angles and choosing a pocket line.";
+    return `${nameOf(state.turn)} is reading the angles and choosing a pocket line.`;
   }
   if (state.lastOutcome !== undefined) {
     return state.lastOutcome.message;
@@ -162,8 +205,17 @@ export interface AppProps {
 export default function App({ bridge }: AppProps) {
   const [mode, setMode] = useState<Mode>("local");
   const [localTable, setLocalTable] = useState(2);
+  const [variant, setVariant] = useState<GameVariant>(storedVariant);
+  const [turnSeconds, setTurnSeconds] = useState(0);
+  const [striker, setStriker] = useState<string>(CARROM_STRIKERS[0]!.id);
   const [game, setGame] = useState<CarromState>(() =>
-    createInitialState(tablePlayers(2)),
+    createInitialState(tablePlayers(2), {
+      variant: storedVariant(),
+      strikers: {
+        white: CARROM_STRIKERS[0]!.id,
+        black: CARROM_STRIKERS[0]!.id,
+      },
+    }),
   );
   const [positions, setPositions] = useState<Record<CarromPlayer, number>>({
     ...DEFAULT_POSITIONS,
@@ -181,6 +233,9 @@ export default function App({ bridge }: AppProps) {
   const [paused, setPaused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [onlineSeats, setOnlineSeats] = useState(2);
+  const [clockDeadline, setClockDeadline] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [challengeId, setChallengeId] = useState<string | null>(null);
 
   const appRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<CarromShotResult | null>(null);
@@ -203,6 +258,14 @@ export default function App({ bridge }: AppProps) {
     autoJoinMatchId: inviteMatchId,
     autoSpectate: inviteSpectate,
   });
+  /**
+   * The online controller is a new object on every render. The callbacks
+   * below read it through a ref so they keep the same identity, because a
+   * callback that changes on every render restarts the shot animation and
+   * the shot never finishes.
+   */
+  const onlineRef = useRef(online);
+  onlineRef.current = online;
   const onlineMode = mode === "online";
   const activeGame: CarromState | null = onlineMode ? online.game : game;
   const activeAnimation: CarromShotResult | null = onlineMode
@@ -213,10 +276,84 @@ export default function App({ bridge }: AppProps) {
   const activeTurn: CarromPlayer = onlineMode
     ? (activeGame?.turn ?? "white")
     : game.turn;
-  const strikerPosition = positions[activeTurn] ?? 0.5;
   const seatedPlayers = onlineMode
     ? (activeGame?.players ?? [])
     : game.players;
+  const tableRules = rulesOf(activeGame ?? game);
+
+  /**
+   * The table is turned for a player who is sitting at their own screen, so
+   * their baseline is at the bottom of the screen and their striker is at
+   * hand level. A table played on one device is shared, so it is never
+   * turned.
+   */
+  const viewPlayer: CarromPlayer = onlineMode
+    ? (online.myColour ?? activeTurn)
+    : "white";
+  /**
+   * The striker control. Online it keeps one comfortable place, under the
+   * player's own hand. On a table played on one device it moves to the side
+   * of the player whose turn it is.
+   */
+  const dockPlayer: CarromPlayer = onlineMode
+    ? (online.myColour ?? activeTurn)
+    : activeTurn;
+  const dockSide: CarromSide = onlineMode
+    ? "bottom"
+    : sideOf(dockPlayer);
+
+  // The striker sits where the server left it, unless it is the local
+  // player's own turn and they have moved it.
+  const strikerPosition = useMemo(() => {
+    if (!onlineMode) {
+      return positions[dockPlayer] ?? 0.5;
+    }
+    if (online.myColour === dockPlayer) {
+      const local = positions[dockPlayer];
+      if (local !== undefined) {
+        return local;
+      }
+    }
+    const striker = activeGame?.striker;
+    if (striker === undefined) {
+      return 0.5;
+    }
+    const baseline = baselineOf(dockPlayer);
+    return baseline.slideAxis === "x" ? striker.x : striker.y;
+  }, [
+    activeGame?.striker,
+    dockPlayer,
+    online.myColour,
+    onlineMode,
+    positions,
+  ]);
+
+  /**
+   * The name a player is known by. Online that is the account name, the
+   * computer opponent is called Computer, and a table on one device names
+   * the seats.
+   */
+  const accountName =
+    online.account !== null && online.account.kind !== "guest"
+      ? online.account.username
+      : null;
+  const nameOf = useCallback(
+    (player: CarromPlayer): string => {
+      if (onlineMode) {
+        const seat = online.seats.find((entry) => entry.colour === player);
+        return seat?.username ?? PLAYER_LABEL[player];
+      }
+      if (isAiPlayer(mode, player)) {
+        return "Computer";
+      }
+      if (player === "white") {
+        return accountName ?? "You";
+      }
+      const index = game.players.indexOf(player);
+      return `Player ${index + 1}`;
+    },
+    [accountName, game.players, mode, online.seats, onlineMode],
+  );
 
   useEffect(() => {
     modeRef.current = mode;
@@ -238,6 +375,14 @@ export default function App({ bridge }: AppProps) {
       // Storage can be unavailable in private or embedded contexts.
     }
   }, [aimMode]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(VARIANT_KEY, variant);
+    } catch {
+      // Storage can be unavailable in private or embedded contexts.
+    }
+  }, [variant]);
 
   useEffect(() => {
     return bridge.onMessage((message) => {
@@ -268,9 +413,17 @@ export default function App({ bridge }: AppProps) {
     if (toast === null) {
       return;
     }
-    const timer = window.setTimeout(() => setToast(null), 5200);
+    const timer = window.setTimeout(() => setToast(null), TOAST_MS);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  // The server tells the table what happened, for example when a shot clock
+  // runs out. Those messages belong on the table, not only in the sidebar.
+  useEffect(() => {
+    if (online.notice !== null) {
+      setToast(online.notice);
+    }
+  }, [online.notice]);
 
   const clearSoundTimers = useCallback(() => {
     for (const timer of soundTimers.current) {
@@ -317,11 +470,21 @@ export default function App({ bridge }: AppProps) {
     [clearSoundTimers, soundOn],
   );
 
+  /**
+   * The table speaks for every shot, whether it was played here or on the
+   * server: the strike, the pockets, the foul, and the win.
+   */
+  useEffect(() => {
+    if (activeAnimation !== null) {
+      scheduleSounds(activeAnimation);
+    }
+  }, [activeAnimation, scheduleSounds]);
+
   const handleShoot = useCallback(
     (shot: CarromShotInput) => {
       if (onlineMode) {
         // The server owns the table. The client only asks for the shot.
-        online.sendShot(shot);
+        onlineRef.current.sendShot(shot, striker);
         return;
       }
       if (animationRef.current !== null || paused) {
@@ -343,26 +506,32 @@ export default function App({ bridge }: AppProps) {
         [game.turn]: shot.position,
       }));
       setAiThinking(false);
-      scheduleSounds(result);
     },
-    [game, online, onlineMode, paused, scheduleSounds],
+    [game, onlineMode, paused, striker],
   );
 
   const handleAnimationComplete = useCallback(() => {
+    const result = onlineMode ? onlineRef.current.animation : animationRef.current;
     if (onlineMode) {
-      online.clearAnimation();
-      return;
+      onlineRef.current.clearAnimation();
+    } else {
+      if (result === null) {
+        return;
+      }
+      animationRef.current = null;
+      setAnimation(null);
+      setGame(result.state);
+      setToast(result.outcome.message);
+      if (result.outcome.winner !== null) {
+        setResultOpen(true);
+      }
     }
-    const result = animationRef.current;
+    // The table speaks in every mode: a shot is heard, a pocket is heard,
+    // and the phone answers with a buzz.
     if (result === null) {
       return;
     }
-    animationRef.current = null;
-    setAnimation(null);
-    setGame(result.state);
-    setToast(result.outcome.message);
     if (result.outcome.winner !== null) {
-      setResultOpen(true);
       bridge.haptic("success");
     } else if (result.outcome.foul) {
       bridge.haptic("error");
@@ -371,28 +540,72 @@ export default function App({ bridge }: AppProps) {
     } else {
       bridge.haptic("light");
     }
-  }, [bridge, online, onlineMode]);
+  }, [bridge, onlineMode]);
 
   const resetBoard = useCallback(
-    (message: string) => {
+    (
+      message: string,
+      options: { solo?: boolean; tableSize?: number } = {},
+    ) => {
       clearSoundTimers();
       animationRef.current = null;
       setAnimation(null);
+      const solo = options.solo === true;
+      // The table size is passed in, because the state of the picker is not
+      // updated yet when the board is built.
+      const size = options.tableSize ?? localTable;
+      const players = solo
+        ? tablePlayers(2)
+        : mode === "ai"
+          ? tablePlayers(2)
+          : tablePlayers(size);
       setGame(
-        createInitialState(
-          mode === "ai" ? tablePlayers(2) : tablePlayers(localTable),
-        ),
+        createInitialState(players, {
+          // A challenge table is a freestyle solo table: the queen does not
+          // need covering, so the challenge is only about the shots.
+          variant: solo ? "freestyle" : variant,
+          turnSeconds,
+          solo,
+          strikers: {
+            white: striker,
+            black: solo
+              ? CARROM_STRIKERS[0]!.id
+              : mode === "ai"
+                ? CARROM_STRIKERS[0]!.id
+                : striker,
+            green: striker,
+            yellow: striker,
+          },
+        }),
       );
       setPositions({ ...DEFAULT_POSITIONS });
       setAiThinking(false);
       setResultOpen(false);
       setToast(message);
     },
-    [clearSoundTimers, localTable, mode],
+    [clearSoundTimers, localTable, mode, striker, turnSeconds, variant],
   );
 
   const handleNewGame = useCallback(() => {
-    resetBoard("Fresh board. Ivory to shoot.");
+    // A challenge survives a new board: it starts again from the opening.
+    resetBoard(
+      challengeId !== null ? "Challenge restarted." : "Fresh board. Ivory to shoot.",
+      { solo: challengeId !== null },
+    );
+  }, [challengeId, resetBoard]);
+
+  const startChallenge = useCallback(
+    (challenge: CarromChallenge) => {
+      setChallengeId(challenge.id);
+      setMode("local");
+      resetBoard(`${challenge.label}. ${challenge.hint}`, { solo: true });
+    },
+    [resetBoard],
+  );
+
+  const quitChallenge = useCallback(() => {
+    setChallengeId(null);
+    resetBoard("Challenge finished. A normal board is ready.");
   }, [resetBoard]);
 
   const handleModeChange = useCallback(
@@ -401,13 +614,21 @@ export default function App({ bridge }: AppProps) {
         return;
       }
       setMode(next);
+      // A challenge belongs to the local table, so leaving that table ends it.
+      setChallengeId(null);
+      // Leaving the online mode leaves the table behind.
+      if (mode === "online" && next !== "online") {
+        void online.leaveMatch();
+      }
       resetBoard(
         next === "ai"
-          ? "You are Ivory. The Moon AI plays Onyx."
-          : "Pass-and-play board ready.",
+          ? "You are Ivory. Computer takes Onyx."
+          : next === "online"
+            ? "Open a table to play online."
+            : "Pass-and-play board ready.",
       );
     },
-    [mode, resetBoard],
+    [mode, online, resetBoard],
   );
 
   const handleStrikerChange = useCallback(
@@ -426,11 +647,44 @@ export default function App({ bridge }: AppProps) {
         ...current,
         [player]: nearestValidStrikerPosition(
           activeGame ?? game,
-          (current[player] ?? 0.5) + direction * 0.025,
+          (current[player] ?? 0.5) + direction * STRIKER_STEP,
         ),
       }));
     },
     [activeGame, game],
+  );
+
+  // The table settings that change the rules start a fresh board.
+  const applyVariant = useCallback(
+    (next: GameVariant) => {
+      setVariant(next);
+      resetBoard(`${variantRules(next).label} rules. Fresh board.`);
+    },
+    [resetBoard],
+  );
+
+  const applyTurnSeconds = useCallback(
+    (next: number) => {
+      setTurnSeconds(next);
+      resetBoard(
+        next === 0
+          ? "Shot clock off. Fresh board."
+          : `${next} second shot clock. Fresh board.`,
+      );
+    },
+    [resetBoard],
+  );
+
+  const applyStriker = useCallback(
+    (next: string) => {
+      setStriker(next);
+      if (onlineMode) {
+        setToast("Your striker changes on your next shot.");
+        return;
+      }
+      resetBoard("Fresh board with your striker.");
+    },
+    [onlineMode, resetBoard],
   );
 
   useEffect(() => {
@@ -460,7 +714,7 @@ export default function App({ bridge }: AppProps) {
         setAiThinking(false);
         handleShoot(aiShot);
       })();
-    }, 260);
+    }, AI_THINK_MS);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
@@ -485,6 +739,28 @@ export default function App({ bridge }: AppProps) {
     activeGame !== null &&
     online.myColour === activeGame.turn;
 
+  // The challenge table: a solo table with a target.
+  const challenge = challengeId !== null ? challengeById(challengeId) : null;
+  const challengeState = useMemo(() => {
+    if (challenge === null) {
+      return null;
+    }
+    return challengeProgress(challenge, game.scores.white, game.shotNumber);
+  }, [challenge, game.scores.white, game.shotNumber]);
+  const challengeFinished = challengeState?.finished ?? false;
+  const challengeWon = challengeState?.won ?? false;
+
+  useEffect(() => {
+    if (!challengeFinished) {
+      return;
+    }
+    setToast(
+      challengeWon
+        ? `Challenge complete. ${challengeState?.pocketed ?? 0} pieces in ${challengeState?.shots ?? 0} shots.`
+        : "The challenge is over. Try the next one.",
+    );
+  }, [challengeFinished, challengeState, challengeWon]);
+
   const canShoot = onlineMode
     ? activeGame !== null &&
       activeGame.status === "aiming" &&
@@ -495,40 +771,132 @@ export default function App({ bridge }: AppProps) {
       animation === null &&
       !paused &&
       !aiThinking &&
+      !challengeFinished &&
       !isAiPlayer(mode, game.turn);
+
+  // The shot clock. Online tables take the deadline from the server, local
+  // tables run it here.
+  const activeDeadline = onlineMode
+    ? (activeGame?.turnDeadline ?? null)
+    : clockDeadline;
+  const clockSeconds = activeDeadline === null
+    ? null
+    : Math.max(0, Math.ceil((activeDeadline - now) / 1000));
+
+  // The server finishes an online table, so the result dialog follows the
+  // server and not the local board. The result is watched by its key, so the
+  // dialog is not opened again by every later state.
+  const onlineResult = online.state?.result ?? null;
+  const resultKey =
+    onlineResult === null
+      ? null
+      : `${onlineResult.winnerColour ?? "none"}:${onlineResult.endedAt ?? 0}`;
+  const seenResultRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (resultKey === null) {
+      seenResultRef.current = null;
+      return;
+    }
+    if (seenResultRef.current === resultKey) {
+      return;
+    }
+    seenResultRef.current = resultKey;
+    setResultOpen(true);
+  }, [resultKey]);
+
+  /**
+   * The table tells the player when it is their turn. A player should never
+   * have to watch the board to find out.
+   */
+  const turnNoticeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!onlineMode || activeGame === null) {
+      turnNoticeRef.current = null;
+      return;
+    }
+    const key = `${activeGame.shotNumber}:${activeGame.turn}`;
+    if (turnNoticeRef.current === key) {
+      return;
+    }
+    turnNoticeRef.current = key;
+    if (online.myColour !== null && online.myColour === activeGame.turn) {
+      setToast("Your turn.");
+    }
+  }, [activeGame, online.myColour, onlineMode]);
+
+  useEffect(() => {
+    // The clock only ticks while a table has a clock, so the page does not
+    // redraw for nothing.
+    if (activeDeadline === null) {
+      return;
+    }
+    const timer = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [activeDeadline === null]);
+
+  useEffect(() => {
+    if (onlineMode) {
+      return;
+    }
+    if (turnSeconds <= 0) {
+      setClockDeadline(null);
+      return;
+    }
+    setClockDeadline(Date.now() + turnSeconds * 1000);
+  }, [game.shotNumber, game.turn, onlineMode, turnSeconds]);
+
+  useEffect(() => {
+    if (onlineMode || turnSeconds <= 0) {
+      return;
+    }
+    if (game.status !== "aiming" || animation !== null || paused) {
+      return;
+    }
+    if (isAiPlayer(mode, game.turn)) {
+      return;
+    }
+    if (clockSeconds === null || clockSeconds > 0) {
+      return;
+    }
+    // The clock ran out. The turn is handed on without a shot.
+    setGame((current) => passTurn(current));
+    setToast("Time is up. The turn passes.");
+  }, [
+    animation,
+    clockSeconds,
+    game,
+    mode,
+    onlineMode,
+    paused,
+    turnSeconds,
+  ]);
 
   const active = activeGame !== null && activeGame.status === "aiming"
     ? activeGame.turn
     : false;
-  const title = statusTitle(activeGame, activeAnimation, aiThinking);
-  const detail = statusDetail(activeGame, activeAnimation, aiThinking);
-  const queen = queenText(activeGame);
+  const myTurn = onlineMode ? onlineMyTurn : !isAiPlayer(mode, activeTurn);
+  const winner: CarromPlayer | null = onlineMode
+    ? (onlineResult?.winnerColour ?? null)
+    : game.winner;
+  const title = statusTitle(
+    activeGame,
+    activeAnimation,
+    aiThinking,
+    nameOf,
+    myTurn,
+  );
+  const detail = statusDetail(activeGame, activeAnimation, aiThinking, nameOf);
+  const queen = queenText(activeGame, tableRules);
   const queenPending = activeGame?.queen.status === "pending";
   const modeLabel =
     mode === "ai"
-      ? "Moon AI"
+      ? "Computer"
       : mode === "online"
         ? online.spectating
           ? "Watching"
           : "Online table"
         : "Pass & play";
   const version = __MOONGAMES_GAME_VERSION__;
-
-  const scoreSummary = useMemo(() => {
-    if (onlineMode) {
-      return activeGame === null
-        ? "No table yet"
-        : (activeGame.players ?? [])
-            .map(
-              (player) =>
-                `${PLAYER_LABEL[player]} ${activeGame.scores[player] ?? 0}`,
-            )
-            .join(" · ");
-    }
-    return game.players
-      .map((player) => `${PLAYER_LABEL[player]} ${game.scores[player]}`)
-      .join(" · ");
-  }, [activeGame, game.players, game.scores, onlineMode]);
 
   const shots = online.state?.shots ?? [];
   const recentShots = shots.slice(-8).reverse();
@@ -541,6 +909,18 @@ export default function App({ bridge }: AppProps) {
     }
     return counts;
   }, [activeGame]);
+
+  const strikerLabel = (player: CarromPlayer): string | undefined => {
+    const id = onlineMode
+      ? activeGame?.strikers?.[player]
+      : player === "white" || player === activeTurn
+        ? striker
+        : undefined;
+    if (id === undefined) {
+      return undefined;
+    }
+    return CARROM_STRIKERS.find((entry) => entry.id === id)?.label ?? id;
+  };
 
   return (
     <div
@@ -609,14 +989,16 @@ export default function App({ bridge }: AppProps) {
           >
             <Icon name={isFullscreen ? "minimize" : "maximize"} size={18} />
           </button>
-          <button
-            type="button"
-            className="button button--ghost header-new"
-            onClick={handleNewGame}
-          >
-            <Icon name="refresh" size={16} />
-            New board
-          </button>
+          {onlineMode ? null : (
+            <button
+              type="button"
+              className="button button--ghost header-new"
+              onClick={handleNewGame}
+            >
+              <Icon name="refresh" size={16} />
+              New board
+            </button>
+          )}
         </div>
       </header>
 
@@ -636,6 +1018,8 @@ export default function App({ bridge }: AppProps) {
           <PointsBar
             players={seatedPlayers}
             scores={activeGame?.scores ?? game.scores}
+            queen={activeGame?.queen ?? game.queen}
+            rules={tableRules}
             active={activeGame?.turn ?? game.turn}
           />
           <div className="turn-strip">
@@ -644,89 +1028,53 @@ export default function App({ bridge }: AppProps) {
               <span className="eyebrow">Current shot</span>
               <strong>{title}</strong>
             </div>
+            {clockSeconds !== null ? (
+              <span
+                className={`turn-clock${
+                  clockSeconds <= 5 ? " turn-clock--urgent" : ""
+                }`}
+                title="The shot clock"
+              >
+                <Icon name="clock" size={14} strokeWidth={2} />
+                {clockSeconds}s
+              </span>
+            ) : null}
+            {online.connection !== "connected" ? (
+              <span
+                className={`turn-connection turn-connection--${online.connection}`}
+                title="The MoonGames connection"
+              >
+                {online.connection === "connecting" ? "Connecting…" : "Offline"}
+              </span>
+            ) : null}
             <span className="turn-strip__meta">{modeLabel}</span>
           </div>
 
-          <div className="board-stage">
-            <CarromBoard
-              state={activeGame ?? game}
-              strikerPosition={strikerPosition}
-              animation={activeAnimation}
+          <div className={`board-frame board-frame--${dockSide}`}>
+            <div className="board-stage">
+              <CarromBoard
+                state={activeGame ?? game}
+                strikerPosition={strikerPosition}
+                animation={activeAnimation}
+                disabled={!canShoot}
+                theme={theme}
+                aimMode={aimMode}
+                view={viewPlayer}
+                onShoot={handleShoot}
+                onAnimationComplete={handleAnimationComplete}
+              />
+            </div>
+            <StrikerDock
+              player={dockPlayer}
+              side={dockSide}
+              position={strikerPosition}
               disabled={!canShoot}
-              theme={theme}
-              aimMode={aimMode}
-              onShoot={handleShoot}
-              onAnimationComplete={handleAnimationComplete}
+              onChange={(value) => handleStrikerChange(value, dockPlayer)}
+              onNudge={(direction) => nudgeStriker(direction, dockPlayer)}
             />
           </div>
 
           <div className="board-controls">
-            {mode === "local" ? (
-              <div className="table-size">
-                <span className="table-size__label">Table</span>
-                <div className="table-size__options" role="radiogroup">
-                  {LOCAL_TABLE_SIZES.map((size) => (
-                    <button
-                      key={size}
-                      type="button"
-                      role="radio"
-                      aria-checked={localTable === size}
-                      className={`table-size__option${
-                        localTable === size ? " table-size__option--active" : ""
-                      }`}
-                      onClick={() => {
-                        setLocalTable(size);
-                        resetBoard(
-                          `${size} player table ready. Ivory to shoot.`,
-                        );
-                      }}
-                    >
-                      {size}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            <div className="striker-control">
-              <span className="striker-control__label">Striker</span>
-              {seatedPlayers.map((player) => (
-                <span className="striker-seat" key={player}>
-                  <span className="striker-seat__name">
-                    {PLAYER_LABEL[player]}
-                  </span>
-                  <button
-                    type="button"
-                    className="stepper"
-                    onClick={() => nudgeStriker(-1, player)}
-                    disabled={!canShoot}
-                    aria-label={`Move the ${PLAYER_LABEL[player]} striker left`}
-                  >
-                    <Icon name="chevron-left" size={15} strokeWidth={2.2} />
-                  </button>
-                  <input
-                    type="range"
-                    min={CARROM_BOARD.baselineMin}
-                    max={CARROM_BOARD.baselineMax}
-                    step={0.005}
-                    value={positions[player] ?? 0.5}
-                    disabled={!canShoot}
-                    aria-label={`${PLAYER_LABEL[player]} striker position along the baseline`}
-                    onChange={(event) =>
-                      handleStrikerChange(Number(event.target.value), player)
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="stepper"
-                    onClick={() => nudgeStriker(1, player)}
-                    disabled={!canShoot}
-                    aria-label={`Move the ${PLAYER_LABEL[player]} striker right`}
-                  >
-                    <Icon name="chevron-right" size={15} strokeWidth={2.2} />
-                  </button>
-                </span>
-              ))}
-            </div>
             <div className="aim-mode">
               <span className="aim-mode__label">Aim</span>
               <div
@@ -765,13 +1113,33 @@ export default function App({ bridge }: AppProps) {
         </section>
 
         <aside className="sidebar">
+          {mode === "local" ? (
+            <ChallengePanel
+              active={challenge}
+              progress={challengeState}
+              onStart={startChallenge}
+              onQuit={quitChallenge}
+            />
+          ) : null}
+
+          {onlineMode ? (
+            <OnlinePanel
+              online={online}
+              seats={onlineSeats}
+              onSeatsChange={setOnlineSeats}
+              settings={{ variant, turnSeconds }}
+            />
+          ) : null}
+
           <section className="panel table-panel">
             <div className="panel-heading">
               <div>
                 <p className="eyebrow">Scoreboard</p>
                 <h2>Table</h2>
               </div>
-              <span className="panel-heading__meta">{scoreSummary}</span>
+              <span className="panel-heading__meta">
+                {tableRules.label} · {seatedPlayers.length} players
+              </span>
             </div>
             <div className="score-list">
               {onlineMode
@@ -779,22 +1147,26 @@ export default function App({ bridge }: AppProps) {
                     <ScoreCard
                       key={seat.user_id}
                       player={seat.colour}
-                      score={activeGame?.scores[seat.colour] ?? 0}
+                      name={seat.username}
+                      left={piecesLeft(activeGame ?? game, seat.colour)}
                       active={active === seat.colour}
                       queen={activeGame?.queen ?? { status: "board" }}
                       ai={false}
                       seat={seatIndex + 1}
+                      striker={strikerLabel(seat.colour)}
                     />
                   ))
                 : game.players.map((player, seat) => (
                     <ScoreCard
                       key={player}
                       player={player}
-                      score={game.scores[player]}
+                      name={nameOf(player)}
+                      left={piecesLeft(game, player)}
                       active={active === player}
                       queen={game.queen}
                       ai={isAiPlayer(mode, player)}
                       seat={seat + 1}
+                      striker={strikerLabel(player)}
                     />
                   ))}
             </div>
@@ -811,6 +1183,37 @@ export default function App({ bridge }: AppProps) {
             />
           </section>
 
+          <TableSettings
+            tableSizes={LOCAL_TABLE_SIZES}
+            tableSize={onlineMode ? onlineSeats : localTable}
+            onTableSizeChange={(size) => {
+              if (onlineMode) {
+                setOnlineSeats(size);
+                return;
+              }
+              setLocalTable(size);
+              resetBoard(`${size} player table ready. Ivory to shoot.`, {
+                tableSize: size,
+              });
+            }}
+            tableSizeLocked={onlineMode && online.matchId !== null}
+            variant={
+              onlineMode && activeGame !== null
+                ? ((activeGame.rules?.id ?? "classic") as GameVariant)
+                : variant
+            }
+            onVariantChange={applyVariant}
+            striker={striker}
+            onStrikerChange={applyStriker}
+            turnSeconds={
+              onlineMode && activeGame !== null
+                ? (activeGame.turnSeconds ?? 0)
+                : turnSeconds
+            }
+            onTurnSecondsChange={applyTurnSeconds}
+            locked={onlineMode && online.matchId !== null}
+          />
+
           <section className="panel status-panel" aria-live="polite">
             <div className="status-panel__icon">
               <Icon
@@ -825,19 +1228,20 @@ export default function App({ bridge }: AppProps) {
               />
             </div>
             <div>
-              <p className="eyebrow">Table read</p>
-              <h2>{title}</h2>
+              <p className="eyebrow">
+                {activeGame?.status === "finished"
+                  ? "Result"
+                  : activeGame?.lastOutcome !== undefined
+                    ? "Last shot"
+                    : "Table read"}
+              </p>
+              {activeGame?.status === "finished" ? <h2>{title}</h2> : null}
               <p>{detail}</p>
             </div>
           </section>
 
           {onlineMode ? (
             <>
-              <OnlinePanel
-                online={online}
-                seats={onlineSeats}
-                onSeatsChange={setOnlineSeats}
-              />
               {recentShots.length > 0 ? (
                 <section className="panel shot-list">
                   <div className="panel-heading">
@@ -867,12 +1271,6 @@ export default function App({ bridge }: AppProps) {
                   </ol>
                 </section>
               ) : null}
-              <MatchChat
-                matchId={online.matchId}
-                messages={online.chat}
-                selfUserId={online.myUserId}
-                onSend={(text) => online.sendChat(text)}
-              />
               <AccountPanel
                 account={online.account}
                 authBusy={online.authBusy}
@@ -896,6 +1294,11 @@ export default function App({ bridge }: AppProps) {
                 emptyProfileText="Your rating and your pocket box fill in after your first game."
                 emptyHistoryText="Your finished carrom games will appear here."
                 emptyLeaderboardText="Play a quick match to enter the rating leaderboard."
+                statLabels={{
+                  pieces_pocketed: "Pieces pocketed",
+                  queens_covered: "Queens covered",
+                  best_streak: "Best streak",
+                }}
                 historyMeta={(entry) =>
                   `${entry.mode === "private" ? "Private" : "Quick"} · ${
                     entry.endedAt > 0
@@ -914,7 +1317,7 @@ export default function App({ bridge }: AppProps) {
             <section className="panel ai-panel">
               <div className="panel-heading">
                 <div>
-                  <p className="eyebrow">Moon AI</p>
+                  <p className="eyebrow">Computer</p>
                   <h2>Opponent</h2>
                 </div>
               </div>
@@ -965,18 +1368,47 @@ export default function App({ bridge }: AppProps) {
               </li>
               <li>
                 <span className="tip-mark" />
-                The queen must be covered before the last piece can finish the
-                board.
+                {tableRules.coverQueen
+                  ? "The queen must be covered before the last piece can finish the board."
+                  : "The queen is an ordinary piece here. Pocket it like any other."}
               </li>
+              {tableRules.fouls ? (
+                <li>
+                  <span className="tip-mark" />
+                  A striker in a pocket gives one of your pieces back.
+                </li>
+              ) : (
+                <li>
+                  <span className="tip-mark" />
+                  There are no fouls on this table. Nothing is given back.
+                </li>
+              )}
             </ul>
           </section>
 
           <p className="sidebar-note">
-            {mode === "ai" ? "Solo table" : "Two players, one device"} ·{" "}
-            {isFullscreen ? "Fullscreen" : "Windowed"}
+            {mode === "ai"
+              ? "You against Computer"
+              : mode === "online"
+                ? online.spectating
+                  ? "Watching a table"
+                  : "Shared table"
+                : `${localTable} players, one device`}{" "}
+            · {isFullscreen ? "Fullscreen" : "Windowed"}
           </p>
         </aside>
       </main>
+
+      {onlineMode ? (
+        <div className="chat-dock">
+          <MatchChat
+            matchId={online.matchId}
+            messages={online.chat}
+            selfUserId={online.myUserId}
+            onSend={(text) => online.sendChat(text)}
+          />
+        </div>
+      ) : null}
 
       <RulesDialog open={rulesOpen} onClose={() => setRulesOpen(false)} />
       {online.opponentLeft !== null ? (
@@ -989,15 +1421,20 @@ export default function App({ bridge }: AppProps) {
           onStay={online.dismissOpponentLeft}
         />
       ) : null}
-      {resultOpen && game.status === "finished" && game.winner !== null ? (
+      {resultOpen && winner !== null ? (
         <GameOverDialog
-          winner={game.winner}
+          winner={winner}
+          winnerName={nameOf(winner)}
           onNewGame={handleNewGame}
           onRematch={
             onlineMode
               ? () => {
+                  setResultOpen(false);
                   void online.leaveMatch().then(() =>
-                    online.createPrivateRoom(onlineSeats),
+                    online.createPrivateRoom(onlineSeats, {
+                      variant,
+                      turnSeconds,
+                    }),
                   );
                 }
               : undefined

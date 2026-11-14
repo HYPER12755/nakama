@@ -58,11 +58,16 @@ import {
   type OnlineTimeControl,
 } from "../lib/onlineProtocol";
 
-const DEVICE_ID_KEY = "moongames.chess.deviceId";
-const SERVER_ADDRESS_KEY = "moongames.chess.serverAddress";
-const TIME_CONTROL_KEY = "moongames.chess.timeControl";
-const MATCH_ID_KEY = "moongames.chess.matchId";
-const SPECTATE_KEY = "moongames.chess.spectate";
+/**
+ * The identifiers of this title come from the build, so the client never
+ * carries a game id of its own.
+ */
+const GAME_ID = __MOONGAMES_GAME_ID__;
+const DEVICE_ID_KEY = `moongames.${GAME_ID}.deviceId`;
+const SERVER_ADDRESS_KEY = `moongames.${GAME_ID}.serverAddress`;
+const TIME_CONTROL_KEY = `moongames.${GAME_ID}.timeControl`;
+const MATCH_ID_KEY = `moongames.${GAME_ID}.matchId`;
+const SPECTATE_KEY = `moongames.${GAME_ID}.spectate`;
 const QUICK_MATCH_FALLBACK_MS = 5000;
 
 export interface PendingOnlinePromotion {
@@ -1428,7 +1433,7 @@ export function useOnlineChess(
           await social.acceptFriend({ userId: input.userId });
         }
         const invite = await social.createInvite({
-          gameId: "chess",
+          gameId: GAME_ID,
           mode: "private",
           matchId: targetMatchId,
           recipientId: input.userId,
@@ -1605,7 +1610,7 @@ export function useOnlineChess(
       matchmakerRef.current = pending;
 
       const ticket = await activeSocket.addMatchmaker(query, 2, 2, {
-        game: "chess",
+        game: GAME_ID,
         timeControl: label,
         timeControlKey,
       });

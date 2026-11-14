@@ -10,6 +10,7 @@ import {
   PLAYER_LABEL,
   baselineOf,
   strikerPoint,
+  viewRotation,
   type CarromDiscKind,
   type CarromFrameDisc,
   type CarromPlayer,
@@ -24,11 +25,14 @@ import {
   type AimHit,
   type AimMode,
 } from "../lib/aim";
+import {
+  LOGICAL_SIZE,
+  PLAY_INSET,
+  PLAY_SIZE,
+  screenToBoard,
+} from "../lib/view";
 import type { Theme } from "../lib/theme";
 
-const LOGICAL_SIZE = 1000;
-const PLAY_INSET = 62;
-const PLAY_SIZE = LOGICAL_SIZE - PLAY_INSET * 2;
 const ACCENT = "#48c9b0";
 const QUEEN_RED = "#b3202b";
 
@@ -43,6 +47,8 @@ interface AimState {
   power: number;
   /** Pointer position in board coordinates, used to draw the pull band. */
   pointer: { x: number; y: number };
+  /** Where the finger went down, the far end of the pull. */
+  anchor: { x: number; y: number } | null;
 }
 
 export interface CarromBoardProps {
@@ -53,6 +59,11 @@ export interface CarromBoardProps {
   disabled: boolean;
   theme: Theme;
   aimMode: AimMode;
+  /**
+   * The player the table is turned towards. Their baseline is at the bottom
+   * of the screen, so their striker is always at hand level.
+   */
+  view: CarromPlayer;
   onShoot: (shot: CarromShotInput) => void;
   onAnimationComplete: () => void;
 }
@@ -540,11 +551,11 @@ function drawPiece(
   const palette =
     kind === "striker"
       ? {
-          top: "#fffaf0",
-          mid: "#eadfc9",
-          low: "#b8ab90",
-          rim: "#6f6551",
-          ring: "rgba(96, 86, 66, 0.45)",
+          top: "#f6e7c8",
+          mid: "#cbae7c",
+          low: "#8d6f44",
+          rim: "#4b3820",
+          ring: "rgba(110, 84, 48, 0.5)",
         }
       : kind === "white"
         ? {
@@ -612,14 +623,79 @@ function drawPiece(
     radius * 0.06,
     0,
     0,
-    radius,
-  );
+    radius,  );
   face.addColorStop(0, palette.top);
   face.addColorStop(0.52, palette.mid);
   face.addColorStop(1, palette.low);
   ctx.beginPath();
   ctx.arc(0, 0, radius, 0, Math.PI * 2);
   ctx.fillStyle = face;
+  ctx.fill();
+
+  // The grain of the wood under the paint. The pieces are turned on a lathe,
+  // so the grain runs in rings around the middle.
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.clip();
+  if (!lite) {
+    // Every piece gets its own grain, and the same piece always gets the
+    // same grain, so the table never flickers.
+    const grain = random(0x9e3779b9 ^ (((x * 31 + y * 17) | 0) >>> 0));
+    const rings = kind === "striker" ? 7 : 5;
+    for (let index = 0; index < rings; index += 1) {
+      const ringRadius = radius * (0.16 + (index / rings) * 0.82);
+      ctx.beginPath();
+      ctx.ellipse(
+        (grain() - 0.5) * radius * 0.14,
+        (grain() - 0.5) * radius * 0.14,
+        ringRadius,
+        ringRadius * (0.94 + grain() * 0.12),
+        grain() * 0.6 - 0.3,
+        0,
+        Math.PI * 2,
+      );
+      ctx.strokeStyle =
+        grain() > 0.5
+          ? "rgba(255, 244, 214, 0.07)"
+          : "rgba(40, 22, 8, 0.09)";
+      ctx.lineWidth = Math.max(0.5, radius * (0.03 + grain() * 0.035));
+      ctx.stroke();
+    }
+    // A few pores in the paint.
+    const pores = kind === "striker" ? 26 : 18;
+    for (let index = 0; index < pores; index += 1) {
+      const angle = grain() * Math.PI * 2;
+      const distance = Math.sqrt(grain()) * radius * 0.94;
+      ctx.beginPath();
+      ctx.arc(
+        Math.cos(angle) * distance,
+        Math.sin(angle) * distance,
+        radius * (0.012 + grain() * 0.022),
+        0,
+        Math.PI * 2,
+      );
+      ctx.fillStyle = "rgba(30, 16, 6, 0.12)";
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  // The rounded edge of the piece: light from the top left, shade at the
+  // bottom right, so the piece reads as a solid disc on the table.
+  const bevel = ctx.createLinearGradient(
+    -radius * 0.8,
+    -radius * 0.8,
+    radius * 0.8,
+    radius * 0.8,
+  );
+  bevel.addColorStop(0, "rgba(255, 250, 236, 0.4)");
+  bevel.addColorStop(0.42, "rgba(255, 250, 236, 0.06)");
+  bevel.addColorStop(0.62, "rgba(24, 12, 4, 0.06)");
+  bevel.addColorStop(1, "rgba(24, 12, 4, 0.34)");
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.fillStyle = bevel;
   ctx.fill();
 
   // Bevelled rim.
@@ -652,6 +728,17 @@ function drawPiece(
   }
 
   if (kind === "striker") {
+    // The striker is a turned wooden disc with a metal band around it.
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.84, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(196, 160, 96, 0.85)";
+    ctx.lineWidth = Math.max(1.2, radius * 0.09);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.84, Math.PI * 0.15, Math.PI * 0.95);
+    ctx.strokeStyle = "rgba(255, 232, 176, 0.75)";
+    ctx.lineWidth = Math.max(0.8, radius * 0.045);
+    ctx.stroke();
     ctx.beginPath();
     ctx.arc(0, 0, radius * 0.78, 0, Math.PI * 2);
     ctx.strokeStyle = "rgba(72, 201, 176, 0.9)";
@@ -686,12 +773,14 @@ function drawAim(
   ctx.save();
   ctx.lineCap = "round";
 
-  // Pull band: where the finger pulled the striker back from.
-  if (mode === "pull") {
+  // Pull band: the line the finger is pulling along. It starts where the
+  // finger went down and ends under the finger, so the shot leaves along
+  // exactly this line.
+  if (mode === "pull" && aim.anchor !== null) {
     ctx.beginPath();
-    ctx.moveTo(originX, originY);
+    ctx.moveTo(toCanvasX(aim.anchor.x), toCanvasY(aim.anchor.y));
     ctx.lineTo(toCanvasX(aim.pointer.x), toCanvasY(aim.pointer.y));
-    ctx.strokeStyle = "rgba(255, 236, 196, 0.28)";
+    ctx.strokeStyle = "rgba(255, 236, 196, 0.34)";
     ctx.lineWidth = 3;
     ctx.stroke();
   }
@@ -703,6 +792,18 @@ function drawAim(
   ctx.strokeStyle = "rgba(72, 201, 176, 0.16)";
   ctx.lineWidth = 13;
   ctx.stroke();
+
+  // In a direct flick the finger is further along the same line than the
+  // first contact, so the rest of the line is drawn faintly. The finger is
+  // then always on the line the shot follows.
+  if (mode === "direct") {
+    ctx.beginPath();
+    ctx.moveTo(hitX, hitY);
+    ctx.lineTo(toCanvasX(aim.pointer.x), toCanvasY(aim.pointer.y));
+    ctx.strokeStyle = "rgba(108, 238, 212, 0.28)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
 
   // Dashed guide along the launch direction.
   ctx.setLineDash([10, 11]);
@@ -775,6 +876,7 @@ export function CarromBoard({
   disabled,
   theme,
   aimMode,
+  view,
   onShoot,
   onAnimationComplete,
 }: CarromBoardProps) {
@@ -784,6 +886,21 @@ export function CarromBoard({
   const completedRef = useRef<CarromShotResult | null>(null);
   const [aim, setAim] = useState<AimState | null>(null);
   const [dpr, setDpr] = useState(1);
+  // The table turns so the player sits at the bottom of the screen. The
+  // rotation is kept in a ref so the aim follows the finger while it turns.
+  const rotationRef = useRef(0);
+  const rotationFromRef = useRef(0);
+  const rotationToRef = useRef(0);
+  const rotationFrameRef = useRef(0);
+  const sceneRef = useRef<{
+    display: DisplayState;
+    aimState: AimState | null;
+    animating: boolean;
+  } | null>(null);
+  // The shot callback is read through a ref so that a new callback never
+  // restarts a shot that is already running.
+  const onCompleteRef = useRef(onAnimationComplete);
+  onCompleteRef.current = onAnimationComplete;
   const lite =
     typeof document !== "undefined" &&
     document.documentElement.dataset.moonperf === "lite";
@@ -805,6 +922,14 @@ export function CarromBoard({
     }
   }, [animation]);
 
+  // A new turn means a new striker, so an aim that is still being dragged is
+  // dropped rather than carried over.
+  useEffect(() => {
+    setAim(null);
+    draggingRef.current = null;
+    dragAnchorRef.current = null;
+  }, [state.turn]);
+
   useEffect(() => {
     if (disabled) {
       setAim(null);
@@ -822,6 +947,7 @@ export function CarromBoard({
       if (canvas === null) {
         return;
       }
+      sceneRef.current = { display, aimState, animating };
       const pixelSize = Math.round(LOGICAL_SIZE * dpr);
       if (canvas.width !== pixelSize || canvas.height !== pixelSize) {
         canvas.width = pixelSize;
@@ -833,6 +959,13 @@ export function CarromBoard({
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, LOGICAL_SIZE, LOGICAL_SIZE);
+
+      // The table is turned so the player sits at the bottom of the screen.
+      const centre = LOGICAL_SIZE / 2;
+      ctx.save();
+      ctx.translate(centre, centre);
+      ctx.rotate(rotationRef.current);
+      ctx.translate(-centre, -centre);
 
       drawFrame(ctx, lite);
       drawSurface(ctx, lite);
@@ -884,9 +1017,68 @@ export function CarromBoard({
         const hit = raycastBoard(origin, aimState.angle, display.discs);
         drawAim(ctx, display, aimState, aimMode, hit, lite);
       }
+      ctx.restore();
     },
     [dpr, lite, disabled, aimMode],
   );
+
+  /**
+   * Turn the table towards a player. The turn is animated so the table
+   * swings round instead of jumping, and the aim keeps working while it
+   * moves.
+   */
+  const turnTableTo = useCallback(
+    (player: CarromPlayer) => {
+      const target = viewRotation(player);
+      const current = rotationRef.current;
+      let delta = target - current;
+      while (delta > Math.PI) {
+        delta -= Math.PI * 2;
+      }
+      while (delta < -Math.PI) {
+        delta += Math.PI * 2;
+      }
+      if (Math.abs(delta) < 0.002) {
+        return;
+      }
+      rotationFromRef.current = current;
+      rotationToRef.current = current + delta;
+      cancelAnimationFrame(rotationFrameRef.current);
+      const started = performance.now();
+      const duration = 360;
+      const tick = (now: number) => {
+        const progress = Math.min(1, (now - started) / duration);
+        const eased =
+          progress < 0.5
+            ? 4 * progress * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+        rotationRef.current =
+          rotationFromRef.current +
+          (rotationToRef.current - rotationFromRef.current) * eased;
+        const scene = sceneRef.current;
+        if (scene !== null) {
+          drawScene(scene.display, scene.aimState, scene.animating);
+        }
+        if (progress < 1) {
+          rotationFrameRef.current = requestAnimationFrame(tick);
+        } else {
+          rotationRef.current = rotationToRef.current;
+        }
+      };
+      rotationFrameRef.current = requestAnimationFrame(tick);
+    },
+    [drawScene],
+  );
+
+  useEffect(() => {
+    turnTableTo(view);
+  }, [turnTableTo, view]);
+
+  useEffect(() => {
+    return () => {
+      cancelAnimationFrame(rotationFrameRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (animation !== null) {
@@ -913,6 +1105,8 @@ export function CarromBoard({
       completedRef.current = null;
       return;
     }
+    // The callback is read through a ref. If it changed identity the shot
+    // would start again from the first frame and never finish.
     let frameId = 0;
     let cancelled = false;
     const started = performance.now();
@@ -936,7 +1130,7 @@ export function CarromBoard({
       if (elapsed >= animation.duration) {
         if (completedRef.current !== animation) {
           completedRef.current = animation;
-          onAnimationComplete();
+          onCompleteRef.current();
         }
         return;
       }
@@ -947,11 +1141,12 @@ export function CarromBoard({
       cancelled = true;
       cancelAnimationFrame(frameId);
     };
-  }, [animation, drawScene, onAnimationComplete]);
+  }, [animation, drawScene]);
 
   /**
    * The pointer is read in board coordinates and never clamped: the aim has
-   * to keep following the finger when it leaves the table.
+   * to keep following the finger when it leaves the table. The table may be
+   * turned, so the pointer is turned back before it is used.
    */
   const pointFromEvent = (
     event: ReactPointerEvent<HTMLCanvasElement>,
@@ -964,19 +1159,25 @@ export function CarromBoard({
     if (rect.width <= 0 || rect.height <= 0) {
       return null;
     }
-    const x =
-      ((event.clientX - rect.left) / rect.width) * LOGICAL_SIZE -
-      PLAY_INSET;
-    const y =
-      ((event.clientY - rect.top) / rect.height) * LOGICAL_SIZE - PLAY_INSET;
-    return { x: x / PLAY_SIZE, y: y / PLAY_SIZE };
+    const screenX =
+      ((event.clientX - rect.left) / rect.width) * LOGICAL_SIZE;
+    const screenY =
+      ((event.clientY - rect.top) / rect.height) * LOGICAL_SIZE;
+    // The table may be turned, so the pointer is turned back before it is
+    // used.
+    return screenToBoard(screenX, screenY, rotationRef.current);
   };
 
   const aimAt = (point: { x: number; y: number }): AimState => {
     const origin = strikerPoint(state.turn, strikerPosition);
     const anchor = dragAnchorRef.current ?? origin;
     const base = aimFromGesture(anchor, point, origin, aimMode);
-    return { angle: base.angle, power: base.power, pointer: point };
+    return {
+      angle: base.angle,
+      power: base.power,
+      pointer: point,
+      anchor: dragAnchorRef.current,
+    };
   };
 
   const handlePointerDown = (

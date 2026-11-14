@@ -92,6 +92,28 @@ export function RulesDialog({ open, onClose }: RulesDialogProps) {
               </p>
             </div>
           </article>
+          <article className="rule">
+            <span className="rule__number">05</span>
+            <div>
+              <h3>How the points are counted</h3>
+              <p>
+                Every man you pocket is worth one point and the queen is worth
+                three, so a full table is worth twelve. The points bar above
+                the board always shows the count.
+              </p>
+            </div>
+          </article>
+          <article className="rule">
+            <span className="rule__number">06</span>
+            <div>
+              <h3>Game types and the clock</h3>
+              <p>
+                Classic is the ICF game. Freestyle plays the queen as an
+                ordinary piece. Practice drops the penalties. A shot clock hands
+                the turn on when a player runs out of time.
+              </p>
+            </div>
+          </article>
         </div>
 
         <div className="rules-tip">

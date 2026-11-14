@@ -16,6 +16,7 @@
     "@moongames/carrom-core": "workspace:*",
     "@moongames/game-sdk": "workspace:*",
     "@moongames/game-ui": "workspace:*",
+    "@moongames/social": "workspace:*",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

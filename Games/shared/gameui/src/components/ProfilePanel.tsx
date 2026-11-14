@@ -23,6 +23,20 @@ export interface ProfilePanelProps {
   /** The game specific detail line under a history entry. */
   historyMeta?: (entry: GameHistoryEntry) => string;
   resultLabels?: Partial<Record<GameOutcome, string>>;
+  /**
+   * The names of the counters a game owns. A title describes its own
+   * counters, so the panel never shows a raw key.
+   */
+  statLabels?: Record<string, string>;
+}
+
+/** Turn a counter key into words when a title has no name for it. */
+function humaniseStat(key: string): string {
+  const words = key.replace(/[_-]+/g, " ").trim();
+  if (words.length === 0) {
+    return key;
+  }
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 const DEFAULT_RESULT_LABELS: Record<GameOutcome, string> = {
@@ -105,6 +119,7 @@ export function ProfilePanel({
   emptyLeaderboardText = "Play a quick match to enter the rating leaderboard.",
   historyMeta,
   resultLabels,
+  statLabels,
 }: ProfilePanelProps) {
   if (!connected) {
     return null;
@@ -166,7 +181,7 @@ export function ProfilePanel({
             {Object.entries(profile.stats ?? {}).map(([key, value]) => (
               <div className="profile-stat" key={key}>
                 <strong>{value}</strong>
-                <span>{key}</span>
+                <span>{statLabels?.[key] ?? humaniseStat(key)}</span>
               </div>
             ))}
           </div>

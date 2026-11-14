@@ -13,11 +13,15 @@ Carrom/
 │   │   ├── physics.ts # fixed-step simulation, pockets, collisions
 │   │   ├── rules.ts   # carrom rules applied to a finished simulation
 │   │   ├── shot.ts    # physics + rules entry point
+│   │   ├── protocol.ts # the wire op codes the client and server share
+│   │   ├── challenges.ts # the challenge table targets
 │   │   └── ai.ts      # simulation-backed opponent search
 │   └── test/
 │       ├── carrom.test.ts
 │       ├── match.test.ts
-│       └── parity.test.ts
+│       ├── layout.test.ts
+│       ├── parity.test.ts
+│       └── variants.test.ts
 ├── server/         # authoritative Nakama runtime logic (Lua)
 │   ├── carrom_physics.lua
 │   ├── carrom_rules.lua
@@ -32,20 +36,26 @@ Carrom/
     ├── src/
     │   ├── App.tsx
     │   ├── components/
-    │   │   ├── CarromBoard.tsx   # canvas board, aiming, animation
-    │   │   ├── EmojiPicker.tsx
+    │   │   ├── CarromBoard.tsx   # canvas board, aiming, animation, the turn
+    │   │   ├── ChallengePanel.tsx # the trick shot challenges
     │   │   ├── GameOverDialog.tsx
     │   │   ├── Icon.tsx
     │   │   ├── OnlinePanel.tsx    # lobby, seats, table chat
+    │   │   ├── PointsBar.tsx      # the one score display
     │   │   ├── RulesDialog.tsx
-    │   │   └── ScoreCard.tsx
+    │   │   ├── ScoreCard.tsx      # a seat at the table
+    │   │   ├── StrikerDock.tsx    # the striker control on the board
+    │   │   └── TableSettings.tsx  # table size, game type, striker, clock
     │   ├── hooks/
     │   │   └── useOnlineCarrom.ts # Nakama client, seats, shots, chat
     │   └── lib/
     │       ├── aim.ts    # power curve, aim raycast, frame interpolation
     │       ├── audio.ts  # generated wooden shot sounds
-    │       └── theme.ts
-    └── test/aim.test.ts
+    │       ├── theme.ts
+    │       └── view.ts   # the turned table and the pointer math
+    └── test/
+        ├── aim.test.ts
+        └── view.test.ts
 ```
 
 ## Tables
@@ -63,6 +73,36 @@ moves clockwise around the table:
 
 A two player table uses Ivory and Onyx. The room creator keeps the first
 colour, whoever joins first otherwise takes the next free colour.
+
+### The table turns
+
+A player who is sitting at their own screen sees the table turned so their
+own side is at the bottom, the way they sit at a real table. Their striker is
+then always at hand level, and the striker control sits under their own hand
+in one comfortable place.
+
+A table played on one device is shared, so it is **never** turned. There the
+striker control moves to the side of the player whose turn it is, because
+that is where their striker is.
+
+The turn is animated, so the table swings round instead of jumping, and the
+aim keeps following the finger while it moves. The geometry lives in
+`core/src/board.ts` (`viewRotation` and `sideForViewer`), and the pointer
+math in `web/src/lib/view.ts`; both are covered by tests.
+
+### Names
+
+A player is known by the name on their MoonGames account, which is the shared
+session the launcher hands over. The computer opponent is called Computer.
+A table played on one device names the seats. Nothing on the table says
+"Player" when the account knows better.
+
+### Invites
+
+A player at a table can invite a friend to it. The picker is the shared one:
+it lists the friends, takes an incoming friend request, and sends the
+invitation with the table. The copied link is the fallback when a friend
+cannot be reached.
 
 ## Board
 
@@ -90,7 +130,9 @@ touching the inner ring, with white men on the axis of the first player.
 
 Two players, ivory and onyx, with nine men each plus the red queen.
 
-- Place the striker on your baseline between the two lines.
+- Place the striker on your baseline between the two lines. The striker
+  control sits on the board, on the side of the player whose turn it is, and
+  that side is always the bottom of your screen.
 - Pull back from your target and release: the striker launches away from the
   pull, with a longer pull meaning a harder shot. A direct style, where the
   striker launches toward your pointer, is available in the aim switch.
@@ -104,6 +146,50 @@ Two players, ivory and onyx, with nine men each plus the red queen.
   covered. If it is not, that piece returns and the turn passes.
 - The first player to clear all nine of their colour, with the queen covered,
   wins.
+
+### Points
+
+The score is counted the way the carrom apps count it: every man is worth one
+point and the queen is worth three, so a full table is worth twelve points.
+The points bar above the board is the only score display on the table. The
+sidebar shows who is sitting where, how many of their colour is left, and
+which striker they brought.
+
+### Game types
+
+The type of game is chosen in the table settings and is kept by the server,
+so both players play the same game:
+
+| Type | Fouls | Queen | Scoring |
+| --- | --- | --- | --- |
+| Classic | yes | must be covered | a man is one point, the queen three |
+| Freestyle | yes | an ordinary piece | a man is one point, the queen three |
+| Practice | no | an ordinary piece | no score |
+
+### Strikers
+
+A striker is a real choice: it changes how hard the shot leaves the
+baseline. The striker travels with the shot, and the server keeps the one a
+player brought to the table.
+
+| Striker | Power | Note |
+| --- | --- | --- |
+| Classic | 1.00 | the standard 15 g striker |
+| Heavy | 1.14 | hits harder and travels further |
+| Light | 0.86 | a softer touch, easier to control |
+| Swift | 1.05 | quick off the line, less weight behind it |
+
+### The shot clock
+
+A table can run with a 15, 30, or 60 second clock, or with no clock at all.
+When a player runs out of time the turn is handed on without a shot and the
+table carries on. Online tables are timed by the server.
+
+### Challenges
+
+A challenge is a solo table with a target: pocket a number of your pieces
+inside a number of shots. The challenge table uses the freestyle rules, so
+the queen does not need covering and the challenge is only about the shots.
 
 ## Physics
 
@@ -151,8 +237,10 @@ the rules, and the result:
   positions on both sides, and both assert it.
 - `carrom_match.lua` assigns the seats, starts the table once every seat is
   taken, simulates each shot itself, refuses out-of-turn shots, keeps a rate
-  limited table chat, and broadcasts the state with the shot so every client
-  replays the same animation.
+  limited table chat, runs the shot clock, and broadcasts the state with the
+  shot so every client replays the same animation. The striker and the
+  colour travel with the shot, because the striker changes how hard it
+  leaves the baseline.
 - `carrom_rpc.lua` creates private rooms, finds open quick tables, pairs the
   atomic matchmaker, and registers the shared invite room hook.
 
@@ -161,12 +249,29 @@ The Lua modules are copied to the local Nakama runtime with
 
 Nakama keeps a single matchmaker callback, so the shared module owns it and
 routes a ticket to the game that asked for it. The matchmaker query is scoped
-to the game and the table size, and a table's label follows its state so the
-quick table lookup never hands out a table that has already started.
+to the game, the table size, and the game type, and a table's label follows
+its state so the quick table lookup never hands out a table that has already
+started.
 
 ## Next
 
-- The in-game friend picker, the invite banner, and the shared chat emoji
-  picker for Carrom tables.
 - An offline four player table, ratings, and history.
+- A two against two team mode, where the turn order crosses the teams.
 - A parity suite that replays whole matches on both sides.
+
+## The table speaks
+
+A player should never have to guess what the table is doing, so the client
+says it out loud:
+
+- The table connects by itself. There is no button to press to get into the
+  game, and the connection state is shown on the turn strip when something is
+  wrong.
+- The account is picked up from the shared session, so the player is known by
+  their own name, and the rating, the history, and the leaderboard load with
+  the connection.
+- Every shot is heard and felt: the strike, the pockets, the foul, and the
+  win, whether the shot was played on this device or on the server.
+- The turn says who is shooting, and a player is told when it is their turn.
+- The table tells a player when somebody joins, when the clock runs out, and
+  when the other player leaves.

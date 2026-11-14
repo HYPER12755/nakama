@@ -35,18 +35,20 @@ protocol.MIN_SEATS = 2
 protocol.MAX_SEATS = 4
 
 -- The label used to find an open quick table of the same size. It follows the
--- same shape as the Chess label: game, mode, table size, status.
-function protocol.label(mode, seats, status)
+-- same shape as the Chess label: game, mode, table size, status, and the
+-- game type, so a table is only offered to a player who wants the same rules.
+function protocol.label(mode, seats, status, variant)
   return table.concat({
     "carrom",
     mode,
     tostring(seats),
     status or "open",
+    protocol.clamp_variant(variant),
   }, "|")
 end
 
-function protocol.quick_label(seats)
-  return protocol.label("quick", seats, "open")
+function protocol.quick_label(seats, variant)
+  return protocol.label("quick", seats, "open", variant)
 end
 
 function protocol.clamp_seats(value)
@@ -58,6 +60,49 @@ function protocol.clamp_seats(value)
     return protocol.MAX_SEATS
   end
   return math.floor(seats)
+end
+
+-- The game types a table can be played with.
+protocol.VARIANTS = { "classic", "freestyle", "practice" }
+
+function protocol.clamp_variant(value)
+  if type(value) ~= "string" then
+    return "classic"
+  end
+  for _, variant in ipairs(protocol.VARIANTS) do
+    if variant == value then
+      return variant
+    end
+  end
+  return "classic"
+end
+
+-- The shot clocks a table can use. Zero means the table has no clock.
+protocol.TURN_SECONDS = { 0, 15, 30, 60 }
+
+function protocol.clamp_turn_seconds(value)
+  local seconds = tonumber(value) or 0
+  for _, allowed in ipairs(protocol.TURN_SECONDS) do
+    if allowed == seconds then
+      return allowed
+    end
+  end
+  return 0
+end
+
+-- The strikers a player can bring to the table.
+protocol.STRIKERS = { "classic", "heavy", "light", "swift" }
+
+function protocol.clamp_striker(value)
+  if type(value) ~= "string" then
+    return nil
+  end
+  for _, striker in ipairs(protocol.STRIKERS) do
+    if striker == value then
+      return striker
+    end
+  end
+  return nil
 end
 
 -- Nakama's Lua runtime does not expose the utf8 library, so the length check

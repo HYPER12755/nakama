@@ -10,8 +10,9 @@ local physics = {}
 
 physics.DISC_RADIUS = 0.0216
 physics.STRIKER_RADIUS = 0.0279
-physics.POCKET_RADIUS = 0.0193
-physics.POCKET_HOLE_RADIUS = 0.0301
+-- The hole in the frame: 4.45 cm across. A piece drops when its centre
+-- passes over it.
+physics.POCKET_RADIUS = 0.0301
 physics.POCKETS = {
   { x = 0.036, y = 0.036 },
   { x = 0.964, y = 0.036 },
@@ -32,6 +33,24 @@ physics.STOP_SPEED = 0.02
 physics.STEP_SECONDS = 1 / 240
 physics.MAX_SIMULATION_SECONDS = 9
 physics.PIECES_PER_PLAYER = 9
+
+-- The strikers a player can bring to the table. The power is a multiplier on
+-- the launch speed, and it mirrors Carrom/core/src/board.ts.
+physics.STRIKERS = {
+  { id = "classic", label = "Classic", power = 1 },
+  { id = "heavy", label = "Heavy", power = 1.14 },
+  { id = "light", label = "Light", power = 0.86 },
+  { id = "swift", label = "Swift", power = 1.05 },
+}
+
+function physics.striker_skin(id)
+  for _, skin in ipairs(physics.STRIKERS) do
+    if skin.id == id then
+      return skin
+    end
+  end
+  return physics.STRIKERS[1]
+end
 
 -- Seating order around the table, clockwise.
 physics.SEATS = { "white", "yellow", "black", "green" }
@@ -218,8 +237,12 @@ function physics.simulate(state, shot)
   end
 
   local sx, sy = physics.striker_point(state.turn, shot.position)
-  local speed = physics.MIN_SHOT_SPEED
-    + (physics.MAX_SHOT_SPEED - physics.MIN_SHOT_SPEED) * shot.power
+  -- The striker the player brought to the table decides how hard the shot
+  -- leaves the baseline.
+  local skin = physics.striker_skin((state.strikers or {})[state.turn])
+  local speed = (physics.MIN_SHOT_SPEED
+    + (physics.MAX_SHOT_SPEED - physics.MIN_SHOT_SPEED) * shot.power)
+    * skin.power
   local striker = {
     index = #bodies + 1,
     id = "striker",

@@ -3,6 +3,8 @@ import { Icon } from "./Icon";
 
 interface GameOverDialogProps {
   winner: CarromPlayer;
+  /** The name the winner is known by. */
+  winnerName?: string;
   onNewGame: () => void;
   onClose: () => void;
   /** Offers a rematch, which is how every carrom app handles a finished board. */
@@ -11,10 +13,12 @@ interface GameOverDialogProps {
 
 export function GameOverDialog({
   winner,
+  winnerName,
   onNewGame,
   onClose,
   onRematch,
 }: GameOverDialogProps) {
+  const name = winnerName ?? PLAYER_LABEL[winner];
   return (
     <div className="dialog-backdrop" onClick={onClose}>
       <section
@@ -36,22 +40,24 @@ export function GameOverDialog({
           <Icon name="trophy" size={34} strokeWidth={1.6} />
         </span>
         <p className="eyebrow">Board cleared</p>
-        <h2 id="result-title">{PLAYER_LABEL[winner]} wins</h2>
+        <h2 id="result-title">{name} wins</h2>
         <p className="result-dialog__copy">
           Every piece of {PLAYER_LABEL[winner].toLowerCase()} colour is in a
           pocket and the queen is covered. A clean finish.
         </p>
         <div className="result-dialog__actions">
-          <button
-            type="button"
-            className="button button--primary"
-            onClick={onNewGame}
-          >
-            <Icon name="refresh" size={17} />
-            New board
-          </button>
+          {onRematch === undefined ? (
+            <button
+              type="button"
+              className="button button--primary"
+              onClick={onNewGame}
+            >
+              <Icon name="refresh" size={17} />
+              New board
+            </button>
+          ) : null}
           {onRematch !== undefined ? (
-            <button type="button" className="button button--ghost" onClick={onRematch}>
+            <button type="button" className="button button--primary" onClick={onRematch}>
               <Icon name="sparkles" size={17} />
               Rematch
             </button>

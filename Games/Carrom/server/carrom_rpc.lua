@@ -48,6 +48,14 @@ local function seats_from(params)
   return protocol.clamp_seats(value)
 end
 
+-- The table settings a client asks for: the game type and the shot clock.
+local function settings_from(params)
+  return {
+    variant = protocol.clamp_variant(params.variant),
+    turnSeconds = protocol.clamp_turn_seconds(params.turnSeconds),
+  }
+end
+
 local function spectate_requested(params)
   local metadata = params.metadata
   local value = type(metadata) == "table" and metadata.spectate or nil
@@ -98,6 +106,7 @@ end
 -- Create a private carrom room for the inviter and the invited player.
 local function create_private_room(context, params, recipient)
   local seats = seats_from(params)
+  local settings = settings_from(params)
   local expected_users = {
     {
       user_id = context.user_id,
@@ -116,6 +125,8 @@ local function create_private_room(context, params, recipient)
     rated = false,
     creator = context.user_id,
     seats = seats,
+    variant = settings.variant,
+    turnSeconds = settings.turnSeconds,
     expected_users = expected_users,
     lobby_timeout_ms = PRIVATE_LOBBY_TIMEOUT_MS,
   })
@@ -151,7 +162,8 @@ local function quick_match(context, payload)
   end
 
   local seats = seats_from(params)
-  local label = protocol.quick_label(seats)
+  local settings = settings_from(params)
+  local label = protocol.quick_label(seats, settings.variant)
 
   -- match_list is eventually consistent. The web client calls this only after
   -- the atomic matchmaker has had a few seconds to pair concurrent players.
@@ -170,6 +182,8 @@ local function quick_match(context, payload)
       mode = "quick",
       rated = true,
       seats = seats,
+      variant = settings.variant,
+      turnSeconds = settings.turnSeconds,
     })
   end
 
@@ -193,11 +207,14 @@ local function create_private_match(context, payload)
   end
 
   local seats = seats_from(params)
+  local settings = settings_from(params)
   local match_id = nk.match_create("carrom_match", {
     mode = "private",
     rated = false,
     creator = context.user_id,
     seats = seats,
+    variant = settings.variant,
+    turnSeconds = settings.turnSeconds,
     expected_users = {
       {
         user_id = context.user_id,
@@ -245,10 +262,19 @@ local function matchmaker_matched(context, matched)
     return nil
   end
 
+  -- The two players asked for the same table size. They have to want the
+  -- same game type as well, or one of them would play different rules.
+  local first_variant = protocol.clamp_variant(first_properties.variant)
+  local second_variant = protocol.clamp_variant(second_properties.variant)
+  if first_variant ~= second_variant then
+    return nil
+  end
+
   return nk.match_create("carrom_match", {
     mode = "quick",
     rated = true,
     seats = first_seats,
+    variant = first_variant,
     expected_users = {
       {
         user_id = first.presence.user_id,

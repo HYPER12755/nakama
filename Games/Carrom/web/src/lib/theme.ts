@@ -1,8 +1,9 @@
 import type { GameTheme } from "@moongames/game-sdk";
+import { gameStorageKey } from "./storage";
 
 export type Theme = "dark" | "light";
 
-const THEME_KEY = "moongames.carrom.theme";
+const THEME_KEY = gameStorageKey("theme");
 
 export function storedTheme(): Theme {
   try {

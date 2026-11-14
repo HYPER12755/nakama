@@ -322,14 +322,16 @@ async function playMatchmakerTable(runId) {
       bob.socket.onmatchmakermatched = resolve;
     });
 
-    const query = `+properties.game:carrom +properties.seats:2`;
+    const query = `+properties.game:carrom +properties.seats:2 +properties.variant:classic`;
     await alice.socket.addMatchmaker(query, 2, 2, {
       game: "carrom",
       seats: "2",
+      variant: "classic",
     });
     await bob.socket.addMatchmaker(query, 2, 2, {
       game: "carrom",
       seats: "2",
+      variant: "classic",
     });
 
     const [aliceMatch, bobMatch] = await Promise.all([
@@ -360,12 +362,85 @@ async function playMatchmakerTable(runId) {
   }
 }
 
+async function playTableSettings(runId) {
+  const alice = await authenticate(`moongames-carrom-${runId}-settings-a`);
+  const bob = await authenticate(`moongames-carrom-${runId}-settings-b`);
+  try {
+    const aliceEvents = createCollector(alice.socket, "settings-a");
+
+    const response = await alice.client.rpc(
+      alice.session,
+      "carrom_create_private_match",
+      { seats: 2, variant: "freestyle", turnSeconds: 15 },
+    );
+    const payload = response.payload;
+    assert(
+      payload?.ok === true && typeof payload.matchId === "string",
+      `create private match failed: ${JSON.stringify(payload)}`,
+    );
+    const matchId = payload.matchId;
+
+    await bob.socket.joinMatch(matchId);
+    await alice.socket.joinMatch(matchId);
+
+    const started = await aliceEvents.waitFor(
+      (message) =>
+        message.op === OP.STATE && message.data?.game?.discs?.length > 0,
+      "the table to start",
+    );
+    const game = started.data.game;
+    assert(
+      game.rules?.id === "freestyle" && game.rules?.coverQueen === false,
+      `the table did not keep the game type: ${JSON.stringify(game.rules)}`,
+    );
+    assert(
+      game.turnSeconds === 15 && typeof game.turnDeadline === "number",
+      `the table did not start the shot clock: ${JSON.stringify({
+        turnSeconds: game.turnSeconds,
+        turnDeadline: game.turnDeadline,
+      })}`,
+    );
+    console.log("[ok] the table kept the game type and the shot clock");
+
+    await alice.socket.sendMatchState(
+      matchId,
+      OP.SHOT_REQUEST,
+      JSON.stringify({
+        position: 0.5,
+        angle: -Math.PI / 2,
+        power: 0.6,
+        striker: "heavy",
+      }),
+    );
+
+    const afterShot = await aliceEvents.waitFor(
+      (message) =>
+        message.op === OP.STATE && (message.data?.game?.shotNumber ?? 0) > 0,
+      "the shot to resolve",
+    );
+    assert(
+      afterShot.data.game.strikers?.white === "heavy",
+      `the striker was not kept: ${JSON.stringify(afterShot.data.game.strikers)}`,
+    );
+    assert(
+      afterShot.data.lastShot?.striker === "heavy" &&
+        afterShot.data.lastShot?.colour === "white",
+      `the shot did not carry the striker: ${JSON.stringify(afterShot.data.lastShot)}`,
+    );
+    console.log("[ok] the striker a player brings is kept at the table");
+  } finally {
+    close(alice);
+    close(bob);
+  }
+}
+
 async function main() {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   await playTwoPlayerTable(runId);
   await playFourPlayerTable(runId);
   await playQuickTable(runId);
   await playMatchmakerTable(runId);
+  await playTableSettings(runId);
   console.log("carrom online smoke test passed");
 }
 

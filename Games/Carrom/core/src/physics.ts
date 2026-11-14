@@ -3,6 +3,7 @@ import {
   nearestValidStrikerPosition,
   strikerFits,
   strikerPoint,
+  strikerSkin,
 } from "./board";
 import type {
   CarromDisc,
@@ -252,9 +253,13 @@ export function simulatePhysics(
     pocketed: false,
   };
 
+  // The striker the player brought to the table decides how hard the shot
+  // leaves the baseline.
+  const power = strikerSkin(state.strikers?.[state.turn]).power;
   const speed =
-    CARROM_BOARD.minShotSpeed +
-    (CARROM_BOARD.maxShotSpeed - CARROM_BOARD.minShotSpeed) * shot.power;
+    (CARROM_BOARD.minShotSpeed +
+      (CARROM_BOARD.maxShotSpeed - CARROM_BOARD.minShotSpeed) * shot.power) *
+    power;
   striker.vx = Math.cos(shot.angle) * speed;
   striker.vy = Math.sin(shot.angle) * speed;
 

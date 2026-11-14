@@ -161,7 +161,16 @@ test("initialises a table with a label", function()
   })
   assert_equal(state.seats, 4, "seats")
   assert_equal(tick, 10, "tick rate")
-  assert_equal(label, "carrom|quick|4|open", "label")
+  assert_equal(label, "carrom|quick|4|open|classic", "label")
+end)
+
+test("keeps the game type in the label", function()
+  local _, _, label = match.match_init({ match_id = "m2" }, {
+    mode = "quick",
+    seats = 2,
+    variant = "freestyle",
+  })
+  assert_equal(label, "carrom|quick|2|open|freestyle", "label")
 end)
 
 test("starts the table when every seat is taken", function()
