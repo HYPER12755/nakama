@@ -761,7 +761,6 @@ function drawAim(
   ctx: CanvasRenderingContext2D,
   display: DisplayState,
   aim: AimState,
-  mode: AimMode,
   hit: AimHit,
   lite: boolean,
 ): void {
@@ -770,8 +769,6 @@ function drawAim(
   const strikerRadius = scaleOf(CARROM_BOARD.strikerRadius);
   const hitX = toCanvasX(hit.point.x);
   const hitY = toCanvasY(hit.point.y);
-  const pointerX = toCanvasX(aim.pointer.x);
-  const pointerY = toCanvasY(aim.pointer.y);
 
   ctx.save();
   ctx.lineCap = "round";
@@ -780,26 +777,16 @@ function drawAim(
   /**
    * One straight line, and only one.
    *
-   * - A direct flick draws the line from the striker through the first
-   *   contact and on to the finger, so the finger is always on the line the
-   *   shot follows.
-   * - A pull draws the line from the finger through the point the finger
-   *   went down at, because the shot leaves in the exact opposite
-   *   direction: the far end of that line is where the striker goes.
+   * The line starts at the middle of the striker and runs along the launch
+   * direction to the first thing the striker meets, with the arrow at that
+   * far end. A pull defines that direction the other way round: the shot
+   * leaves in the exact opposite of the pull, so the arrow is on the far
+   * side of where the finger is.
    */
-  let startX = originX;
-  let startY = originY;
-  let endX = pointerX;
-  let endY = pointerY;
-  if (mode === "pull" && aim.anchor !== null) {
-    startX = pointerX;
-    startY = pointerY;
-    endX = toCanvasX(aim.anchor.x);
-    endY = toCanvasY(aim.anchor.y);
-  } else {
-    endX = pointerX;
-    endY = pointerY;
-  }
+  const startX = originX;
+  const startY = originY;
+  const endX = hitX;
+  const endY = hitY;
 
   // The soft wash under the line.
   ctx.beginPath();
@@ -835,15 +822,13 @@ function drawAim(
   ctx.fill();
 
   // First contact ghost, where the striker meets the first piece.
-  if (mode === "direct") {
-    ctx.beginPath();
-    ctx.arc(hitX, hitY, strikerRadius, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(72, 201, 176, 0.1)";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(108, 238, 212, 0.78)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
+  ctx.beginPath();
+  ctx.arc(hitX, hitY, strikerRadius, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(72, 201, 176, 0.1)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(108, 238, 212, 0.78)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
 
   // Power ring around the striker.
   const ringRadius = strikerRadius * 2.1;
@@ -1067,7 +1052,7 @@ export function CarromBoard({
       if (aimState !== null && !animating && !disabled) {
         const origin = { x: display.striker.x, y: display.striker.y };
         const hit = raycastBoard(origin, aimState.angle, display.discs);
-        drawAim(ctx, display, aimState, aimMode, hit, lite);
+        drawAim(ctx, display, aimState, hit, lite);
       }
       ctx.restore();
     },
