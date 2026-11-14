@@ -593,6 +593,98 @@ tests[#tests + 1] = {
 }
 
 tests[#tests + 1] = {
+  name = "a room code names the table it was made for",
+  fn = function()
+    reset()
+    local code = social.create_room_code("match-abc", "carrom")
+    assert_equal(type(code), "string", "a code was made")
+    assert_equal(#code, social.ROOM_CODE_LENGTH, "the code length")
+    for index = 1, #code do
+      assert_equal(
+        social.ROOM_CODE_ALPHABET:find(code:sub(index, index), 1, true) ~= nil,
+        true,
+        "the code only uses the alphabet"
+      )
+    end
+    local room = social.resolve_room_code(code, "carrom")
+    assert_equal(type(room), "table", "the code was found")
+    assert_equal(room.matchId, "match-abc", "the table behind the code")
+  end,
+}
+
+tests[#tests + 1] = {
+  name = "a room code is found whatever way it is written",
+  fn = function()
+    reset()
+    local code = social.create_room_code("match-abc", "carrom")
+    local room = social.resolve_room_code(" " .. code:lower() .. " ", "carrom")
+    assert_equal(type(room), "table", "the code was found")
+    assert_equal(room.matchId, "match-abc", "the table behind the code")
+  end,
+}
+
+tests[#tests + 1] = {
+  name = "a room code does not open another game's table",
+  fn = function()
+    reset()
+    local code = social.create_room_code("match-abc", "carrom")
+    local room, room_error = social.resolve_room_code(code, "chess")
+    assert_equal(room, nil, "the room was not found")
+    assert_equal(room_error, "room_not_found", "the reason")
+  end,
+}
+
+tests[#tests + 1] = {
+  name = "an unknown room code is refused",
+  fn = function()
+    reset()
+    local room, room_error = social.resolve_room_code("ZZZZZZ", "carrom")
+    assert_equal(room, nil, "the room was not found")
+    assert_equal(room_error, "room_not_found", "the reason")
+  end,
+}
+
+tests[#tests + 1] = {
+  name = "an old room code stops working",
+  fn = function()
+    reset()
+    local code = social.create_room_code("match-abc", "carrom")
+    fake_time = fake_time + social.ROOM_CODE_TTL_MS + 1000
+    local room, room_error = social.resolve_room_code(code, "carrom")
+    assert_equal(room, nil, "the room was not found")
+    assert_equal(room_error, "room_expired", "the reason")
+  end,
+}
+
+tests[#tests + 1] = {
+  name = "a room code knows how many players its table is for",
+  fn = function()
+    reset()
+    local code = social.create_room_code("match-abc", "carrom", 4)
+    local room = social.resolve_room_code(code, "carrom")
+    assert_equal(room.seats, 4, "the seat count")
+    local handler = rpc_handlers["moongames_room_code_resolve"]
+    local result = handler({ user_id = "user-b", username = "B" }, { code = code })
+    assert_equal(result.seats, 4, "the seat count over the wire")
+  end,
+}
+
+tests[#tests + 1] = {
+  name = "the room code RPC resolves a code to a table",
+  fn = function()
+    reset()
+    local code = social.create_room_code("match-abc", "carrom")
+    local handler = rpc_handlers["moongames_room_code_resolve"]
+    assert_equal(type(handler), "function", "the RPC is registered")
+    local result = handler({ user_id = "user-b", username = "B" }, { code = code })
+    assert_equal(result.ok, true, "the code was accepted")
+    assert_equal(result.matchId, "match-abc", "the table behind the code")
+    local refused = handler({ user_id = "user-b", username = "B" }, { code = "ZZZZZZ" })
+    assert_equal(refused.ok, false, "an unknown code is refused")
+  end,
+}
+
+tests[#tests + 1] = {
   name = "the matchmaker hook ignores a ticket for an unknown game",
   fn = function()
     local result = matchmaker_handler({}, {

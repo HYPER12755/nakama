@@ -55,11 +55,50 @@ export function OnlinePanel({
 
   const connected = online.connection === "connected";
   const inMatch = online.matchId !== null;
+  // The server says how many players the table is for, so a player who
+  // joined with a code is told the truth about the table.
+  const tableSeats = online.roomSeats ?? seats;
 
   const openInvite = () => {
     online.clearInviteFeedback();
     setInviteOpen(true);
     void online.loadFriends();
+  };
+
+  /**
+   * The room code is how the other player gets to this table, so it has to
+   * be copyable. A failed copy is said out loud rather than swallowed.
+   */
+  const copyRoomCode = async () => {
+    const code = online.roomCode;
+    if (code === null) {
+      return;
+    }
+    const copied = await copyText(code);
+    online.setNotice(
+      copied ? "Room code copied." : "The room code could not be copied.",
+    );
+  };
+
+  /**
+   * Joining a room with a code that is wrong has to say so. A silent
+   * failure leaves the player staring at a lobby that never opens.
+   */
+  const joinRoom = async () => {
+    const code = roomId.trim();
+    if (code.length === 0) {
+      return;
+    }
+    try {
+      await online.joinByRoomCode(code);
+      setRoomId("");
+    } catch (cause) {
+      online.setNotice(
+        cause instanceof Error
+          ? `That room could not be joined: ${cause.message}`
+          : "That room could not be joined.",
+      );
+    }
   };
 
   return (
@@ -152,12 +191,18 @@ export function OnlinePanel({
                 value={roomId}
                 placeholder="Paste a room code"
                 onChange={(event) => setRoomId(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void joinRoom();
+                  }
+                }}
               />
               <button
                 type="button"
                 className="button button--ghost"
                 disabled={roomId.trim().length === 0}
-                onClick={() => void online.joinMatch(roomId.trim())}
+                onClick={() => void joinRoom()}
               >
                 Join
               </button>
@@ -165,6 +210,25 @@ export function OnlinePanel({
           </>
         ) : (
           <>
+            {online.roomCode !== null ? (
+              <div className="online-code">
+                <span className="online-code__label">Room code</span>
+                <div className="online-code__row">
+                  <code>{online.roomCode}</code>
+                  <button
+                    type="button"
+                    className="button button--ghost"
+                    onClick={() => void copyRoomCode()}
+                  >
+                    Copy
+                  </button>
+                </div>
+                <p className="online-code__hint">
+                  Send this code to the other player so they can join this
+                  table. It is a {tableSeats} player table.
+                </p>
+              </div>
+            ) : null}
             <ul className="online-seats">
               {online.seats.map((seat) => (
                 <SeatRow
@@ -173,7 +237,7 @@ export function OnlinePanel({
                   isYou={seat.user_id === online.myUserId}
                 />
               ))}
-              {online.seats.length < seats ? (
+              {online.seats.length < tableSeats ? (
                 <li className="online-seat online-seat--empty">
                   <span className="online-seat__disc online-seat__disc--empty" />
                   <span className="online-seat__name">Waiting for a player…</span>

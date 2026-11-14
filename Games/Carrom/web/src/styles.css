@@ -2189,6 +2189,51 @@ button {
   min-height: 34px;
 }
 
+/* The room code. It is how the other player reaches this table, so it is
+   shown in full and can be copied. */
+.online-code {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-raised);
+}
+
+.online-code__label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.online-code__row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.online-code__row code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.online-code__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
 .online-seats {
   display: flex;
   flex-direction: column;

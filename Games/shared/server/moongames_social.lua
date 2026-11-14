@@ -11,9 +11,17 @@ local social = {}
 social.INVITE_COLLECTION = "moongames_invites"
 social.NOTIFICATION_STATE_COLLECTION = "moongames_notification_state"
 social.RECENT_PLAYERS_COLLECTION = "moongames_recent_players"
+social.ROOM_CODE_COLLECTION = "moongames_room_codes"
 social.INVITE_TTL_MS = 24 * 60 * 60 * 1000
 social.MAX_INVITE_MESSAGE = 240
 social.MAX_RECENT_PLAYERS = 12
+
+-- A room code is the short thing a player reads out to their friend. It is
+-- six characters from an alphabet without the letters and numbers people
+-- confuse with one another, so "0" and "O" never meet.
+social.ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+social.ROOM_CODE_LENGTH = 6
+social.ROOM_CODE_TTL_MS = 6 * 60 * 60 * 1000
 
 social.CODES = {
   friend_accepted = 1102,
@@ -30,6 +38,7 @@ social.CODES = {
 local STATE_KEY = "state"
 local INVITE_PREFIX = "invite_"
 local TOKEN_PREFIX = "token_"
+local ROOM_CODE_PREFIX = "room_"
 local games = {}
 
 local function copy(value)
@@ -328,6 +337,95 @@ local function create_token_index(record, token)
       permission_write = 0,
     },
   })
+end
+
+local function room_code_key(code)
+  return ROOM_CODE_PREFIX .. code
+end
+
+-- A code is made from the hash of a fresh uuid, so two tables never get the
+-- same code. The characters are taken from an alphabet without the letters
+-- and numbers people confuse with one another.
+local function make_room_code()
+  local alphabet = social.ROOM_CODE_ALPHABET
+  local digest = nk.sha256_hash(nk.uuid_v4() .. nk.uuid_v4())
+  local characters = {}
+  local index = 0
+  while #characters < social.ROOM_CODE_LENGTH do
+    index = index + 1
+    -- The digest is read as pairs of hex digits, so every character of the
+    -- alphabet is equally likely.
+    local pair = digest:sub((index - 1) * 2 + 1, (index - 1) * 2 + 2)
+    local value = tonumber(pair, 16)
+    if value == nil then
+      value = digest:byte(index) or 65
+    end
+    local position = (value % #alphabet) + 1
+    characters[#characters + 1] = alphabet:sub(position, position)
+  end
+  return table.concat(characters)
+end
+
+-- Register a table under a short code, so the player can read the code out
+-- to their friend instead of a long match id.
+function social.create_room_code(match_id, game_id, seats)
+  if type(match_id) ~= "string" or match_id == "" then
+    return nil
+  end
+  for _ = 1, 5 do
+    local code = make_room_code()
+    local key = room_code_key(code)
+    local existing = nk.storage_read({
+      { collection = social.ROOM_CODE_COLLECTION, key = key },
+    })
+    if not existing or not existing[1] then
+      nk.storage_write({
+        {
+          collection = social.ROOM_CODE_COLLECTION,
+          key = key,
+          value = {
+            matchId = match_id,
+            gameId = game_id or "",
+            seats = tonumber(seats) or 0,
+            createdAt = nk.time(),
+          },
+          permission_read = 0,
+          permission_write = 0,
+        },
+      })
+      return code
+    end
+  end
+  return nil
+end
+
+-- Find the table behind a room code. A code only opens the table while it
+-- is still fresh, and only for the game it was made for.
+function social.resolve_room_code(code, game_id)
+  local normalised = trim(code)
+  if not normalised then
+    return nil, "room_not_found"
+  end
+  normalised = normalised:upper()
+  local objects = nk.storage_read({
+    { collection = social.ROOM_CODE_COLLECTION, key = room_code_key(normalised) },
+  })
+  local record = objects and objects[1] and objects[1].value
+  if type(record) ~= "table" or type(record.matchId) ~= "string" then
+    return nil, "room_not_found"
+  end
+  if game_id and record.gameId ~= "" and record.gameId ~= game_id then
+    return nil, "room_not_found"
+  end
+  local created_at = tonumber(record.createdAt) or 0
+  if created_at > 0 and (nk.time() - created_at) > social.ROOM_CODE_TTL_MS then
+    return nil, "room_expired"
+  end
+  return {
+    matchId = record.matchId,
+    code = normalised,
+    seats = tonumber(record.seats) or 0,
+  }
 end
 
 local function public_invite(record)
@@ -1017,6 +1115,32 @@ function social.recent_players(context)
 end
 
 -- RPC entry points ---------------------------------------------------------
+
+-- The room code a player reads out to their friend. It only names a table;
+-- the client joins the table with the match id behind it.
+local function rpc_room_code_resolve(context, payload)
+  local user_id, auth_error = require_user(context)
+  if not user_id then
+    return auth_error
+  end
+  local params, decode_error = decode_payload(payload)
+  if not params then
+    return fail("invalid_payload", decode_error)
+  end
+  local room, room_error = social.resolve_room_code(
+    params.code or params.roomCode or params.room_code,
+    params.gameId or params.game_id
+  )
+  if room == nil then
+    return fail(room_error or "room_not_found", "That room code was not found")
+  end
+  return ok({
+    matchId = room.matchId,
+    code = room.code,
+    seats = room.seats or 0,
+  })
+end
+nk.register_rpc(rpc_room_code_resolve, "moongames_room_code_resolve")
 
 local function rpc_create(context, payload)
   local response, error_response = require_payload(context, payload, function(_, params)

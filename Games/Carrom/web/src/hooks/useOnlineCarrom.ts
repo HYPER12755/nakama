@@ -260,6 +260,12 @@ export interface OnlineCarromController {
     options?: CarromTableSettings,
   ) => Promise<void>;
   joinMatch: (matchId: string, options?: { spectator?: boolean }) => Promise<void>;
+  /** Join a table by the short code the host read out. */
+  joinByRoomCode: (code: string) => Promise<void>;
+  /** The short code of the table this player is sitting at. */
+  roomCode: string | null;
+  /** How many players the table behind the code is for. */
+  roomSeats: number | null;
   leaveMatch: () => Promise<void>;
   sendShot: (shot: CarromShotInput, striker?: string) => void;
   sendChat: (text: string) => void;
@@ -297,6 +303,10 @@ export function useOnlineCarrom(
   const [inviteSendingId, setInviteSendingId] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
+  // The short code a player reads out to their friend.
+  const [roomCode, setRoomCode] = useState<string | null>(null);
+  // How many players the table behind the code is for.
+  const [roomSeats, setRoomSeats] = useState<number | null>(null);
 
   const clientRef = useRef<Client | null>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -343,6 +353,48 @@ export function useOnlineCarrom(
       setError(null);
     },
     [requireSocket],
+  );
+
+  /**
+   * Join a table by the short code the host read out. The server knows which
+   * table the code names, so the client never has to know a match id.
+   */
+  const joinByRoomCode = useCallback(
+    async (code: string): Promise<void> => {
+      const client = clientRef.current;
+      const session = sessionRef.current;
+      if (client === null || session === null) {
+        throw new Error("The realtime connection is not ready yet.");
+      }
+      const trimmed = code.trim();
+      if (trimmed.length === 0) {
+        throw new Error("Enter a room code.");
+      }
+      const response = await client.rpc(session, "moongames_room_code_resolve", {
+        code: trimmed,
+        gameId: GAME_ID,
+      });
+      const parsed = (response.payload ?? {}) as {
+        ok?: boolean;
+        matchId?: string;
+        code?: string;
+        seats?: number;
+        error?: { message?: string };
+      };
+      if (parsed.ok !== true || typeof parsed.matchId !== "string") {
+        throw new Error(
+          parsed.error?.message ?? "That room code was not found.",
+        );
+      }
+      await joinMatch(parsed.matchId);
+      setRoomCode(parsed.code ?? trimmed.toUpperCase());
+      // The server knows how many players the table is for, so the guest is
+      // told what they are walking into.
+      if (typeof parsed.seats === "number" && parsed.seats > 0) {
+        setRoomSeats(parsed.seats);
+      }
+    },
+    [joinMatch],
   );
 
   const applyServerState = useCallback((payload: CarromServerState) => {
@@ -700,10 +752,13 @@ export function useOnlineCarrom(
         const parsed = (response.payload ?? {}) as {
           ok?: boolean;
           matchId?: string;
+          roomCode?: string | null;
         };
         if (parsed.ok !== true || typeof parsed.matchId !== "string") {
           throw new Error("The private room could not be created.");
         }
+        setRoomCode(parsed.roomCode ?? null);
+        setRoomSeats(seats);
         await joinMatch(parsed.matchId);
       } catch (cause) {
         setError(
@@ -728,6 +783,8 @@ export function useOnlineCarrom(
     setMatchId(null);
     setState(null);
     setSpectating(false);
+    setRoomCode(null);
+    setRoomSeats(null);
     gameRef.current = null;
   }, []);
 
@@ -1174,6 +1231,9 @@ export function useOnlineCarrom(
     quickMatch,
     createPrivateRoom,
     joinMatch,
+    joinByRoomCode,
+    roomCode,
+    roomSeats,
     leaveMatch,
     sendShot,
     sendChat,

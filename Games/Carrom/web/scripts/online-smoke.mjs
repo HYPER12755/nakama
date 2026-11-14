@@ -124,7 +124,7 @@ async function createPrivateRoom(connection, seats) {
     payload?.ok === true && typeof payload.matchId === "string",
     `create private match failed: ${JSON.stringify(payload)}`,
   );
-  return payload.matchId;
+  return payload;
 }
 
 async function playTwoPlayerTable(runId) {
@@ -134,10 +134,42 @@ async function playTwoPlayerTable(runId) {
     const aliceEvents = createCollector(alice.socket, "alice");
     const bobEvents = createCollector(bob.socket, "bob");
 
-    const matchId = await createPrivateRoom(alice, 2);
+    const room = await createPrivateRoom(alice, 2);
+    const matchId = room.matchId;
     console.log(`[ok] private carrom room created: ${matchId}`);
 
-    await bob.socket.joinMatch(matchId);
+    // The host is given a short code to read out, and that code is what the
+    // other player joins with.
+    assert(
+      typeof room.roomCode === "string" && room.roomCode.length > 0,
+      `the host was not given a room code: ${JSON.stringify(room)}`,
+    );
+    console.log(`[ok] the host was given the room code: ${room.roomCode}`);
+
+    const resolved = await bob.client.rpc(
+      bob.session,
+      "moongames_room_code_resolve",
+      { code: room.roomCode, gameId: "carrom" },
+    );
+    assert(
+      resolved.payload?.ok === true &&
+        resolved.payload.matchId === matchId,
+      `the room code did not resolve: ${JSON.stringify(resolved.payload)}`,
+    );
+    console.log("[ok] the room code resolves to the table it was made for");
+
+    const unknown = await bob.client.rpc(
+      bob.session,
+      "moongames_room_code_resolve",
+      { code: "ZZZZZZ", gameId: "carrom" },
+    );
+    assert(
+      unknown.payload?.ok === false,
+      `an unknown room code was accepted: ${JSON.stringify(unknown.payload)}`,
+    );
+    console.log("[ok] an unknown room code is refused");
+
+    await bob.socket.joinMatch(resolved.payload.matchId);
     await alice.socket.joinMatch(matchId);
 
     const started = await aliceEvents.waitFor(
@@ -243,11 +275,29 @@ async function playFourPlayerTable(runId) {
       );
     }
 
-    const matchId = await createPrivateRoom(players[0], seats);
+    const room = await createPrivateRoom(players[0], seats);
+    const matchId = room.matchId;
     const events = createCollector(players[0].socket, "host");
-    for (const player of players) {
-      await player.socket.joinMatch(matchId);
+    // The other three players join with the short code, so the code has to
+    // open a four player table and not only a table of two.
+    assert(
+      typeof room.roomCode === "string" && room.roomCode.length > 0,
+      `the host was not given a room code: ${JSON.stringify(room)}`,
+    );
+    for (const player of players.slice(1)) {
+      const resolved = await player.client.rpc(
+        player.session,
+        "moongames_room_code_resolve",
+        { code: room.roomCode, gameId: "carrom" },
+      );
+      assert(
+        resolved.payload?.ok === true &&
+          resolved.payload.matchId === matchId,
+        `the room code did not resolve: ${JSON.stringify(resolved.payload)}`,
+      );
+      await player.socket.joinMatch(resolved.payload.matchId);
     }
+    await players[0].socket.joinMatch(matchId);
 
     const started = await events.waitFor(
       (message) =>
@@ -266,6 +316,63 @@ async function playFourPlayerTable(runId) {
       `unexpected four player seats: ${colours.join(",")}`,
     );
     console.log("[ok] the four player table started with 37 pieces");
+  } finally {
+    for (const player of players) {
+      close(player);
+    }
+  }
+}
+
+async function playThreePlayerTable(runId) {
+  const seats = 3;
+  const players = [];
+  try {
+    for (let index = 0; index < seats; index += 1) {
+      players.push(
+        await authenticate(`moongames-carrom-${runId}-p${index}`),
+      );
+    }
+
+    const room = await createPrivateRoom(players[0], seats);
+    const matchId = room.matchId;
+    const events = createCollector(players[0].socket, "host");
+    // The other two players join with the short code.
+    assert(
+      typeof room.roomCode === "string" && room.roomCode.length > 0,
+      `the host was not given a room code: ${JSON.stringify(room)}`,
+    );
+    for (const player of players.slice(1)) {
+      const resolved = await player.client.rpc(
+        player.session,
+        "moongames_room_code_resolve",
+        { code: room.roomCode, gameId: "carrom" },
+      );
+      assert(
+        resolved.payload?.ok === true &&
+          resolved.payload.matchId === matchId,
+        `the room code did not resolve: ${JSON.stringify(resolved.payload)}`,
+      );
+      await player.socket.joinMatch(resolved.payload.matchId);
+    }
+    await players[0].socket.joinMatch(matchId);
+
+    const started = await events.waitFor(
+      (message) =>
+        message.op === OP.STATE &&
+        (message.data?.seats?.length ?? 0) === seats &&
+        message.data?.game !== null,
+      "the three player table to start",
+    );
+    assert(
+      started.data.game.discs.length === 28,
+      `expected 28 pieces, got ${started.data.game.discs.length}`,
+    );
+    const colours = started.data.seats.map((seat) => seat.colour);
+    assert(
+      colours.join(",") === "white,black,green",
+      `unexpected three player seats: ${colours.join(",")}`,
+    );
+    console.log("[ok] the three player table joined by room code");
   } finally {
     for (const player of players) {
       close(player);
@@ -437,6 +544,7 @@ async function playTableSettings(runId) {
 async function main() {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   await playTwoPlayerTable(runId);
+  await playThreePlayerTable(runId);
   await playFourPlayerTable(runId);
   await playQuickTable(runId);
   await playMatchmakerTable(runId);
