@@ -218,10 +218,18 @@ hosts are file-backed and should load only the single-entry subset.
   light/dark theme, fullscreen, lite paint path) with 6 web tests.
 - [x] Carrom simulation-backed AI that yields between candidate batches so a
   phone browser keeps painting.
-- [x] Carrom `0.3.0` signed release, catalog entry, and launcher card.
+- [x] Carrom `0.4.0` signed release, catalog entry, and launcher card.
 - [x] Launcher rebuilt around catalog data: generated artwork for unknown
   games, a real launch phase pipeline for the play button, no hardcoded game
   list, and a data driven time control.
+- [x] Shared game UI kit at `Games/shared/gameui/`: the account panel, the
+  profile panel, the table chat and its emoji picker, the friend invite
+  dialog, the player card, the action toolbar, the mode switch, the replay
+  chrome, the icon set, the auth and invite helpers, and the host preview.
+  Chess and Carrom share one implementation.
+- [x] Carrom pocket box, shared profile panel, fullscreen table that shows
+  only the board and its controls, and an AI that misses like a player.
+- [x] A graceful message when the other player leaves, in both titles.
 - [x] Carrom authoritative Nakama server (Lua port of the physics and rules)
   with seats for two, three, and four players, the room creator keeping the
   first colour, spectators, a rate limited table chat, and the shared invite

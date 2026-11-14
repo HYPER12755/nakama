@@ -12,7 +12,7 @@ import {
   buildMatchInviteUrl,
   parseLaunchInvite,
   parseMatchInvite,
-} from "../src/lib/invite";
+} from "@moongames/game-ui";
 import {
   normalizedOnlineState,
   type OnlineHistoryEntry,
@@ -34,7 +34,7 @@ function historyEntry(
     winnerColor: "w",
     opponent: { userId: "user-2", username: "Bob" },
     moves: 3,
-    sans: ["e4", "e5", "Nf3"],
+    steps: ["e4", "e5", "Nf3"],
     pgn: "1. e4 e5 2. Nf3",
     timeControl: { initialMs: 300000, incrementMs: 0 },
     ratingBefore: 1200,
@@ -197,7 +197,7 @@ describe("history replay", () => {
   it("rebuilds every position from a stored PGN", () => {
     const replay = replayFromHistory(historyEntry());
     expect(replay.error).toBeNull();
-    expect(replay.sans).toEqual(["e4", "e5", "Nf3"]);
+    expect(replay.steps).toEqual(["e4", "e5", "Nf3"]);
     expect(replay.frames).toHaveLength(4);
     expect(replay.frames[0]?.state.history).toEqual([]);
     expect(replay.frames[3]?.state.lastMove?.san).toBe("Nf3");
@@ -205,7 +205,7 @@ describe("history replay", () => {
 
   it("falls back to SAN history when a PGN is unavailable", () => {
     const replay = replayFromHistory(
-      historyEntry({ pgn: "", sans: ["e4", "e5"] }),
+      historyEntry({ pgn: "", steps: ["e4", "e5"] }),
     );
     expect(replay.error).toBeNull();
     expect(replay.frames).toHaveLength(3);
@@ -213,7 +213,7 @@ describe("history replay", () => {
 
   it("returns a readable error for a malformed PGN", () => {
     const replay = replayFromHistory(
-      historyEntry({ pgn: "1. e4 definitely-not-a-move", sans: [] }),
+      historyEntry({ pgn: "1. e4 definitely-not-a-move", steps: [] }),
     );
     expect(replay.error).toContain("Could not replay this game");
     expect(replay.frames).toHaveLength(1);

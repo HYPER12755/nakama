@@ -8,6 +8,19 @@ import {
   type CarromState,
 } from "@moongames/carrom-core";
 import { readLauncherHandoff, type GameHostConfig } from "@moongames/game-sdk";
+import {
+  authErrorMessage,
+  clearStoredEmailSession,
+  readStoredEmailSession,
+  storeEmailSession,
+  validateEmail,
+  validatePassword,
+  validateUsername,
+  type OnlineAuthAccount,
+  type GameHistoryEntry,
+  type GameLeaderboardEntry,
+  type GameProfile,
+} from "@moongames/game-ui";
 
 /**
  * The Carrom wire protocol. It mirrors Carrom/server/carrom_protocol.lua so
@@ -45,10 +58,10 @@ export interface CarromSpectator {
 
 export interface CarromChatMessage {
   id: string;
-  user_id: string;
+  userId: string;
   username: string;
   text: string;
-  at: number;
+  sentAt: number;
 }
 
 export interface CarromMatchResult {
@@ -165,6 +178,27 @@ export interface OnlineCarromController {
   myColour: CarromPlayer | null;
   myUserId: string | null;
   animation: CarromShotResult | null;
+  profile: GameProfile | null;
+  history: GameHistoryEntry[];
+  leaderboard: GameLeaderboardEntry[];
+  myLeaderboard: GameLeaderboardEntry | null;
+  profileLoading: boolean;
+  profileError: string | null;
+  account: OnlineAuthAccount | null;
+  authBusy: boolean;
+  authError: string | null;
+  authNotice: string | null;
+  refreshProfile: () => Promise<void>;
+  opponentLeft: string | null;
+  dismissOpponentLeft: () => void;
+  clearAuthFeedback: () => void;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    username: string,
+  ) => Promise<void>;
+  signOut: () => Promise<void>;
   connect: () => Promise<void>;
   quickMatch: (seats: number) => Promise<void>;
   createPrivateRoom: (seats: number) => Promise<void>;
@@ -188,10 +222,23 @@ export function useOnlineCarrom(
   const [searching, setSearching] = useState(false);
   const [spectating, setSpectating] = useState(false);
   const [animation, setAnimation] = useState<CarromShotResult | null>(null);
+  const [profile, setProfile] = useState<GameProfile | null>(null);
+  const [history, setHistory] = useState<GameHistoryEntry[]>([]);
+  const [leaderboard, setLeaderboard] = useState<GameLeaderboardEntry[]>([]);
+  const [myLeaderboard, setMyLeaderboard] =
+    useState<GameLeaderboardEntry | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [account, setAccount] = useState<OnlineAuthAccount | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [opponentLeft, setOpponentLeft] = useState<string | null>(null);
 
   const clientRef = useRef<Client | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const sessionRef = useRef<Session | null>(null);
+  const serverLabelRef = useRef("nakama-local");
   const matchIdRef = useRef<string | null>(null);
   const serialRef = useRef(0);
   const gameRef = useRef<CarromState | null>(null);
@@ -278,6 +325,7 @@ export function useOnlineCarrom(
       // the shared session and the launcher's Nakama address; a direct launch
       // falls back to a guest device identity on the same server.
       const address = serverAddress(handoff?.nakama);
+      serverLabelRef.current = address.host;
       const client = new Client(
         address.serverKey,
         address.host,
@@ -319,13 +367,38 @@ export function useOnlineCarrom(
           return;
         }
         if (matchData.op_code === CARROM_OP.CHAT) {
+          const entry = message as {
+            id?: string;
+            user_id?: string;
+            username?: string;
+            text?: string;
+            at?: number;
+          };
           setState((current) => {
             if (current === null) {
               return current;
             }
-            const entry = message as unknown as CarromChatMessage;
-            return { ...current, chat: [...current.chat, entry] };
+            return {
+              ...current,
+              chat: [
+                ...current.chat,
+                {
+                  id: entry.id ?? `${entry.at ?? 0}`,
+                  userId: entry.user_id ?? "",
+                  username: entry.username ?? "Player",
+                  text: entry.text ?? "",
+                  sentAt: entry.at ?? Date.now(),
+                },
+              ],
+            };
           });
+          return;
+        }
+        if (matchData.op_code === CARROM_OP.PLAYER_LEFT) {
+          const left = message as { username?: string; userId?: string };
+          if (left.userId !== undefined && left.userId !== sessionRef.current?.user_id) {
+            setOpponentLeft(left.username ?? "Your opponent");
+          }
           return;
         }
         if (matchData.op_code === CARROM_OP.MATCH_STARTED) {
@@ -560,6 +633,176 @@ export function useOnlineCarrom(
   }, []);
 
   const myUserId = sessionRef.current?.user_id ?? null;
+
+  const refreshProfile = useCallback(async (): Promise<void> => {
+    const client = clientRef.current;
+    const session = sessionRef.current;
+    if (client === null || session === null) {
+      return;
+    }
+    setProfileLoading(true);
+    setProfileError(null);
+    try {
+      const profileResponse = await client.rpc(session, "carrom_get_profile", {});
+      const profilePayload = (profileResponse.payload ?? {}) as {
+        ok?: boolean;
+        profile?: GameProfile;
+        history?: GameHistoryEntry[];
+        error?: { message?: string };
+      };
+      if (profilePayload.ok !== true) {
+        setProfileError(
+          profilePayload.error?.message ?? "The profile could not be loaded.",
+        );
+        return;
+      }
+      setProfile(profilePayload.profile ?? null);
+      setHistory(profilePayload.history ?? []);
+
+      const leaderboardResponse = await client.rpc(
+        session,
+        "carrom_get_leaderboard",
+        { limit: 10 },
+      );
+      const leaderboardPayload = (leaderboardResponse.payload ?? {}) as {
+        ok?: boolean;
+        entries?: GameLeaderboardEntry[];
+        me?: GameLeaderboardEntry | null;
+      };
+      setLeaderboard(leaderboardPayload.entries ?? []);
+      setMyLeaderboard(leaderboardPayload.me ?? null);
+    } catch (cause) {
+      setProfileError(
+        cause instanceof Error ? cause.message : "The profile could not be loaded.",
+      );
+    } finally {
+      setProfileLoading(false);
+    }
+  }, []);
+
+  const clearAuthFeedback = useCallback((): void => {
+    setAuthError(null);
+    setAuthNotice(null);
+  }, []);
+
+  const dismissOpponentLeft = useCallback((): void => {
+    setOpponentLeft(null);
+  }, []);
+
+  const signIn = useCallback(
+    async (email: string, password: string): Promise<void> => {
+      const client = clientRef.current;
+      if (client === null) {
+        setAuthError("The realtime connection is not ready yet.");
+        return;
+      }
+      const emailError = validateEmail(email);
+      if (emailError !== null) {
+        setAuthError(emailError);
+        return;
+      }
+      const passwordError = validatePassword(password);
+      if (passwordError !== null) {
+        setAuthError(passwordError);
+        return;
+      }
+      setAuthBusy(true);
+      setAuthError(null);
+      try {
+        const session = await client.authenticateEmail(email, password, false);
+        sessionRef.current = session;
+        storeEmailSession({
+          server: serverLabelRef.current,
+          email,
+          token: session.token,
+          refreshToken: session.refresh_token,
+        });
+        setAccount({
+          kind: "email",
+          username: email,
+          email,
+          userId: session.user_id ?? email,
+        });
+        setAuthNotice("Signed in. Your shared account is ready.");
+        await refreshProfile();
+      } catch (cause) {
+        setAuthError(await authErrorMessage(cause, "sign-in"));
+      } finally {
+        setAuthBusy(false);
+      }
+    },
+    [refreshProfile],
+  );
+
+  const signUp = useCallback(
+    async (
+      email: string,
+      password: string,
+      username: string,
+    ): Promise<void> => {
+      const client = clientRef.current;
+      if (client === null) {
+        setAuthError("The realtime connection is not ready yet.");
+        return;
+      }
+      const emailError = validateEmail(email);
+      if (emailError !== null) {
+        setAuthError(emailError);
+        return;
+      }
+      const passwordError = validatePassword(password);
+      if (passwordError !== null) {
+        setAuthError(passwordError);
+        return;
+      }
+      const usernameError = validateUsername(username);
+      if (usernameError !== null) {
+        setAuthError(usernameError);
+        return;
+      }
+      setAuthBusy(true);
+      setAuthError(null);
+      try {
+        const session = await client.authenticateEmail(
+          email,
+          password,
+          true,
+          username,
+        );
+        sessionRef.current = session;
+        storeEmailSession({
+          server: serverLabelRef.current,
+          email,
+          token: session.token,
+          refreshToken: session.refresh_token,
+        });
+        setAccount({
+          kind: "email",
+          username,
+          email,
+          userId: session.user_id ?? username,
+        });
+        setAuthNotice("Account created. Your shared account is ready.");
+        await refreshProfile();
+      } catch (cause) {
+        setAuthError(await authErrorMessage(cause, "sign-up"));
+      } finally {
+        setAuthBusy(false);
+      }
+    },
+    [refreshProfile],
+  );
+
+  const signOut = useCallback(async (): Promise<void> => {
+    setAuthBusy(true);
+    try {
+      clearStoredEmailSession();
+      setAccount(null);
+      setAuthNotice("Signed out. This device is a guest again.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }, []);
   const myColour =
     state?.seats.find((seat) => seat.user_id === myUserId)?.colour ?? null;
 
@@ -579,6 +822,23 @@ export function useOnlineCarrom(
     myColour,
     myUserId,
     animation,
+    profile,
+    history,
+    leaderboard,
+    myLeaderboard,
+    profileLoading,
+    profileError,
+    account,
+    authBusy,
+    authError,
+    authNotice,
+    refreshProfile,
+    opponentLeft,
+    dismissOpponentLeft,
+    clearAuthFeedback,
+    signIn,
+    signUp,
+    signOut,
     connect,
     quickMatch,
     createPrivateRoom,

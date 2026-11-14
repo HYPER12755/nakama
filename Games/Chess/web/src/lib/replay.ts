@@ -9,7 +9,7 @@ export interface ReplayFrame {
 
 export interface ReplayData {
   frames: ReplayFrame[];
-  sans: string[];
+  steps: string[];
   error: string | null;
 }
 
@@ -47,23 +47,23 @@ function pgnDate(milliseconds: number): string {
 }
 
 export function replayFromHistory(entry: OnlineHistoryEntry): ReplayData {
-  const sans = Array.isArray(entry.sans) ? entry.sans : [];
+  const steps = Array.isArray(entry.steps) ? entry.steps : [];
   const engine = new ChessEngine();
 
   try {
     if (typeof entry.pgn === "string" && entry.pgn.trim().length > 0) {
       engine.loadPgn(entry.pgn);
     } else {
-      for (const san of sans) {
+      for (const san of steps) {
         engine.moveSan(san);
       }
     }
 
     // Older history records may not have the SAN array. The PGN remains the
     // source of truth and can always reconstruct it.
-    if (engine.history.length === 0 && sans.length > 0) {
+    if (engine.history.length === 0 && steps.length > 0) {
       engine.reset();
-      for (const san of sans) {
+      for (const san of steps) {
         engine.moveSan(san);
       }
     }
@@ -76,7 +76,7 @@ export function replayFromHistory(entry: OnlineHistoryEntry): ReplayData {
           san: null,
         },
       ],
-      sans: [],
+      steps: [],
       error:
         cause instanceof Error
           ? `Could not replay this game: ${cause.message}`
@@ -109,7 +109,7 @@ export function replayFromHistory(entry: OnlineHistoryEntry): ReplayData {
 
   return {
     frames,
-    sans: moves.map((move) => move.san),
+    steps: moves.map((move) => move.san),
     error: null,
   };
 }

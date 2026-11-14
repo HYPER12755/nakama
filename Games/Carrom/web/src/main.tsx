@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { applyPerformanceMode, GameBridge } from "@moongames/game-sdk";
 import App from "./App";
+import "@moongames/game-ui/styles.css";
 import "./styles.css";
 
 applyPerformanceMode();

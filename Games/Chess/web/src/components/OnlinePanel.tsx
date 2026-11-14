@@ -4,10 +4,10 @@ import {
   type SocialFriend,
 } from "@moongames/game-sdk";
 import type { OnlineChessController } from "../hooks/useOnlineChess";
-import { copyText } from "../lib/clipboard";
-import { buildMatchInviteUrl } from "../lib/invite";
+import { copyText } from "@moongames/game-ui";
+import { buildMatchInviteUrl } from "@moongames/game-ui";
 import { TIME_CONTROLS, formatClock } from "../lib/onlineProtocol";
-import { FriendInviteDialog } from "./FriendInviteDialog";
+import { FriendInviteDialog } from "@moongames/game-ui";
 
 export interface OnlinePanelProps {
   controller: OnlineChessController;

@@ -368,24 +368,78 @@ function defaultYield(): Promise<void> {
   });
 }
 
+/**
+ * A seeded generator, so the same position always produces the same shot while
+ * the AI still varies from move to move.
+ */
+function seededRandom(seed: number): () => number {
+  let state = (seed >>> 0) || 1;
+  const advance = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+  // Warm the generator up so neighbouring seeds land in different places.
+  advance();
+  advance();
+  advance();
+  advance();
+  return advance;
+}
+
+/**
+ * Pick a line the way a person would: the strongest line is the most likely
+ * choice, but the AI also misses. The decay decides how often.
+ */
+export function pickWithRealism(
+  ranked: { shot: CarromShotInput; score: number }[],
+  seed: number,
+  decay: number,
+): CarromShotInput {
+  if (ranked.length === 0) {
+    throw new Error("no ranked shots");
+  }
+  const weights = ranked.map((_, index) => Math.pow(decay, index));
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  const random = seededRandom(seed);
+  let roll = random() * total;
+  for (let index = 0; index < ranked.length; index += 1) {
+    roll -= weights[index]!;
+    if (roll <= 0) {
+      return ranked[index]!.shot;
+    }
+  }
+  return ranked[0]!.shot;
+}
+
+const REALISM: Record<CarromAiDifficulty, number> = {
+  easy: 0.28,
+  normal: 0.45,
+  hard: 0.62,
+};
+
 export function chooseAiShot(
   state: CarromState,
   options: CarromAiOptions = {},
 ): CarromShotInput {
-  const plan = buildAiPlan(state, options.difficulty ?? "normal");
-  let best: CarromShotInput | null = null;
-  let bestScore = Number.NEGATIVE_INFINITY;
+  const difficulty = options.difficulty ?? "normal";
+  const plan = buildAiPlan(state, difficulty);
+  const ranked: { shot: CarromShotInput; score: number }[] = [];
   for (const candidate of plan.ordered.slice(0, plan.limit)) {
     const evaluation = shotScore(state, candidate.shot);
     if (evaluation === null) {
       continue;
     }
-    if (evaluation.score > bestScore) {
-      best = candidate.shot;
-      bestScore = evaluation.score;
-    }
+    ranked.push({ shot: candidate.shot, score: evaluation.score });
   }
-  return best ?? plan.fallback();
+  ranked.sort((left, right) => right.score - left.score);
+  if (ranked.length === 0) {
+    return plan.fallback();
+  }
+  return pickWithRealism(
+    ranked,
+    state.shotNumber * 7919 + ranked.length,
+    REALISM[difficulty],
+  );
 }
 
 /**
@@ -397,9 +451,9 @@ export async function chooseAiShotAsync(
   options: CarromAiOptions = {},
   yieldControl: () => Promise<void> = defaultYield,
 ): Promise<CarromShotInput> {
-  const plan = buildAiPlan(state, options.difficulty ?? "normal");
-  let best: CarromShotInput | null = null;
-  let bestScore = Number.NEGATIVE_INFINITY;
+  const difficulty = options.difficulty ?? "normal";
+  const plan = buildAiPlan(state, difficulty);
+  const ranked: { shot: CarromShotInput; score: number }[] = [];
   const batch = plan.ordered.slice(0, plan.limit);
   for (let index = 0; index < batch.length; index += 3) {
     for (const candidate of batch.slice(index, index + 3)) {
@@ -407,12 +461,17 @@ export async function chooseAiShotAsync(
       if (evaluation === null) {
         continue;
       }
-      if (evaluation.score > bestScore) {
-        best = candidate.shot;
-        bestScore = evaluation.score;
-      }
+      ranked.push({ shot: candidate.shot, score: evaluation.score });
     }
     await yieldControl();
   }
-  return best ?? plan.fallback();
+  ranked.sort((left, right) => right.score - left.score);
+  if (ranked.length === 0) {
+    return plan.fallback();
+  }
+  return pickWithRealism(
+    ranked,
+    state.shotNumber * 7919 + ranked.length,
+    REALISM[difficulty],
+  );
 }

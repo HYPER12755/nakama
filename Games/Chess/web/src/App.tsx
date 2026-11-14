@@ -11,31 +11,36 @@ import {
   type ChessState,
   type Color,
 } from "@moongames/chess-core";
-import { AccountPanel } from "./components/AccountPanel";
+import {
+  AccountPanel,
+  GameToolbar,
+  Icon,
+  MatchChat,
+  ModeSwitch,
+  OpponentLeftDialog,
+  PlayerCard,
+  ProfilePanel,
+  copyText,
+  parseLaunchInvite,
+  parseMatchInvite,
+  clearMatchInviteFromLocation,
+} from "@moongames/game-ui";
 import { AiPanel } from "./components/AiPanel";
 import { ChessBoard } from "./components/ChessBoard";
-import { Icon } from "./components/Icon";
 import { GameStatus } from "./components/GameStatus";
-import { GameToolbar } from "./components/GameToolbar";
-import { ModeSwitch, type GameMode } from "./components/ModeSwitch";
-import { MatchChat } from "./components/MatchChat";
 import { MoveList } from "./components/MoveList";
 import { OnlineGameToolbar } from "./components/OnlineGameToolbar";
 import { OnlinePanel } from "./components/OnlinePanel";
-import { PlayerCard } from "./components/PlayerCard";
-import { ProfilePanel } from "./components/ProfilePanel";
 import { PromotionPicker } from "./components/PromotionPicker";
+import { ReplayDialog } from "./components/ReplayDialog";
+import type { OnlineHistoryEntry } from "./lib/onlineProtocol";
 import {
   useChessGame,
   type AiGameSettings,
 } from "./hooks/useChessGame";
 import { useOnlineChess } from "./hooks/useOnlineChess";
-import { copyText } from "./lib/clipboard";
-import {
-  clearMatchInviteFromLocation,
-  parseLaunchInvite,
-  parseMatchInvite,
-} from "./lib/invite";
+
+type GameMode = "local" | "ai" | "online";
 
 type Theme = "dark" | "light";
 
@@ -106,6 +111,9 @@ export default function App({ bridge }: AppProps) {
   const [flipped, setFlipped] = useState(false);
   const [boardFullscreen, setBoardFullscreen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [replayEntry, setReplayEntry] = useState<OnlineHistoryEntry | null>(
+    null,
+  );
   const boardPanelRef = useRef<HTMLElement>(null);
   const inviteConnectRef = useRef(false);
   const inviteHandledRef = useRef(false);
@@ -581,9 +589,13 @@ export default function App({ bridge }: AppProps) {
         </div>
         <div className="header-actions">
           <ModeSwitch
+            modes={[
+              { id: "local", label: "Local" },
+              { id: "ai", label: "vs AI" },
+              { id: "online", label: "Online" },
+            ]}
             mode={mode}
-            onlineStatus={online.connection}
-            onChange={handleModeChange}
+            onChange={(next) => handleModeChange(next as GameMode)}
           />
           <button
             className="icon-button"
@@ -604,7 +616,8 @@ export default function App({ bridge }: AppProps) {
           ref={boardPanelRef}
         >
           <PlayerCard
-            color={topColor}
+            name={topOnline.name ?? (topColor === "w" ? "White" : "Black")}
+            accent={topColor === "w" ? "#f3ead4" : "#22252a"}
             active={topActive}
             finished={finished}
             {...topOnline}
@@ -665,7 +678,8 @@ export default function App({ bridge }: AppProps) {
           </div>
 
           <PlayerCard
-            color={bottomColor}
+            name={bottomOnline.name ?? (bottomColor === "w" ? "White" : "Black")}
+            accent={bottomColor === "w" ? "#f3ead4" : "#22252a"}
             active={bottomActive}
             finished={finished}
             {...bottomOnline}
@@ -675,7 +689,18 @@ export default function App({ bridge }: AppProps) {
         <aside className="sidebar">
           {onlineMode ? (
             <>
-              {showAccountPanel && <AccountPanel controller={online} />}
+              {showAccountPanel && (
+                <AccountPanel
+                  account={online.account}
+                  authBusy={online.authBusy}
+                  authError={online.authError}
+                  authNotice={online.authNotice}
+                  signIn={online.signIn}
+                  signUp={online.signUp}
+                  signOut={online.signOut}
+                  clearAuthFeedback={online.clearAuthFeedback}
+                />
+              )}
               <OnlinePanel controller={online} onNotify={setToast} />
               {online.serverState !== null &&
                 online.serverState.match.started && (
@@ -700,7 +725,25 @@ export default function App({ bridge }: AppProps) {
                     />
                   </>
                 )}
-              {showProfilePanel && <ProfilePanel controller={online} />}
+              {showProfilePanel && (
+                <ProfilePanel
+                  connected={online.connection === "connected"}
+                  userId={online.session?.userId ?? null}
+                  profile={online.profile}
+                  history={online.history}
+                  leaderboard={online.leaderboard}
+                  myLeaderboard={online.myLeaderboard}
+                  loading={online.profileLoading}
+                  error={online.profileError}
+                  onRefresh={() => void online.refreshProfile()}
+                  onReplay={(entry) =>
+                    setReplayEntry(entry as unknown as OnlineHistoryEntry)
+                  }
+                  historyMeta={(entry) =>
+                    `${entry.mode === "private" ? "Private" : "Quick"} · ${entry.endedAt > 0 ? new Date(entry.endedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Unknown date"}`
+                  }
+                />
+              )}
             </>
           ) : aiMode ? (
             <>
@@ -712,11 +755,26 @@ export default function App({ bridge }: AppProps) {
               <GameStatus state={activeState} />
               <MoveList history={activeState.history} />
               <GameToolbar
-                canUndo={aiGame.canUndo}
-                onNewGame={handleNewGame}
-                onUndo={aiGame.undo}
-                onFlip={() => setFlipped((current) => !current)}
-                onCopyPgn={() => void handleCopyPgn()}
+                actions={[
+                  { id: "new", label: "New game", onClick: handleNewGame },
+                  {
+                    id: "undo",
+                    label: "Undo",
+                    onClick: aiGame.undo,
+                    disabled: !aiGame.canUndo,
+                  },
+                  {
+                    id: "flip",
+                    label: "Flip board",
+                    onClick: () => setFlipped((current) => !current),
+                  },
+                  {
+                    id: "pgn",
+                    label: "Copy PGN",
+                    onClick: () => void handleCopyPgn(),
+                    disabled: !aiGame.canUndo,
+                  },
+                ]}
               />
             </>
           ) : (
@@ -724,11 +782,26 @@ export default function App({ bridge }: AppProps) {
               <GameStatus state={activeState} />
               <MoveList history={activeState.history} />
               <GameToolbar
-                canUndo={localGame.canUndo}
-                onNewGame={handleNewGame}
-                onUndo={localGame.undo}
-                onFlip={() => setFlipped((current) => !current)}
-                onCopyPgn={() => void handleCopyPgn()}
+                actions={[
+                  { id: "new", label: "New game", onClick: handleNewGame },
+                  {
+                    id: "undo",
+                    label: "Undo",
+                    onClick: localGame.undo,
+                    disabled: !localGame.canUndo,
+                  },
+                  {
+                    id: "flip",
+                    label: "Flip board",
+                    onClick: () => setFlipped((current) => !current),
+                  },
+                  {
+                    id: "pgn",
+                    label: "Copy PGN",
+                    onClick: () => void handleCopyPgn(),
+                    disabled: !localGame.canUndo,
+                  },
+                ]}
               />
             </>
           )}
@@ -746,10 +819,28 @@ export default function App({ bridge }: AppProps) {
           />
         )}
 
+      {online.opponentLeft !== null ? (
+        <OpponentLeftDialog
+          name={online.opponentLeft}
+          onLeave={() => {
+            online.dismissOpponentLeft();
+            void online.leaveMatch();
+          }}
+          onStay={online.dismissOpponentLeft}
+        />
+      ) : null}
+
       {activeError !== null && (
         <div className="error-banner" role="alert">
           {activeError}
         </div>
+      )}
+
+      {replayEntry !== null && (
+        <ReplayDialog
+          entry={replayEntry}
+          onClose={() => setReplayEntry(null)}
+        />
       )}
 
       {toast !== null && (

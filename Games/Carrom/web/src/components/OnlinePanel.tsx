@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { PLAYER_LABEL, type CarromPlayer } from "@moongames/carrom-core";
 import type {
-  CarromChatMessage,
   CarromSeat,
   OnlineCarromController,
 } from "../hooks/useOnlineCarrom";
-import { EmojiPicker } from "./EmojiPicker";
 import { Icon } from "./Icon";
 
 const TABLE_SIZES = [2, 3, 4];
@@ -37,35 +35,15 @@ function SeatRow({
   );
 }
 
-function ChatEntry({ message }: { message: CarromChatMessage }) {
-  return (
-    <li className="online-chat__message">
-      <span className="online-chat__author">{message.username}</span>
-      <span className="online-chat__text">{message.text}</span>
-    </li>
-  );
-}
-
 export function OnlinePanel({
   online,
   seats,
   onSeatsChange,
 }: OnlinePanelProps) {
   const [roomId, setRoomId] = useState("");
-  const [message, setMessage] = useState("");
-  const [emojiOpen, setEmojiOpen] = useState(false);
 
   const connected = online.connection === "connected";
   const inMatch = online.matchId !== null;
-
-  const send = () => {
-    const text = message.trim();
-    if (text.length === 0) {
-      return;
-    }
-    online.sendChat(text);
-    setMessage("");
-  };
 
   return (
     <div className="online-panel">
@@ -192,63 +170,6 @@ export function OnlinePanel({
           </>
         )}
       </section>
-
-      {inMatch ? (
-        <section className="panel online-chat">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Table chat</p>
-              <h2>Say hello</h2>
-            </div>
-          </div>
-          <ul className="online-chat__list">
-            {online.chat.length === 0 ? (
-              <li className="online-chat__empty">No messages yet.</li>
-            ) : (
-              online.chat.map((entry) => (
-                <ChatEntry key={entry.id} message={entry} />
-              ))
-            )}
-          </ul>
-          <div className="online-chat__compose">
-            <input
-              type="text"
-              value={message}
-              maxLength={240}
-              placeholder="Message the table"
-              aria-label="Message the table"
-              onChange={(event) => setMessage(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  send();
-                }
-              }}
-            />
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Add an emoji"
-              onClick={() => setEmojiOpen((open) => !open)}
-            >
-              <Icon name="sparkles" size={17} />
-            </button>
-            <button
-              type="button"
-              className="button button--primary online-chat__send"
-              disabled={message.trim().length === 0}
-              onClick={send}
-            >
-              <Icon name="send" size={15} />
-            </button>
-            {emojiOpen ? (
-              <EmojiPicker
-                onPick={(emoji) => setMessage((current) => `${current}${emoji}`)}
-                onClose={() => setEmojiOpen(false)}
-              />
-            ) : null}
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }

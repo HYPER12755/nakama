@@ -34,7 +34,7 @@ import {
   validatePassword,
   validateUsername,
   type OnlineAuthAccount,
-} from "../lib/auth";
+} from "@moongames/game-ui";
 import {
   ONLINE_OP,
   TIME_CONTROLS,
@@ -146,6 +146,9 @@ export interface OnlineChessController {
     options?: { spectator?: boolean },
   ) => Promise<void>;
   leaveMatch: () => Promise<void>;
+  /** The name of the player who left the table, when it happened. */
+  opponentLeft: string | null;
+  dismissOpponentLeft: () => void;
   selectSquare: (square: Square) => void;
   choosePromotion: (piece: PromotionPiece) => void;
   cancelPromotion: () => void;
@@ -313,6 +316,7 @@ export function useOnlineChess(
   const [connection, setConnection] =
     useState<OnlineConnectionStatus>("offline");
   const [session, setSession] = useState<OnlineSessionInfo | null>(null);
+  const [opponentLeft, setOpponentLeft] = useState<string | null>(null);
   const [account, setAccount] = useState<OnlineAuthAccount | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -563,6 +567,14 @@ export function useOnlineChess(
           break;
         }
         case ONLINE_OP.PLAYER_LEFT: {
+          // The other player left: say so plainly and offer the way out.
+          const left = payload as { userId?: string; username?: string };
+          if (
+            left.userId !== undefined &&
+            left.userId !== sessionRef.current?.user_id
+          ) {
+            setOpponentLeft(left.username ?? "Your opponent");
+          }
           break;
         }
         default:
@@ -947,6 +959,10 @@ export function useOnlineChess(
         }
       }
     };
+  }, []);
+
+  const dismissOpponentLeft = useCallback((): void => {
+    setOpponentLeft(null);
   }, []);
 
   const clearAuthFeedback = useCallback(() => {
@@ -2085,6 +2101,8 @@ export function useOnlineChess(
     createPrivateMatch,
     joinMatch,
     leaveMatch,
+    opponentLeft,
+    dismissOpponentLeft,
     selectSquare,
     choosePromotion,
     cancelPromotion,

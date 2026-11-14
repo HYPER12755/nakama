@@ -148,7 +148,7 @@ export interface OnlineHistoryEntry {
     username: string;
   };
   moves: number;
-  sans?: string[];
+  steps?: string[];
   pgn: string;
   finalFen?: string;
   timeControl: OnlineTimeControl;
@@ -159,6 +159,7 @@ export interface OnlineHistoryEntry {
 }
 
 export interface OnlineLeaderboardMetadata {
+  [key: string]: unknown;
   wins?: number;
   losses?: number;
   draws?: number;

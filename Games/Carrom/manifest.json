@@ -1,7 +1,7 @@
 {
   "id": "carrom",
   "name": "Carrom",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "sdkVersion": "0.1.0",
   "entry": "index.html",
   "minPlayers": 2,

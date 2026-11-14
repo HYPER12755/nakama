@@ -5,7 +5,7 @@ import {
   hostPreviewEnabled,
   sessionFromToken,
   type PreviewLogEntry,
-} from "../src/preview/hostPreview";
+} from "@moongames/game-ui";
 
 describe("browser host preview", () => {
   it("sends init after ready and records both directions", async () => {

@@ -2,6 +2,7 @@
 
 local nk = require("nakama")
 local protocol = require("carrom_protocol")
+local progression = require("carrom_profile")
 local social = require("moongames_social")
 
 local PRIVATE_LOBBY_TIMEOUT_MS = social.INVITE_TTL_MS + 60000
@@ -167,7 +168,7 @@ local function quick_match(context, payload)
   if not match_id then
     match_id = nk.match_create("carrom_match", {
       mode = "quick",
-      rated = false,
+      rated = true,
       seats = seats,
     })
   end
@@ -246,7 +247,7 @@ local function matchmaker_matched(context, matched)
 
   return nk.match_create("carrom_match", {
     mode = "quick",
-    rated = false,
+    rated = true,
     seats = first_seats,
     expected_users = {
       {
@@ -263,3 +264,17 @@ end
 -- The shared module owns the single Nakama matchmaker callback and routes a
 -- ticket to the game that asked for it.
 social.register_matchmaker_game("carrom", matchmaker_matched)
+
+local function get_profile(context)
+  return nk.json_encode(progression.profile_payload(context))
+end
+nk.register_rpc(get_profile, "carrom_get_profile")
+
+local function get_leaderboard(context, payload)
+  local params, decode_error = decode_payload(payload)
+  if not params then
+    return response_error("invalid_payload", decode_error)
+  end
+  return nk.json_encode(progression.leaderboard_payload(context, params))
+end
+nk.register_rpc(get_leaderboard, "carrom_get_leaderboard")

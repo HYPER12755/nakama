@@ -8,6 +8,7 @@ import {
   findPocketAt,
   nextPlayerInTurnOrder,
   nearestValidStrikerPosition,
+  pickWithRealism,
   playersInTurnOrder,
   resolveShotRules,
   simulateShot,
@@ -360,6 +361,21 @@ describe("carrom rules", () => {
     );
     expect(next.turn).toBe("yellow");
     expect(next.scores.green).toBe(1);
+  });
+
+  it("plays like a person and misses the hard lines", () => {
+    const ranked = [
+      { shot: { position: 0.4, angle: 0, power: 0.6 }, score: 10 },
+      { shot: { position: 0.5, angle: 0.1, power: 0.6 }, score: 6 },
+      { shot: { position: 0.6, angle: 0.2, power: 0.6 }, score: 2 },
+    ];
+    const picks = new Set<string>();
+    for (let seed = 1; seed <= 40; seed += 1) {
+      picks.add(JSON.stringify(pickWithRealism(ranked, seed, 0.45)));
+    }
+    expect(picks.size).toBeGreaterThan(1);
+    // The strongest line is still the usual choice.
+    expect(picks.has(JSON.stringify(ranked[0]!.shot))).toBe(true);
   });
 
   it(

@@ -15,19 +15,31 @@ import {
   nearestValidStrikerPosition,
   simulateShot,
   validateShot,
+  type CarromAiDifficulty,
   type CarromPlayer,
   type CarromShotInput,
   type CarromShotResult,
   type CarromState,
 } from "@moongames/carrom-core";
 import { CarromBoard } from "./components/CarromBoard";
+import { EmojiPicker } from "./components/EmojiPicker";
 import { GameOverDialog } from "./components/GameOverDialog";
 import { Icon } from "./components/Icon";
 import { OnlinePanel } from "./components/OnlinePanel";
+import { PocketBox } from "./components/PocketBox";
 import { RulesDialog } from "./components/RulesDialog";
 import { ScoreCard } from "./components/ScoreCard";
 import { useOnlineCarrom } from "./hooks/useOnlineCarrom";
 import { type AimMode } from "./lib/aim";
+import {
+  AccountPanel,
+  MatchChat,
+  ModeSwitch,
+  OpponentLeftDialog,
+  PlayerCard,
+  ProfilePanel,
+  type GameHistoryEntry,
+} from "@moongames/game-ui";
 import {
   playFoul,
   playPocket,
@@ -146,6 +158,8 @@ export default function App({ bridge }: AppProps) {
   const [resultOpen, setResultOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [aiThinking, setAiThinking] = useState(false);
+  const [aiDifficulty, setAiDifficulty] =
+    useState<CarromAiDifficulty>("normal");
   const [paused, setPaused] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [onlineSeats, setOnlineSeats] = useState(2);
@@ -405,7 +419,9 @@ export default function App({ bridge }: AppProps) {
         if (cancelled || modeRef.current !== "ai" || animationRef.current !== null) {
           return;
         }
-        const aiShot = await chooseAiShotAsync(game);
+        const aiShot = await chooseAiShotAsync(game, {
+          difficulty: aiDifficulty,
+        });
         if (cancelled || modeRef.current !== "ai" || animationRef.current !== null) {
           return;
         }
@@ -482,8 +498,21 @@ export default function App({ bridge }: AppProps) {
       .join(" · ");
   }, [activeGame, game.players, game.scores, onlineMode]);
 
+  const pocketed = useMemo(() => {
+    const counts = { white: 0, black: 0, green: 0, yellow: 0 };
+    for (const disc of activeGame?.discs ?? []) {
+      if (disc.kind !== "queen" && disc.pocketed) {
+        counts[disc.kind] += 1;
+      }
+    }
+    return counts;
+  }, [activeGame]);
+
   return (
-    <div className="app" ref={appRef}>
+    <div
+      className={`app${isFullscreen ? " app--board-only" : ""}`}
+      ref={appRef}
+    >
       <header className="app-header">
         <div className="brand">
           <span className="brand-mark">
@@ -497,38 +526,17 @@ export default function App({ bridge }: AppProps) {
         </div>
 
         <div className="header-actions">
-          <div className="mode-switch" role="tablist" aria-label="Game mode">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "local"}
-              className={`mode-switch__button${mode === "local" ? " mode-switch__button--active" : ""}`}
-              onClick={() => handleModeChange("local")}
-            >
-              <Icon name="users" size={15} />
-              Local
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "ai"}
-              className={`mode-switch__button${mode === "ai" ? " mode-switch__button--active" : ""}`}
-              onClick={() => handleModeChange("ai")}
-            >
-              <Icon name="cpu" size={15} />
-              vs AI
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "online"}
-              className={`mode-switch__button${mode === "online" ? " mode-switch__button--active" : ""}`}
-              onClick={() => handleModeChange("online")}
-            >
-              <Icon name="users" size={15} />
-              Online
-            </button>
-          </div>
+          <ModeSwitch
+            modes={[
+              { id: "local", label: "Local", icon: <Icon name="users" size={15} /> },
+              { id: "ai", label: "vs AI", icon: <Icon name="cpu" size={15} /> },
+              { id: "online", label: "Online", icon: <Icon name="sparkles" size={15} /> },
+            ]}
+            mode={mode}
+            onChange={(next) =>
+              handleModeChange(next as "local" | "ai" | "online")
+            }
+          />
 
           <button
             type="button"
@@ -712,6 +720,12 @@ export default function App({ bridge }: AppProps) {
               <span>Queen</span>
               <strong>{queen}</strong>
             </div>
+            <PocketBox
+              pocketed={pocketed}
+              players={activeGame?.players ?? game.players}
+              queenOwner={activeGame?.queen.owner ?? null}
+              queenPocketed={activeGame?.queen.status !== "board"}
+            />
           </section>
 
           <section className="panel status-panel" aria-live="polite">
@@ -735,11 +749,90 @@ export default function App({ bridge }: AppProps) {
           </section>
 
           {onlineMode ? (
-            <OnlinePanel
-              online={online}
-              seats={onlineSeats}
-              onSeatsChange={setOnlineSeats}
-            />
+            <>
+              <OnlinePanel
+                online={online}
+                seats={onlineSeats}
+                onSeatsChange={setOnlineSeats}
+              />
+              <MatchChat
+                matchId={online.matchId}
+                messages={online.chat}
+                selfUserId={online.myUserId}
+                onSend={(text) => online.sendChat(text)}
+              />
+              <AccountPanel
+                account={online.account}
+                authBusy={online.authBusy}
+                authError={online.authError}
+                authNotice={online.authNotice}
+                signIn={online.signIn}
+                signUp={online.signUp}
+                signOut={online.signOut}
+                clearAuthFeedback={online.clearAuthFeedback}
+              />
+              <ProfilePanel
+                connected={online.connection === "connected"}
+                userId={online.myUserId}
+                profile={online.profile}
+                history={online.history}
+                leaderboard={online.leaderboard}
+                myLeaderboard={online.myLeaderboard}
+                loading={online.profileLoading}
+                error={online.profileError}
+                onRefresh={() => void online.refreshProfile()}
+                emptyProfileText="Your rating and your pocket box fill in after your first game."
+                emptyHistoryText="Your finished carrom games will appear here."
+                emptyLeaderboardText="Play a quick match to enter the rating leaderboard."
+                historyMeta={(entry) =>
+                  `${entry.mode === "private" ? "Private" : "Quick"} · ${
+                    entry.endedAt > 0
+                      ? new Date(entry.endedAt).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                        })
+                      : "Unknown date"
+                  }`
+                }
+              />
+            </>
+          ) : null}
+
+          {mode === "ai" ? (
+            <section className="panel ai-panel">
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">Moon AI</p>
+                  <h2>Opponent</h2>
+                </div>
+              </div>
+              <div className="ai-panel__options" role="radiogroup">
+                {(
+                  [
+                    { id: "easy", label: "Easy" },
+                    { id: "normal", label: "Normal" },
+                    { id: "hard", label: "Hard" },
+                  ] as const
+                ).map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={aiDifficulty === option.id}
+                    className={`ai-panel__option${
+                      aiDifficulty === option.id ? " ai-panel__option--active" : ""
+                    }`}
+                    onClick={() => setAiDifficulty(option.id)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="ai-panel__note">
+                The AI plays like a person: it reads the table, picks a pocket
+                line, and misses the hard ones.
+              </p>
+            </section>
           ) : null}
 
           <section className="panel tips-panel">
@@ -774,6 +867,16 @@ export default function App({ bridge }: AppProps) {
       </main>
 
       <RulesDialog open={rulesOpen} onClose={() => setRulesOpen(false)} />
+      {online.opponentLeft !== null ? (
+        <OpponentLeftDialog
+          name={online.opponentLeft}
+          onLeave={() => {
+            online.dismissOpponentLeft();
+            void online.leaveMatch();
+          }}
+          onStay={online.dismissOpponentLeft}
+        />
+      ) : null}
       {resultOpen && game.status === "finished" && game.winner !== null ? (
         <GameOverDialog
           winner={game.winner}

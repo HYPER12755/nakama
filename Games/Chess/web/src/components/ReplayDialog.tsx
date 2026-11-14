@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { copyText } from "../lib/clipboard";
+import { copyText } from "@moongames/game-ui";
 import type { OnlineHistoryEntry } from "../lib/onlineProtocol";
 import { exportPgn, replayFromHistory } from "../lib/replay";
 import { ChessBoard } from "./ChessBoard";
@@ -215,7 +215,7 @@ export function ReplayDialog({ entry, onClose }: ReplayDialogProps) {
                 >
                   Start
                 </button>
-                {replay.sans.map((san, index) => (
+                {replay.steps.map((san, index) => (
                   <button
                     key={`${san}-${index}`}
                     type="button"

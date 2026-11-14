@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { copyText } from "../src/lib/clipboard";
+import { copyText } from "@moongames/game-ui";
 
 afterEach(() => {
   vi.unstubAllGlobals();

@@ -164,7 +164,17 @@ function App() {
   const onlineCount = games.filter((game) =>
     game.capabilities.includes("online"),
   ).length;
-  const orbitGames = games.slice(0, 4);
+  // The most played title sits in the middle of the orbit, the rest of the
+  // library circles it like the trending shelf.
+  const orbitGames = useMemo(() => {
+    const sorted = [...games].sort(
+      (left, right) =>
+        (social.playCounts[right.id] ?? 0) - (social.playCounts[left.id] ?? 0),
+    );
+    return sorted.slice(0, 4);
+  }, [games, social.playCounts]);
+  const centreGame = orbitGames[0] ?? null;
+  const sideGames = orbitGames.slice(1);
   const nativeLaunch = useMemo(
     () => hasLauncherBridge(currentLauncherWindow()),
     [],
@@ -522,9 +532,9 @@ function App() {
               <span className="hero-orbit__ring hero-orbit__ring--one" />
               <span className="hero-orbit__ring hero-orbit__ring--two" />
               <span className="hero-orbit__ring hero-orbit__ring--three" />
-              {orbitGames.map((game, index) => (
+              {sideGames.map((game, index) => (
                 <span
-                  className={`orbit-token orbit-token--${index + 1}`}
+                  className={`orbit-token orbit-token--${index + 2}`}
                   style={{ "--accent": game.accent } as CSSProperties}
                   key={game.id}
                 >
@@ -537,10 +547,27 @@ function App() {
                 </span>
               ))}
               <span className="orbit-center">
-                <span className="orbit-center__moon">
-                  <Icon name="moon" size={38} strokeWidth={1.55} />
-                </span>
-                <small>MOON<br />GAMES</small>
+                {centreGame === null ? (
+                  <span className="orbit-center__moon">
+                    <Icon name="moon" size={38} strokeWidth={1.55} />
+                  </span>
+                ) : (
+                  <span
+                    className="orbit-center__game"
+                    style={{ "--accent": centreGame.accent } as CSSProperties}
+                  >
+                    <GameMark
+                      game={centreGame}
+                      size={44}
+                      strokeWidth={1.4}
+                      className="icon"
+                    />
+                    <small>{centreGame.name.toUpperCase()}</small>
+                  </span>
+                )}
+                {centreGame === null ? (
+                  <small>MOON<br />GAMES</small>
+                ) : null}
               </span>
             </div>
             <p className="hero__visual-caption">

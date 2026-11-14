@@ -15,6 +15,7 @@
     "@heroiclabs/nakama-js": "^2.8.0",
     "@moongames/carrom-core": "workspace:*",
     "@moongames/game-sdk": "workspace:*",
+    "@moongames/game-ui": "workspace:*",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

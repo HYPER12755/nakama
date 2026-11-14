@@ -231,7 +231,7 @@ function progression.history_record(
       username = opponent and opponent.username or "Player",
     },
     moves = #history,
-    sans = history,
+    steps = history,
     pgn = pgn,
     finalFen = final_fen,
     timeControl = {
@@ -539,11 +539,22 @@ function progression.finalize_match(context, state, result, now)
         )
       end
       local social_ok, social = pcall(require, "moongames_social")
-      if social_ok and type(social) == "table" and social.record_recent_players then
-        pcall(social.record_recent_players, "chess", {
-          { userId = white.user_id, username = white.username },
-          { userId = black.user_id, username = black.username },
-        })
+      if social_ok and type(social) == "table" then
+        if social.record_recent_players then
+          pcall(social.record_recent_players, "chess", {
+            { userId = white.user_id, username = white.username },
+            { userId = black.user_id, username = black.username },
+          })
+        end
+        -- The launcher shows the most played title in the middle of the orbit.
+        if social.record_play then
+          for _, player in ipairs(players) do
+            pcall(social.record_play, {
+              user_id = player.user_id,
+              username = player.username,
+            }, "chess")
+          end
+        end
       end
       return true
     end

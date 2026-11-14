@@ -5,15 +5,18 @@ import {
   type FormEvent,
 } from "react";
 import { insertEmojiAtSelection } from "@moongames/game-sdk";
-import type { OnlineChatMessage } from "../lib/onlineProtocol";
+import type { GameChatMessage } from "../types";
 import { EmojiPicker } from "./EmojiPicker";
 import { Icon } from "./Icon";
 
 export interface MatchChatProps {
+  /** Changes when the player switches tables, so the panel resets. */
   matchId: string | null;
-  messages: OnlineChatMessage[];
+  messages: GameChatMessage[];
   selfUserId: string | null;
   onSend: (text: string) => void;
+  disabled?: boolean;
+  title?: string;
 }
 
 function ChatIcon() {

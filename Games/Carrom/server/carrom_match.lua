@@ -7,6 +7,7 @@ local nk = require("nakama")
 local physics = require("carrom_physics")
 local rules = require("carrom_rules")
 local protocol = require("carrom_protocol")
+local progression = require("carrom_profile")
 
 local OP = protocol.OP
 
@@ -248,6 +249,7 @@ local function match_init(context, params)
   local state = {
     mode = mode,
     seats = seats,
+    rated = params.rated == true,
     expected_by_user = expected_by_user,
     expected_count = expected_count,
     reserved_colours = reserved_colours,
@@ -258,6 +260,7 @@ local function match_init(context, params)
     spectator_order = {},
     pending_joins = {},
     game = nil,
+    shots = {},
     chat = {},
     created_at = now,
     started_at = nil,
@@ -471,6 +474,30 @@ local function handle_shot(context, dispatcher, state, message, payload, now)
   local next_game, outcome = rules.resolve(state.game, result, shot)
   state.game = next_game
   state.last_activity = now
+
+  -- The shot list is the replay: it is stored with the finished game so the
+  -- history can show how the board was cleared.
+  local pocketed_count = 0
+  local queen_covered = false
+  for _, event in ipairs(result.pocketed or {}) do
+    if event.kind == player.colour then
+      pocketed_count = pocketed_count + 1
+    end
+    if event.kind == "queen" then
+      queen_covered = true
+    end
+  end
+  state.shots[#state.shots + 1] = {
+    by = message.sender.user_id,
+    colour = player.colour,
+    position = position,
+    angle = angle,
+    power = power,
+    pocketed_count = pocketed_count,
+    queen_covered = queen_covered,
+    turn_after = next_game.turn,
+  }
+
   -- The shot is shared so every client can replay the same deterministic
   -- animation that the server just resolved.
   state.last_shot = {
@@ -489,6 +516,7 @@ local function handle_shot(context, dispatcher, state, message, payload, now)
       reason = "board cleared",
       endedAt = now,
     }
+    progression.finalize_match(context, state, state.result, now)
     broadcast(dispatcher, OP.GAME_OVER, state.result)
     refresh_label(state, dispatcher)
   end

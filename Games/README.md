@@ -325,6 +325,21 @@ public deployment.
 Phases 1–7.6 are code-complete except optional host attestation, visual
 mobile QA, and real-device build validation:
 
+- There is now a **shared game UI kit** at `Games/shared/gameui/`. The account
+  panel, the profile panel with the rating, history, and leaderboard, the table
+  chat with its emoji picker, the friend invite dialog, the player card, the
+  action toolbar, the mode switch, the replay chrome, the icon set, the auth
+  helpers, the invite helpers, and the host preview panel live there. Chess and
+  Carrom both render the same components, and a future title gets them for
+  free. The profile, history, leaderboard, account, and chat contracts are one
+  shape for every title.
+- The launcher reads the shared play counts, so the most played title sits in
+  the middle of the orbit and the rest of the library circles it.
+- Carrom is the second official title. It runs on the launcher's Nakama
+  server, with the shared account session, two, three, and four player
+  tables, spectators, table chat, ratings, a pocket box, and a fullscreen
+  table that shows only the board and its controls.
+
 - The TypeScript chess core is implemented and covered by 22 passing tests.
 - The portable web client has 26 passing tests for invite links, native launch
   contexts, Lua empty-array normalization, temporary-chat cleanup, history
@@ -472,12 +487,25 @@ mobile QA, and real-device build validation:
   connects over the realtime socket, finds a table through the atomic
   matchmaker, opens private rooms, joins by room code, and renders the
   authoritative state.
+- The Carrom table shows a pocket box with every pocketed piece, the shared
+  profile panel with the rating, history, and leaderboard, the shared account
+  panel, the shared table chat, and a fullscreen mode that leaves only the
+  board and its controls on the screen.
+- The Carrom AI plays like a person. It reads the table, picks a pocket line,
+  and misses the hard ones: the strongest line is the most likely choice, not
+  the only one, and the difficulty decides how often it misses.
+- When the other player leaves, both titles say so plainly and offer the way
+  out, so nobody is left staring at a table that cannot continue.
 - The authoritative Carrom server is a Lua runtime module. It owns the seats,
   the turn, the rules, and the result: it simulates every shot itself,
   validates the striker placement, refuses out-of-turn shots, keeps a rate
   limited table chat, and broadcasts the state with the shot so every client
   replays the same animation. Two, three, and four player tables are
   supported, and the room creator keeps the first colour.
+- The Carrom progression follows the shared profile shape: a rating, the
+  counters, the stats a title owns (pieces pocketed, queens covered, the best
+  streak), the finished game history with the shot list, and a rating
+  leaderboard.
 - Nakama keeps a single matchmaker callback, so the shared module owns it and
   routes a ticket to the game that asked for it. Chess and Carrom therefore
   pair their own tables instead of overwriting each other, and the matchmaker
@@ -503,8 +531,8 @@ mobile QA, and real-device build validation:
   renders it as a normal catalog card next to Chess.
 
 Current local automation: 22 core + 26 web + 14 host-core + 42 launcher
-TypeScript tests, 24 Carrom core + 6 Carrom web tests, 11 tool tests, and 102
-Lua tests (247 passing tests total, excluding Flutter package tests that
+TypeScript tests, 25 Carrom core + 6 Carrom web tests, 11 tool tests, and 108
+Lua tests (254 passing tests total, excluding Flutter package tests that
 require the Flutter SDK). The launcher
 account, social, and invite smoke scripts also run against real local Nakama,
 and the Carrom online smoke test runs two and four player tables against the

@@ -24,7 +24,7 @@ export {
 } from "./physics";
 export { resolveShot, resolveShotRules } from "./rules";
 export { simulateShot } from "./shot";
-export { chooseAiShot, chooseAiShotAsync } from "./ai";
+export { chooseAiShot, chooseAiShotAsync, pickWithRealism } from "./ai";
 export type { CarromAiDifficulty, CarromAiOptions } from "./ai";
 export type {
   CarromDisc,

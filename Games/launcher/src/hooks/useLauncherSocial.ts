@@ -96,6 +96,9 @@ export interface LauncherSocialController {
   notificationNotice: string | null;
   recentPlayers: SocialPlayerSummary[];
   recentPlayersBusy: boolean;
+  /** How many games the player has finished in each title. */
+  playCounts: Record<string, number>;
+  refreshPlayCounts: () => Promise<void>;
   inviteBusy: string | null;
   inviteError: string | null;
   inviteNotice: string | null;
@@ -205,6 +208,7 @@ export function useLauncherSocial(): LauncherSocialController {
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [notificationNotice, setNotificationNotice] = useState<string | null>(null);
   const [recentPlayers, setRecentPlayers] = useState<SocialPlayerSummary[]>([]);
+  const [playCounts, setPlayCounts] = useState<Record<string, number>>({});
   const [recentPlayersBusy, setRecentPlayersBusy] = useState(false);
   const [inviteBusy, setInviteBusy] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -437,6 +441,21 @@ export function useLauncherSocial(): LauncherSocialController {
     [refreshFriends],
   );
 
+  const refreshPlayCounts = useCallback(async (): Promise<void> => {
+    const client = clientRef.current;
+    const session = sessionRef.current;
+    if (client === null || session === null) {
+      return;
+    }
+    try {
+      const response = await client.rpc(session, "moongames_play_counts", {});
+      const payload = response.payload as { counts?: Record<string, number> };
+      setPlayCounts(payload.counts ?? {});
+    } catch {
+      // The play counts are a hint for the menu, not a requirement.
+    }
+  }, []);
+
   const refreshNotifications = useCallback(async (): Promise<void> => {
     const social = socialRef.current;
     if (social === null) {
@@ -531,7 +550,11 @@ export function useLauncherSocial(): LauncherSocialController {
     }
     const refresh = () => {
       if (document.visibilityState === "visible") {
-        void Promise.allSettled([refreshFriends(), refreshNotifications()]);
+        void Promise.allSettled([
+          refreshFriends(),
+          refreshNotifications(),
+          refreshPlayCounts(),
+        ]);
       }
     };
     window.addEventListener("focus", refresh);
@@ -1025,6 +1048,7 @@ export function useLauncherSocial(): LauncherSocialController {
         } catch {
           setError("Connected, but your friends list could not be loaded.");
         }
+        await refreshPlayCounts();
         await Promise.allSettled([
           refreshNotifications(),
           refreshRecentPlayers(),
@@ -1653,6 +1677,8 @@ export function useLauncherSocial(): LauncherSocialController {
     notificationNotice,
     recentPlayers,
     recentPlayersBusy,
+    playCounts,
+    refreshPlayCounts,
     inviteBusy,
     inviteError,
     inviteNotice,

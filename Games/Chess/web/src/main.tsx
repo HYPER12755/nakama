@@ -2,11 +2,12 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { applyPerformanceMode, GameBridge } from "@moongames/game-sdk";
 import App from "./App";
-import { HostPreviewPanel } from "./preview/HostPreviewPanel";
+import { HostPreviewPanel } from "@moongames/game-ui";
 import {
   BrowserPreviewHost,
   hostPreviewEnabled,
-} from "./preview/hostPreview";
+} from "@moongames/game-ui";
+import "@moongames/game-ui/styles.css";
 import "./styles.css";
 
 applyPerformanceMode();

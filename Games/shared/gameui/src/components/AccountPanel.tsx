@@ -1,5 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
-import type { OnlineChessController } from "../hooks/useOnlineChess";
+import {
+  type OnlineAuthAccount,
+  type OnlineAuthKind,
+} from "../lib/auth";
 import {
   validateEmail,
   validatePassword,
@@ -10,10 +13,30 @@ import { Icon } from "./Icon";
 type AuthView = "summary" | "sign-in" | "sign-up";
 
 export interface AccountPanelProps {
-  controller: OnlineChessController;
+  account: OnlineAuthAccount | null;
+  authBusy: boolean;
+  authError: string | null;
+  authNotice: string | null;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    username: string,
+  ) => Promise<void>;
+  signOut: () => Promise<void>;
+  clearAuthFeedback: () => void;
 }
 
-export function AccountPanel({ controller }: AccountPanelProps) {
+export function AccountPanel({
+  account,
+  authBusy,
+  authError,
+  authNotice,
+  signIn,
+  signUp,
+  signOut,
+  clearAuthFeedback,
+}: AccountPanelProps) {
   const [view, setView] = useState<AuthView>("summary");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,17 +44,6 @@ export function AccountPanel({ controller }: AccountPanelProps) {
   const [username, setUsername] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
-  const {
-    account,
-    authBusy,
-    authError,
-    authNotice,
-    signIn,
-    signUp,
-    signOut,
-    clearAuthFeedback,
-  } = controller;
 
   const feedback = formError ?? authError;
 

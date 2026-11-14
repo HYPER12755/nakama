@@ -7,7 +7,7 @@ import {
   validateEmail,
   validatePassword,
   validateUsername,
-} from "../src/lib/auth";
+} from "@moongames/game-ui";
 
 describe("account validation", () => {
   it("normalizes and validates email addresses", () => {

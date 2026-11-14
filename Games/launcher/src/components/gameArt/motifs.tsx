@@ -93,12 +93,26 @@ function LudoMotif(props: MotifProps): ReactElement {
 function CarromMotif(props: MotifProps): ReactElement {
   return (
     <Svg {...props}>
-      <circle cx="12" cy="12" r="8.4" fill="currentColor" fillOpacity="0.08" />
-      <circle cx="12" cy="12" r="2.25" />
-      <circle cx="8.2" cy="9.2" r="1.15" fill="currentColor" stroke="none" />
-      <circle cx="15.5" cy="8.4" r="1.15" fill="currentColor" stroke="none" />
-      <circle cx="15.2" cy="15.6" r="1.15" fill="currentColor" stroke="none" />
-      <path d="m4.9 17.1 1.9 1.9" />
+      <rect
+        x="3.4"
+        y="3.4"
+        width="17.2"
+        height="17.2"
+        rx="2.6"
+        fill="currentColor"
+        fillOpacity="0.06"
+      />
+      <circle cx="6.4" cy="6.4" r="1.7" />
+      <circle cx="17.6" cy="6.4" r="1.7" />
+      <circle cx="6.4" cy="17.6" r="1.7" />
+      <circle cx="17.6" cy="17.6" r="1.7" />
+      <circle cx="12" cy="12" r="2.3" />
+      <circle cx="12" cy="7.4" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="8.2" cy="12" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="15.8" cy="12" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="16.6" r="1.15" fill="currentColor" stroke="none" />
+      <path d="M6.6 18.6h10.8" />
+      <path d="M9.6 18.6 12 21.6l2.4-3" />
     </Svg>
   );
 }

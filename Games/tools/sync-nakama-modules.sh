@@ -33,7 +33,8 @@ for module in \
   carrom_rules.lua \
   carrom_protocol.lua \
   carrom_match.lua \
-  carrom_rpc.lua; do
+  carrom_rpc.lua \
+  carrom_profile.lua; do
   if [[ -f "$CARROM_DIR/$module" ]]; then
     cp "$CARROM_DIR/$module" "$DESTINATION/$module"
   fi

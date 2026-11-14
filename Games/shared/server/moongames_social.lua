@@ -1168,4 +1168,93 @@ local function rpc_recent_players(context)
 end
 nk.register_rpc(rpc_recent_players, "moongames_recent_players_list")
 
+-- Play counts live in the shared module so the launcher can show the most
+-- played title in the middle of the orbit, whatever games it hosts.
+social.PLAY_COLLECTION = "moongames_plays"
+
+function social.record_play(context, game_id)
+  if type(context) ~= "table" then
+    return false
+  end
+  local user_id = context.user_id
+  if not user_id or user_id == "" then
+    return false
+  end
+  if type(game_id) ~= "string" or game_id == "" then
+    return false
+  end
+
+  local key = "plays:" .. game_id
+  local count = 0
+  local ok, records = pcall(nk.storage_read, {
+    {
+      collection = social.PLAY_COLLECTION,
+      key = key,
+      user_id = user_id,
+    },
+  })
+  if ok and type(records) == "table" then
+    for _, record in ipairs(records) do
+      if type(record.value) == "table" and tonumber(record.value.count) then
+        count = tonumber(record.value.count)
+      end
+    end
+  end
+  count = count + 1
+
+  local written, write_error = pcall(nk.storage_write, {
+    {
+      collection = social.PLAY_COLLECTION,
+      key = key,
+      user_id = user_id,
+      value = {
+        count = count,
+        game_id = game_id,
+        updated_at = nk.time(),
+      },
+    },
+  })
+  if not written then
+    nk.logger_warn("Could not record a play: " .. tostring(write_error))
+    return false
+  end
+  return true
+end
+
+function social.play_counts(context)
+  if type(context) ~= "table" then
+    return {}
+  end
+  local user_id = context.user_id
+  if not user_id or user_id == "" then
+    return {}
+  end
+
+  local ok, records = pcall(
+    nk.storage_list,
+    user_id,
+    social.PLAY_COLLECTION,
+    64
+  )
+  local counts = {}
+  if ok and type(records) == "table" then
+    for _, record in ipairs(records) do
+      local value = record.value
+      if type(value) == "table" and type(value.game_id) == "string" then
+        counts[value.game_id] = tonumber(value.count) or 0
+      end
+    end
+  end
+  return counts
+end
+
+local function rpc_play_counts(context)
+  local read_ok, counts = pcall(social.play_counts, context)
+  if not read_ok then
+    return fail("unknown", "The play counts could not be read.")
+  end
+  return ok({ counts = counts })
+end
+nk.register_rpc(rpc_play_counts, "moongames_play_counts")
+
 return social
