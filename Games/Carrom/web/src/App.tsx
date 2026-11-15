@@ -55,14 +55,10 @@ import { useOnlineCarrom } from "./hooks/useOnlineCarrom";
 import { type AimMode } from "./lib/aim";
 import {
   AccountPanel,
-  GameFlowMenu,
-  GameFlowScreen,
-  GameFlowSetting,
   MatchChat,
   ModeSwitch,
   OpponentLeftDialog,
   ProfilePanel,
-  flowSettingEnabled,
   parseMatchInvite,
   type GameHistoryEntry,
 } from "@moongames/game-ui";
@@ -82,9 +78,6 @@ import { gameStorageKey } from "./lib/storage";
 import { playbackTime } from "./lib/playback";
 
 type Mode = "local" | "ai" | "online";
-
-/** The identifiers of this title come from the build. */
-const GAME_ID = __MOONGAMES_GAME_ID__;
 
 /** The tables a game can be played at, in seating order. */
 const LOCAL_TABLE_SIZES = TABLE_SIZES;
@@ -229,24 +222,9 @@ export default function App({ bridge }: AppProps) {
   );
   const inviteMatchId = invite?.matchId ?? null;
   const inviteSpectate = invite?.spectate === true;
-  const [mode, setMode] = useState<Mode>(() => {
-    // The menu can open a game in the way the player chose, so the game
-    // starts the way it was asked to.
-    if (inviteMatchId !== null) {
-      return "online";
-    }
-    const asked =
-      typeof window === "undefined"
-        ? null
-        : new URLSearchParams(window.location.search).get("mode");
-    return asked === "ai" || asked === "online" ? asked : "local";
-  });
-  // The organized steps. When they are on, the plain switch opens the
-  // organized menu instead of changing the mode straight away.
-  const [flowOn, setFlowOn] = useState(() => flowSettingEnabled(GAME_ID));
-  const [flowMode, setFlowMode] = useState<string | null>(null);
-  const [flowScreen, setFlowScreen] = useState<string | null>(null);
-  const [flowMenuOpen, setFlowMenuOpen] = useState(false);
+  const [mode, setMode] = useState<Mode>(
+    inviteMatchId === null ? "local" : "online",
+  );
   const [localTable, setLocalTable] = useState(2);
   const [variant, setVariant] = useState<GameVariant>(storedVariant);
   const [turnSeconds, setTurnSeconds] = useState(0);
@@ -1027,110 +1005,6 @@ export default function App({ bridge }: AppProps) {
     return CARROM_STRIKERS.find((entry) => entry.id === id)?.label ?? id;
   };
 
-  /**
-   * The panels of the table, each one a screen of the organized menu.
-   *
-   * The same panels are in the side of the table when the organized steps
-   * are off, so nothing is lost either way.
-   */
-  const flowSections = [
-    {
-      id: "table",
-      title: "Table",
-      description: "Who is at the table and what is left.",
-      body: (
-        <section className="panel table-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Scoreboard</p>
-              <h2>Table</h2>
-            </div>
-            <span className="panel-heading__meta">
-              {tableRules.label} · {seatedPlayers.length} players
-            </span>
-          </div>
-          <div className="score-list">
-            {onlineMode
-              ? online.seats.map((seat, seatIndex) => (
-                  <ScoreCard
-                    key={seat.user_id}
-                    player={seat.colour}
-                    name={seat.username}
-                    left={Math.max(0, CARROM_BOARD.piecesPerPlayer - (tableScores[seat.colour] ?? 0))}
-                    active={active === seat.colour}
-                    queen={activeGame?.queen ?? { status: "board" }}
-                    ai={false}
-                    seat={seatIndex + 1}
-                    striker={strikerLabel(seat.colour)}
-                  />
-                ))
-              : game.players.map((player, seat) => (
-                  <ScoreCard
-                    key={player}
-                    player={player}
-                    name={nameOf(player)}
-                    left={Math.max(0, CARROM_BOARD.piecesPerPlayer - (tableScores[player] ?? 0))}
-                    active={active === player}
-                    queen={game.queen}
-                    ai={isAiPlayer(mode, player)}
-                    seat={seat + 1}
-                    striker={strikerLabel(player)}
-                  />
-                ))}
-          </div>
-          <div className={`queen-row${queenPending ? " queen-row--pending" : ""}`}>
-            <span className="queen-dot" />
-            <span>Queen</span>
-            <strong>{queen}</strong>
-          </div>
-          <PocketBox
-            pocketed={pocketed}
-            players={activeGame?.players ?? game.players}
-            queenOwner={activeGame?.queen.owner ?? null}
-            queenPocketed={activeGame?.queen.status !== "board"}
-          />
-        </section>
-      ),
-    },
-    {
-      id: "settings",
-      title: "Settings",
-      description: "The table, the game type, and the clock.",
-      body: (
-        <>
-          <TableSettings
-            tableSizes={LOCAL_TABLE_SIZES}
-            tableSize={onlineMode ? onlineSeats : localTable}
-            onTableSizeChange={(size) => {
-              if (onlineMode) {
-                setOnlineSeats(size);
-                return;
-              }
-              setLocalTable(size);
-              resetBoard(
-                `${size} player table ready. ${PLAYER_LABEL.white} to shoot.`,
-                { tableSize: size },
-              );
-            }}
-            tableSizeLocked={onlineMode && online.matchId !== null}
-            variant={onlineMode && activeGame !== null
-              ? ((activeGame.rules?.id ?? "classic") as GameVariant)
-              : variant}
-            onVariantChange={applyVariant}
-            striker={striker}
-            onStrikerChange={applyStriker}
-            turnSeconds={onlineMode
-              ? (activeGame?.turnSeconds ?? 0)
-              : turnSeconds}
-            onTurnSecondsChange={applyTurnSeconds}
-            locked={onlineMode && online.matchId !== null}
-          />
-          <GameFlowSetting gameId={GAME_ID} onChange={setFlowOn} />
-        </>
-      ),
-    },
-  ];
-
   return (
     <div
       className={`app${isFullscreen ? " app--board-only" : ""}`}
@@ -1156,28 +1030,10 @@ export default function App({ bridge }: AppProps) {
               { id: "online", label: "Online", icon: <Icon name="sparkles" size={15} /> },
             ]}
             mode={mode}
-            onChange={(next) => {
-              // With the organized steps on, the plain switch opens the
-              // organized menu and the mode is chosen there.
-              if (flowOn) {
-                setFlowMode(next);
-                return;
-              }
-              handleModeChange(next as "local" | "ai" | "online");
-            }}
+            onChange={(next) =>
+              handleModeChange(next as "local" | "ai" | "online")
+            }
           />
-
-          {flowOn ? (
-            <button
-              type="button"
-              className="icon-button"
-              onClick={() => setFlowMenuOpen(true)}
-              aria-label="Open the menu"
-              title="Menu"
-            >
-              <Icon name="menu" size={18} />
-            </button>
-          ) : null}
 
           <button
             type="button"
@@ -1340,26 +1196,6 @@ export default function App({ bridge }: AppProps) {
           </div>
         </section>
 
-        {/*
-          The organized steps are a layer over the game, not a change to it.
-          When they are on, the panels are opened one at a time from the
-          menu, and the table keeps everything it has.
-        */}
-        {flowOn && flowScreen !== null ? (
-          <aside className="sidebar sidebar--flow">
-            <GameFlowScreen
-              title={
-                flowSections.find((entry) => entry.id === flowScreen)?.title ??
-                "Panel"
-              }
-              subtitle={flowSections.find((entry) => entry.id === flowScreen)
-                ?.description}
-              onBack={() => setFlowScreen(null)}
-            >
-              {flowSections.find((entry) => entry.id === flowScreen)?.body}
-            </GameFlowScreen>
-          </aside>
-        ) : (
         <aside className="sidebar">
           {mode === "local" ? (
             <ChallengePanel
@@ -1645,65 +1481,7 @@ export default function App({ bridge }: AppProps) {
             · {isFullscreen ? "Fullscreen" : "Windowed"}
           </p>
         </aside>
-        )}
       </main>
-
-      {/*
-        The organized menu. It is a layer over the game: the switch opens it
-        when the organized steps are on, and the panels are opened one at a
-        time from it.
-      */}
-      {flowOn && flowMode !== null ? (
-        <GameFlowMenu
-          gameName="Carrom"
-          step={{
-            title: "How do you want to play?",
-            subtitle: "The table opens the way you choose.",
-            options: [
-              {
-                id: "local",
-                label: "On this device",
-                description: "Play at this table. Everyone shares the screen.",
-              },
-              {
-                id: "ai",
-                label: "Against the computer",
-                description: "Play the computer at the level you choose.",
-              },
-              {
-                id: "online",
-                label: "Online table",
-                description: "Play another person, at your own table.",
-              },
-            ],
-          }}
-          onChoose={(next) => {
-            setFlowMode(null);
-            handleModeChange(next as "local" | "ai" | "online");
-          }}
-          onClose={() => setFlowMode(null)}
-        />
-      ) : null}
-
-      {flowOn && flowMode === null && flowMenuOpen ? (
-        <GameFlowMenu
-          gameName="Carrom"
-          step={{
-            title: "What do you want to open?",
-            subtitle: "Everything the table has, one screen at a time.",
-            options: flowSections.map((entry) => ({
-              id: entry.id,
-              label: entry.title,
-              description: entry.description,
-            })),
-          }}
-          onChoose={(id) => {
-            setFlowMenuOpen(false);
-            setFlowScreen(id);
-          }}
-          onClose={() => setFlowMenuOpen(false)}
-        />
-      ) : null}
 
       {onlineMode ? (
         <div className="chat-dock">

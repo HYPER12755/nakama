@@ -13,9 +13,6 @@ import {
 } from "@moongames/chess-core";
 import {
   AccountPanel,
-  GameFlowMenu,
-  GameFlowScreen,
-  GameFlowSetting,
   GameToolbar,
   Icon,
   MatchChat,
@@ -24,7 +21,6 @@ import {
   PlayerCard,
   ProfilePanel,
   copyText,
-  flowSettingEnabled,
   parseLaunchInvite,
   parseMatchInvite,
   clearMatchInviteFromLocation,
@@ -118,24 +114,7 @@ export default function App({ bridge }: AppProps) {
   const [invite, setInvite] = useState(() =>
     parseMatchInvite(window.location.search),
   );
-  const [mode, setMode] = useState<GameMode>(() => {
-    // The menu can open a game in the way the player chose, so the game
-    // starts the way it was asked to.
-    if (invite !== null) {
-      return "online";
-    }
-    const asked =
-      typeof window === "undefined"
-        ? null
-        : new URLSearchParams(window.location.search).get("mode");
-    return asked === "ai" || asked === "online" ? asked : "local";
-  });
-  // The organized steps. When they are on, the plain switch opens the
-  // organized menu instead of changing the mode straight away.
-  const [flowOn, setFlowOn] = useState(() => flowSettingEnabled(GAME_ID));
-  const [flowMode, setFlowMode] = useState<string | null>(null);
-  const [flowScreen, setFlowScreen] = useState<string | null>(null);
-  const [flowMenuOpen, setFlowMenuOpen] = useState(false);
+  const [mode, setMode] = useState<GameMode>(invite === null ? "local" : "online");
   const [hostConfig, setHostConfig] = useState<GameHostConfig | null>(
     launcherHandoff,
   );
@@ -803,60 +782,6 @@ export default function App({ bridge }: AppProps) {
     online.matchId === null &&
     (online.connection !== "offline" || online.authBusy);
 
-  /**
-   * The panels of the table, each one a screen of the organized menu.
-   *
-   * The same panels are in the side of the table when the organized steps
-   * are off, so nothing is lost either way.
-   */
-  const flowSections = [
-    {
-      id: "status",
-      title: "Status",
-      description: "Where the game stands right now.",
-      body: <GameStatus state={activeState} result={activeResult} />,
-    },
-    {
-      id: "numbers",
-      title: "Numbers",
-      description: "The pieces taken, the material, and the clocks.",
-      body: (
-        <ChessGameStats
-          state={activeState}
-          clockMs={onlineMode ? online.displayClock : null}
-          names={{
-            white:
-              topColor === "w"
-                ? topOnline.name ?? "White"
-                : bottomOnline.name ?? "White",
-            black:
-              topColor === "b"
-                ? topOnline.name ?? "Black"
-                : bottomOnline.name ?? "Black",
-          }}
-        />
-      ),
-    },
-    {
-      id: "taken",
-      title: "Taken pieces",
-      description: "The pieces that are off the board.",
-      body: <ChessCaptured state={activeState} />,
-    },
-    {
-      id: "moves",
-      title: "Moves",
-      description: "Every move of the game.",
-      body: <MoveList history={activeState.history} />,
-    },
-    {
-      id: "settings",
-      title: "Settings",
-      description: "How the game is shown.",
-      body: <GameFlowSetting gameId={GAME_ID} onChange={setFlowOn} />,
-    },
-  ];
-
   return (
     <div className="app">
       <header className="app-header">
@@ -877,27 +802,8 @@ export default function App({ bridge }: AppProps) {
               { id: "online", label: "Online" },
             ]}
             mode={mode}
-            onChange={(next) => {
-              // With the organized steps on, the plain switch opens the
-              // organized menu and the mode is chosen there.
-              if (flowOn) {
-                setFlowMode(next);
-                return;
-              }
-              handleModeChange(next as GameMode);
-            }}
+            onChange={(next) => handleModeChange(next as GameMode)}
           />
-          {flowOn ? (
-            <button
-              className="icon-button"
-              type="button"
-              onClick={() => setFlowMenuOpen(true)}
-              aria-label="Open the menu"
-              title="Menu"
-            >
-              <Icon name="menu" size={19} />
-            </button>
-          ) : null}
           <button
             className="icon-button"
             type="button"
@@ -987,22 +893,6 @@ export default function App({ bridge }: AppProps) {
           />
         </section>
 
-        {/*
-          The organized steps are a layer over the game, not a change to it.
-          When they are on, the panels are opened one at a time from the
-          menu, and the table keeps everything it has.
-        */}
-        {flowOn && flowScreen !== null ? (
-          <aside className="sidebar sidebar--flow">
-            <GameFlowScreen
-              title={flowSections.find((entry) => entry.id === flowScreen)?.title ?? "Panel"}
-              subtitle={flowSections.find((entry) => entry.id === flowScreen)?.description}
-              onBack={() => setFlowScreen(null)}
-            >
-              {flowSections.find((entry) => entry.id === flowScreen)?.body}
-            </GameFlowScreen>
-          </aside>
-        ) : (
         <aside className="sidebar">
           {onlineMode ? (
             <>
@@ -1164,65 +1054,7 @@ export default function App({ bridge }: AppProps) {
             </>
           )}
         </aside>
-        )}
       </main>
-
-      {/*
-        The organized menu. It is a layer over the game: the switch opens it
-        when the organized steps are on, and the panels are opened one at a
-        time from it.
-      */}
-      {flowOn && flowMode !== null ? (
-        <GameFlowMenu
-          gameName="Chess"
-          step={{
-            title: "How do you want to play?",
-            subtitle: "The table opens the way you choose.",
-            options: [
-              {
-                id: "local",
-                label: "On this device",
-                description: "Play at this table. Everyone shares the screen.",
-              },
-              {
-                id: "ai",
-                label: "Against the computer",
-                description: "Play the computer at the level you choose.",
-              },
-              {
-                id: "online",
-                label: "Online table",
-                description: "Play another person, at your own table.",
-              },
-            ],
-          }}
-          onChoose={(next) => {
-            setFlowMode(null);
-            handleModeChange(next as GameMode);
-          }}
-          onClose={() => setFlowMode(null)}
-        />
-      ) : null}
-
-      {flowOn && flowMode === null && flowMenuOpen ? (
-        <GameFlowMenu
-          gameName="Chess"
-          step={{
-            title: "What do you want to open?",
-            subtitle: "Everything the table has, one screen at a time.",
-            options: flowSections.map((entry) => ({
-              id: entry.id,
-              label: entry.title,
-              description: entry.description,
-            })),
-          }}
-          onChoose={(id) => {
-            setFlowMenuOpen(false);
-            setFlowScreen(id);
-          }}
-          onClose={() => setFlowMenuOpen(false)}
-        />
-      ) : null}
 
       {onlineMode &&
         online.serverState !== null &&

@@ -2523,13 +2523,3 @@ html[data-moonperf="lite"] .toast {
     transition-duration: 0.001ms !important;
   }
 }
-
-/* The organized steps: the panels are opened one at a time. */
-
-.sidebar--flow {
-  padding: 4px;
-}
-
-.flow-screen__body > * + * {
-  margin-top: 12px;
-}

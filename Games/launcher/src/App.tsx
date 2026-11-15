@@ -22,11 +22,7 @@ import {
 import {
   GameArt,
   GameCard,
-  GameFlowMenu,
   capabilityLabels,
-  gameModes,
-  globalFlowEnabled,
-  setGlobalFlowEnabled,
 } from "@moongames/game-ui";
 import {
   AccountDrawer,
@@ -207,10 +203,6 @@ function App() {
     [],
   );
 
-  const [flowGame, setFlowGame] = useState<GameCatalogEntry | null>(null);
-  // The choice for every game. A game may choose its own.
-  const [globalFlow, setGlobalFlow] = useState(() => globalFlowEnabled());
-
   const playGame = useCallback(
     async (game: GameCatalogEntry, url: string | null) => {
       if (launch !== null && isLaunchBusy(launch.phase)) {
@@ -338,25 +330,6 @@ function App() {
       social.prepareSession,
       theme,
     ],
-  );
-
-  /**
-   * The game a player wants to open. The organized menu gathers the ways to
-   * play, and the game is opened in the way that was chosen.
-   */
-  const openGame = useCallback(
-    (game: GameCatalogEntry, mode: string) => {
-      setFlowGame(null);
-      const base = gameWebUrl(game, catalogUrl);
-      if (base === null) {
-        void playGame(game, null);
-        return;
-      }
-      const url = new URL(base);
-      url.searchParams.set("mode", mode);
-      void playGame(game, url.toString());
-    },
-    [catalogUrl, playGame],
   );
 
   const sendInvite = useCallback(
@@ -658,41 +631,16 @@ function App() {
                 Pick a mood and settle in.
               </p>
             </div>
-            <div className="section-heading__actions">
-              <label className="search">
-                <Icon name="search" size={18} className="search__icon" />
-                <span className="visually-hidden">Search games</span>
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search games"
-                />
-              </label>
-              <div className="flow-setting flow-setting--global">
-                <div className="flow-setting__copy">
-                  <strong>Organized steps</strong>
-                  <small>
-                    Open each game through a menu, one step at a time. Every
-                    game can choose its own.
-                  </small>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={globalFlow}
-                  aria-label="Organized steps for every game"
-                  className={`flow-switch${globalFlow ? " flow-switch--on" : ""}`}
-                  onClick={() => {
-                    const next = !globalFlow;
-                    setGlobalFlow(next);
-                    setGlobalFlowEnabled(next);
-                  }}
-                >
-                  <span className="flow-switch__knob" />
-                </button>
-              </div>
-            </div>
+            <label className="search">
+              <Icon name="search" size={18} className="search__icon" />
+              <span className="visually-hidden">Search games</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search games"
+              />
+            </label>
           </div>
 
           <div className="filter-row" aria-label="Filter games">
@@ -763,18 +711,7 @@ function App() {
                         busy={busy}
                         actionLabel={launchButtonShortLabel(phase)}
                         capabilityLabels={capabilityLabels}
-                        onPlay={() => {
-                          // The organized menu gathers the ways to play, so
-                          // the player chooses one before the game opens.
-                          // With the organized steps off, the game opens the
-                          // way it always did.
-                          const modes = gameModes(game);
-                          if (!globalFlow || modes.length <= 1) {
-                            playGame(game, url);
-                            return;
-                          }
-                          setFlowGame(game);
-                        }}
+                        onPlay={() => playGame(game, url)}
                       />
                     );
                   })}
@@ -857,20 +794,6 @@ function App() {
         </span>
         <span>Web · Flutter · React Native</span>
       </footer>
-
-      {flowGame === null ? null : (
-        <GameFlowMenu
-          gameName={flowGame.name}
-          step={{
-            title: "How do you want to play?",
-            subtitle:
-              "The game opens the way you choose, and you can change it later.",
-            options: gameModes(flowGame),
-          }}
-          onChoose={(mode) => openGame(flowGame, mode)}
-          onClose={() => setFlowGame(null)}
-        />
-      )}
 
       {launchNotice === null ? null : (
         <div className="launcher-toast" role="status">

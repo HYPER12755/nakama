@@ -3356,13 +3356,3 @@ html[data-moonperf="lite"] .check-glow {
   font-size: 11.5px;
   line-height: 1.55;
 }
-
-/* The organized steps: the panels are opened one at a time. */
-
-.sidebar--flow {
-  padding: 4px;
-}
-
-.flow-screen__body > * + * {
-  margin-top: 12px;
-}

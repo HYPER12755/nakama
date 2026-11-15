@@ -2996,21 +2996,3 @@ html[data-moonperf="lite"] .hero-orbit__ring--two,
 html[data-moonperf="lite"] .orbit-token {
   animation: none !important;
 }
-
-/* The choice for every game, beside the search */
-
-.section-heading__actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.flow-setting--global {
-  width: min(330px, 100%);
-  padding: 10px 12px;
-}
-
-.flow-setting--global .flow-setting__copy small {
-  font-size: 10px;
-}
