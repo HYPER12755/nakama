@@ -8,12 +8,18 @@ import {
 } from "@moongames/game-sdk";
 
 function memoryStorage(): {
+  length: number;
+  key: (index: number) => string | null;
   getItem: (key: string) => string | null;
   setItem: (key: string, value: string) => void;
   removeItem: (key: string) => void;
 } {
   const store = new Map<string, string>();
   return {
+    get length() {
+      return store.size;
+    },
+    key: (index) => Array.from(store.keys())[index] ?? null,
     getItem: (key) => store.get(key) ?? null,
     setItem: (key, value) => {
       store.set(key, value);

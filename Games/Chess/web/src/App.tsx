@@ -27,12 +27,26 @@ import {
 } from "@moongames/game-ui";
 import { AiPanel } from "./components/AiPanel";
 import { ChessBoard } from "./components/ChessBoard";
+import { ChessGameOverDialog } from "./components/ChessGameOverDialog";
 import { GameStatus } from "./components/GameStatus";
 import { MoveList } from "./components/MoveList";
 import { OnlineGameToolbar } from "./components/OnlineGameToolbar";
 import { OnlinePanel } from "./components/OnlinePanel";
 import { PromotionPicker } from "./components/PromotionPicker";
 import { ReplayDialog } from "./components/ReplayDialog";
+import {
+  playCapture,
+  playCheck,
+  playCheckmate,
+  playDraw,
+  playGameStart,
+  playLose,
+  playMove,
+  playRefused,
+  playSelect,
+  playWin,
+  preloadSound,
+} from "./lib/audio";
 import type { OnlineHistoryEntry } from "./lib/onlineProtocol";
 import {
   useChessGame,
@@ -114,6 +128,7 @@ export default function App({ bridge }: AppProps) {
   const [flipped, setFlipped] = useState(false);
   const [boardFullscreen, setBoardFullscreen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [resultOpen, setResultOpen] = useState(false);
   const [replayEntry, setReplayEntry] = useState<OnlineHistoryEntry | null>(
     null,
   );
@@ -169,6 +184,126 @@ export default function App({ bridge }: AppProps) {
   const topActive = isLive && activeState.turn === topColor;
   const bottomActive = isLive && activeState.turn === bottomColor;
 
+  /**
+   * The table speaks for itself.
+   *
+   * Every event of the game is heard and said: a piece that is put down, a
+   * piece that is taken, check, the end of the game, and the other player
+   * leaving. Without this a player only sees the board change and has to
+   * work out what happened.
+   */
+  const lastEventRef = useRef<string>("");
+  useEffect(() => {
+    const history = activeState.history;
+    if (history.length === 0) {
+      lastEventRef.current = "";
+      return;
+    }
+    const last = history[history.length - 1]!;
+    const key = `${history.length}:${last.san}`;
+    if (key === lastEventRef.current) {
+      return;
+    }
+    const isFirst = history.length === 1;
+    lastEventRef.current = key;
+    if (isFirst) {
+      playGameStart();
+      setToast("The game has started.");
+      return;
+    }
+    if (last.captured !== undefined) {
+      playCapture();
+    } else if (last.flags.includes("k") || last.flags.includes("q")) {
+      playSelect();
+    } else if (last.promotion !== undefined) {
+      playSelect();
+    } else {
+      playMove();
+    }
+    if (activeState.status === "check") {
+      playCheck();
+      setToast("Check.");
+    }
+    if (activeState.status === "checkmate") {
+      const won =
+        activeState.winner !== null && activeState.winner === online.myColor;
+      playCheckmate();
+      setToast(won ? "Checkmate. You win." : "Checkmate.");
+      setResultOpen(true);
+    } else if (activeState.status === "stalemate") {
+      playDraw();
+      setToast("Stalemate. The game is a draw.");
+      setResultOpen(true);
+    } else if (activeState.status === "draw") {
+      playDraw();
+      setToast("The game is a draw.");
+      setResultOpen(true);
+    }
+  }, [activeState, online.myColor]);
+
+  // The sounds of the table are fetched while the game is loaded, so the
+  // first move is not late.
+  useEffect(() => {
+    preloadSound("move");
+    preloadSound("capture");
+    preloadSound("check");
+    preloadSound("checkmate");
+    preloadSound("win");
+    preloadSound("lose");
+    preloadSound("draw");
+    preloadSound("error");
+    preloadSound("notify");
+    preloadSound("start");
+    preloadSound("select");
+  }, []);
+
+  // A move the server refused is heard, so the player knows why the board
+  // did not change.
+  const lastErrorRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeError === null) {
+      lastErrorRef.current = null;
+      return;
+    }
+    if (activeError === lastErrorRef.current) {
+      return;
+    }
+    lastErrorRef.current = activeError;
+    playRefused();
+  }, [activeError]);
+
+  // The end of the game is heard as the player heard it: a win sounds like a
+  // win, and a loss sounds like a loss.
+  const endSoundRef = useRef<string>("");
+  useEffect(() => {
+    if (!finished) {
+      endSoundRef.current = "";
+      return;
+    }
+    const key = `${activeState.status}:${activeState.winner ?? "-"}`;
+    if (key === endSoundRef.current) {
+      return;
+    }
+    endSoundRef.current = key;
+    const winner = activeState.winner;
+    if (winner === null) {
+      playDraw();
+      return;
+    }
+    if (onlineMode) {
+      if (winner === online.myColor) {
+        playWin();
+      } else {
+        playLose();
+      }
+      return;
+    }
+    if (winner === baseBottom) {
+      playWin();
+    } else {
+      playLose();
+    }
+  }, [activeState.status, activeState.winner, baseBottom, finished, online.myColor, onlineMode]);
   useEffect(() => {
     const unsubscribe = bridge.onMessage((message) => {
       switch (message.type) {
@@ -510,10 +645,13 @@ export default function App({ bridge }: AppProps) {
 
     const player = online.players.find((candidate) => candidate.color === color);
     const active = isLive && activeState.turn === color;
+    // The player at this screen is "You", the other player is named by their
+    // account. No name is written into the code.
+    const isYou = online.myColor === color;
 
     if (online.serverState === null) {
       return {
-        name: color === "w" ? "White" : "Black",
+        name: isYou ? "You" : color === "w" ? "White" : "Black",
         subtitle: "Not in a match",
         clockMs: null,
       };
@@ -532,8 +670,12 @@ export default function App({ bridge }: AppProps) {
 
     return {
       name:
-        player?.username ??
-        (online.serverState.match.started ? "Open seat" : "Waiting for opponent"),
+        isYou
+          ? "You"
+          : (player?.username ??
+            (online.serverState.match.started
+              ? "Open seat"
+              : "Waiting for opponent")),
       subtitle,
       clockMs:
         online.serverState.match.started && online.displayClock !== null
@@ -838,13 +980,46 @@ export default function App({ bridge }: AppProps) {
           {activeError}
         </div>
       )}
-
       {replayEntry !== null && (
         <ReplayDialog
           entry={replayEntry}
           onClose={() => setReplayEntry(null)}
         />
       )}
+
+      {resultOpen && finished ? (
+        <ChessGameOverDialog
+          result={{
+            status: activeResult?.status ?? activeState.status,
+            winnerColor: activeResult?.winnerColor ?? activeState.winner,
+            reason: activeResult?.reason ?? activeState.status,
+          }}
+          winnerName={
+            onlineMode && activeState.winner !== null
+              ? (online.players.find(
+                  (candidate) => candidate.color === activeState.winner,
+                )?.username ?? null)
+              : null
+          }
+          won={
+            onlineMode
+              ? activeState.winner !== null && activeState.winner === online.myColor
+              : activeState.winner !== null
+          }
+          draw={activeState.status === "draw" || activeState.status === "stalemate"}
+          onRematch={
+            onlineMode
+              ? () => {
+                  setResultOpen(false);
+                  void online.leaveMatch().then(() =>
+                    online.createPrivateMatch().catch(() => undefined),
+                  );
+                }
+              : undefined
+          }
+          onClose={() => setResultOpen(false)}
+        />
+      ) : null}
 
       {toast !== null && (
         <div className="toast" role="status">

@@ -533,6 +533,46 @@ function drawMarkings(ctx: CanvasRenderingContext2D, turn: CarromPlayer): void {
   ctx.stroke();
 }
 
+/**
+ * The pieces are painted once and then copied onto the table.
+ *
+ * A piece is a turned disc with a soft light on it, a ring of grain and a
+ * few pores in the paint. Painting all of that for every piece on every
+ * frame of every shot is what made the table stutter, so each piece is
+ * drawn once into a small picture and then stamped onto the board.
+ */
+const pieceSprites = new Map<string, HTMLCanvasElement>();
+
+function pieceSprite(
+  kind: CarromDiscKind | "striker",
+  radius: number,
+  lite: boolean,
+  variant: number,
+  dpr: number,
+): HTMLCanvasElement {
+  const key = `${kind}:${radius}:${lite ? 1 : 0}:${variant}:${dpr}`;
+  const existing = pieceSprites.get(key);
+  if (existing !== undefined) {
+    return existing;
+  }
+  // The shadow reaches a little past the rim, so the picture is bigger than
+  // the piece itself. It is painted at the pixel ratio of the screen, so the
+  // piece stays sharp.
+  const size = Math.ceil(radius * 2.6 * dpr);
+  const sprite = document.createElement("canvas");
+  sprite.width = size;
+  sprite.height = size;
+  const ctx = sprite.getContext("2d");
+  if (ctx === null) {
+    return sprite;
+  }
+  ctx.translate(size / 2, size / 2);
+  ctx.scale(dpr, dpr);
+  paintPiece(ctx, kind, radius, lite, variant);
+  pieceSprites.set(key, sprite);
+  return sprite;
+}
+
 function drawPiece(
   ctx: CanvasRenderingContext2D,
   kind: CarromDiscKind | "striker",
@@ -542,13 +582,35 @@ function drawPiece(
   pocketed: boolean,
   animating: boolean,
   lite: boolean,
+  dpr: number,
 ): void {
   if (pocketed && !animating) {
     return;
   }
   const scale = pocketed ? 0.42 : 1;
   const alpha = pocketed ? 0.4 : 1;
+  // The grain is fixed to a piece, so the same piece always looks the same.
+  const variant = Math.abs(Math.round(x * 1000) + Math.round(y * 1000)) % 4;
+  const sprite = pieceSprite(kind, radius, lite, variant, dpr);
+  const size = sprite.width;
+  if (size === 0) {
+    return;
+  }
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // A piece that is going into a pocket is drawn smaller.
+  const drawn = (pocketed ? size * scale : size) / dpr;
+  ctx.drawImage(sprite, x - drawn / 2, y - drawn / 2, drawn, drawn);
+  ctx.restore();
+}
 
+function paintPiece(
+  ctx: CanvasRenderingContext2D,
+  kind: CarromDiscKind | "striker",
+  radius: number,
+  lite: boolean,
+  variant: number,
+): void {
   const palette =
     kind === "striker"
       ? {
@@ -599,9 +661,6 @@ function drawPiece(
                 };
 
   ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(scale, scale);
-  ctx.globalAlpha = alpha;
 
   // Contact shadow on the wood.
   ctx.beginPath();
@@ -642,7 +701,7 @@ function drawPiece(
   if (!lite) {
     // Every piece gets its own grain, and the same piece always gets the
     // same grain, so the table never flickers.
-    const grain = random(0x9e3779b9 ^ (((x * 31 + y * 17) | 0) >>> 0));
+    const grain = random(0x9e3779b9 ^ (variant * 0x85ebca6b));
     const rings = kind === "striker" ? 7 : 5;
     for (let index = 0; index < rings; index += 1) {
       const ringRadius = radius * (0.16 + (index / rings) * 0.82);
@@ -1022,6 +1081,7 @@ export function CarromBoard({
           disc.pocketed,
           animating,
           lite,
+          dpr,
         );
       }
       const queen = display.discs.find((disc) => disc.kind === "queen");
@@ -1035,6 +1095,7 @@ export function CarromBoard({
           queen.pocketed,
           animating,
           lite,
+          dpr,
         );
       }
 
@@ -1047,6 +1108,7 @@ export function CarromBoard({
         display.striker.pocketed,
         animating,
         lite,
+        dpr,
       );
 
       if (aimState !== null && !animating && !disabled) {

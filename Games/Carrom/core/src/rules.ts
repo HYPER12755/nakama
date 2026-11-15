@@ -343,6 +343,24 @@ export function piecesLeft(
 }
 
 /**
+ * The score of every colour, counted from the board itself.
+ *
+ * The pieces that are pocketed are the score, so counting them from the
+ * board gives the same number every time, whether the table is played on
+ * this device or on the server.
+ */
+export function scoresFromBoard(
+  state: CarromState,
+): Record<CarromPlayer, number> {
+  return {
+    white: countPocketed(state.discs, "white"),
+    black: countPocketed(state.discs, "black"),
+    green: countPocketed(state.discs, "green"),
+    yellow: countPocketed(state.discs, "yellow"),
+  };
+}
+
+/**
  * The points of a colour, counted the way the carrom apps count them: a man
  * is worth one point and the queen is worth three.
  */

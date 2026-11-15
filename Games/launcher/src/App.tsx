@@ -98,6 +98,8 @@ function App() {
   const [inviteTarget, setInviteTarget] = useState<InviteComposerTarget | null>(null);
   const [inviteSending, setInviteSending] = useState(false);
   const inviteLinkHandledRef = useRef(false);
+  // The timer that clears an opening that never left the launcher.
+  const launchTimerRef = useRef<number | null>(null);
   const social = useLauncherSocial();
 
   useEffect(() => {
@@ -118,6 +120,17 @@ function App() {
     const timer = window.setTimeout(() => setLaunchNotice(null), 5000);
     return () => window.clearTimeout(timer);
   }, [launchNotice]);
+
+  useEffect(() => {
+    // The timer that clears an opening that never left the launcher must not
+    // outlive the page.
+    return () => {
+      if (launchTimerRef.current !== null) {
+        window.clearTimeout(launchTimerRef.current);
+        launchTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -269,7 +282,19 @@ function App() {
         }
         if (result !== "navigate") {
           setLaunch(null);
+          return;
         }
+        // The tab is leaving for the game. If it does not, the launcher must
+        // not sit on "Opening…" for ever, and every later play would be
+        // refused because the opening is still busy.
+        launchTimerRef.current = window.setTimeout(() => {
+          launchTimerRef.current = null;
+          setLaunch((current) =>
+            current !== null && current.phase === "opening"
+              ? null
+              : current,
+          );
+        }, 4000);
       } catch (cause) {
         clearLauncherHandoff(game.id);
         setLaunch({ gameId: game.id, phase: "error" });

@@ -14,11 +14,12 @@ import {
   type SocialFriend,
   type SocialNotification,
 } from "@moongames/game-sdk";
-import type {
-  ChessState,
-  Color,
-  PromotionPiece,
-  Square,
+import {
+  createChessEngine,
+  type ChessState,
+  type Color,
+  type PromotionPiece,
+  type Square,
 } from "@moongames/chess-core";
 import {
   authErrorDetail,
@@ -57,6 +58,7 @@ import {
   type OnlineStatePayload,
   type OnlineTimeControl,
 } from "../lib/onlineProtocol";
+import { playOpponentLeft } from "../lib/audio";
 
 /**
  * The identifiers of this title come from the build, so the client never
@@ -345,6 +347,9 @@ export function useOnlineChess(
   const [selected, setSelected] = useState<Square | null>(null);
   const [pendingPromotion, setPendingPromotion] =
     useState<PendingOnlinePromotion | null>(null);
+  // True while a move is on its way to the server. The table waits for the
+  // answer, so the player cannot send a second move on top of the first.
+  const [pendingMove, setPendingMove] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [matchmaking, setMatchmaking] = useState(false);
   const [matchmakingSeconds, setMatchmakingSeconds] = useState(0);
@@ -379,6 +384,15 @@ export function useOnlineChess(
     password: string;
   } | null>(null);
   const matchmakerRef = useRef<PendingMatchmaker | null>(null);
+  // The move that is on its way to the server. It is sent again when the
+  // connection comes back, so a broken line never loses a move.
+  const pendingMoveRef = useRef<{
+    from: Square;
+    to: Square;
+    promotion?: PromotionPiece;
+  } | null>(null);
+  // The last state the server sent, so a refused move can be taken back.
+  const lastServerStateRef = useRef<OnlineStatePayload | null>(null);
   const matchmakingActiveRef = useRef(false);
   const matchmakingRunRef = useRef(0);
   const clockOffsetRef = useRef(0);
@@ -471,10 +485,14 @@ export function useOnlineChess(
   const applyPayload = useCallback((payload: OnlineStatePayload) => {
     const normalized = normalizedOnlineState(payload);
     setServerState(normalized);
+    lastServerStateRef.current = normalized;
     setDrawOffer(normalized.drawOffer ?? null);
     setSelected(null);
     setPendingPromotion(null);
     setError(null);
+    // The server has answered, so the move is no longer on its way.
+    pendingMoveRef.current = null;
+    setPendingMove(false);
 
     if (normalized.match.id) {
       matchIdRef.current = normalized.match.id;
@@ -571,6 +589,17 @@ export function useOnlineChess(
           setError(
             typeof message === "string" ? message : "The server rejected that action.",
           );
+          // The move was refused, so the table goes back to what the server
+          // last said. The board is not left showing a move that never
+          // happened.
+          if (pendingMoveRef.current !== null) {
+            pendingMoveRef.current = null;
+            setPendingMove(false);
+            const last = lastServerStateRef.current;
+            if (last !== null) {
+              setServerState(last);
+            }
+          }
           break;
         }
         case ONLINE_OP.PLAYER_JOINED: {
@@ -585,6 +614,7 @@ export function useOnlineChess(
             left.userId !== sessionRef.current?.user_id
           ) {
             setOpponentLeft(left.username ?? "Your opponent");
+            playOpponentLeft();
           }
           break;
         }
@@ -840,7 +870,10 @@ export function useOnlineChess(
             if (socketRef.current !== null) {
               return;
             }
-            const delay = Math.min(15000, 1000 * 2 ** attempt);
+            // The first try is quick, because a dropped line on a phone is
+            // usually a moment. Later tries wait longer.
+            const delay =
+              attempt === 0 ? 250 : Math.min(15000, 1000 * 2 ** attempt);
             attempt += 1;
             window.setTimeout(() => {
               if (socketRef.current !== null) {
@@ -918,6 +951,21 @@ export function useOnlineChess(
             setMatchId(currentMatchId);
             rememberMatchId(currentMatchId);
             rememberSpectating(reconnectAsSpectator);
+            // A move that was on its way when the line dropped is sent
+            // again, so a broken connection never loses a move.
+            const waiting = pendingMoveRef.current;
+            if (waiting !== null) {
+              pendingMoveRef.current = null;
+              socket.sendMatchState(
+                currentMatchId,
+                ONLINE_OP.MOVE_REQUEST,
+                JSON.stringify({
+                  from: waiting.from,
+                  to: waiting.to,
+                  promotion: waiting.promotion,
+                }),
+              );
+            }
           } catch {
             // The match ended, expired, or was created by another account.
             matchIdRef.current = null;
@@ -1932,10 +1980,36 @@ export function useOnlineChess(
     serverState.result === null &&
     (serverState.state.status === "active" ||
       serverState.state.status === "check") &&
-    serverState.state.turn === myColor;
+    serverState.state.turn === myColor &&
+    // A move that is still on its way holds the table. Without this a
+    // second move is sent on top of the first, and the server refuses it
+    // because it is not the player's turn yet.
+    !pendingMove;
 
   const sendMove = useCallback(
     (from: Square, to: Square, promotion?: PromotionPiece) => {
+      // The board answers at once. The move is put on the table straight
+      // away and the server has the last word, so a slow or broken
+      // connection never leaves the player waiting for their own move.
+      const current = serverState?.state ?? null;
+      if (current !== null) {
+        try {
+          const engine = createChessEngine(current.fen);
+          engine.move({ from, to, promotion });
+          const optimistic = engine.getState();
+          setServerState((previous) =>
+            previous === null
+              ? previous
+              : { ...previous, state: optimistic },
+          );
+        } catch {
+          // An illegal move is refused by the server, which says so.
+        }
+      }
+      // The move is kept until the server has answered, so a connection that
+      // drops in the middle of a move does not lose it.
+      pendingMoveRef.current = { from, to, promotion };
+      setPendingMove(true);
       sendMatchState(ONLINE_OP.MOVE_REQUEST, {
         from,
         to,
@@ -1945,12 +2019,18 @@ export function useOnlineChess(
       setPendingPromotion(null);
       setError(null);
     },
-    [sendMatchState],
+    [sendMatchState, serverState],
   );
 
   const selectSquare = useCallback(
     (square: Square) => {
       if (serverState === null || myColor === null || pendingPromotion !== null) {
+        return;
+      }
+      // A move that is still on its way holds the table. Without this a
+      // second move is sent on top of the first, and the server refuses it
+      // because it is not the player's turn yet.
+      if (pendingMove) {
         return;
       }
 

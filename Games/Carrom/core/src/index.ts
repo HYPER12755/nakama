@@ -54,6 +54,7 @@ export {
   resolveShot,
   resolveShotRules,
   rulesOf,
+  scoresFromBoard,
 } from "./rules";
 export { simulateShot } from "./shot";
 export { chooseAiShot, chooseAiShotAsync, pickWithRealism } from "./ai";

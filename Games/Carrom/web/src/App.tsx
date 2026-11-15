@@ -23,8 +23,9 @@ import {
   createInitialState,
   nearestValidStrikerPosition,
   passTurn,
-  piecesLeft,
+
   rulesOf,
+  scoresFromBoard,
   sideOf,
   simulateShot,
   tablePlayers,
@@ -378,6 +379,28 @@ export default function App({ bridge }: AppProps) {
     },
     [accountName, game.players, mode, online.seats, onlineMode],
   );
+
+  /**
+   * The score of every colour at the table. It is counted from the pieces
+   * that are on the board, so the number a player sees always matches the
+   * table, whether the game is played here or on the server.
+   */
+  const tableScores = useMemo(
+    () => scoresFromBoard(activeGame ?? game),
+    [activeGame, game],
+  );
+
+  /**
+   * The name of every player at the table, so the score bar names the
+   * people at it and not the colour of their pieces.
+   */
+  const playerNames = useMemo(() => {
+    const names: Partial<Record<CarromPlayer, string>> = {};
+    for (const player of seatedPlayers) {
+      names[player] = nameOf(player);
+    }
+    return names as Record<CarromPlayer, string>;
+  }, [nameOf, seatedPlayers]);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -1075,10 +1098,11 @@ export default function App({ bridge }: AppProps) {
           ) : null}
           <PointsBar
             players={seatedPlayers}
-            scores={activeGame?.scores ?? game.scores}
+            scores={tableScores}
             queen={activeGame?.queen ?? game.queen}
             rules={tableRules}
             active={activeGame?.turn ?? game.turn}
+            names={playerNames}
           />
           <div className="turn-strip">
             <span className={`turn-disc turn-disc--${activeGame?.turn ?? "white"}`} />
@@ -1206,7 +1230,7 @@ export default function App({ bridge }: AppProps) {
                       key={seat.user_id}
                       player={seat.colour}
                       name={seat.username}
-                      left={piecesLeft(activeGame ?? game, seat.colour)}
+                      left={Math.max(0, CARROM_BOARD.piecesPerPlayer - (tableScores[seat.colour] ?? 0))}
                       active={active === seat.colour}
                       queen={activeGame?.queen ?? { status: "board" }}
                       ai={false}
@@ -1219,7 +1243,7 @@ export default function App({ bridge }: AppProps) {
                       key={player}
                       player={player}
                       name={nameOf(player)}
-                      left={piecesLeft(game, player)}
+                      left={Math.max(0, CARROM_BOARD.piecesPerPlayer - (tableScores[player] ?? 0))}
                       active={active === player}
                       queen={game.queen}
                       ai={isAiPlayer(mode, player)}

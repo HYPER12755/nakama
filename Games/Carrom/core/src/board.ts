@@ -65,7 +65,12 @@ export const CARROM_BOARD = {
   maxShotSpeed: 4.6,
   stopSpeed: 0.02,
   stepSeconds: 1 / 240,
-  sampleSeconds: 1 / 60,
+  /**
+   * The animation is sampled thirty times a second. The player never sees
+   * the frames one by one, and every frame is a copy of every piece on the
+   * table, so a finer rate only costs the phone time.
+   */
+  sampleSeconds: 1 / 30,
   maxSimulationSeconds: 9,
   piecesPerPlayer: 9,
 } as const;

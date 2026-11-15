@@ -1,6 +1,5 @@
 import {
   CARROM_BOARD,
-  PLAYER_LABEL,
   type CarromPlayer,
   type CarromQueen,
   type CarromRuleSet,
@@ -12,6 +11,11 @@ export interface PointsBarProps {
   queen: CarromQueen;
   rules: CarromRuleSet;
   active?: CarromPlayer | null;
+  /**
+   * The name each player is known by. The bar names the players, so the
+   * table shows the people at it and not the colour of their pieces.
+   */
+  names?: Record<CarromPlayer, string>;
 }
 
 /**
@@ -26,15 +30,20 @@ export function PointsBar({
   queen,
   rules,
   active = null,
+  names,
 }: PointsBarProps) {
   const target = CARROM_BOARD.piecesPerPlayer;
   return (
     <div className="points-bar">
       {players.map((player) => {
+        // The count is the pieces already pocketed, so the track shows the
+        // race to the last piece filling up.
         const men = scores[player] ?? 0;
         const holdsQueen =
           queen.status === "covered" && queen.owner === player;
-        const points = men * rules.manPoints + (holdsQueen ? rules.queenPoints : 0);
+        const points =
+          men * rules.manPoints + (holdsQueen ? rules.queenPoints : 0);
+        const name = names?.[player];
         return (
           <div
             className={`points-bar__row${
@@ -43,7 +52,9 @@ export function PointsBar({
             key={player}
           >
             <span className={`points-bar__disc points-bar__disc--${player}`} />
-            <span className="points-bar__name">{PLAYER_LABEL[player]}</span>
+            <span className="points-bar__name">
+              {name !== undefined && name.length > 0 ? name : player}
+            </span>
             <span className="points-bar__track">
               <span
                 className={`points-bar__fill points-bar__fill--${player}`}

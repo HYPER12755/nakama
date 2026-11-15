@@ -360,8 +360,18 @@ function buildAiPlan(
 
 function defaultYield(): Promise<void> {
   return new Promise((resolve) => {
-    if (typeof requestIdleCallback === "function") {
-      requestIdleCallback(() => resolve(), { timeout: 50 });
+    // The idle callback gives the browser a chance to paint between the
+    // candidates, so the table keeps moving while the computer thinks.
+    const idle = (
+      globalThis as {
+        requestIdleCallback?: (
+          callback: () => void,
+          options?: { timeout: number },
+        ) => number;
+      }
+    ).requestIdleCallback;
+    if (typeof idle === "function") {
+      idle(() => resolve(), { timeout: 50 });
       return;
     }
     if (typeof setTimeout === "function") {
