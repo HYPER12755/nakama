@@ -894,6 +894,9 @@ export function useLauncherSocial(): LauncherSocialController {
       setError(null);
       manualDisconnectRef.current = false;
       let pendingSocket: Socket | null = null;
+      // How many times the launcher has tried. A server that is starting up
+      // is usually back after a second or two.
+      let attempt = 0;
 
       try {
         const address = parseLauncherServerAddress(
@@ -1119,6 +1122,18 @@ export function useLauncherSocial(): LauncherSocialController {
             "Could not connect to the MoonGames server.",
           ),
         );
+        // The server may be starting, or it may have gone away for a
+        // moment. The launcher keeps trying on its own, so it does not have
+        // to be reloaded to come back.
+        clearReconnectTimer();
+        const delay = Math.min(15000, 1000 * 2 ** Math.min(attempt, 4));
+        attempt += 1;
+        reconnectTimerRef.current = window.setTimeout(() => {
+          reconnectTimerRef.current = null;
+          if (!disposedRef.current) {
+            void connect().catch(() => undefined);
+          }
+        }, delay);
         throw cause;
       }
     })();

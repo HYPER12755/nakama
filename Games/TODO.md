@@ -281,3 +281,8 @@ hosts are file-backed and should load only the single-entry subset.
   replay SANs". The failure is there before this round, so the replay steps
   a finished Chess game writes are not reaching the history the client
   reads back.
+- [ ] The local stack has to be started by hand after the machine wakes
+  up, and the launcher then says "MoonGames is offline" until the page is
+  reloaded. The launcher now keeps trying on its own, but the stack itself
+  should come back by itself, so a phone that was asleep wakes up with a
+  working menu.
