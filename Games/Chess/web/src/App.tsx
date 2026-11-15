@@ -28,6 +28,7 @@ import {
 import { AiPanel } from "./components/AiPanel";
 import { ChessBoard } from "./components/ChessBoard";
 import { ChessGameOverDialog } from "./components/ChessGameOverDialog";
+import { ChessCaptured } from "./components/ChessCaptured";
 import { ChessGameStats } from "./components/ChessGameStats";
 import { GameStatus } from "./components/GameStatus";
 import { MoveList } from "./components/MoveList";
@@ -921,6 +922,35 @@ export default function App({ bridge }: AppProps) {
                       }}
                     />
                     <MoveList history={activeState.history} />
+                    <ChessCaptured state={activeState} />
+                    {online.drawOffer !== null &&
+                    online.drawOffer.by !== online.myColor ? (
+                      <section className="panel draw-offer-panel">
+                        <div className="panel-heading">
+                          <h2>Draw offered</h2>
+                          <span className="live-badge">Waiting</span>
+                        </div>
+                        <p className="draw-offer-panel__copy">
+                          The other player offers a draw. Accept it, or play on.
+                        </p>
+                        <div className="toolbar-grid">
+                          <button
+                            type="button"
+                            className="action-button action-button--primary"
+                            onClick={() => void online.acceptDraw()}
+                          >
+                            Accept draw
+                          </button>
+                          <button
+                            type="button"
+                            className="action-button"
+                            onClick={() => void online.declineDraw()}
+                          >
+                            Keep playing
+                          </button>
+                        </div>
+                      </section>
+                    ) : null}
                     <OnlineGameToolbar
                       inProgress={inProgress}
                       spectating={online.spectating}
@@ -968,6 +998,7 @@ export default function App({ bridge }: AppProps) {
               />
               <GameStatus state={activeState} />
               <ChessGameStats state={activeState} />
+              <ChessCaptured state={activeState} />
               <MoveList history={activeState.history} />
               <GameToolbar
                 actions={[
@@ -996,6 +1027,7 @@ export default function App({ bridge }: AppProps) {
             <>
               <GameStatus state={activeState} />
               <ChessGameStats state={activeState} />
+              <ChessCaptured state={activeState} />
               <MoveList history={activeState.history} />
               <GameToolbar
                 actions={[
