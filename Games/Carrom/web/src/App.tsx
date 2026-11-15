@@ -59,6 +59,7 @@ import {
   ModeSwitch,
   OpponentLeftDialog,
   ProfilePanel,
+  parseMatchInvite,
   type GameHistoryEntry,
 } from "@moongames/game-ui";
 import {
@@ -210,7 +211,20 @@ export interface AppProps {
 }
 
 export default function App({ bridge }: AppProps) {
-  const [mode, setMode] = useState<Mode>("local");
+  // A game opened with a room in the address opens that room, so it starts
+  // at the online table and not at a local board.
+  const invite = useMemo(
+    () =>
+      typeof window === "undefined"
+        ? null
+        : parseMatchInvite(window.location.search),
+    [],
+  );
+  const inviteMatchId = invite?.matchId ?? null;
+  const inviteSpectate = invite?.spectate === true;
+  const [mode, setMode] = useState<Mode>(
+    inviteMatchId === null ? "local" : "online",
+  );
   const [localTable, setLocalTable] = useState(2);
   const [variant, setVariant] = useState<GameVariant>(storedVariant);
   const [turnSeconds, setTurnSeconds] = useState(0);
@@ -249,18 +263,6 @@ export default function App({ bridge }: AppProps) {
   const soundTimers = useRef<number[]>([]);
   const modeRef = useRef<Mode>(mode);
 
-  const inviteMatchId = useMemo(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-    return new URLSearchParams(window.location.search).get("match");
-  }, []);
-  const inviteSpectate = useMemo(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-    return new URLSearchParams(window.location.search).get("spectate") === "1";
-  }, []);
   /**
    * The account and server the launcher handed over. A game opened from the
    * MoonGames menu plays with the shared account; a game opened on its own

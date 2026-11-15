@@ -186,7 +186,9 @@ async function readableError(
   return fallback;
 }
 
-export function useLauncherSocial(): LauncherSocialController {
+export function useLauncherSocial(
+  options: { onInviteAccepted?: (invite: MoonGamesInvite) => void } = {},
+): LauncherSocialController {
   const [connection, setConnection] = useState<LauncherConnection>("offline");
   const [account, setAccount] = useState<LauncherAccount | null>(null);
   const [gameSession, setGameSession] = useState<GameSession | null>(null);
@@ -807,6 +809,9 @@ export function useLauncherSocial(): LauncherSocialController {
         updateChatInvite(next);
         await markInviteNotificationRead(next.inviteId);
         await refreshNotifications();
+        // Accepting an invite means the player wants to play, so the room is
+        // opened for them.
+        options.onInviteAccepted?.(next);
       } catch (cause) {
         setInviteError(
           await readableError(cause, "Could not accept that invite."),
@@ -815,7 +820,12 @@ export function useLauncherSocial(): LauncherSocialController {
         setInviteBusy(null);
       }
     },
-    [markInviteNotificationRead, refreshNotifications, updateChatInvite],
+    [
+      markInviteNotificationRead,
+      options,
+      refreshNotifications,
+      updateChatInvite,
+    ],
   );
 
   const declineInvite = useCallback(

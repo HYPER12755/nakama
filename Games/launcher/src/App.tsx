@@ -100,7 +100,20 @@ function App() {
   const inviteLinkHandledRef = useRef(false);
   // The timer that clears an opening that never left the launcher.
   const launchTimerRef = useRef<number | null>(null);
-  const social = useLauncherSocial();
+  // Accepting an invite opens the room. The handler is held in a ref because
+  // the room is opened further down, where the game is known.
+  const joinInviteRef = useRef<(invite: MoonGamesInvite) => void>(() => {
+    // Nothing to open yet.
+  });
+  const socialOptions = useMemo(
+    () => ({
+      onInviteAccepted: (invite: MoonGamesInvite) => {
+        joinInviteRef.current(invite);
+      },
+    }),
+    [],
+  );
+  const social = useLauncherSocial(socialOptions);
 
   useEffect(() => {
     applyTheme(theme);
@@ -380,6 +393,11 @@ function App() {
     },
     [games, nativeLaunch, playGame],
   );
+
+  // The room that is opened when an invite is accepted.
+  joinInviteRef.current = (invite) => {
+    void joinInvite(invite);
+  };
 
   useEffect(() => {
     if (social.connection !== "online" || inviteLinkHandledRef.current) {
