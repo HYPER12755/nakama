@@ -5,6 +5,7 @@ import type {
   PieceSymbol,
 } from "@moongames/chess-core";
 import { pieceName } from "../lib/pieces";
+import { pieceImageUrl } from "../lib/pieceSets";
 
 export interface PieceMotion {
   /** Horizontal travel in board squares (positive = right). */
@@ -18,6 +19,10 @@ export interface PieceProps {
   piece: BoardPiece;
   justMoved?: boolean;
   motion?: PieceMotion | null;
+  /** The set of pieces the table is using. */
+  pieceSet?: string;
+  /** How long a piece takes to travel, in milliseconds. */
+  animationMs?: number;
 }
 
 export interface PieceArtworkProps {
@@ -129,7 +134,13 @@ export function PieceArtwork({
   );
 }
 
-export function Piece({ piece, justMoved = false, motion = null }: PieceProps) {
+export function Piece({
+  piece,
+  justMoved = false,
+  motion = null,
+  pieceSet = "moongames",
+  animationMs = 190,
+}: PieceProps) {
   const nodeRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
@@ -138,6 +149,7 @@ export function Piece({ piece, justMoved = false, motion = null }: PieceProps) {
       node === null ||
       motion === null ||
       (motion.x === 0 && motion.y === 0) ||
+      animationMs <= 0 ||
       typeof node.animate !== "function"
     ) {
       return;
@@ -158,11 +170,17 @@ export function Piece({ piece, justMoved = false, motion = null }: PieceProps) {
         { transform: "translate(0, 0)" },
       ],
       {
-        duration: 190,
+        duration: animationMs,
         easing: "cubic-bezier(0.22, 0.78, 0.32, 1)",
       },
     );
-  }, [motion?.key, motion?.x, motion?.y]);
+  }, [motion?.key, motion?.x, motion?.y, animationMs]);
+
+  const drawing = pieceImageUrl(
+    pieceSet,
+    piece.color === "w" ? "w" : "b",
+    piece.type,
+  );
 
   return (
     <span
@@ -171,7 +189,11 @@ export function Piece({ piece, justMoved = false, motion = null }: PieceProps) {
       aria-hidden="true"
       data-piece={pieceName(piece)}
     >
-      <PieceArtwork type={piece.type} color={piece.color} />
+      {drawing === null ? (
+        <PieceArtwork type={piece.type} color={piece.color} />
+      ) : (
+        <img className="piece__drawing" src={drawing} alt="" draggable={false} />
+      )}
     </span>
   );
 }

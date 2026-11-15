@@ -8,6 +8,16 @@ export { GameArt } from "./components/GameArt";
 export type { GameArtProps } from "./components/GameArt";
 export { GameCard, capabilityLabels } from "./components/GameCard";
 export type { GameCardProps } from "./components/GameCard";
+export {
+  GamePreferencesPanel,
+} from "./components/GamePreferencesPanel";
+export type {
+  GamePreferencesPanelProps,
+  PieceChoice,
+  PreferenceFeatures,
+  SoundChoice,
+  ThemeChoice,
+} from "./components/GamePreferencesPanel";
 export { GameIdMark } from "./components/gameArt/GameIdMark";
 export type { GameIdMarkProps } from "./components/gameArt/GameIdMark";
 export { GameMark } from "./components/gameArt/GameMark";
@@ -55,6 +65,38 @@ export type {
   StoredEmailSession,
 } from "./lib/auth";
 export { copyText } from "./lib/clipboard";
+export {
+  AnimationSpeed,
+  ANIMATION_SPEED_LABELS,
+  AutoQueen,
+  AUTO_QUEEN_LABELS,
+  CLOCK_TENTHS_LABELS,
+  Coordinates,
+  COORDINATE_LABELS,
+  DEFAULT_PREFERENCES,
+  MoveEvent,
+  MOVE_EVENT_LABELS,
+  PREFERENCE_KEYS,
+  ShowClockTenths,
+  animationDuration,
+  clearPreference,
+  clearSharedPreference,
+  hasOwnPreference,
+  onPreferenceChange,
+  readPreference,
+  readPreferenceScope,
+  readPreferences,
+  writePreference,
+  writePreferenceScope,
+  writeSharedPreference,
+} from "./lib/preferences";
+export type {
+  GamePreferences,
+  PreferenceKey,
+  PreferenceScope,
+} from "./lib/preferences";
+export { useGamePreferences } from "./hooks/useGamePreferences";
+export type { UseGamePreferencesResult } from "./hooks/useGamePreferences";
 export {
   buildMatchInviteUrl,
   clearMatchInviteFromLocation,

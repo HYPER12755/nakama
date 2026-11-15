@@ -8,6 +8,8 @@ import {
   type PromotionPiece,
   type Square,
 } from "@moongames/chess-core";
+import { AutoQueen, type MoveEvent } from "@moongames/game-ui";
+import { promotionPiece } from "../lib/promotion";
 
 export interface PendingPromotion {
   from: Square;
@@ -23,6 +25,10 @@ export interface AiGameSettings {
 export interface ChessGameOptions {
   ai?: boolean;
   active?: boolean;
+  /** When a pawn that reaches the last rank becomes a queen. */
+  autoQueen?: AutoQueen;
+  /** How a piece is moved across the board. */
+  moveEvent?: MoveEvent;
 }
 
 export interface ChessGameController {
@@ -36,6 +42,8 @@ export interface ChessGameController {
   aiSettings: AiGameSettings | null;
   aiThinking: boolean;
   selectSquare: (square: Square) => void;
+  /** Move a piece from one square to another, as a drag does. */
+  movePiece: (from: Square, to: Square) => void;
   choosePromotion: (piece: PromotionPiece) => void;
   cancelPromotion: () => void;
   newGame: () => void;
@@ -59,6 +67,7 @@ function terminal(state: ChessState): boolean {
 export function useChessGame(
   options: ChessGameOptions = {},
 ): ChessGameController {
+  const autoQueen = options.autoQueen ?? AutoQueen.Never;
   const engineRef = useRef<ChessEngine | null>(null);
   if (engineRef.current === null) {
     engineRef.current = new ChessEngine();
@@ -178,8 +187,20 @@ export function useChessGame(
   const selectSquare = useCallback(
     (square: Square) => {
       const humanColor = aiSettings?.humanColor ?? null;
+
+      if (pendingPromotion !== null) {
+        // The picker is open. A second click on the same square is a quick
+        // way to make the pawn a queen.
+        if (
+          autoQueen === AutoQueen.OnPromotion &&
+          square === pendingPromotion.to
+        ) {
+          playMove(pendingPromotion.from, pendingPromotion.to, "q");
+        }
+        return;
+      }
+
       if (
-        pendingPromotion !== null ||
         terminal(state) ||
         (humanColor !== null &&
           (aiThinking || state.turn !== humanColor))
@@ -197,6 +218,11 @@ export function useChessGame(
 
         if (candidates.length > 0) {
           if (candidates.some((move) => move.promotion !== undefined)) {
+            const queen = promotionPiece(autoQueen, true);
+            if (queen !== null) {
+              playMove(selected, square, queen);
+              return;
+            }
             setPendingPromotion({
               from: selected,
               to: square,
@@ -219,7 +245,59 @@ export function useChessGame(
 
       setSelected(null);
     },
-    [aiSettings, aiThinking, pendingPromotion, playMove, selected, state],
+    [
+      aiSettings,
+      aiThinking,
+      autoQueen,
+      pendingPromotion,
+      playMove,
+      selected,
+      state,
+    ],
+  );
+
+  /**
+   * Move a piece from one square to another, as a drag does.
+   *
+   * The move is checked against the engine, so a drag that is not a legal
+   * move is refused the same way a click is.
+   */
+  const movePiece = useCallback(
+    (from: Square, to: Square) => {
+      const humanColor = aiSettings?.humanColor ?? null;
+      if (
+        pendingPromotion !== null ||
+        terminal(state) ||
+        (humanColor !== null && (aiThinking || state.turn !== humanColor))
+      ) {
+        return;
+      }
+
+      const candidates = (state.legalMoves[from] ?? []).filter(
+        (move) => move.to === to,
+      );
+      if (candidates.length === 0) {
+        return;
+      }
+
+      if (candidates.some((move) => move.promotion !== undefined)) {
+        const queen = promotionPiece(autoQueen, true);
+        if (queen !== null) {
+          playMove(from, to, queen);
+          return;
+        }
+        setPendingPromotion({
+          from,
+          to,
+          color: humanColor ?? state.turn,
+        });
+        setError(null);
+        return;
+      }
+
+      playMove(from, to);
+    },
+    [aiSettings, aiThinking, autoQueen, pendingPromotion, playMove, state],
   );
 
   const choosePromotion = useCallback(
@@ -321,6 +399,7 @@ export function useChessGame(
     aiSettings,
     aiThinking,
     selectSquare,
+    movePiece,
     choosePromotion,
     cancelPromotion,
     newGame,

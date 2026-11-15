@@ -13,6 +13,7 @@ import {
 } from "@moongames/chess-core";
 import {
   AccountPanel,
+  GamePreferencesPanel,
   GameToolbar,
   Icon,
   MatchChat,
@@ -20,10 +21,12 @@ import {
   OpponentLeftDialog,
   PlayerCard,
   ProfilePanel,
+  animationDuration,
   copyText,
   parseLaunchInvite,
   parseMatchInvite,
   clearMatchInviteFromLocation,
+  useGamePreferences,
 } from "@moongames/game-ui";
 import { AiPanel } from "./components/AiPanel";
 import { ChessBoard } from "./components/ChessBoard";
@@ -49,8 +52,19 @@ import {
   playSelect,
   playWin,
   preloadSound,
+  configureSound,
 } from "./lib/audio";
 import type { OnlineHistoryEntry } from "./lib/onlineProtocol";
+import {
+  BOARD_THEMES,
+  boardTheme as boardThemeOf,
+} from "./lib/boardThemes";
+import {
+  PIECE_SET_IDS,
+  pieceImageUrl,
+  pieceSetLabel,
+} from "./lib/pieceSets";
+import { SOUND_SETS } from "./lib/soundSets";
 import {
   useChessGame,
   type AiGameSettings,
@@ -70,6 +84,23 @@ const launcherHandoff = readLauncherHandoff(__MOONGAMES_GAME_ID__);
 
 /** The identifiers of this title come from the build. */
 const GAME_ID = __MOONGAMES_GAME_ID__;
+
+/**
+ * The sets of pieces the player may choose, with a picture of the king of
+ * each set to show in the picker.
+ */
+const PIECE_SETS = PIECE_SET_IDS.map((id) => ({
+  id,
+  label: pieceSetLabel(id),
+  preview: pieceImageUrl(id, "w", "k") ?? undefined,
+}));
+
+/** The choices that only a game of chess has. */
+const CHESS_FEATURES = {
+  autoQueen: true,
+  moveEvent: true,
+  clockTenths: true,
+};
 
 export interface AppProps {
   bridge: GameBridge;
@@ -122,9 +153,24 @@ export default function App({ bridge }: AppProps) {
     launcherHandoff !== null,
   );
   const [hostInitTimedOut, setHostInitTimedOut] = useState(false);
-  const localGame = useChessGame({ active: mode === "local" });
-  const aiGame = useChessGame({ ai: true, active: mode === "ai" });
-  const online = useOnlineChess(hostConfig);
+
+  // The customizations of the table: the pieces, the board, the sound, and
+  // the way a piece is moved. They are read before the game, because the
+  // game needs to know how a piece is moved.
+  const { preferences } = useGamePreferences(GAME_ID);
+
+  const localGame = useChessGame({
+    active: mode === "local",
+    autoQueen: preferences.autoQueen,
+  });
+  const aiGame = useChessGame({
+    ai: true,
+    active: mode === "ai",
+    autoQueen: preferences.autoQueen,
+  });
+  const online = useOnlineChess(hostConfig, {
+    autoQueen: preferences.autoQueen,
+  });
   const [theme, setTheme] = useState<Theme>(() =>
     launcherHandoff === null ? "dark" : resolveGameTheme(launcherHandoff.theme),
   );
@@ -139,6 +185,21 @@ export default function App({ bridge }: AppProps) {
   const inviteConnectRef = useRef(false);
   const inviteHandledRef = useRef(false);
   const hostLaunchHandledRef = useRef(false);
+
+  useEffect(() => {
+    configureSound({
+      set: preferences.soundSet,
+      volume: preferences.soundVolume,
+      enabled: preferences.soundEnabled,
+    });
+  }, [
+    preferences.soundSet,
+    preferences.soundVolume,
+    preferences.soundEnabled,
+  ]);
+
+  const boardTheme = boardThemeOf(preferences.boardTheme);
+  const pieceAnimationMs = animationDuration(preferences.animationSpeed);
 
   const onlineMode = mode === "online";
   const aiMode = mode === "ai";
@@ -861,6 +922,16 @@ export default function App({ bridge }: AppProps) {
               lastMove={activeState.lastMove ?? null}
               checkSquare={activeCheckSquare}
               flipped={bottomColor === "b"}
+              coordinates={preferences.coordinates}
+              theme={boardTheme}
+              pieceSet={preferences.pieceSet}
+              animationMs={pieceAnimationMs}
+              showLegalMoves={preferences.showLegalMoves}
+              highlightLastMove={preferences.highlightLastMove}
+              moveEvent={preferences.moveEvent}
+              onMove={
+                onlineMode ? online.movePiece : localController.movePiece
+              }
               onSquareClick={
                 onlineMode
                   ? online.selectSquare
@@ -916,6 +987,7 @@ export default function App({ bridge }: AppProps) {
                     <ChessGameStats
                       state={activeState}
                       clockMs={online.displayClock}
+                      clockTenths={preferences.clockTenths}
                       names={{
                         white: topColor === "w" ? topOnline.name ?? "White" : bottomOnline.name ?? "White",
                         black: topColor === "b" ? topOnline.name ?? "Black" : bottomOnline.name ?? "Black",
@@ -988,6 +1060,13 @@ export default function App({ bridge }: AppProps) {
                   }
                 />
               )}
+              <GamePreferencesPanel
+                gameId={GAME_ID}
+                pieceSets={PIECE_SETS}
+                themes={BOARD_THEMES}
+                soundSets={SOUND_SETS}
+                features={CHESS_FEATURES}
+              />
             </>
           ) : aiMode ? (
             <>
@@ -997,7 +1076,10 @@ export default function App({ bridge }: AppProps) {
                 onStart={handleStartAiGame}
               />
               <GameStatus state={activeState} />
-              <ChessGameStats state={activeState} />
+              <ChessGameStats
+                state={activeState}
+                clockTenths={preferences.clockTenths}
+              />
               <ChessCaptured state={activeState} />
               <MoveList history={activeState.history} />
               <GameToolbar
@@ -1022,11 +1104,21 @@ export default function App({ bridge }: AppProps) {
                   },
                 ]}
               />
+              <GamePreferencesPanel
+                gameId={GAME_ID}
+                pieceSets={PIECE_SETS}
+                themes={BOARD_THEMES}
+                soundSets={SOUND_SETS}
+                features={CHESS_FEATURES}
+              />
             </>
           ) : (
             <>
               <GameStatus state={activeState} />
-              <ChessGameStats state={activeState} />
+              <ChessGameStats
+                state={activeState}
+                clockTenths={preferences.clockTenths}
+              />
               <ChessCaptured state={activeState} />
               <MoveList history={activeState.history} />
               <GameToolbar
@@ -1050,6 +1142,13 @@ export default function App({ bridge }: AppProps) {
                     disabled: !localGame.canUndo,
                   },
                 ]}
+              />
+              <GamePreferencesPanel
+                gameId={GAME_ID}
+                pieceSets={PIECE_SETS}
+                themes={BOARD_THEMES}
+                soundSets={SOUND_SETS}
+                features={CHESS_FEATURES}
               />
             </>
           )}

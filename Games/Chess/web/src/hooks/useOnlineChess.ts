@@ -26,6 +26,7 @@ import {
 import {
   authErrorDetail,
   authErrorMessage,
+  AutoQueen,
   clearStoredEmailSession,
   consumeGuestIdentityLinked,
   INSECURE_ACCOUNT_MESSAGE,
@@ -40,8 +41,7 @@ import {
 } from "@moongames/game-ui";
 import {
   ONLINE_OP,
-  TIME_CONTROLS,
-  clockForColor,
+  TIME_CONTROLS,  clockForColor,
   defaultServerAddress,
   normalizedOnlineState,
   parseServerAddress,
@@ -61,6 +61,7 @@ import {
   type OnlineTimeControl,
 } from "../lib/onlineProtocol";
 import { playOpponentLeft } from "../lib/audio";
+import { promotionPiece } from "../lib/promotion";
 
 /**
  * The identifiers of this title come from the build, so the client never
@@ -163,6 +164,8 @@ export interface OnlineChessController {
   opponentLeft: string | null;
   dismissOpponentLeft: () => void;
   selectSquare: (square: Square) => void;
+  /** Move a piece from one square to another, as a drag does. */
+  movePiece: (from: Square, to: Square) => void;
   choosePromotion: (piece: PromotionPiece) => void;
   cancelPromotion: () => void;
   resign: () => void;
@@ -325,7 +328,9 @@ interface PendingMatchmaker {
 
 export function useOnlineChess(
   hostConfig?: GameHostConfig | null,
+  options: { autoQueen?: AutoQueen } = {},
 ): OnlineChessController {
+  const autoQueen = options.autoQueen ?? AutoQueen.Never;
   const [connection, setConnection] =
     useState<OnlineConnectionStatus>("offline");
   const [session, setSession] = useState<OnlineSessionInfo | null>(null);
@@ -2041,7 +2046,19 @@ export function useOnlineChess(
 
   const selectSquare = useCallback(
     (square: Square) => {
-      if (serverState === null || myColor === null || pendingPromotion !== null) {
+      if (serverState === null || myColor === null) {
+        return;
+      }
+
+      if (pendingPromotion !== null) {
+        // The picker is open. A second click on the same square is a quick
+        // way to make the pawn a queen.
+        if (
+          autoQueen === AutoQueen.OnPromotion &&
+          square === pendingPromotion.to
+        ) {
+          sendMove(pendingPromotion.from, pendingPromotion.to, "q");
+        }
         return;
       }
       // A move that is still on its way holds the table. Without this a
@@ -2069,6 +2086,11 @@ export function useOnlineChess(
 
         if (candidates.length > 0) {
           if (candidates.some((move) => move.promotion !== undefined)) {
+            const queen = promotionPiece(autoQueen, true);
+            if (queen !== null) {
+              sendMove(selected, square, queen);
+              return;
+            }
             setPendingPromotion({
               from: selected,
               to: square,
@@ -2092,7 +2114,67 @@ export function useOnlineChess(
 
       setSelected(null);
     },
-    [myColor, pendingPromotion, sendMove, selected, serverState],
+    [
+      autoQueen,
+      myColor,
+      pendingPromotion,
+      sendMove,
+      selected,
+      serverState,
+    ],
+  );
+
+  /**
+   * Move a piece from one square to another, as a drag does.
+   *
+   * The move is checked against the table, so a drag that is not a legal
+   * move is refused the same way a click is.
+   */
+  const movePiece = useCallback(
+    (from: Square, to: Square) => {
+      if (serverState === null || myColor === null || pendingMove) {
+        return;
+      }
+
+      const state = serverState.state;
+      const isTerminal =
+        state.status === "checkmate" ||
+        state.status === "stalemate" ||
+        state.status === "draw" ||
+        serverState.result !== null;
+
+      if (isTerminal || !serverState.match.started) {
+        return;
+      }
+      if (state.turn !== myColor) {
+        return;
+      }
+
+      const candidates = (state.legalMoves[from] ?? []).filter(
+        (move) => move.to === to,
+      );
+      if (candidates.length === 0) {
+        return;
+      }
+
+      if (candidates.some((move) => move.promotion !== undefined)) {
+        const queen = promotionPiece(autoQueen, true);
+        if (queen !== null) {
+          sendMove(from, to, queen);
+          return;
+        }
+        setPendingPromotion({
+          from,
+          to,
+          color: myColor,
+        });
+        setError(null);
+        return;
+      }
+
+      sendMove(from, to);
+    },
+    [autoQueen, myColor, pendingMove, sendMove, serverState],
   );
 
   const choosePromotion = useCallback(
@@ -2254,6 +2336,7 @@ export function useOnlineChess(
     opponentLeft,
     dismissOpponentLeft,
     selectSquare,
+    movePiece,
     choosePromotion,
     cancelPromotion,
     resign,

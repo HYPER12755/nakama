@@ -1,10 +1,12 @@
-import { memo } from "react";
+import { memo, useRef, useState } from "react";
 import type {
   BoardPiece,
   MoveRecord,
   Square,
 } from "@moongames/chess-core";
+import { Coordinates, MoveEvent } from "@moongames/game-ui";
 import { getDisplaySquares, isLightSquare } from "../lib/coordinates";
+import { boardThemeStyle, type BoardTheme } from "../lib/boardThemes";
 import { pieceName } from "../lib/pieces";
 import { Piece, type PieceMotion } from "./Piece";
 
@@ -16,6 +18,22 @@ export interface ChessBoardProps {
   checkSquare: Square | null;
   flipped: boolean;
   onSquareClick: (square: Square) => void;
+  /** Move a piece from one square to another, as a drag does. */
+  onMove?: (from: Square, to: Square) => void;
+  /** How a piece is moved across the board. */
+  moveEvent?: MoveEvent;
+  /** Where the coordinates are drawn. */
+  coordinates?: Coordinates;
+  /** The colouring of the board. */
+  theme?: BoardTheme;
+  /** The set of pieces on the board. */
+  pieceSet?: string;
+  /** How long a piece takes to travel, in milliseconds. */
+  animationMs?: number;
+  /** Whether the squares a piece may go to are marked. */
+  showLegalMoves?: boolean;
+  /** Whether the squares of the last move are marked. */
+  highlightLastMove?: boolean;
 }
 
 function displayPosition(square: Square, flipped: boolean) {
@@ -49,10 +67,95 @@ export const ChessBoard = memo(function ChessBoard({
   checkSquare,
   flipped,
   onSquareClick,
+  onMove,
+  moveEvent = MoveEvent.ClickOrDrag,
+  coordinates = Coordinates.Outside,
+  theme,
+  pieceSet = "moongames",
+  animationMs = 190,
+  showLegalMoves = true,
+  highlightLastMove = true,
 }: ChessBoardProps) {
   const pieces = new Map(board.map((piece) => [piece.square, piece]));
   const targets = new Set(legalTargets);
   const motions = new Map<Square, PieceMotion>();
+
+  // The drag in progress, if there is one.
+  const dragRef = useRef<{
+    square: Square | null;
+    x: number;
+    y: number;
+    moved: boolean;
+  }>({ square: null, x: 0, y: 0, moved: false });
+  // A drag ends with a click, and the click must not move the piece again.
+  const skipClickRef = useRef(false);
+  const [dragging, setDragging] = useState<Square | null>(null);
+
+  const draggingAllowed = moveEvent !== MoveEvent.Click;
+
+  const handlePointerDown = (
+    square: Square,
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) => {
+    if (!draggingAllowed) {
+      return;
+    }
+    dragRef.current = {
+      square,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+    };
+
+    if (moveEvent === MoveEvent.Drag) {
+      // The piece is picked up, so the squares it may go to are shown. A
+      // square the piece may go to is left alone, so that the piece is
+      // moved by the drop and not by the press.
+      const isTarget = targets.has(square);
+      if (!isTarget) {
+        onSquareClick(square);
+      }
+    }
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (drag.square === null || drag.moved) {
+      return;
+    }
+    const moved =
+      Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 6;
+    if (!moved) {
+      return;
+    }
+    drag.moved = true;
+    setDragging(drag.square);
+  };
+
+  const handlePointerUp = (square: Square) => {
+    const drag = dragRef.current;
+    dragRef.current = { square: null, x: 0, y: 0, moved: false };
+    setDragging(null);
+
+    if (drag.square === null || !drag.moved || onMove === undefined) {
+      return;
+    }
+    // The click that follows the drag must not move the piece a second time.
+    skipClickRef.current = true;
+    onMove(drag.square, square);
+  };
+
+  const handleClick = (square: Square) => {
+    if (skipClickRef.current) {
+      skipClickRef.current = false;
+      return;
+    }
+    if (moveEvent === MoveEvent.Drag) {
+      // A piece is moved by dragging it, never by clicking.
+      return;
+    }
+    onSquareClick(square);
+  };
 
   if (lastMove !== null && lastMove.from !== lastMove.to) {
     motions.set(
@@ -71,7 +174,8 @@ export const ChessBoard = memo(function ChessBoard({
       if (fromFile === "e" && toFile === "g") {
         rookFrom = `h${rank}` as Square;
         rookTo = `f${rank}` as Square;
-      } else if (fromFile === "e" && toFile === "c") {
+      }
+      if (fromFile === "e" && toFile === "c") {
         rookFrom = `a${rank}` as Square;
         rookTo = `d${rank}` as Square;
       }
@@ -89,14 +193,23 @@ export const ChessBoard = memo(function ChessBoard({
   }
 
   return (
-    <div className="board" role="grid" aria-label="Chess board">
-      {getDisplaySquares(flipped).map(({ square, showFile, showRank }) => {
+    <div
+      className={`board${draggingAllowed ? " board--drag" : ""}${
+        dragging !== null ? " board--dragging" : ""
+      }`}
+      role="grid"
+      aria-label="Chess board"
+      style={theme === undefined ? undefined : boardThemeStyle(theme)}
+    >
+      {getDisplaySquares(flipped, coordinates).map(
+        ({ square, showFile, showRank, showInnerFile, showInnerRank }) => {
         const piece = pieces.get(square);
         const motion = motions.get(square) ?? null;
         const isSelected = selected === square;
         const isTarget = targets.has(square);
         const isLastMove =
-          lastMove?.from === square || lastMove?.to === square;
+          highlightLastMove &&
+          (lastMove?.from === square || lastMove?.to === square);
         const isCheck = checkSquare === square;
         const classes = [
           "square",
@@ -112,10 +225,13 @@ export const ChessBoard = memo(function ChessBoard({
         if (isCheck) {
           classes.push("square--check");
         }
+        if (dragging === square) {
+          classes.push("square--dragging");
+        }
 
         const label = `${square}, ${
           piece === undefined ? "empty" : pieceName(piece)
-        }${isTarget ? ", legal move" : ""}`;
+        }${isTarget && showLegalMoves ? ", legal move" : ""}`;
 
         return (
           <button
@@ -128,7 +244,14 @@ export const ChessBoard = memo(function ChessBoard({
                 ? undefined
                 : { overflow: "visible", zIndex: 8 }
             }
-            onClick={() => onSquareClick(square)}
+            onClick={() => handleClick(square)}
+            onPointerDown={(event) => handlePointerDown(square, event)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={() => handlePointerUp(square)}
+            onPointerCancel={() => {
+              dragRef.current = { square: null, x: 0, y: 0, moved: false };
+              setDragging(null);
+            }}
             aria-label={label}
             aria-pressed={isSelected}
           >
@@ -142,14 +265,26 @@ export const ChessBoard = memo(function ChessBoard({
                 {square[1]}
               </span>
             )}
+            {showInnerFile && (
+              <span className="coord coord--inner coord--inner-file" aria-hidden="true">
+                {square[0]}
+              </span>
+            )}
+            {showInnerRank && (
+              <span className="coord coord--inner coord--inner-rank" aria-hidden="true">
+                {square[1]}
+              </span>
+            )}
             {piece !== undefined && (
               <Piece
                 piece={piece}
                 justMoved={lastMove?.to === square}
                 motion={motion}
+                pieceSet={pieceSet}
+                animationMs={animationMs}
               />
             )}
-            {isTarget && (
+            {isTarget && showLegalMoves && (
               <span
                 className={`move-hint ${
                   piece === undefined ? "" : "move-hint--capture"
@@ -159,7 +294,8 @@ export const ChessBoard = memo(function ChessBoard({
             )}
           </button>
         );
-      })}
+      },
+      )}
     </div>
   );
 });

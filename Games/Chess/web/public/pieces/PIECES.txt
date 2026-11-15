@@ -1,0 +1,70 @@
+The pieces of the board
+======================
+
+The sets of pieces in this folder come from the lichess client, which keeps
+them beside the games it shows:
+
+    https://github.com/lichess-org/lila/tree/master/public/piece
+
+Each set is drawn by its own artist and is released under its own licence.
+The list below names the artist and the licence of every set, so the pieces
+can be traced back to the people who drew them.
+
+The MoonGames pieces are not in this list. They are drawn by the game
+itself, as the artwork in the piece component, and are the default.
+
+  cburnett            Colin M.L. Burnett            GPLv2+
+  alpha               Eric Bentzen                   free for personal, non commercial use
+  anarcandy           caderek                        CC BY-NC-SA 4.0
+  caliente            avi                            CC BY-NC-SA 4.0
+  california          Jerry S.                       CC BY-NC-SA 4.0
+  cardinal            sadsnake1                      CC BY-NC-SA 4.0
+  celtic               Maurizio Monge                 MIT
+  chess7              Style-7                        freeware
+  chessnut            Alexis Luengas                 Apache 2.0
+  companion           David L. Brown                 freeware
+  cooke               fejfar                         CC BY-NC-SA 4.0
+  disguised           danegraphics                   CC BY-NC-SA 4.0
+  dubrovny            sadsnake1                      CC BY-NC-SA 4.0
+  fantasy             Maurizio Monge                 MIT
+  firi                James Faure                    CC BY 4.0
+  fresca              sadsnake1                      CC BY-NC-SA 4.0
+  gioco               sadsnake1                      CC BY-NC-SA 4.0
+  governor            the lila authors              no licence named by the source
+  horsey              cham, michael1241              CC BY-NC-SA 4.0
+  icpieces            sadsnake1                      CC BY-NC-SA 4.0
+  kiwen-suwi          neverRare                      CC BY 4.0
+  kosal               Kosal Sen                      CC BY 4.0
+  leipzig             Armando Hernandez Marroquin    freeware
+  letter              usolando                       AGPLv3+
+  maestro             sadsnake1                      CC BY-NC-SA 4.0
+  merida              Armando Hernandez Marroquin    GPLv2+
+  minimal-warmth      blunder_reign                 CC BY-NC-SA 4.0
+  monarchy            slither77                      CC BY-NC-SA 4.0
+  mpchess             Maxime Chupin                 GPLv3+
+  papercut            Nikolay Anzarov                CC BY 4.0
+  pirouetti           pirouetti                      AGPLv3+
+  pixel               therealqtpi                    AGPLv3+
+  reillycraig         Reilly Craig                   as named by the artist
+  rhosgfx             RhosGFX                        CC0 1.0
+  riohacha            the lila authors              no licence named by the source
+  shahi-ivory-brown   Tamer Karatekin                free for personal and commercial use, no changes
+  shapes              flugsio                        CC BY-SA 4.0
+  spatial             Maurizio Monge                 MIT
+  staunty             sadsnake1                      CC BY-NC-SA 4.0
+  tatiana             sadsnake1                      CC BY-NC-SA 4.0
+  totoy               Kosal Sen                      CC BY 4.0
+  xkcd                Randall Munroe                 CC BY-NC-SA 2.5
+
+A note about the non commercial sets
+------------------------------------
+
+The sets marked CC BY-NC-SA, and the alpha set, may not be used for a
+commercial purpose. They are here because they are beautiful, and they are
+kept apart from the rest so the choice is easy to make. A table that is
+offered for money should use one of the sets that allows it: cburnett,
+chessnut, celtic, fantasy, spatial, letter, merida, mpchess, pix...
+
+Every set is a folder of twelve drawings, one for each piece of each
+colour. The names are the same in every set, so the game can draw any of
+them in the same way.

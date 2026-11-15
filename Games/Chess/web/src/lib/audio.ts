@@ -7,8 +7,8 @@
  * the game never waits for a sound.
  *
  * The sounds come from the lichess sound set, which is released under the
- * MIT licence. The table sounds come from the standard theme and the loud
- * moments from the futuristic theme.
+ * MIT licence. There are nine sets to choose from, and the player chooses
+ * one, the volume and whether the table speaks at all.
  */
 
 export type ChessSound =
@@ -60,6 +60,45 @@ let audioContext: AudioContext | null = null;
 const buffers = new Map<ChessSound, AudioBuffer>();
 const loading = new Map<ChessSound, Promise<AudioBuffer | null>>();
 
+/** The set of sounds the table uses right now. */
+let currentSet = "moongames";
+/** How loud the table is, from nothing to everything. */
+let currentVolume = 0.8;
+/** Whether the table speaks at all. */
+let currentEnabled = true;
+
+export interface SoundSettings {
+  /** The set of sounds, named by its folder. */
+  set?: string;
+  /** How loud the table is, from 0 to 1. */
+  volume?: number;
+  /** Whether the table speaks at all. */
+  enabled?: boolean;
+}
+
+/**
+ * Set the way the table sounds. The sounds already fetched are kept, so a
+ * change is heard from the next sound on.
+ */
+export function configureSound(settings: SoundSettings): void {
+  if (settings.set !== undefined && settings.set !== currentSet) {
+    currentSet = settings.set;
+    // The sounds of the old set are of no use now.
+    buffers.clear();
+  }
+  if (settings.volume !== undefined) {
+    currentVolume = Math.min(1, Math.max(0, settings.volume));
+  }
+  if (settings.enabled !== undefined) {
+    currentEnabled = settings.enabled;
+  }
+}
+
+/** The set of sounds the table uses right now. */
+export function soundSet(): string {
+  return currentSet;
+}
+
 type AudioContextConstructor = typeof AudioContext;
 
 function context(): AudioContext | null {
@@ -85,9 +124,9 @@ function context(): AudioContext | null {
 }
 
 function soundUrl(file: string): string {
-  // The sounds sit beside the game, so the path is relative to the page.
+  // The sounds sit beside the game, one folder for each set.
   const base = document.baseURI;
-  return new URL(`sounds/${file}`, base).toString();
+  return new URL(`sounds/${currentSet}/${file}`, base).toString();
 }
 
 function load(
@@ -125,6 +164,9 @@ function load(
 
 /** Warm a sound up, so it is ready when the event happens. */
 export function preloadSound(sound: ChessSound): void {
+  if (!currentEnabled) {
+    return;
+  }
   void load(sound);
 }
 
@@ -133,6 +175,9 @@ export function preloadSound(sound: ChessSound): void {
  * sound must never stop the game.
  */
 export function playSound(sound: ChessSound): void {
+  if (!currentEnabled || currentVolume <= 0) {
+    return;
+  }
   const ctx = context();
   if (ctx === null) {
     return;
@@ -148,7 +193,7 @@ export function playSound(sound: ChessSound): void {
       const source = ctx.createBufferSource();
       const gain = ctx.createGain();
       source.buffer = buffer;
-      gain.gain.value = SOUND_VOLUME[sound];
+      gain.gain.value = SOUND_VOLUME[sound] * currentVolume;
       source.connect(gain);
       gain.connect(ctx.destination);
       source.start();

@@ -548,6 +548,46 @@ button {
   transition: transform 0.18s cubic-bezier(0.22, 0.8, 0.3, 1);
 }
 
+/* The pieces of the sets the player chooses. */
+
+.piece__drawing {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* The coordinates drawn inside every square. */
+
+.coord--inner {
+  opacity: 0.34;
+  font-size: clamp(6px, 0.95vmin, 9px);
+  z-index: 4;
+}
+
+.coord--inner-file {
+  right: 4%;
+  bottom: 3%;
+}
+
+.coord--inner-rank {
+  left: 4%;
+  top: 3%;
+}
+
+/* Dragging a piece across the board. */
+
+.board--drag .square {
+  touch-action: none;
+}
+
+.square--dragging .piece {
+  transform: translateY(-8%) scale(1.08);
+  filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.35));
+}
+
 .piece-art {
   display: block;
   width: 100%;
@@ -640,11 +680,11 @@ button {
 }
 
 .square--light .coord {
-  color: #5d513f;
+  color: color-mix(in srgb, var(--board-light) 42%, #1c1710);
 }
 
 .square--dark .coord {
-  color: #f2e9d8;
+  color: color-mix(in srgb, var(--board-dark) 26%, #fffaf0);
 }
 
 @keyframes board-arrive {

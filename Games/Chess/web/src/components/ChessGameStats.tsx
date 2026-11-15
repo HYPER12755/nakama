@@ -1,4 +1,5 @@
 import type { ChessState, Color, PieceSymbol } from "@moongames/chess-core";
+import { ShowClockTenths } from "@moongames/game-ui";
 
 export interface ChessGameStatsProps {
   state: ChessState;
@@ -6,6 +7,8 @@ export interface ChessGameStatsProps {
   clockMs?: { whiteMs: number | null; blackMs: number | null } | null;
   /** The name of each side. */
   names?: { white: string; black: string };
+  /** When the clock shows the tenths of a second. */
+  clockTenths?: ShowClockTenths;
 }
 
 /** What a piece is worth. A pawn is one, and so on up the board. */
@@ -27,14 +30,43 @@ const PIECE_NAMES: Record<PieceSymbol, string> = {
   k: "king",
 };
 
-function formatClock(milliseconds: number | null): string {
+/**
+ * The time on a clock.
+ *
+ * The tenths of a second are shown when the clock is nearly out, or always,
+ * if that is what the player asked for.
+ */
+export function formatClock(
+  milliseconds: number | null,
+  tenths: ShowClockTenths = ShowClockTenths.Below10Seconds,
+): string {
   if (milliseconds === null) {
     return "—";
   }
-  const total = Math.max(0, Math.ceil(milliseconds / 1000));
+
+  const showTenths =
+    tenths === ShowClockTenths.Always ||
+    (tenths === ShowClockTenths.Below10Seconds &&
+      milliseconds > 0 &&
+      milliseconds < 10_000);
+
+  // Without the tenths the clock counts the second up, so a second is shown
+  // until it is gone. With the tenths the clock counts down, so the tenths
+  // and the seconds always tell the same time.
+  const remaining = Math.max(0, milliseconds);
+  const total = showTenths
+    ? Math.floor(remaining / 1000)
+    : Math.ceil(remaining / 1000);
   const minutes = Math.floor(total / 60);
   const seconds = total % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  const clock = `${minutes}:${seconds.toString().padStart(2, "0")}`;
+
+  if (!showTenths) {
+    return clock;
+  }
+
+  const fraction = Math.floor((remaining % 1000) / 100);
+  return `${clock}.${fraction}`;
 }
 
 /**
@@ -47,6 +79,7 @@ export function ChessGameStats({
   state,
   clockMs = null,
   names,
+  clockTenths = ShowClockTenths.Below10Seconds,
 }: ChessGameStatsProps) {
   // The pieces that are off the board are the ones that were taken.
   const taken: Record<Color, PieceSymbol[]> = { w: [], b: [] };
@@ -77,7 +110,7 @@ export function ChessGameStats({
     <div className={`game-stats__row game-stats__row--${color}`} key={color}>
       <span className="game-stats__name">{label}</span>
       <span className="game-stats__count">{count} taken</span>
-      <span className="game-stats__clock">{formatClock(clock)}</span>
+      <span className="game-stats__clock">{formatClock(clock, clockTenths)}</span>
       <span className="game-stats__value">{value}</span>
     </div>
   );
