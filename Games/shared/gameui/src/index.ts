@@ -34,11 +34,13 @@ export { Icon } from "./components/Icon";
 export type { IconName, IconProps } from "./components/Icon";
 export * from "./types";
 export {
+  accountTransportSafe,
+  emailAuthTransportSafe,
+  INSECURE_ACCOUNT_MESSAGE,
   authErrorDetail,
   authErrorMessage,
   clearStoredEmailSession,
   consumeGuestIdentityLinked,
-  emailAuthTransportSafe,
   markGuestIdentityLinked,
   normalizeEmail,
   readStoredEmailSession,

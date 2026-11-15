@@ -26,7 +26,8 @@ import {
   authErrorMessage,
   clearStoredEmailSession,
   consumeGuestIdentityLinked,
-  emailAuthTransportSafe,
+  accountTransportSafe,
+  INSECURE_ACCOUNT_MESSAGE,
   markGuestIdentityLinked,
   normalizeEmail,
   readStoredEmailSession,
@@ -746,6 +747,15 @@ export function useOnlineChess(
         let authSource: OnlineAuthAccount["kind"];
         let authEmail: string | null = null;
 
+        // A guest account is an account too, and the session that comes back
+        // is a secret. It must not cross a public plain connection.
+        if (
+          restoredHost === null &&
+          !accountTransportSafe(address.host, address.useSSL)
+        ) {
+          throw new Error(INSECURE_ACCOUNT_MESSAGE);
+        }
+
         if (restoredHost !== null) {
           sessionResult = restoredHost;
           authSource = "host";
@@ -1061,7 +1071,7 @@ export function useOnlineChess(
         setAuthError("Enter a valid server address.");
         return;
       }
-      if (!emailAuthTransportSafe(address.host, address.useSSL)) {
+      if (!accountTransportSafe(address.host, address.useSSL)) {
         setAuthError(
           "Email sign-in requires HTTPS. Use a secure server address.",
         );
@@ -1134,7 +1144,7 @@ export function useOnlineChess(
         setAuthError("Enter a valid server address.");
         return;
       }
-      if (!emailAuthTransportSafe(address.host, address.useSSL)) {
+      if (!accountTransportSafe(address.host, address.useSSL)) {
         setAuthError(
           "Account creation requires HTTPS. Use a secure server address.",
         );

@@ -16,6 +16,10 @@ import {
   sameOriginServerAddress,
   type GameHostConfig,
 } from "@moongames/game-sdk";
+import {
+  accountTransportSafe,
+  INSECURE_ACCOUNT_MESSAGE,
+} from "@moongames/game-ui";
 import type { SocialFriend } from "@moongames/game-sdk";
 import {
   authErrorMessage,
@@ -490,6 +494,14 @@ export function useOnlineCarrom(
       let accountKind: OnlineAuthAccount["kind"] = "guest";
       let accountEmail: string | null = null;
       const storedEmail = readStoredEmailSession(address.label);
+      // A guest account is an account too, and the session that comes back is
+      // a secret. It must not cross a public plain connection.
+      if (
+        hostSession === null &&
+        !accountTransportSafe(address.host, address.useSSL)
+      ) {
+        throw new Error(INSECURE_ACCOUNT_MESSAGE);
+      }
       if (hostSession !== null) {
         session = hostSession;
         accountKind = "host";

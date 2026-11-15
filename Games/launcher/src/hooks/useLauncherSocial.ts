@@ -32,7 +32,8 @@ import {
   clearStoredLauncherEmailSession,
   consumeLauncherGuestLinked,
   defaultLauncherServerAddress,
-  emailAuthTransportSafe,
+  accountTransportSafe,
+  INSECURE_ACCOUNT_MESSAGE,
   guestDeviceId,
   launcherServerKey,
   markLauncherGuestLinked,
@@ -922,6 +923,18 @@ export function useLauncherSocial(
         const pendingSession = pendingSessionRef.current;
         pendingSessionRef.current = null;
 
+        // An account is made on the server, and the session that comes back
+        // is a secret. It must not cross a public plain connection, so the
+        // menu refuses to make an account over one.
+        if (
+          pendingSession === null &&
+          !accountTransportSafe(address.host, address.useSSL)
+        ) {
+          setConnection("error");
+          setError(INSECURE_ACCOUNT_MESSAGE);
+          throw new Error(INSECURE_ACCOUNT_MESSAGE);
+        }
+
         let session: Session;
         let kind: LauncherAuthKind;
         let email: string | null = null;
@@ -1245,7 +1258,7 @@ export function useLauncherSocial(
         return;
       }
       const address = parseLauncherServerAddress();
-      if (!emailAuthTransportSafe(address.host, address.useSSL)) {
+      if (!accountTransportSafe(address.host, address.useSSL)) {
         setAuthError("Email sign-in requires HTTPS. Use a secure server address.");
         return;
       }
@@ -1310,7 +1323,7 @@ export function useLauncherSocial(
         return;
       }
       const address = parseLauncherServerAddress();
-      if (!emailAuthTransportSafe(address.host, address.useSSL)) {
+      if (!accountTransportSafe(address.host, address.useSSL)) {
         setAuthError("Account creation requires HTTPS. Use a secure server address.");
         return;
       }

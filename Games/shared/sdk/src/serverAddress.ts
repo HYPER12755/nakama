@@ -33,6 +33,51 @@ export const DEFAULT_SERVER_PORT = "7350";
 /** The key the local server uses when nothing else is said. */
 export const DEFAULT_SERVER_KEY = "defaultkey";
 
+/**
+ * An account must not cross a public plaintext connection. The session that
+ * comes back is a secret, so the account is only made when the connection is
+ * secure, or when the address is on the player's own network.
+ *
+ * Loopback and private-network addresses are allowed so local Nakama
+ * development still works.
+ */
+export function accountTransportSafe(
+  host: string,
+  useSSL: boolean,
+): boolean {
+  if (useSSL) {
+    return true;
+  }
+  const normalized = host.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized.endsWith(".local")
+  ) {
+    return true;
+  }
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(normalized);
+  if (match === null) {
+    return false;
+  }
+  const octets = match.slice(1).map(Number);
+  if (octets.some((octet) => octet < 0 || octet > 255)) {
+    return false;
+  }
+  if (octets[0] === 10 || octets[0] === 127) {
+    return true;
+  }
+  if (octets[0] === 192 && octets[1] === 168) {
+    return true;
+  }
+  return octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31;
+}
+
+/** The message shown when the account would cross a public plain connection. */
+export const INSECURE_ACCOUNT_MESSAGE =
+  "MoonGames needs a secure connection to make an account. Open the https address of the server.";
+
 function environment(name: string): string | undefined {
   // The settings are read from the environment of the build, and the shared
   // kit is also used outside a browser, so the environment is read in a way

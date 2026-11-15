@@ -1,4 +1,5 @@
 import {
+  accountTransportSafe as accountTransportSafeShared,
   parseServerAddress,
   sameOriginServerAddress,
 } from "@moongames/game-sdk";
@@ -168,38 +169,24 @@ export function authErrorMessage(
     : "Could not create the account. Check your details and try again.";
 }
 
-export function emailAuthTransportSafe(
+/**
+ * Credentials must not cross a public plaintext connection. The rule is the
+ * one the whole platform uses, so the menu, the games and the shells all
+ * refuse the same addresses.
+ */
+export function accountTransportSafe(
   host: string,
   useSSL: boolean,
 ): boolean {
-  if (useSSL) {
-    return true;
-  }
-  const normalized = host.trim().toLowerCase().replace(/^\[|\]$/g, "");
-  if (
-    normalized === "localhost" ||
-    normalized === "127.0.0.1" ||
-    normalized === "::1" ||
-    normalized.endsWith(".local")
-  ) {
-    return true;
-  }
-  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(normalized);
-  if (match === null) {
-    return false;
-  }
-  const octets = match.slice(1).map(Number);
-  if (octets.some((octet) => octet < 0 || octet > 255)) {
-    return false;
-  }
-  if (octets[0] === 10 || octets[0] === 127) {
-    return true;
-  }
-  if (octets[0] === 192 && octets[1] === 168) {
-    return true;
-  }
-  return octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31;
+  return accountTransportSafeShared(host, useSSL);
 }
+
+/** The same rule, for the accounts that use a password. */
+export const emailAuthTransportSafe = accountTransportSafe;
+
+/** The message shown when the account would cross a public plain connection. */
+export const INSECURE_ACCOUNT_MESSAGE =
+  "MoonGames needs a secure connection to make an account. Open the https address of the server.";
 
 export function defaultLauncherServerAddress(): string {
   // The server is reached through the address the menu itself came from,
