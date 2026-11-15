@@ -673,14 +673,9 @@ function App() {
                 <div className="flow-setting__copy">
                   <strong>Organized steps</strong>
                   <small>
-                    Open every game through a menu, one step at a time. Each
+                    Open each game through a menu, one step at a time. Every
                     game can choose its own.
                   </small>
-                  <span className="flow-setting__state">
-                    {globalFlow
-                      ? "Every game opens with the organized menu"
-                      : "Every game opens the way it always did"}
-                  </span>
                 </div>
                 <button
                   type="button"

@@ -25,7 +25,6 @@ import {
   ProfilePanel,
   copyText,
   flowSettingEnabled,
-  flowSettingOverride,
   parseLaunchInvite,
   parseMatchInvite,
   clearMatchInviteFromLocation,
@@ -137,23 +136,6 @@ export default function App({ bridge }: AppProps) {
   const [flowMode, setFlowMode] = useState<string | null>(null);
   const [flowScreen, setFlowScreen] = useState<string | null>(null);
   const [flowMenuOpen, setFlowMenuOpen] = useState(false);
-
-  // The menu can turn the organized steps on for every game, so a game that
-  // follows the menu picks the choice up when it is looked at again.
-  useEffect(() => {
-    const refresh = () => {
-      if (flowSettingOverride(GAME_ID) !== null) {
-        return;
-      }
-      setFlowOn(flowSettingEnabled(GAME_ID));
-    };
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-  }, []);
   const [hostConfig, setHostConfig] = useState<GameHostConfig | null>(
     launcherHandoff,
   );
@@ -1095,9 +1077,6 @@ export default function App({ bridge }: AppProps) {
                       onCopyPgn={() => void handleCopyPgn()}
                       onLeave={handleLeaveMatch}
                     />
-                    {/* The organized steps are turned on from here, so they can
-                        be reached before they are on. */}
-                    <GameFlowSetting gameId={GAME_ID} onChange={setFlowOn} />
                   </>
                 )}
               {showProfilePanel && (
@@ -1131,9 +1110,6 @@ export default function App({ bridge }: AppProps) {
               <ChessGameStats state={activeState} />
               <ChessCaptured state={activeState} />
               <MoveList history={activeState.history} />
-              {/* The organized steps are turned on from here, so they can be
-                  reached before they are on. */}
-              <GameFlowSetting gameId={GAME_ID} onChange={setFlowOn} />
               <GameToolbar
                 actions={[
                   { id: "new", label: "New game", onClick: handleNewGame },
@@ -1163,9 +1139,6 @@ export default function App({ bridge }: AppProps) {
               <ChessGameStats state={activeState} />
               <ChessCaptured state={activeState} />
               <MoveList history={activeState.history} />
-              {/* The organized steps are turned on from here, so they can be
-                  reached before they are on. */}
-              <GameFlowSetting gameId={GAME_ID} onChange={setFlowOn} />
               <GameToolbar
                 actions={[
                   { id: "new", label: "New game", onClick: handleNewGame },

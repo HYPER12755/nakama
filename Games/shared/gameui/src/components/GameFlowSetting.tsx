@@ -26,28 +26,17 @@ export function setGlobalFlowEnabled(on: boolean): void {
 }
 
 /**
- * The choice a game has made for itself, or null when it follows the menu.
- */
-export function flowSettingOverride(gameId: string): boolean | null {
-  try {
-    const own = window.localStorage.getItem(`moongames.flow.${gameId}`);
-    if (own === null) {
-      return null;
-    }
-    return own === "1";
-  } catch {
-    return null;
-  }
-}
-
-/**
  * True when the organized steps are on for a game. The setting is kept on
  * the device, so the player finds the game the way they left it.
  */
 export function flowSettingEnabled(gameId: string): boolean {
-  const own = flowSettingOverride(gameId);
-  if (own !== null) {
-    return own;
+  try {
+    const own = window.localStorage.getItem(`moongames.flow.${gameId}`);
+    if (own !== null) {
+      return own === "1";
+    }
+  } catch {
+    // Storage can be unavailable.
   }
   return globalFlowEnabled();
 }
