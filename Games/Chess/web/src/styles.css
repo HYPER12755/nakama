@@ -3261,3 +3261,61 @@ html[data-moonperf="lite"] .piece {
 html[data-moonperf="lite"] .check-glow {
   animation: none !important;
 }
+
+/* The numbers of the game */
+
+.game-stats__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.game-stats__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-raised);
+}
+
+.game-stats__name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-stats__count {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.game-stats__clock {
+  min-width: 46px;
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  text-align: right;
+}
+
+.game-stats__value {
+  min-width: 26px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.game-stats__note {
+  margin: 11px 0 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.55;
+}

@@ -28,6 +28,7 @@ import {
 import { AiPanel } from "./components/AiPanel";
 import { ChessBoard } from "./components/ChessBoard";
 import { ChessGameOverDialog } from "./components/ChessGameOverDialog";
+import { ChessGameStats } from "./components/ChessGameStats";
 import { GameStatus } from "./components/GameStatus";
 import { MoveList } from "./components/MoveList";
 import { OnlineGameToolbar } from "./components/OnlineGameToolbar";
@@ -41,6 +42,7 @@ import {
   playDraw,
   playGameStart,
   playLose,
+  playLowTime,
   playMove,
   playRefused,
   playSelect,
@@ -207,8 +209,6 @@ export default function App({ bridge }: AppProps) {
     const isFirst = history.length === 1;
     lastEventRef.current = key;
     if (isFirst) {
-      playGameStart();
-      setToast("The game has started.");
       return;
     }
     if (last.captured !== undefined) {
@@ -257,6 +257,24 @@ export default function App({ bridge }: AppProps) {
     preloadSound("select");
   }, []);
 
+  /**
+   * The table announces that the game is on. This happens when the players
+   * are both at the table, which is before the first move and not with it.
+   */
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (startedRef.current || !matchStarted) {
+      return;
+    }
+    startedRef.current = true;
+    playGameStart();
+    setToast(
+      onlineMode
+        ? "Both players are at the table. The game has started."
+        : "White moves first.",
+    );
+  }, [matchStarted, onlineMode]);
+
   // A move the server refused is heard, so the player knows why the board
   // did not change.
   const lastErrorRef = useRef<string | null>(null);
@@ -271,6 +289,49 @@ export default function App({ bridge }: AppProps) {
     lastErrorRef.current = activeError;
     playRefused();
   }, [activeError]);
+
+  /**
+   * The table says whose turn it is and when the clock is nearly out. A
+   * player who is waiting should never have to look at the board to know
+   * that it is their move.
+   */
+  const turnAnnouncedRef = useRef<string>("");
+  useEffect(() => {
+    if (!onlineMode || !matchStarted || finished) {
+      turnAnnouncedRef.current = "";
+      return;
+    }
+    const key = `${activeState.turn}:${activeState.history.length}`;
+    if (key === turnAnnouncedRef.current) {
+      return;
+    }
+    turnAnnouncedRef.current = key;
+    if (activeState.turn === online.myColor) {
+      setToast("Your move.");
+    }
+  }, [activeState.history.length, activeState.turn, finished, matchStarted, online.myColor, onlineMode]);
+
+  // The clock running out is heard, so a player is never surprised by the
+  // end of the game.
+  const lowTimeRef = useRef<string>("");
+  useEffect(() => {
+    if (!onlineMode || online.displayClock === null) {
+      lowTimeRef.current = "";
+      return;
+    }
+    const remaining = online.displayClock[online.myColor === "w" ? "whiteMs" : "blackMs"];
+    const who = online.myColor === "w" ? "white" : "black";
+    const low = remaining !== null && remaining <= 20000;
+    const key = `${who}:${low ? "low" : "ok"}`;
+    if (key === lowTimeRef.current) {
+      return;
+    }
+    lowTimeRef.current = key;
+    if (low) {
+      playLowTime();
+      setToast("Your clock is nearly out.");
+    }
+  }, [online.displayClock, online.myColor, onlineMode]);
 
   // The end of the game is heard as the player heard it: a win sounds like a
   // win, and a loss sounds like a loss.
@@ -851,6 +912,14 @@ export default function App({ bridge }: AppProps) {
                 online.serverState.match.started && (
                   <>
                     <GameStatus state={activeState} result={activeResult} />
+                    <ChessGameStats
+                      state={activeState}
+                      clockMs={online.displayClock}
+                      names={{
+                        white: topColor === "w" ? topOnline.name ?? "White" : bottomOnline.name ?? "White",
+                        black: topColor === "b" ? topOnline.name ?? "Black" : bottomOnline.name ?? "Black",
+                      }}
+                    />
                     <MoveList history={activeState.history} />
                     <OnlineGameToolbar
                       inProgress={inProgress}
@@ -898,6 +967,7 @@ export default function App({ bridge }: AppProps) {
                 onStart={handleStartAiGame}
               />
               <GameStatus state={activeState} />
+              <ChessGameStats state={activeState} />
               <MoveList history={activeState.history} />
               <GameToolbar
                 actions={[
@@ -925,6 +995,7 @@ export default function App({ bridge }: AppProps) {
           ) : (
             <>
               <GameStatus state={activeState} />
+              <ChessGameStats state={activeState} />
               <MoveList history={activeState.history} />
               <GameToolbar
                 actions={[
