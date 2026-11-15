@@ -12,14 +12,13 @@ import {
   type GameVariant,
 } from "@moongames/carrom-core";
 import {
+  accountCreationAllowed,
+  insecureConnectionRequested,
   readLauncherHandoff,
   sameOriginServerAddress,
   type GameHostConfig,
 } from "@moongames/game-sdk";
-import {
-  accountTransportSafe,
-  INSECURE_ACCOUNT_MESSAGE,
-} from "@moongames/game-ui";
+import { INSECURE_ACCOUNT_MESSAGE } from "@moongames/game-ui";
 import type { SocialFriend } from "@moongames/game-sdk";
 import {
   authErrorMessage,
@@ -498,7 +497,13 @@ export function useOnlineCarrom(
       // a secret. It must not cross a public plain connection.
       if (
         hostSession === null &&
-        !accountTransportSafe(address.host, address.useSSL)
+        !accountCreationAllowed({
+          host: address.host,
+          useSSL: address.useSSL,
+          allowInsecure:
+            handoff?.nakama?.allowInsecure === true ||
+            insecureConnectionRequested(window.location.search),
+        })
       ) {
         throw new Error(INSECURE_ACCOUNT_MESSAGE);
       }

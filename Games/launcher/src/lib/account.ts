@@ -188,6 +188,29 @@ export const emailAuthTransportSafe = accountTransportSafe;
 export const INSECURE_ACCOUNT_MESSAGE =
   "MoonGames needs a secure connection to make an account. Open the https address of the server.";
 
+const INSECURE_CHOICE_KEY = "moongames.launcher.insecure.v1";
+
+/**
+ * True when the host has said that a plain connection is allowed. This is
+ * for a test tunnel, where the connection is plain on purpose.
+ */
+export function readStoredInsecureChoice(): boolean {
+  try {
+    return window.localStorage.getItem(INSECURE_CHOICE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** Remember that a plain connection is allowed, so it survives a reload. */
+export function rememberInsecureChoice(): void {
+  try {
+    window.localStorage.setItem(INSECURE_CHOICE_KEY, "1");
+  } catch {
+    // Storage can be unavailable.
+  }
+}
+
 export function defaultLauncherServerAddress(): string {
   // The server is reached through the address the menu itself came from,
   // so the menu works behind a proxy, a tunnel or a CDN without anyone

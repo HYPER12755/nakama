@@ -802,6 +802,13 @@ function App() {
         </div>
       )}
 
+      {social.insecureNotice === null ? null : (
+        <div className="launcher-toast launcher-toast--warn" role="status">
+          <Icon name="shield-check" size={17} />
+          <span>{social.insecureNotice}</span>
+        </div>
+      )}
+
       <AccountDrawer
         open={drawerOpen}
         tab={drawerTab}

@@ -78,6 +78,41 @@ export function accountTransportSafe(
 export const INSECURE_ACCOUNT_MESSAGE =
   "MoonGames needs a secure connection to make an account. Open the https address of the server.";
 
+/**
+ * True when an account may be made on this connection.
+ *
+ * A host that runs a test tunnel, where the whole point is that the
+ * connection is plain, can say so with the allowInsecure flag. Nothing
+ * else allows it.
+ */
+export function accountCreationAllowed(connection: {
+  host: string;
+  useSSL: boolean;
+  allowInsecure?: boolean;
+}): boolean {
+  if (connection.allowInsecure === true) {
+    return true;
+  }
+  return accountTransportSafe(connection.host, connection.useSSL);
+}
+
+/**
+ * True when the address asks for a plain connection to be allowed. A host
+ * that serves the menu on a test tunnel opens it with this in the address.
+ */
+export function insecureConnectionRequested(search: string): boolean {
+  try {
+    const params = new URLSearchParams(search);
+    return (
+      params.get("insecure") === "1" ||
+      params.get("insecure") === "true" ||
+      params.get("allowInsecure") === "1"
+    );
+  } catch {
+    return false;
+  }
+}
+
 function environment(name: string): string | undefined {
   // The settings are read from the environment of the build, and the shared
   // kit is also used outside a browser, so the environment is read in a way

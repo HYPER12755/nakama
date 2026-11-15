@@ -65,6 +65,12 @@ export interface NakamaConnection {
   port: string;
   serverKey: string;
   useSSL: boolean;
+  /**
+   * The host knows the connection is not secure and allows it anyway. This is
+   * for a test tunnel, where the whole point is that the connection is
+   * plain, and it is never set unless the host asks for it.
+   */
+  allowInsecure?: boolean;
 }
 
 export interface GameReleaseIdentity {

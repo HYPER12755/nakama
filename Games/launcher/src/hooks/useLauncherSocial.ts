@@ -32,8 +32,9 @@ import {
   clearStoredLauncherEmailSession,
   consumeLauncherGuestLinked,
   defaultLauncherServerAddress,
-  accountTransportSafe,
   INSECURE_ACCOUNT_MESSAGE,
+  readStoredInsecureChoice,
+  rememberInsecureChoice,
   guestDeviceId,
   launcherServerKey,
   markLauncherGuestLinked,
@@ -48,6 +49,10 @@ import {
   type LauncherAccount,
   type LauncherAuthKind,
 } from "../lib/account";
+import {
+  accountCreationAllowed,
+  insecureConnectionRequested,
+} from "@moongames/game-sdk";
 import {
   FRIEND_STATE,
   acceptedFriends,
@@ -79,6 +84,8 @@ export interface LauncherSocialController {
   nakama: NakamaConnection | null;
   serverLabel: string;
   error: string | null;
+  /** Shown when the host has allowed a plain connection on purpose. */
+  insecureNotice: string | null;
   authBusy: boolean;
   authError: string | null;
   authNotice: string | null;
@@ -198,6 +205,10 @@ export function useLauncherSocial(
     parseLauncherServerAddress(defaultLauncherServerAddress()).label,
   );
   const [error, setError] = useState<string | null>(null);
+  // Shown when the host has allowed a plain connection on purpose.
+  const [insecureNotice, setInsecureNotice] = useState<string | null>(null);
+  // The connection the menu hands to the games.
+  const nakamaRef = useRef<NakamaConnection | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
@@ -925,14 +936,40 @@ export function useLauncherSocial(
 
         // An account is made on the server, and the session that comes back
         // is a secret. It must not cross a public plain connection, so the
-        // menu refuses to make an account over one.
+        // menu refuses to make an account over one. A host that is testing
+        // through a plain tunnel can say that it knows, with the insecure
+        // flag in the address.
+        const insecureAllowed =
+          insecureConnectionRequested(window.location.search) ||
+          readStoredInsecureChoice();
+        if (insecureConnectionRequested(window.location.search)) {
+          rememberInsecureChoice();
+        }
+        // The games inherit the choice, so a table opened from this menu
+        // may also be played over the plain connection.
+        if (insecureAllowed && !address.useSSL) {
+          nakamaRef.current = {
+            ...address,
+            serverKey: launcherServerKey(),
+            allowInsecure: true,
+          };
+        }
         if (
           pendingSession === null &&
-          !accountTransportSafe(address.host, address.useSSL)
+          !accountCreationAllowed({
+            host: address.host,
+            useSSL: address.useSSL,
+            allowInsecure: insecureAllowed,
+          })
         ) {
           setConnection("error");
           setError(INSECURE_ACCOUNT_MESSAGE);
           throw new Error(INSECURE_ACCOUNT_MESSAGE);
+        }
+        if (insecureAllowed && !address.useSSL) {
+          setInsecureNotice(
+            "This connection is not secure. Use it for testing only.",
+          );
         }
 
         let session: Session;
@@ -1084,6 +1121,11 @@ export function useLauncherSocial(
           port: address.port,
           serverKey: launcherServerKey(),
           useSSL: address.useSSL,
+          // The games inherit the choice, so a table opened from this menu
+          // may also be played over the plain connection.
+          ...(nakamaRef.current?.allowInsecure === true
+            ? { allowInsecure: true }
+            : {}),
         });
         const snapshot: GameSession = {
           token: session.token,
@@ -1258,7 +1300,7 @@ export function useLauncherSocial(
         return;
       }
       const address = parseLauncherServerAddress();
-      if (!accountTransportSafe(address.host, address.useSSL)) {
+      if (!accountCreationAllowed(address)) {
         setAuthError("Email sign-in requires HTTPS. Use a secure server address.");
         return;
       }
@@ -1323,7 +1365,7 @@ export function useLauncherSocial(
         return;
       }
       const address = parseLauncherServerAddress();
-      if (!accountTransportSafe(address.host, address.useSSL)) {
+      if (!accountCreationAllowed(address)) {
         setAuthError("Account creation requires HTTPS. Use a secure server address.");
         return;
       }
@@ -1733,6 +1775,7 @@ export function useLauncherSocial(
     nakama,
     serverLabel,
     error,
+    insecureNotice,
     authBusy,
     authError,
     authNotice,

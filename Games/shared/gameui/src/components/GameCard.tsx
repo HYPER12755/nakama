@@ -134,8 +134,10 @@ export function GameCard({
               disabled={busy}
               onClick={() => onPlay?.()}
             >
-              {actionLabel}
-              <Icon name="arrow-up-right" size={13} strokeWidth={2.2} />
+              <span className="mg-button__label">{actionLabel}</span>
+              <span className="mg-button__icon" aria-hidden="true">
+                <Icon name="arrow-up-right" size={13} strokeWidth={2.4} />
+              </span>
             </button>
           ) : (
             <span className="mg-card__soon">

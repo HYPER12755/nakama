@@ -8,6 +8,8 @@ import {
 } from "@heroiclabs/nakama-js";
 import { MoonGamesSocialClient } from "@moongames/social";
 import {
+  accountCreationAllowed,
+  insecureConnectionRequested,
   inviteWantsSpectator,
   type GameHostConfig,
   type MoonGamesInvite,
@@ -26,7 +28,6 @@ import {
   authErrorMessage,
   clearStoredEmailSession,
   consumeGuestIdentityLinked,
-  accountTransportSafe,
   INSECURE_ACCOUNT_MESSAGE,
   markGuestIdentityLinked,
   normalizeEmail,
@@ -751,7 +752,13 @@ export function useOnlineChess(
         // is a secret. It must not cross a public plain connection.
         if (
           restoredHost === null &&
-          !accountTransportSafe(address.host, address.useSSL)
+          !accountCreationAllowed({
+            host: address.host,
+            useSSL: address.useSSL,
+            allowInsecure:
+              activeHost?.nakama?.allowInsecure === true ||
+              insecureConnectionRequested(window.location.search),
+          })
         ) {
           throw new Error(INSECURE_ACCOUNT_MESSAGE);
         }
@@ -1071,7 +1078,7 @@ export function useOnlineChess(
         setAuthError("Enter a valid server address.");
         return;
       }
-      if (!accountTransportSafe(address.host, address.useSSL)) {
+      if (!accountCreationAllowed(address)) {
         setAuthError(
           "Email sign-in requires HTTPS. Use a secure server address.",
         );
@@ -1144,7 +1151,7 @@ export function useOnlineChess(
         setAuthError("Enter a valid server address.");
         return;
       }
-      if (!accountTransportSafe(address.host, address.useSSL)) {
+      if (!accountCreationAllowed(address)) {
         setAuthError(
           "Account creation requires HTTPS. Use a secure server address.",
         );

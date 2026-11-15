@@ -2526,6 +2526,7 @@
 }
 
 .mg-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -2538,6 +2539,10 @@
   font-size: 11px;
   font-weight: 800;
   cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    border-color 0.16s ease;
 }
 
 .mg-button:disabled {
@@ -2545,15 +2550,97 @@
   cursor: default;
 }
 
+/* The play button. It is the one thing a player presses, so it is filled
+   with the colour of the game and it lifts a little when it is hovered. */
 .mg-button--play {
-  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--accent) 26%, transparent),
+      color-mix(in srgb, var(--accent) 12%, transparent)
+    );
+  color: var(--text);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent),
+    0 6px 16px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.mg-button--play::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in srgb, #fff 26%, transparent) 50%,
+    transparent 80%
+  );
+  transform: translateX(-120%);
+  transition: transform 0.55s ease;
 }
 
 .mg-button--play:hover:not(:disabled) {
-  background: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 42%, transparent),
+    color-mix(in srgb, var(--accent) 20%, transparent)
+  );
   color: #fff;
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 24%, transparent);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #fff 30%, transparent),
+    0 14px 30px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.mg-button--play:hover:not(:disabled)::before {
+  transform: translateX(120%);
+}
+
+.mg-button--play:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.mg-button--play .icon {
+  transition: transform 0.16s ease;
+}
+
+.mg-button--play:hover:not(:disabled) .icon {
+  transform: translate(2px, -2px);
+}
+
+.mg-button--play:disabled {
+  background: var(--panel-raised);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+/* The arrow sits in a little pill, so the button reads as a way out of the
+   card rather than as a flat label. */
+.mg-button__label {
+  position: relative;
+  z-index: 1;
+}
+
+.mg-button__icon {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 6px;
+  background: color-mix(in srgb, #fff 16%, transparent);
+  transition:
+    transform 0.16s ease,
+    background 0.16s ease;
+}
+
+.mg-button--play:hover:not(:disabled) .mg-button__icon {
+  background: color-mix(in srgb, #fff 26%, transparent);
+  transform: translate(1px, -1px);
 }
 
 .mg-card__soon {
