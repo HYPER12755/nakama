@@ -2,6 +2,10 @@ nakama
 .cookie
 local.yml
 
+# The lichess sources, kept beside the project to read the rules and the
+# sounds it uses. It is not part of this repository.
+lila/
+
 # Created by https://www.toptal.com/developers/gitignore/api/go,angular,node,intellij+all,visualstudiocode,visualstudio,sublimetext,windows,linux,macos
 # Edit at https://www.toptal.com/developers/gitignore?templates=go,angular,node,intellij+all,visualstudiocode,visualstudio,sublimetext,windows,linux,macos
 
