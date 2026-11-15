@@ -87,6 +87,34 @@ export const ShowClockTenths = {
 export type ShowClockTenths =
   (typeof ShowClockTenths)[keyof typeof ShowClockTenths];
 
+/**
+ * When the corner of the board can be dragged to make the board bigger or
+ * smaller.
+ *
+ * The names come from lichess.
+ */
+export const ShowResizeHandle = {
+  Never: 0,
+  OnlyAtStart: 1,
+  Always: 2,
+} as const;
+
+export type ShowResizeHandle =
+  (typeof ShowResizeHandle)[keyof typeof ShowResizeHandle];
+
+/**
+ * When a finished game is played back on the board.
+ *
+ * The names come from lichess.
+ */
+export const Replay = {
+  Never: 0,
+  OnlySlowGames: 1,
+  Always: 2,
+} as const;
+
+export type Replay = (typeof Replay)[keyof typeof Replay];
+
 /** The names a player sees for the speeds. */
 export const ANIMATION_SPEED_LABELS: Record<AnimationSpeed, string> = {
   [AnimationSpeed.None]: "Off",
@@ -122,6 +150,20 @@ export const CLOCK_TENTHS_LABELS: Record<ShowClockTenths, string> = {
   [ShowClockTenths.Never]: "Never",
   [ShowClockTenths.Below10Seconds]: "Below ten seconds",
   [ShowClockTenths.Always]: "Always",
+};
+
+/** The names a player sees for the corner that resizes the board. */
+export const RESIZE_HANDLE_LABELS: Record<ShowResizeHandle, string> = {
+  [ShowResizeHandle.Never]: "Never",
+  [ShowResizeHandle.OnlyAtStart]: "Before the game begins",
+  [ShowResizeHandle.Always]: "Always",
+};
+
+/** The names a player sees for the replay of a finished game. */
+export const REPLAY_LABELS: Record<Replay, string> = {
+  [Replay.Never]: "Never",
+  [Replay.OnlySlowGames]: "Only slow games",
+  [Replay.Always]: "Always",
 };
 
 /**
@@ -167,6 +209,10 @@ export interface GamePreferences {
   moveEvent: MoveEvent;
   /** When the clock shows the tenths of a second. */
   clockTenths: ShowClockTenths;
+  /** When the corner of the board can be dragged to resize it. */
+  resizeHandle: ShowResizeHandle;
+  /** When a finished game is played back on the board. */
+  replay: Replay;
 }
 
 export const DEFAULT_PREFERENCES: GamePreferences = {
@@ -182,6 +228,8 @@ export const DEFAULT_PREFERENCES: GamePreferences = {
   autoQueen: AutoQueen.Never,
   moveEvent: MoveEvent.ClickOrDrag,
   clockTenths: ShowClockTenths.Below10Seconds,
+  resizeHandle: ShowResizeHandle.Always,
+  replay: Replay.Never,
 };
 
 export type PreferenceKey = keyof GamePreferences;
@@ -393,6 +441,10 @@ function parseValue(key: PreferenceKey, raw: string): unknown {
         return isOneOf(MoveEvent, parsed) ? parsed : undefined;
       case "clockTenths":
         return isOneOf(ShowClockTenths, parsed) ? parsed : undefined;
+      case "resizeHandle":
+        return isOneOf(ShowResizeHandle, parsed) ? parsed : undefined;
+      case "replay":
+        return isOneOf(Replay, parsed) ? parsed : undefined;
       case "soundEnabled":
       case "showLegalMoves":
       case "highlightLastMove":

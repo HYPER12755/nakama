@@ -3080,3 +3080,11 @@
   cursor: not-allowed;
 
 }
+
+.pref-note {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+  opacity: 0.8;
+}

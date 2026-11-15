@@ -577,6 +577,97 @@ button {
   top: 3%;
 }
 
+/* The corner that is dragged to make the board bigger or smaller. */
+
+.board-resize {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  z-index: 9;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.board-resize:hover,
+.board-resize:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.board-resize span {
+  display: block;
+  width: 13px;
+  height: 13px;
+  border-right: 2px solid rgba(242, 233, 216, 0.45);
+  border-bottom: 2px solid rgba(242, 233, 216, 0.45);
+  border-bottom-right-radius: 4px;
+}
+
+/* The bar that is shown while a finished game is played back. */
+
+.replay-bar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 10;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(10, 14, 18, 0.86);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+  color: #f2e9d8;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.replay-bar__label {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  opacity: 0.65;
+}
+
+.replay-bar__move {
+  min-width: 42px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.replay-bar__count {
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-bar__button {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 4px 11px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.replay-bar__button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.replay-bar__button--stop {
+  background: transparent;
+}
+
 /* Dragging a piece across the board. */
 
 .board--drag .square {

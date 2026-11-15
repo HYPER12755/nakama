@@ -114,6 +114,39 @@ export function replayFromHistory(entry: OnlineHistoryEntry): ReplayData {
   };
 }
 
+/**
+ * The board at every step of a game, so the game can be played back.
+ *
+ * The moves are given as they were written, and the board is built from
+ * them. A move that cannot be played stops the replay, so a broken record
+ * never leaves the board in a wrong place.
+ */
+export function replayFrames(steps: string[]): ReplayFrame[] {
+  const engine = new ChessEngine();
+  const frames: ReplayFrame[] = [
+    {
+      ply: 0,
+      state: engine.getState(),
+      san: null,
+    },
+  ];
+
+  for (const san of steps) {
+    try {
+      engine.moveSan(san);
+    } catch {
+      break;
+    }
+    frames.push({
+      ply: frames.length,
+      state: engine.getState(),
+      san,
+    });
+  }
+
+  return frames;
+}
+
 export function exportPgn(entry: OnlineHistoryEntry): string {
   const white =
     entry.color === "w" ? "You" : entry.opponent.username || "Opponent";

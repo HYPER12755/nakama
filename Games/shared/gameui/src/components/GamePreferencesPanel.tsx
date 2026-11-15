@@ -9,7 +9,11 @@ import {
   COORDINATE_LABELS,
   MOVE_EVENT_LABELS,
   MoveEvent,
+  REPLAY_LABELS,
+  Replay,
+  RESIZE_HANDLE_LABELS,
   ShowClockTenths,
+  ShowResizeHandle,
   clearSharedPreference,
   readPreferenceScope,
   writePreferenceScope,
@@ -57,6 +61,10 @@ export interface PreferenceFeatures {
   moveEvent?: boolean;
   /** The game has a clock. */
   clockTenths?: boolean;
+  /** The board of the game can be made bigger or smaller. */
+  resizeHandle?: boolean;
+  /** A finished game of the game can be played back. */
+  replay?: boolean;
 }
 
 export interface GamePreferencesPanelProps {
@@ -408,6 +416,87 @@ export function GamePreferencesPanel({
               </button>
             ))}
           </div>
+        </PreferenceGroup>
+      )}
+
+      {features.resizeHandle === true && (
+        <PreferenceGroup
+          title="The size of the board"
+          onRestore={() => restore("resizeHandle")}
+        >
+          <div
+            className="pref-choices"
+            role="radiogroup"
+            aria-label="The size of the board"
+          >
+            {(
+              [
+                [
+                  ShowResizeHandle.Never,
+                  RESIZE_HANDLE_LABELS[ShowResizeHandle.Never],
+                ],
+                [
+                  ShowResizeHandle.OnlyAtStart,
+                  RESIZE_HANDLE_LABELS[ShowResizeHandle.OnlyAtStart],
+                ],
+                [
+                  ShowResizeHandle.Always,
+                  RESIZE_HANDLE_LABELS[ShowResizeHandle.Always],
+                ],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={preferences.resizeHandle === value}
+                className={`pref-choice${
+                  preferences.resizeHandle === value ? " is-chosen" : ""
+                }`}
+                onClick={() => choose("resizeHandle", value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </PreferenceGroup>
+      )}
+
+      {features.replay === true && (
+        <PreferenceGroup
+          title="A game that is over"
+          onRestore={() => restore("replay")}
+        >
+          <div
+            className="pref-choices"
+            role="radiogroup"
+            aria-label="A game that is over"
+          >
+            {(
+              [
+                [Replay.Never, REPLAY_LABELS[Replay.Never]],
+                [Replay.OnlySlowGames, REPLAY_LABELS[Replay.OnlySlowGames]],
+                [Replay.Always, REPLAY_LABELS[Replay.Always]],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={preferences.replay === value}
+                className={`pref-choice${
+                  preferences.replay === value ? " is-chosen" : ""
+                }`}
+                onClick={() => choose("replay", value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="pref-note">
+            A slow game is one that took more than two minutes, or one with
+            three minutes or more on the clock.
+          </p>
         </PreferenceGroup>
       )}
 

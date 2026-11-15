@@ -21,6 +21,8 @@ import {
   OpponentLeftDialog,
   PlayerCard,
   ProfilePanel,
+  Replay,
+  ShowResizeHandle,
   animationDuration,
   copyText,
   parseLaunchInvite,
@@ -29,10 +31,12 @@ import {
   useGamePreferences,
 } from "@moongames/game-ui";
 import { AiPanel } from "./components/AiPanel";
+import { BoardResizeHandle } from "./components/BoardResizeHandle";
 import { ChessBoard } from "./components/ChessBoard";
 import { ChessGameOverDialog } from "./components/ChessGameOverDialog";
 import { ChessCaptured } from "./components/ChessCaptured";
 import { ChessGameStats } from "./components/ChessGameStats";
+import { GameReplayBar } from "./components/GameReplayBar";
 import { GameStatus } from "./components/GameStatus";
 import { MoveList } from "./components/MoveList";
 import { OnlineGameToolbar } from "./components/OnlineGameToolbar";
@@ -65,6 +69,8 @@ import {
   pieceSetLabel,
 } from "./lib/pieceSets";
 import { SOUND_SETS } from "./lib/soundSets";
+import { readBoardSize, writeBoardSize } from "./lib/boardSize";
+import { replayFrames, type ReplayFrame } from "./lib/replay";
 import {
   useChessGame,
   type AiGameSettings,
@@ -100,6 +106,8 @@ const CHESS_FEATURES = {
   autoQueen: true,
   moveEvent: true,
   clockTenths: true,
+  resizeHandle: true,
+  replay: true,
 };
 
 export interface AppProps {
@@ -185,6 +193,8 @@ export default function App({ bridge }: AppProps) {
   const inviteConnectRef = useRef(false);
   const inviteHandledRef = useRef(false);
   const hostLaunchHandledRef = useRef(false);
+  /** When the first move was played, so a slow game can be known. */
+  const gameStartedAtRef = useRef<number | null>(null);
 
   useEffect(() => {
     configureSound({
@@ -200,6 +210,23 @@ export default function App({ bridge }: AppProps) {
 
   const boardTheme = boardThemeOf(preferences.boardTheme);
   const pieceAnimationMs = animationDuration(preferences.animationSpeed);
+
+  // The size of the board, which the player can drag the corner of.
+  const [boardSize, setBoardSize] = useState<number | null>(() =>
+    readBoardSize(GAME_ID),
+  );
+  const [boardWidth, setBoardWidth] = useState(0);
+
+  useEffect(() => {
+    const panel = boardPanelRef.current;
+    if (panel === null) {
+      return;
+    }
+    const measure = () => setBoardWidth(panel.clientWidth);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
 
   const onlineMode = mode === "online";
   const aiMode = mode === "ai";
@@ -233,6 +260,81 @@ export default function App({ bridge }: AppProps) {
 
   const matchStarted =
     !onlineMode || (online.serverState?.match.started ?? false);
+
+  /**
+   * A slow game is one that took more than two minutes, or one that had
+   * three minutes or more on the clock.
+   */
+  const slowGame =
+    (online.serverState?.match.timeControl.initialMs ?? 0) >= 180_000 ||
+    (gameStartedAtRef.current !== null &&
+      Date.now() - gameStartedAtRef.current > 120_000);
+
+  // The corner of the board is only there when the player wants it.
+  const resizeAllowed =
+    preferences.resizeHandle === ShowResizeHandle.Always ||
+    (preferences.resizeHandle === ShowResizeHandle.OnlyAtStart && !matchStarted);
+
+  // A finished game is played back on the board, if the player asked for it.
+  const [replay, setReplay] = useState<{
+    frames: ReplayFrame[];
+    ply: number;
+    playing: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (activeState.history.length > 0 && gameStartedAtRef.current === null) {
+      gameStartedAtRef.current = Date.now();
+    }
+  }, [activeState.history.length]);
+
+  useEffect(() => {
+    if (!finished) {
+      setReplay(null);
+      return;
+    }
+    if (preferences.replay === Replay.Never) {
+      return;
+    }
+    if (preferences.replay === Replay.OnlySlowGames && !slowGame) {
+      return;
+    }
+    const steps = activeState.history.map((move) => move.san);
+    const frames = replayFrames(steps);
+    if (frames.length < 2) {
+      return;
+    }
+    setReplay({ frames, ply: 0, playing: true });
+  }, [activeState.history, finished, preferences.replay, slowGame]);
+
+  useEffect(() => {
+    if (replay === null || !replay.playing) {
+      return;
+    }
+    if (replay.ply >= replay.frames.length - 1) {
+      setReplay((current) =>
+        current === null ? null : { ...current, playing: false },
+      );
+      return;
+    }
+    const timer = window.setTimeout(
+      () =>
+        setReplay((current) =>
+          current === null
+            ? null
+            : { ...current, ply: current.ply + 1 },
+        ),
+      700,
+    );
+    return () => window.clearTimeout(timer);
+  }, [replay]);
+
+  /** The board shows the replay while a finished game is played back. */
+  const shownState =
+    replay === null
+      ? activeState
+      : (replay.frames[replay.ply]?.state ?? activeState);
+
   const isLive =
     matchStarted &&
     !finished &&
@@ -914,12 +1016,17 @@ export default function App({ bridge }: AppProps) {
             </button>
           </div>
 
-          <div className="board-wrap">
+          <div
+            className="board-wrap"
+            style={
+              boardSize === null ? undefined : { width: `${boardSize}px` }
+            }
+          >
             <ChessBoard
-              board={activeState.board}
+              board={shownState.board}
               selected={activeSelected}
               legalTargets={activeLegalTargets}
-              lastMove={activeState.lastMove ?? null}
+              lastMove={shownState.lastMove ?? null}
               checkSquare={activeCheckSquare}
               flipped={bottomColor === "b"}
               coordinates={preferences.coordinates}
@@ -951,6 +1058,40 @@ export default function App({ bridge }: AppProps) {
                     ? online.cancelPromotion
                     : localController.cancelPromotion
                 }
+              />
+            )}
+            {replay !== null && (
+              <GameReplayBar
+                ply={replay.ply}
+                lastPly={replay.frames.length - 1}
+                playing={replay.playing}
+                san={replay.frames[replay.ply]?.san ?? null}
+                onTogglePlay={() =>
+                  setReplay((current) =>
+                    current === null
+                      ? null
+                      : {
+                          ...current,
+                          playing: !current.playing,
+                          ply:
+                            current.ply >= current.frames.length - 1
+                              ? 0
+                              : current.ply,
+                        },
+                  )
+                }
+                onStop={() => setReplay(null)}
+              />
+            )}
+            {resizeAllowed && (
+              <BoardResizeHandle
+                size={boardSize ?? boardWidth}
+                available={boardWidth}
+                onResize={(size) => setBoardSize(size)}
+                onResizeEnd={(size) => {
+                  setBoardSize(size);
+                  writeBoardSize(GAME_ID, size);
+                }}
               />
             )}
           </div>
