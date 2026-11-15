@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   BoardPiece,
   Color,
@@ -6,6 +6,46 @@ import type {
 } from "@moongames/chess-core";
 import { pieceName } from "../lib/pieces";
 import { pieceImageUrl } from "../lib/pieceSets";
+
+export interface PieceImageProps {
+  /** The picture of the piece. */
+  src: string;
+  /** The name of the piece, for a reader that cannot see the picture. */
+  alt?: string;
+  className?: string;
+}
+
+/**
+ * The picture of a piece.
+ *
+ * A few of the sets are drawn as pictures and the rest as drawings, so when
+ * a picture cannot be shown the other kind is tried.
+ */
+export function PieceImage({ src, alt = "", className }: PieceImageProps) {
+  const [source, setSource] = useState(src);
+
+  useEffect(() => {
+    setSource(src);
+  }, [src]);
+
+  return (
+    <img
+      className={className}
+      src={source}
+      alt={alt}
+      draggable={false}
+      onError={() => {
+        if (source.endsWith(".svg")) {
+          setSource(source.replace(/\.svg$/, ".webp"));
+          return;
+        }
+        if (source.endsWith(".webp")) {
+          setSource(source.replace(/\.webp$/, ".svg"));
+        }
+      }}
+    />
+  );
+}
 
 export interface PieceMotion {
   /** Horizontal travel in board squares (positive = right). */
@@ -192,7 +232,7 @@ export function Piece({
       {drawing === null ? (
         <PieceArtwork type={piece.type} color={piece.color} />
       ) : (
-        <img className="piece__drawing" src={drawing} alt="" draggable={false} />
+        <PieceImage className="piece__drawing" src={drawing} />
       )}
     </span>
   );

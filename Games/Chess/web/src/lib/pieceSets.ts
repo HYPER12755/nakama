@@ -111,6 +111,14 @@ export function pieceSetLabel(id: string): string {
 }
 
 /**
+ * The sets whose drawings are pictures rather than drawings.
+ *
+ * They are the same pictures, so the board does not care, but the browser
+ * does.
+ */
+const PICTURE_SETS = new Set(["monarchy"]);
+
+/**
  * The drawing of a piece in a set.
  *
  * The sets are kept beside the game, so the path is relative to the page.
@@ -126,7 +134,11 @@ export function pieceImageUrl(
   if (typeof document === "undefined") {
     return null;
   }
-  return new URL(`pieces/${set}/${color}${type.toUpperCase()}.svg`, document.baseURI).toString();
+  const extension = PICTURE_SETS.has(set) ? "webp" : "svg";
+  return new URL(
+    `pieces/${set}/${color}${type.toUpperCase()}.${extension}`,
+    document.baseURI,
+  ).toString();
 }
 
 /** True when the set is one of the sets the game can draw. */

@@ -56,6 +56,13 @@ describe("the sets of pieces", () => {
   it("draws the pieces of the house set itself", () => {
     expect(pieceImageUrl("moongames", "w", "k")).toBeNull();
   });
+
+  it("draws the sets that are pictures as pictures", () => {
+    expect(pieceImageUrl("monarchy", "w", "k")).toBe(
+      "http://127.0.0.1:4174/chess/pieces/monarchy/wK.webp",
+    );
+    expect(pieceImageUrl("cburnett", "w", "k")).toContain(".svg");
+  });
 });
 
 describe("the colouring of the board", () => {
