@@ -107,15 +107,16 @@ export const ChessBoard = memo(function ChessBoard({
       moved: false,
     };
 
-    if (moveEvent === MoveEvent.Drag) {
-      // The piece is picked up, so the squares it may go to are shown. A
-      // square the piece may go to is left alone, so that the piece is
-      // moved by the drop and not by the press.
-      const isTarget = targets.has(square);
-      if (!isTarget) {
-        onSquareClick(square);
-      }
+    // The piece is picked up, so the squares it may go to are shown. A
+    // square the piece may go to is left alone, so that the piece is moved
+    // by the drop and not by the press.
+    const isTarget = targets.has(square);
+    if (isTarget || selected === square) {
+      return;
     }
+    onSquareClick(square);
+    // The click that follows the press must not undo the picking up.
+    skipClickRef.current = true;
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {

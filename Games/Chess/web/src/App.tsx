@@ -195,6 +195,8 @@ export default function App({ bridge }: AppProps) {
   const hostLaunchHandledRef = useRef(false);
   /** When the first move was played, so a slow game can be known. */
   const gameStartedAtRef = useRef<number | null>(null);
+  /** True once the finished game has been played back, so it is not again. */
+  const replayStartedRef = useRef(false);
 
   useEffect(() => {
     configureSound({
@@ -291,6 +293,10 @@ export default function App({ bridge }: AppProps) {
   useEffect(() => {
     if (!finished) {
       setReplay(null);
+      replayStartedRef.current = false;
+      return;
+    }
+    if (replayStartedRef.current) {
       return;
     }
     if (preferences.replay === Replay.Never) {
@@ -304,8 +310,9 @@ export default function App({ bridge }: AppProps) {
     if (frames.length < 2) {
       return;
     }
+    replayStartedRef.current = true;
     setReplay({ frames, ply: 0, playing: true });
-  }, [activeState.history, finished, preferences.replay, slowGame]);
+  }, [finished, preferences.replay, slowGame]);
 
   useEffect(() => {
     if (replay === null || !replay.playing) {

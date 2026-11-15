@@ -286,3 +286,61 @@ hosts are file-backed and should load only the single-entry subset.
   reloaded. The launcher now keeps trying on its own, but the stack itself
   should come back by itself, so a phone that was asleep wakes up with a
   working menu.
+
+## Phase 9 — Taking from lichess
+
+The lichess sources are cloned beside the project (`lila/`, ignored by git)
+so the rules, the sounds and the ways of playing can be read and taken.
+The licences of everything taken are named beside it.
+
+### The customizations of the table — done
+
+Every choice in lichess's `ui/lib/src/prefs.ts` is now ours, and the panel
+that offers them is shared by every title (`Games/shared/gameui/`).
+
+- [x] The sets of pieces: forty-two sets came with the game, each with its
+  own licence named in `Games/Chess/web/public/pieces/PIECES.txt`. The
+  pieces the game draws itself stay the default.
+- [x] The colourings of the board: eighteen, named after the boards they
+  remind a player of.
+- [x] The coordinates: hidden, inside every square, on the edge, or both.
+- [x] How fast a piece travels: off, fast, normal, slow.
+- [x] The sound: nine sets of sounds, the volume, and a table that can be
+  quiet.
+- [x] Whether the squares a piece may go to and the squares of the last
+  move are marked.
+- [x] A pawn that reaches the last rank: always ask, ask with the queen
+  one click away, or always a queen.
+- [x] How a piece is moved: by a click, by a drag, or by either.
+- [x] The tenths of the clock: never, below ten seconds, or always.
+- [x] The corner of the board that is dragged to make the board bigger or
+  smaller, and the size kept on the device.
+- [x] The replay of a finished game: never, only for slow games, or always.
+- [x] The choices are kept on the device, per game, with a shared room
+  underneath for the choice made once for every game.
+
+### What lichess has that we do not — to take next
+
+- [ ] The analysis board: an engine that says what the position is worth,
+  an evaluation bar, and the moves it likes.
+- [ ] The opening explorer: the openings people play, with the games they
+  came from.
+- [ ] Puzzles: positions to solve, a streak, and a board of what has been
+  solved.
+- [ ] The trainer: the coordinate trainer, the opening trainer, and the
+  practice game against the computer.
+- [ ] The position editor, with FEN and PGN going in and out.
+- [ ] PGN import, so a game brought from elsewhere can be looked at and
+  played back.
+- [ ] Pre-moves: the move that is ready before it is the player's turn.
+- [ ] Blind mode: the notation that hides the names of the pieces.
+- [ ] The keyboard: writing a move without touching the board.
+- [ ] Takeback and rematch offers in a game that is being played.
+- [ ] The rating system of lichess (Glicko), with a provisional mark, a
+  deviation, and the history of a rating drawn as a chart.
+- [ ] Tournaments: an arena, a swiss, and a round of games.
+- [ ] The badges and the titles a player earns.
+- [ ] The dashboard: the puzzles, the streak, the ratings, and the games
+  played, all in one place.
+- [ ] The reports, the appeals, and the moderation of a community.
+- [ ] The voice chat of a table (we have the written one).
