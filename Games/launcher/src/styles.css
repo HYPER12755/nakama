@@ -3014,3 +3014,19 @@ html[data-moonperf="lite"] .orbit-token {
 .flow-setting--global .flow-setting__copy small {
   font-size: 10px;
 }
+
+/* The choice for every game, made obvious. */
+
+.flow-setting--global {
+  padding: 12px 14px;
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel-raised));
+}
+
+.flow-setting--global .flow-setting__copy strong {
+  font-size: 13px;
+}
+
+.flow-setting--global .flow-setting__state {
+  margin-top: 2px;
+}

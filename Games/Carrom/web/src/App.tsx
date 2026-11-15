@@ -63,6 +63,7 @@ import {
   OpponentLeftDialog,
   ProfilePanel,
   flowSettingEnabled,
+  flowSettingOverride,
   parseMatchInvite,
   type GameHistoryEntry,
 } from "@moongames/game-ui";
@@ -247,6 +248,23 @@ export default function App({ bridge }: AppProps) {
   const [flowMode, setFlowMode] = useState<string | null>(null);
   const [flowScreen, setFlowScreen] = useState<string | null>(null);
   const [flowMenuOpen, setFlowMenuOpen] = useState(false);
+
+  // The menu can turn the organized steps on for every game, so a game that
+  // follows the menu picks the choice up when it is looked at again.
+  useEffect(() => {
+    const refresh = () => {
+      if (flowSettingOverride(GAME_ID) !== null) {
+        return;
+      }
+      setFlowOn(flowSettingEnabled(GAME_ID));
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
   const [localTable, setLocalTable] = useState(2);
   const [variant, setVariant] = useState<GameVariant>(storedVariant);
   const [turnSeconds, setTurnSeconds] = useState(0);
@@ -1461,6 +1479,10 @@ export default function App({ bridge }: AppProps) {
             onTurnSecondsChange={applyTurnSeconds}
             locked={onlineMode && online.matchId !== null}
           />
+
+          {/* The organized steps are turned on from here, so they can be
+              reached before they are on. */}
+          <GameFlowSetting gameId={GAME_ID} onChange={setFlowOn} />
 
           <section className="panel status-panel" aria-live="polite">
             <div className="status-panel__icon">
