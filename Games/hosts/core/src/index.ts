@@ -397,6 +397,32 @@ export interface LauncherHostConfigInput {
 }
 
 /**
+ * The address of the game server for a shell.
+ *
+ * A shell that serves the menu from an address reaches the server through
+ * that same address, so one name is enough for a tunnel, a proxy or a CDN.
+ * A shell that runs the server somewhere else says so with the host, the
+ * port and whether the connection is secure.
+ */
+export function gameServerAddressFor(
+  origin: { host: string; port?: string | number; secure?: boolean },
+  override?: { host?: string; port?: string | number; secure?: boolean },
+): NakamaConnection {
+  const host = override?.host ?? origin.host;
+  const secure = override?.secure ?? origin.secure ?? false;
+  const rawPort = override?.port ?? origin.port ?? (secure ? 443 : 80);
+  const port = Number(rawPort);
+  const resolvedPort =
+    Number.isFinite(port) && port > 0 ? String(port) : secure ? "443" : "80";
+  return {
+    host,
+    port: resolvedPort,
+    useSSL: secure,
+    serverKey: "defaultkey",
+  };
+}
+
+/**
  * Creates the single native launch config used by menu shells. Verified games
  * always receive the launcher session and are marked official; unverified games
  * never receive that session and keep their own account flow.

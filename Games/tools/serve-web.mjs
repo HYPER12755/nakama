@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFile, stat } from "node:fs/promises";
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
+import { connect as netConnect } from "node:net";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -54,6 +55,7 @@ Options:
   --root <dir>   Built web root to serve (default: launcher/dist)
   --port <n>     Port to listen on (default: 4174)
   --host <addr>  Bind address (default: 0.0.0.0)
+  --server <a>   Where the game server is (default: 127.0.0.1:7350)
   --help         Show this help
 `);
 }
@@ -179,6 +181,7 @@ async function main() {
       root: { type: "string", default: "" },
       port: { type: "string", default: "4174" },
       host: { type: "string", default: "0.0.0.0" },
+      server: { type: "string", default: "127.0.0.1:7350" },
       help: { type: "boolean", short: "h", default: false },
     },
     allowPositionals: false,
@@ -196,6 +199,20 @@ async function main() {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     fail("--port must be an integer between 1 and 65535.");
   }
+  // Where the game server is. The calls and the socket are passed on to it,
+  // so the menu, the games and the server are all reached through one
+  // address, and a tunnel or a CDN only needs that one address.
+  const [serverHost, serverPort] = values.server.split(":");
+  const gameServer = {
+    host: serverHost && serverHost.length > 0 ? serverHost : "127.0.0.1",
+    port: Number(serverPort) > 0 ? Number(serverPort) : 7350,
+  };
+  // The calls the server answers and the socket it holds.
+  const SERVER_PATHS = ["/v2", "/v1", "/ws", "/healthcheck", "/status"];
+  const isServerPath = (pathname) =>
+    SERVER_PATHS.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    );
   try {
     const rootStat = await stat(root);
     if (!rootStat.isDirectory()) {
@@ -214,6 +231,34 @@ async function main() {
         `${method} ${pathname} ${response.statusCode} ${Date.now() - started}ms`,
       );
     });
+
+    // The calls and the socket go straight to the game server, so the menu
+    // and the games are reached through the same address the player came
+    // to. That is what lets a tunnel, a proxy or a CDN serve the whole
+    // thing from one name.
+    if (isServerPath(pathname)) {
+      const upstream = httpRequest(
+        {
+          host: gameServer.host,
+          port: gameServer.port,
+          path: request.url,
+          method,
+          headers: { ...request.headers, host: `${gameServer.host}:${gameServer.port}` },
+        },
+        (upstreamResponse) => {
+          response.writeHead(upstreamResponse.statusCode ?? 502, {
+            ...upstreamResponse.headers,
+          });
+          upstreamResponse.pipe(response);
+        },
+      );
+      upstream.on("error", () => {
+        response.writeHead(502, { "content-type": "text/plain" });
+        response.end("The game server could not be reached.");
+      });
+      request.pipe(upstream);
+      return;
+    }
 
     if (method !== "GET" && method !== "HEAD") {
       response.writeHead(405, { allow: "GET, HEAD" }).end("method not allowed");
@@ -290,8 +335,41 @@ async function main() {
     fail(cause instanceof Error ? cause.message : String(cause));
   });
 
+  // The socket the games and the menu hold is passed on to the game server
+  // as well, so the player only ever needs one address.
+  server.on("upgrade", (request, socket, head) => {
+    const upstream = netConnect(gameServer.port, gameServer.host, () => {
+      const headers = { ...request.headers };
+      delete headers["upgrade"];
+      delete headers["connection"];
+      upstream.write(
+        `GET ${request.url} HTTP/1.1\r\n` +
+          Object.entries(headers)
+            .map(([name, value]) => `${name}: ${value}`)
+            .join("\r\n") +
+          "\r\n" +
+          "Connection: Upgrade\r\n" +
+          "Upgrade: websocket\r\n\r\n",
+      );
+      if (head && head.length > 0) {
+        upstream.write(head);
+      }
+      upstream.pipe(socket);
+      socket.pipe(upstream);
+    });
+    upstream.on("error", () => {
+      socket.destroy();
+    });
+    socket.on("error", () => {
+      upstream.destroy();
+    });
+  });
+
   server.listen(port, values.host, () => {
     console.log(`Serving ${root} at http://${values.host}:${port}/`);
+    console.log(
+      `The game server is reached through this address, at ${gameServer.host}:${gameServer.port}.`,
+    );
   });
 }
 

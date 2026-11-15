@@ -1,3 +1,8 @@
+import {
+  parseServerAddress,
+  sameOriginServerAddress,
+} from "@moongames/game-sdk";
+
 const EMAIL_SESSION_KEY = "moongames.launcher.email.v1";
 const GUEST_LINKED_KEY = "moongames.launcher.guestLinked.v1";
 const DEVICE_ID_KEY = "moongames.launcher.deviceId";
@@ -197,39 +202,21 @@ export function emailAuthTransportSafe(
 }
 
 export function defaultLauncherServerAddress(): string {
-  const configuredHost = import.meta.env.VITE_NAKAMA_HOST as
-    | string
-    | undefined;
-  const configuredPort = import.meta.env.VITE_NAKAMA_PORT as
-    | string
-    | undefined;
-  const configuredSSL = import.meta.env.VITE_NAKAMA_SSL as
-    | string
-    | undefined;
-  const host =
-    configuredHost ||
-    (typeof window !== "undefined" ? window.location.hostname : "") ||
-    "127.0.0.1";
-  const port = configuredPort || "7350";
-  const useSSL = configuredSSL === "true";
-  return `${useSSL ? "https" : "http"}://${host}:${port}`;
+  // The server is reached through the address the menu itself came from,
+  // so the menu works behind a proxy, a tunnel or a CDN without anyone
+  // having to know the port of the server.
+  return sameOriginServerAddress().label;
 }
 
 export function parseLauncherServerAddress(
   input = defaultLauncherServerAddress(),
 ): LauncherServerAddress {
-  const trimmed = input.trim() || defaultLauncherServerAddress();
-  const withProtocol = /^[a-z]+:\/\//i.test(trimmed)
-    ? trimmed
-    : `http://${trimmed}`;
-  const url = new URL(withProtocol);
-  const useSSL = url.protocol === "https:";
-  const port = url.port || (useSSL ? "443" : "80");
+  const address = parseServerAddress(input, sameOriginServerAddress());
   return {
-    host: url.hostname,
-    port,
-    useSSL,
-    label: `${useSSL ? "https" : "http"}://${url.hostname}:${port}`,
+    host: address.host,
+    port: address.port,
+    useSSL: address.useSSL,
+    label: address.label,
   };
 }
 

@@ -11,7 +11,11 @@ import {
   type CarromState,
   type GameVariant,
 } from "@moongames/carrom-core";
-import { readLauncherHandoff, type GameHostConfig } from "@moongames/game-sdk";
+import {
+  readLauncherHandoff,
+  sameOriginServerAddress,
+  type GameHostConfig,
+} from "@moongames/game-sdk";
 import type { SocialFriend } from "@moongames/game-sdk";
 import {
   authErrorMessage,
@@ -135,17 +139,21 @@ function serverAddress(fallback?: {
   label: string;
 } {
   const params = new URLSearchParams(window.location.search);
+  // The server is reached through the address the game itself came from, so
+  // a game opened from a menu works behind a proxy, a tunnel or a CDN.
+  const sameOrigin = sameOriginServerAddress();
   const host =
     fallback?.host ??
     params.get("nakamaHost") ??
-    (typeof window !== "undefined" ? window.location.hostname : "127.0.0.1");
-  const rawPort = fallback?.port ?? params.get("nakamaPort") ?? DEFAULT_PORT;
+    sameOrigin.host;
+  const rawPort = fallback?.port ?? params.get("nakamaPort") ?? sameOrigin.port;
   const port = Number(rawPort);
   const useSSL =
-    fallback?.useSSL ?? params.get("nakamaSSL") === "1";
+    fallback?.useSSL ??
+    (params.get("nakamaSSL") === "1" ? true : sameOrigin.useSSL);
   const resolvedHost = host.length > 0 ? host : "127.0.0.1";
   const resolvedPort = String(
-    Number.isFinite(port) && port > 0 ? port : DEFAULT_PORT,
+    Number.isFinite(port) && port > 0 ? port : sameOrigin.port,
   );
   return {
     host: resolvedHost,

@@ -1000,6 +1000,10 @@ async function startWeb(settings, state, options) {
       settings.web.host,
       "--port",
       String(settings.web.port),
+      // The menu and the games reach the server through the menu's own
+      // address, so one name is enough for a tunnel or a CDN.
+      "--server",
+      `${urlHost(settings.nakama.socketAddress)}:${settings.nakama.socketPort}`,
     ],
     logPath: settings.web.logPath,
     displayCommand: "serve-web",

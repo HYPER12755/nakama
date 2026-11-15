@@ -4,6 +4,7 @@ export * from "./handoff";
 export * from "./catalog";
 export * from "./protocol";
 export * from "./platform";
+export * from "./serverAddress";
 export * from "./bridge";
 export * from "./game";
 export * from "./bundle";

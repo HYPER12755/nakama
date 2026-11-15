@@ -1,3 +1,7 @@
+import {
+  parseServerAddress as parseServerAddressShared,
+  sameOriginServerAddress,
+} from "@moongames/game-sdk";
 import type {
   ChessState,
   Color,
@@ -207,6 +211,7 @@ export interface ServerAddress {
   port: string;
   useSSL: boolean;
   label: string;
+  serverKey?: string;
 }
 
 export const TIME_CONTROLS: Array<{
@@ -222,42 +227,20 @@ export const TIME_CONTROLS: Array<{
 ];
 
 export function defaultServerAddress(): string {
-  const configuredHost = import.meta.env.VITE_NAKAMA_HOST as
-    | string
-    | undefined;
-  const configuredPort = import.meta.env.VITE_NAKAMA_PORT as
-    | string
-    | undefined;
-  const configuredSSL = import.meta.env.VITE_NAKAMA_SSL as
-    | string
-    | undefined;
-
-  const host =
-    configuredHost ||
-    (typeof window !== "undefined" ? window.location.hostname : "") ||
-    "127.0.0.1";
-  const port = configuredPort || "7350";
-  const useSSL = configuredSSL === "true";
-
-  return `${useSSL ? "https" : "http"}://${host}:${port}`;
+  // The server is reached through the address the game itself came from, so
+  // a game opened from a menu works behind a proxy, a tunnel or a CDN.
+  return sameOriginServerAddress().label;
 }
 
 export function parseServerAddress(input: string): ServerAddress {
-  const trimmed = input.trim() || defaultServerAddress();
-  const withProtocol = /^[a-z]+:\/\//i.test(trimmed)
-    ? trimmed
-    : `http://${trimmed}`;
-  const url = new URL(withProtocol);
-  const useSSL = url.protocol === "https:";
-  const port = url.port || (useSSL ? "443" : "80");
-  const host = url.hostname;
-
+  const address = parseServerAddressShared(input, sameOriginServerAddress());
   return {
-    host,
-    port,
-    useSSL,
-    label: `${useSSL ? "https" : "http"}://${host}:${port}`,
-  };
+    host: address.host,
+    port: address.port,
+    useSSL: address.useSSL,
+    label: address.label,
+    serverKey: address.serverKey,
+  } as ServerAddress;
 }
 
 export function normalizeChessState(
