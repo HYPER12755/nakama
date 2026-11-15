@@ -18,6 +18,7 @@ export type IconName =
   | "skip-forward"
   | "sparkle"
   | "sparkles"
+  | "menu"
   | "trophy"
   | "arrow-up-right"
   | "sun"
@@ -159,6 +160,11 @@ export function Icon({
           <path d="M8 4h8v5a4 4 0 0 1-8 0V4Z" />
           <path d="M8 5.5H5.5a2.5 2.5 0 0 0 2.5 4M16 5.5h2.5a2.5 2.5 0 0 1-2.5 4" />
           <path d="M12 13v4M9 20h6M10 17h4" />
+        </>
+      )}
+      {name === "menu" && (
+        <>
+          <path d="M4 7h16M4 12h16M4 17h16" />
         </>
       )}
     </svg>

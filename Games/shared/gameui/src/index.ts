@@ -8,6 +8,22 @@ export { GameArt } from "./components/GameArt";
 export type { GameArtProps } from "./components/GameArt";
 export { GameCard, capabilityLabels } from "./components/GameCard";
 export type { GameCardProps } from "./components/GameCard";
+export { GameFlowMenu } from "./components/GameFlowMenu";
+export type {
+  GameFlowMenuProps,
+  GameFlowOption,
+  GameFlowStep,
+} from "./components/GameFlowMenu";
+export {
+  GameFlowSetting,
+  flowSettingEnabled,
+  globalFlowEnabled,
+  setGlobalFlowEnabled,
+} from "./components/GameFlowSetting";
+export type { GameFlowSettingProps } from "./components/GameFlowSetting";
+export { GameFlowScreen } from "./components/GameFlowScreen";
+export type { GameFlowScreenProps } from "./components/GameFlowScreen";
+export { defaultGameMode, gameModes } from "./lib/modes";
 export { GameIdMark } from "./components/gameArt/GameIdMark";
 export type { GameIdMarkProps } from "./components/gameArt/GameIdMark";
 export { GameMark } from "./components/gameArt/GameMark";
