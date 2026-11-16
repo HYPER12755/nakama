@@ -21,7 +21,8 @@ export type IconName =
   | "trophy"
   | "arrow-up-right"
   | "sun"
-  | "user";
+  | "user"
+  | "volume";
 
 export interface IconProps {
   name: IconName;
@@ -159,6 +160,12 @@ export function Icon({
           <path d="M8 4h8v5a4 4 0 0 1-8 0V4Z" />
           <path d="M8 5.5H5.5a2.5 2.5 0 0 0 2.5 4M16 5.5h2.5a2.5 2.5 0 0 1-2.5 4" />
           <path d="M12 13v4M9 20h6M10 17h4" />
+        </>
+      )}
+      {name === "volume" && (
+        <>
+          <path d="M11 5 6.5 9H3v6h3.5L11 19Z" />
+          <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
         </>
       )}
     </svg>

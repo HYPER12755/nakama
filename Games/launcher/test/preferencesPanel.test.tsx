@@ -12,8 +12,13 @@ import {
  */
 
 const PIECES: PieceChoice[] = [
-  { id: "moongames", label: "MoonGames" },
-  { id: "cburnett", label: "Cburnett", preview: "/pieces/cburnett/wK.svg" },
+  { id: "moongames", label: "MoonGames", preview: <span>white</span> },
+  {
+    id: "cburnett",
+    label: "Cburnett",
+    preview: <span>white</span>,
+    previewDark: <span>black</span>,
+  },
 ];
 
 const THEMES: ThemeChoice[] = [
@@ -45,7 +50,10 @@ afterEach(() => {
 });
 
 describe("the panel of customizations", () => {
-  it("shows the sets of pieces, with a picture of each", () => {
+  it("is three lines, each with a picture of what is chosen", () => {
+    store.set("moongames.prefs.chess.pieceSet", '"cburnett"');
+    store.set("moongames.prefs.chess.boardTheme", '"ocean"');
+
     const markup = renderToStaticMarkup(
       <GamePreferencesPanel
         gameId="chess"
@@ -56,17 +64,21 @@ describe("the panel of customizations", () => {
       />,
     );
 
+    // The three lines.
     expect(markup).toContain("Pieces");
-    expect(markup).toContain("Cburnett");
-    expect(markup).toContain('src="/pieces/cburnett/wK.svg"');
-    expect(markup).toContain("Ocean");
-    expect(markup).toContain("Coordinates");
-    expect(markup).toContain("Movement");
+    expect(markup).toContain("Board");
     expect(markup).toContain("Sound");
-    expect(markup).toContain("Volume");
+    expect(markup).toContain("More settings");
+
+    // What is chosen now, with a picture of it.
+    expect(markup).toContain("Cburnett");
+    expect(markup).toContain("Ocean");
+    expect(markup).toContain("Standard");
+    expect(markup).toContain("pref-row__preview--pieces");
+    expect(markup).toContain("pref-row__preview--board");
   });
 
-  it("shows the choices that only chess has", () => {
+  it("keeps the rest of the choices behind the more button", () => {
     const markup = renderToStaticMarkup(
       <GamePreferencesPanel
         gameId="chess"
@@ -74,22 +86,19 @@ describe("the panel of customizations", () => {
       />,
     );
 
-    expect(markup).toContain("A pawn that reaches the end");
-    expect(markup).toContain("Moving a piece");
-    expect(markup).toContain("Click or drag");
-    expect(markup).toContain("The clock");
-    expect(markup).toContain("Below ten seconds");
+    expect(markup).toContain("More settings");
+    expect(markup).not.toContain("A pawn that reaches the end");
+    expect(markup).not.toContain("Click or drag");
   });
 
-  it("leaves out the choices a game does not have", () => {
+  it("shows the choices a game does not have nowhere", () => {
     const markup = renderToStaticMarkup(
       <GamePreferencesPanel gameId="chess" />,
     );
 
     expect(markup).not.toContain("Pieces");
-    expect(markup).not.toContain("A pawn that reaches the end");
-    expect(markup).not.toContain("Moving a piece");
-    expect(markup).toContain("Coordinates");
+    expect(markup).not.toContain("Board");
+    expect(markup).toContain("Sound");
   });
 
   it("marks the choice the player has made", () => {
@@ -99,6 +108,6 @@ describe("the panel of customizations", () => {
       <GamePreferencesPanel gameId="chess" pieceSets={PIECES} />,
     );
 
-    expect(markup).toContain('aria-checked="true"');
+    expect(markup).toContain("Cburnett");
   });
 });

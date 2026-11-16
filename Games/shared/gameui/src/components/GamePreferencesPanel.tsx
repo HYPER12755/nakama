@@ -1,4 +1,9 @@
-import { useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   AnimationSpeed,
   ANIMATION_SPEED_LABELS,
@@ -22,13 +27,16 @@ import {
   type PreferenceScope,
 } from "../lib/preferences";
 import { useGamePreferences } from "../hooks/useGamePreferences";
+import { Icon } from "./Icon";
 
 /** A set of pieces a player can choose. */
 export interface PieceChoice {
   id: string;
   label: string;
-  /** The picture shown in the picker. */
-  preview?: string;
+  /** The white piece, shown in the picker. */
+  preview?: ReactNode;
+  /** The black piece, shown in the picker beside the white one. */
+  previewDark?: ReactNode;
 }
 
 /** A colouring of the board a player can choose. */
@@ -78,16 +86,23 @@ export interface GamePreferencesPanelProps {
   soundSets?: SoundChoice[];
   /** The choices that only this game has. */
   features?: PreferenceFeatures;
+  /** Called to let the player hear what the table sounds like. */
+  onPreviewSound?: () => void;
   /** The name shown above the choices. */
   title?: string;
 }
 
+/** The group of choices a picker is showing. */
+type PickerGroup = "pieces" | "board" | "sounds" | null;
+
 /**
- * The customizations of a game, in one panel.
+ * The customizations of a game.
  *
- * Every title offers the same panel, so a player learns it once. The choices
- * a game does not have, such as the pieces for a game without pieces, are
- * not shown.
+ * The screen is three lines, the way lichess keeps it: the pieces, the
+ * board, and the sound. Each line shows what is chosen now, with a picture
+ * of it, and opens a picker when it is touched. The rest of the choices
+ * are behind "More settings", so the screen stays small and the player
+ * sees the choices that matter first.
  */
 export function GamePreferencesPanel({
   gameId,
@@ -95,6 +110,7 @@ export function GamePreferencesPanel({
   themes = [],
   soundSets = [],
   features = {},
+  onPreviewSound,
   title = "Look and sound",
 }: GamePreferencesPanelProps) {
   const {
@@ -106,21 +122,23 @@ export function GamePreferencesPanel({
   const [scope, setScope] = useState<PreferenceScope>(() =>
     readPreferenceScope(gameId),
   );
+  const [picker, setPicker] = useState<PickerGroup>(null);
+  const [more, setMore] = useState(false);
 
   useEffect(() => {
     setScope(readPreferenceScope(gameId));
   }, [gameId]);
 
-  const choose = <K extends PreferenceKey>(
-    key: K,
-    value: GamePreferences[K],
-  ) => {
-    if (scope === "shared") {
-      setSharedPreference(key, value);
-      return;
-    }
-    setPreference(key, value);
-  };
+  const choose = useCallback(
+    <K extends PreferenceKey>(key: K, value: GamePreferences[K]) => {
+      if (scope === "shared") {
+        setSharedPreference(key, value);
+        return;
+      }
+      setPreference(key, value);
+    },
+    [scope, setPreference, setSharedPreference],
+  );
 
   const restore = (key: PreferenceKey) => {
     resetPreference(key);
@@ -128,6 +146,16 @@ export function GamePreferencesPanel({
       clearSharedPreference(key);
     }
   };
+
+  const chosenPieces = pieceSets.find(
+    (choice) => choice.id === preferences.pieceSet,
+  );
+  const chosenTheme = themes.find(
+    (choice) => choice.id === preferences.boardTheme,
+  );
+  const chosenSounds = soundSets.find(
+    (choice) => choice.id === preferences.soundSet,
+  );
 
   return (
     <section className="panel pref-panel" aria-label={title}>
@@ -145,387 +173,540 @@ export function GamePreferencesPanel({
               writePreferenceScope(gameId, next);
             }}
           />
-          <span>Use in every game</span>
+          <span>Every game</span>
         </label>
       </header>
 
-      {pieceSets.length > 0 && (
-        <PreferenceGroup
-          title="Pieces"
-          onRestore={() => restore("pieceSet")}
-        >
-          <div className="pref-pieces" role="radiogroup" aria-label="Pieces">
-            {pieceSets.map((piece) => (
-              <button
-                key={piece.id}
-                type="button"
-                role="radio"
-                aria-checked={preferences.pieceSet === piece.id}
-                className={`pref-piece${
-                  preferences.pieceSet === piece.id ? " is-chosen" : ""
-                }`}
-                title={piece.label}
-                onClick={() => choose("pieceSet", piece.id)}
-              >
-                {piece.preview !== undefined ? (
-                  <img src={piece.preview} alt="" loading="lazy" />
-                ) : (
-                  <span>{piece.label.slice(0, 2)}</span>
-                )}
-                <small>{piece.label}</small>
-              </button>
-            ))}
-          </div>
-        </PreferenceGroup>
-      )}
+      <div className="pref-rows">
+        {pieceSets.length > 0 && (
+          <button
+            type="button"
+            className="pref-row"
+            onClick={() => setPicker("pieces")}
+          >
+            <span className="pref-row__preview pref-row__preview--pieces">
+              {chosenPieces?.preview ?? null}
+              {chosenPieces?.previewDark ?? null}
+            </span>
+            <span className="pref-row__label">Pieces</span>
+            <span className="pref-row__value">
+              {chosenPieces?.label ?? preferences.pieceSet}
+            </span>
+            <Icon name="chevron-right" size={16} />
+          </button>
+        )}
 
-      {themes.length > 0 && (
-        <PreferenceGroup
-          title="Board"
-          onRestore={() => restore("boardTheme")}
-        >
-          <div className="pref-themes" role="radiogroup" aria-label="Board">
-            {themes.map((theme) => (
-              <button
-                key={theme.id}
-                type="button"
-                role="radio"
-                aria-checked={preferences.boardTheme === theme.id}
-                className={`pref-theme${
-                  preferences.boardTheme === theme.id ? " is-chosen" : ""
-                }`}
-                title={theme.label}
-                onClick={() => choose("boardTheme", theme.id)}
-              >
-                <span
-                  className="pref-theme__swatch"
-                  style={{
-                    background: `linear-gradient(135deg, ${theme.light} 50%, ${theme.dark} 50%)`,
-                  }}
-                />
-                <small>{theme.label}</small>
-              </button>
-            ))}
-          </div>
-        </PreferenceGroup>
-      )}
+        {themes.length > 0 && (
+          <button
+            type="button"
+            className="pref-row"
+            onClick={() => setPicker("board")}
+          >
+            <span
+              className="pref-row__preview pref-row__preview--board"
+              style={
+                chosenTheme === undefined
+                  ? undefined
+                  : {
+                      background: `linear-gradient(135deg, ${chosenTheme.light} 50%, ${chosenTheme.dark} 50%)`,
+                    }
+              }
+            />
+            <span className="pref-row__label">Board</span>
+            <span className="pref-row__value">
+              {chosenTheme?.label ?? preferences.boardTheme}
+            </span>
+            <Icon name="chevron-right" size={16} />
+          </button>
+        )}
 
-      <PreferenceGroup
-        title="Coordinates"
-        onRestore={() => restore("coordinates")}
-      >
-        <div className="pref-choices" role="radiogroup" aria-label="Coordinates">
-          {(
-            [
-              [Coordinates.Hidden, COORDINATE_LABELS[Coordinates.Hidden]],
-              [Coordinates.Inside, COORDINATE_LABELS[Coordinates.Inside]],
-              [Coordinates.Outside, COORDINATE_LABELS[Coordinates.Outside]],
-              [Coordinates.All, COORDINATE_LABELS[Coordinates.All]],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={preferences.coordinates === value}
-              className={`pref-choice${
-                preferences.coordinates === value ? " is-chosen" : ""
-              }`}
-              onClick={() => choose("coordinates", value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </PreferenceGroup>
-
-      <PreferenceGroup
-        title="Movement"
-        onRestore={() => restore("animationSpeed")}
-      >
-        <div className="pref-choices" role="radiogroup" aria-label="Movement">
-          {(
-            [
-              [AnimationSpeed.None, ANIMATION_SPEED_LABELS[AnimationSpeed.None]],
-              [AnimationSpeed.Fast, ANIMATION_SPEED_LABELS[AnimationSpeed.Fast]],
-              [
-                AnimationSpeed.Normal,
-                ANIMATION_SPEED_LABELS[AnimationSpeed.Normal],
-              ],
-              [AnimationSpeed.Slow, ANIMATION_SPEED_LABELS[AnimationSpeed.Slow]],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={preferences.animationSpeed === value}
-              className={`pref-choice${
-                preferences.animationSpeed === value ? " is-chosen" : ""
-              }`}
-              onClick={() => choose("animationSpeed", value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </PreferenceGroup>
-
-      <PreferenceGroup title="Sound" onRestore={() => restore("soundEnabled")}>
-        <label className="pref-toggle">
+        <div className="pref-row pref-row--sound">
+          <button
+            type="button"
+            className="pref-row__preview pref-row__preview--sound"
+            onClick={onPreviewSound}
+            disabled={onPreviewSound === undefined}
+            aria-label="Hear the table"
+            title="Hear the table"
+          >
+            <Icon name="volume" size={16} />
+          </button>
+          <span className="pref-row__label">Sound</span>
+          <button
+            type="button"
+            className="pref-row__value pref-row__value--button"
+            onClick={() => setPicker("sounds")}
+          >
+            {chosenSounds?.label ?? preferences.soundSet}
+          </button>
           <input
-            type="checkbox"
-            checked={preferences.soundEnabled}
-            onChange={(event) =>
-              choose("soundEnabled", event.target.checked)
-            }
-          />
-          <span>The table makes a sound</span>
-        </label>
-
-        <label className="pref-volume">
-          <span>Volume</span>
-          <input
+            className="pref-row__volume"
             type="range"
             min={0}
             max={100}
+            aria-label="The volume of the table"
             value={Math.round(preferences.soundVolume * 100)}
-            disabled={!preferences.soundEnabled}
             onChange={(event) =>
               choose("soundVolume", Number(event.target.value) / 100)
             }
           />
-        </label>
+        </div>
+      </div>
 
-        {soundSets.length > 0 && (
-          <div className="pref-choices" role="radiogroup" aria-label="Sounds">
-            {soundSets.map((set) => (
-              <button
-                key={set.id}
-                type="button"
-                role="radio"
-                aria-checked={preferences.soundSet === set.id}
-                className={`pref-choice${
-                  preferences.soundSet === set.id ? " is-chosen" : ""
-                }`}
-                onClick={() => choose("soundSet", set.id)}
-              >
-                {set.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </PreferenceGroup>
-
-      {features.moveEvent === true && (
-        <PreferenceGroup
-          title="Moving a piece"
-          onRestore={() => restore("moveEvent")}
-        >
-          <div className="pref-choices" role="radiogroup" aria-label="Moving a piece">
-            {(
-              [
-                [MoveEvent.Click, MOVE_EVENT_LABELS[MoveEvent.Click]],
-                [MoveEvent.Drag, MOVE_EVENT_LABELS[MoveEvent.Drag]],
-                [
-                  MoveEvent.ClickOrDrag,
-                  MOVE_EVENT_LABELS[MoveEvent.ClickOrDrag],
-                ],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={preferences.moveEvent === value}
-                className={`pref-choice${
-                  preferences.moveEvent === value ? " is-chosen" : ""
-                }`}
-                onClick={() => choose("moveEvent", value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </PreferenceGroup>
-      )}
-
-      {features.autoQueen === true && (
-        <PreferenceGroup
-          title="A pawn that reaches the end"
-          onRestore={() => restore("autoQueen")}
-        >
-          <div className="pref-choices" role="radiogroup" aria-label="Promotion">
-            {(
-              [
-                [AutoQueen.Never, AUTO_QUEEN_LABELS[AutoQueen.Never]],
-                [
-                  AutoQueen.OnPromotion,
-                  AUTO_QUEEN_LABELS[AutoQueen.OnPromotion],
-                ],
-                [AutoQueen.Always, AUTO_QUEEN_LABELS[AutoQueen.Always]],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={preferences.autoQueen === value}
-                className={`pref-choice${
-                  preferences.autoQueen === value ? " is-chosen" : ""
-                }`}
-                onClick={() => choose("autoQueen", value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </PreferenceGroup>
-      )}
-
-      {features.clockTenths === true && (
-        <PreferenceGroup
-          title="The clock"
-          onRestore={() => restore("clockTenths")}
-        >
-          <div className="pref-choices" role="radiogroup" aria-label="The clock">
-            {(
-              [
-                [ShowClockTenths.Never, CLOCK_TENTHS_LABELS[ShowClockTenths.Never]],
-                [
-                  ShowClockTenths.Below10Seconds,
-                  CLOCK_TENTHS_LABELS[ShowClockTenths.Below10Seconds],
-                ],
-                [
-                  ShowClockTenths.Always,
-                  CLOCK_TENTHS_LABELS[ShowClockTenths.Always],
-                ],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={preferences.clockTenths === value}
-                className={`pref-choice${
-                  preferences.clockTenths === value ? " is-chosen" : ""
-                }`}
-                onClick={() => choose("clockTenths", value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </PreferenceGroup>
-      )}
-
-      {features.resizeHandle === true && (
-        <PreferenceGroup
-          title="The size of the board"
-          onRestore={() => restore("resizeHandle")}
-        >
-          <div
-            className="pref-choices"
-            role="radiogroup"
-            aria-label="The size of the board"
-          >
-            {(
-              [
-                [
-                  ShowResizeHandle.Never,
-                  RESIZE_HANDLE_LABELS[ShowResizeHandle.Never],
-                ],
-                [
-                  ShowResizeHandle.OnlyAtStart,
-                  RESIZE_HANDLE_LABELS[ShowResizeHandle.OnlyAtStart],
-                ],
-                [
-                  ShowResizeHandle.Always,
-                  RESIZE_HANDLE_LABELS[ShowResizeHandle.Always],
-                ],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={preferences.resizeHandle === value}
-                className={`pref-choice${
-                  preferences.resizeHandle === value ? " is-chosen" : ""
-                }`}
-                onClick={() => choose("resizeHandle", value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </PreferenceGroup>
-      )}
-
-      {features.replay === true && (
-        <PreferenceGroup
-          title="A game that is over"
-          onRestore={() => restore("replay")}
-        >
-          <div
-            className="pref-choices"
-            role="radiogroup"
-            aria-label="A game that is over"
-          >
-            {(
-              [
-                [Replay.Never, REPLAY_LABELS[Replay.Never]],
-                [Replay.OnlySlowGames, REPLAY_LABELS[Replay.OnlySlowGames]],
-                [Replay.Always, REPLAY_LABELS[Replay.Always]],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={preferences.replay === value}
-                className={`pref-choice${
-                  preferences.replay === value ? " is-chosen" : ""
-                }`}
-                onClick={() => choose("replay", value)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <p className="pref-note">
-            A slow game is one that took more than two minutes, or one with
-            three minutes or more on the clock.
-          </p>
-        </PreferenceGroup>
-      )}
-
-      <PreferenceGroup
-        title="On the board"
-        onRestore={() => restore("showLegalMoves")}
+      <button
+        type="button"
+        className="pref-more"
+        onClick={() => setMore((current) => !current)}
+        aria-expanded={more}
       >
-        <label className="pref-toggle">
-          <input
-            type="checkbox"
-            checked={preferences.showLegalMoves}
-            onChange={(event) =>
-              choose("showLegalMoves", event.target.checked)
-            }
-          />
-          <span>Mark the squares a piece may go to</span>
-        </label>
-        <label className="pref-toggle">
-          <input
-            type="checkbox"
-            checked={preferences.highlightLastMove}
-            onChange={(event) =>
-              choose("highlightLastMove", event.target.checked)
-            }
-          />
-          <span>Mark the last move</span>
-        </label>
-      </PreferenceGroup>
+        {more ? "Fewer settings" : "More settings"}
+      </button>
+
+      {more && (
+        <div className="pref-more__body">
+          <PreferenceGroup
+            title="Coordinates"
+            onRestore={() => restore("coordinates")}
+          >
+            <div
+              className="pref-choices"
+              role="radiogroup"
+              aria-label="Coordinates"
+            >
+              {(
+                [
+                  [Coordinates.Hidden, COORDINATE_LABELS[Coordinates.Hidden]],
+                  [Coordinates.Inside, COORDINATE_LABELS[Coordinates.Inside]],
+                  [
+                    Coordinates.Outside,
+                    COORDINATE_LABELS[Coordinates.Outside],
+                  ],
+                  [Coordinates.All, COORDINATE_LABELS[Coordinates.All]],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={preferences.coordinates === value}
+                  className={`pref-choice${
+                    preferences.coordinates === value ? " is-chosen" : ""
+                  }`}
+                  onClick={() => choose("coordinates", value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </PreferenceGroup>
+
+          <PreferenceGroup
+            title="Movement"
+            onRestore={() => restore("animationSpeed")}
+          >
+            <div className="pref-choices" role="radiogroup" aria-label="Movement">
+              {(
+                [
+                  [
+                    AnimationSpeed.None,
+                    ANIMATION_SPEED_LABELS[AnimationSpeed.None],
+                  ],
+                  [
+                    AnimationSpeed.Fast,
+                    ANIMATION_SPEED_LABELS[AnimationSpeed.Fast],
+                  ],
+                  [
+                    AnimationSpeed.Normal,
+                    ANIMATION_SPEED_LABELS[AnimationSpeed.Normal],
+                  ],
+                  [
+                    AnimationSpeed.Slow,
+                    ANIMATION_SPEED_LABELS[AnimationSpeed.Slow],
+                  ],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={preferences.animationSpeed === value}
+                  className={`pref-choice${
+                    preferences.animationSpeed === value ? " is-chosen" : ""
+                  }`}
+                  onClick={() => choose("animationSpeed", value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </PreferenceGroup>
+
+          {features.moveEvent === true && (
+            <PreferenceGroup
+              title="Moving a piece"
+              onRestore={() => restore("moveEvent")}
+            >
+              <div
+                className="pref-choices"
+                role="radiogroup"
+                aria-label="Moving a piece"
+              >
+                {(
+                  [
+                    [MoveEvent.Click, MOVE_EVENT_LABELS[MoveEvent.Click]],
+                    [MoveEvent.Drag, MOVE_EVENT_LABELS[MoveEvent.Drag]],
+                    [
+                      MoveEvent.ClickOrDrag,
+                      MOVE_EVENT_LABELS[MoveEvent.ClickOrDrag],
+                    ],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={preferences.moveEvent === value}
+                    className={`pref-choice${
+                      preferences.moveEvent === value ? " is-chosen" : ""
+                    }`}
+                    onClick={() => choose("moveEvent", value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </PreferenceGroup>
+          )}
+
+          {features.autoQueen === true && (
+            <PreferenceGroup
+              title="A pawn that reaches the end"
+              onRestore={() => restore("autoQueen")}
+            >
+              <div
+                className="pref-choices"
+                role="radiogroup"
+                aria-label="Promotion"
+              >
+                {(
+                  [
+                    [AutoQueen.Never, AUTO_QUEEN_LABELS[AutoQueen.Never]],
+                    [
+                      AutoQueen.OnPromotion,
+                      AUTO_QUEEN_LABELS[AutoQueen.OnPromotion],
+                    ],
+                    [AutoQueen.Always, AUTO_QUEEN_LABELS[AutoQueen.Always]],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={preferences.autoQueen === value}
+                    className={`pref-choice${
+                      preferences.autoQueen === value ? " is-chosen" : ""
+                    }`}
+                    onClick={() => choose("autoQueen", value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </PreferenceGroup>
+          )}
+
+          {features.clockTenths === true && (
+            <PreferenceGroup
+              title="The clock"
+              onRestore={() => restore("clockTenths")}
+            >
+              <div
+                className="pref-choices"
+                role="radiogroup"
+                aria-label="The clock"
+              >
+                {(
+                  [
+                    [
+                      ShowClockTenths.Never,
+                      CLOCK_TENTHS_LABELS[ShowClockTenths.Never],
+                    ],
+                    [
+                      ShowClockTenths.Below10Seconds,
+                      CLOCK_TENTHS_LABELS[ShowClockTenths.Below10Seconds],
+                    ],
+                    [
+                      ShowClockTenths.Always,
+                      CLOCK_TENTHS_LABELS[ShowClockTenths.Always],
+                    ],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={preferences.clockTenths === value}
+                    className={`pref-choice${
+                      preferences.clockTenths === value ? " is-chosen" : ""
+                    }`}
+                    onClick={() => choose("clockTenths", value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </PreferenceGroup>
+          )}
+
+          {features.resizeHandle === true && (
+            <PreferenceGroup
+              title="The size of the board"
+              onRestore={() => restore("resizeHandle")}
+            >
+              <div
+                className="pref-choices"
+                role="radiogroup"
+                aria-label="The size of the board"
+              >
+                {(
+                  [
+                    [
+                      ShowResizeHandle.Never,
+                      RESIZE_HANDLE_LABELS[ShowResizeHandle.Never],
+                    ],
+                    [
+                      ShowResizeHandle.OnlyAtStart,
+                      RESIZE_HANDLE_LABELS[ShowResizeHandle.OnlyAtStart],
+                    ],
+                    [
+                      ShowResizeHandle.Always,
+                      RESIZE_HANDLE_LABELS[ShowResizeHandle.Always],
+                    ],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={preferences.resizeHandle === value}
+                    className={`pref-choice${
+                      preferences.resizeHandle === value ? " is-chosen" : ""
+                    }`}
+                    onClick={() => choose("resizeHandle", value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </PreferenceGroup>
+          )}
+
+          {features.replay === true && (
+            <PreferenceGroup
+              title="A game that is over"
+              onRestore={() => restore("replay")}
+            >
+              <div
+                className="pref-choices"
+                role="radiogroup"
+                aria-label="A game that is over"
+              >
+                {(
+                  [
+                    [Replay.Never, REPLAY_LABELS[Replay.Never]],
+                    [
+                      Replay.OnlySlowGames,
+                      REPLAY_LABELS[Replay.OnlySlowGames],
+                    ],
+                    [Replay.Always, REPLAY_LABELS[Replay.Always]],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={preferences.replay === value}
+                    className={`pref-choice${
+                      preferences.replay === value ? " is-chosen" : ""
+                    }`}
+                    onClick={() => choose("replay", value)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="pref-note">
+                A slow game is one that took more than two minutes, or one
+                with three minutes or more on the clock.
+              </p>
+            </PreferenceGroup>
+          )}
+
+          <PreferenceGroup
+            title="On the board"
+            onRestore={() => restore("showLegalMoves")}
+          >
+            <label className="pref-toggle">
+              <input
+                type="checkbox"
+                checked={preferences.soundEnabled}
+                onChange={(event) =>
+                  choose("soundEnabled", event.target.checked)
+                }
+              />
+              <span>The table makes a sound</span>
+            </label>
+            <label className="pref-toggle">
+              <input
+                type="checkbox"
+                checked={preferences.showLegalMoves}
+                onChange={(event) =>
+                  choose("showLegalMoves", event.target.checked)
+                }
+              />
+              <span>Mark the squares a piece may go to</span>
+            </label>
+            <label className="pref-toggle">
+              <input
+                type="checkbox"
+                checked={preferences.highlightLastMove}
+                onChange={(event) =>
+                  choose("highlightLastMove", event.target.checked)
+                }
+              />
+              <span>Mark the last move</span>
+            </label>
+          </PreferenceGroup>
+        </div>
+      )}
+
+      {picker === "pieces" && (
+        <PreferencePicker
+          title="Pieces"
+          onClose={() => setPicker(null)}
+        >
+          <div className="pref-picker__grid pref-picker__grid--pieces">
+            {pieceSets.map((choice) => (
+              <button
+                key={choice.id}
+                type="button"
+                className={`pref-picker__piece${
+                  preferences.pieceSet === choice.id ? " is-chosen" : ""
+                }`}
+                onClick={() => {
+                  choose("pieceSet", choice.id);
+                  setPicker(null);
+                }}
+              >
+                <span className="pref-picker__pieceArt">
+                  {choice.preview ?? null}
+                  {choice.previewDark ?? null}
+                </span>
+                <small>{choice.label}</small>
+              </button>
+            ))}
+          </div>
+        </PreferencePicker>
+      )}
+
+      {picker === "board" && (
+        <PreferencePicker title="Board" onClose={() => setPicker(null)}>
+          <div className="pref-picker__grid pref-picker__grid--boards">
+            {themes.map((choice) => (
+              <button
+                key={choice.id}
+                type="button"
+                className={`pref-picker__board${
+                  preferences.boardTheme === choice.id ? " is-chosen" : ""
+                }`}
+                onClick={() => {
+                  choose("boardTheme", choice.id);
+                  setPicker(null);
+                }}
+              >
+                <span
+                  className="pref-picker__boardArt"
+                  style={{
+                    background: `linear-gradient(135deg, ${choice.light} 50%, ${choice.dark} 50%)`,
+                  }}
+                />
+                <small>{choice.label}</small>
+              </button>
+            ))}
+          </div>
+        </PreferencePicker>
+      )}
+
+      {picker === "sounds" && (
+        <PreferencePicker title="Sound" onClose={() => setPicker(null)}>
+          <div className="pref-picker__grid pref-picker__grid--sounds">
+            {soundSets.map((choice) => (
+              <button
+                key={choice.id}
+                type="button"
+                className={`pref-picker__sound${
+                  preferences.soundSet === choice.id ? " is-chosen" : ""
+                }`}
+                onClick={() => {
+                  choose("soundSet", choice.id);
+                  setPicker(null);
+                }}
+              >
+                {choice.label}
+              </button>
+            ))}
+          </div>
+        </PreferencePicker>
+      )}
     </section>
+  );
+}
+
+/**
+ * The sheet of choices that opens over the screen.
+ */
+function PreferencePicker({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="pref-picker" role="dialog" aria-modal="true" aria-label={title}>
+      <button
+        type="button"
+        className="pref-picker__backdrop"
+        aria-label="Close"
+        onClick={onClose}
+      />
+      <div className="pref-picker__sheet">
+        <header className="pref-picker__head">
+          <h4>{title}</h4>
+          <button
+            type="button"
+            className="pref-picker__close"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </header>
+        <div className="pref-picker__body">{children}</div>
+      </div>
+    </div>
   );
 }
 
@@ -536,13 +717,17 @@ function PreferenceGroup({
 }: {
   title: string;
   onRestore: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="pref-group">
       <div className="pref-group__head">
         <h4>{title}</h4>
-        <button type="button" className="pref-group__restore" onClick={onRestore}>
+        <button
+          type="button"
+          className="pref-group__restore"
+          onClick={onRestore}
+        >
           Default
         </button>
       </div>

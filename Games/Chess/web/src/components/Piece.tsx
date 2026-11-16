@@ -174,6 +174,23 @@ export function PieceArtwork({
   );
 }
 
+/**
+ * A piece shown on its own, the way it is shown in the picker of the sets.
+ */
+export function PiecePreview({
+  type,
+  color,
+}: {
+  type: PieceSymbol;
+  color: Color;
+}) {
+  return (
+    <span className={`piece-preview piece-preview--${color}`} aria-hidden="true">
+      <PieceArtwork type={type} color={color} />
+    </span>
+  );
+}
+
 export function Piece({
   piece,
   justMoved = false,

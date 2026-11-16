@@ -42,6 +42,7 @@ import { MoveList } from "./components/MoveList";
 import { OnlineGameToolbar } from "./components/OnlineGameToolbar";
 import { OnlinePanel } from "./components/OnlinePanel";
 import { PromotionPicker } from "./components/PromotionPicker";
+import { PieceImage, PiecePreview } from "./components/Piece";
 import { ReplayDialog } from "./components/ReplayDialog";
 import {
   playCapture,
@@ -65,6 +66,7 @@ import {
 } from "./lib/boardThemes";
 import {
   PIECE_SET_IDS,
+  MOONGAMES_PIECES,
   pieceImageUrl,
   pieceSetLabel,
 } from "./lib/pieceSets";
@@ -92,13 +94,26 @@ const launcherHandoff = readLauncherHandoff(__MOONGAMES_GAME_ID__);
 const GAME_ID = __MOONGAMES_GAME_ID__;
 
 /**
- * The sets of pieces the player may choose, with a picture of the king of
- * each set to show in the picker.
+ * The sets of pieces the player may choose.
+ *
+ * Each set is shown with its white king and its black king, so the pieces
+ * of the game itself are shown as the game draws them.
  */
 const PIECE_SETS = PIECE_SET_IDS.map((id) => ({
   id,
   label: pieceSetLabel(id),
-  preview: pieceImageUrl(id, "w", "k") ?? undefined,
+  preview:
+    id === MOONGAMES_PIECES ? (
+      <PiecePreview type="k" color="w" />
+    ) : (
+      <PieceImage src={pieceImageUrl(id, "w", "k") ?? ""} />
+    ),
+  previewDark:
+    id === MOONGAMES_PIECES ? (
+      <PiecePreview type="k" color="b" />
+    ) : (
+      <PieceImage src={pieceImageUrl(id, "b", "k") ?? ""} />
+    ),
 }));
 
 /** The choices that only a game of chess has. */
@@ -1214,6 +1229,7 @@ export default function App({ bridge }: AppProps) {
                 themes={BOARD_THEMES}
                 soundSets={SOUND_SETS}
                 features={CHESS_FEATURES}
+                onPreviewSound={() => playMove()}
               />
             </>
           ) : aiMode ? (
@@ -1258,6 +1274,7 @@ export default function App({ bridge }: AppProps) {
                 themes={BOARD_THEMES}
                 soundSets={SOUND_SETS}
                 features={CHESS_FEATURES}
+                onPreviewSound={() => playMove()}
               />
             </>
           ) : (
@@ -1297,6 +1314,7 @@ export default function App({ bridge }: AppProps) {
                 themes={BOARD_THEMES}
                 soundSets={SOUND_SETS}
                 features={CHESS_FEATURES}
+                onPreviewSound={() => playMove()}
               />
             </>
           )}
