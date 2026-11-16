@@ -34,6 +34,8 @@ export interface ChessBoardProps {
   showLegalMoves?: boolean;
   /** Whether the squares of the last move are marked. */
   highlightLastMove?: boolean;
+  /** The move that is ready for the turn after this one. */
+  premove?: { from: Square; to: Square } | null;
 }
 
 function displayPosition(square: Square, flipped: boolean) {
@@ -75,6 +77,7 @@ export const ChessBoard = memo(function ChessBoard({
   animationMs = 190,
   showLegalMoves = true,
   highlightLastMove = true,
+  premove = null,
 }: ChessBoardProps) {
   const pieces = new Map(board.map((piece) => [piece.square, piece]));
   const targets = new Set(legalTargets);
@@ -228,6 +231,12 @@ export const ChessBoard = memo(function ChessBoard({
         }
         if (dragging === square) {
           classes.push("square--dragging");
+        }
+        if (premove !== null && premove.from === square) {
+          classes.push("square--premove");
+        }
+        if (premove !== null && premove.to === square) {
+          classes.push("square--premove-target");
         }
 
         const label = `${square}, ${

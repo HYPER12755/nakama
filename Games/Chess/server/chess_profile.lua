@@ -616,9 +616,116 @@ local function error_payload(code, message)
   }
 end
 
-function progression.profile_payload(context)
+--- A game the player brought from somewhere else.
+--
+-- The moves are played out again by the rules of the server, so a game
+-- that cannot be played is not kept. The rating is not touched: a game that
+-- was played elsewhere says nothing about how well the player plays here.
+function progression.import_game(context, params)
   local user_id = context and context.user_id
   if not user_id or user_id == "" then
+    return error_payload("unauthenticated", "A user session is required")
+  end
+
+  local steps = params.steps
+  if type(steps) ~= "table" or #steps == 0 then
+    return error_payload("invalid_payload", "the game has no moves")
+  end
+
+  local rules = require("chess_rules")
+  local game = rules.new(params.fen)
+  for index, san in ipairs(steps) do
+    if type(san) ~= "string" then
+      return error_payload("invalid_payload", "a move is not written properly")
+    end
+    local played, move_error = game:move_san(san)
+    if not played then
+      return error_payload(
+        "invalid_game",
+        "the game cannot be played: " .. tostring(move_error)
+      )
+    end
+  end
+
+  local result = params.result or "*"
+  local winner = nil
+  local outcome = "draw"
+  local status = "draw"
+
+  if result == "1-0" then
+    winner = "w"
+    outcome = "win"
+    status = "checkmate"
+  elseif result == "0-1" then
+    winner = "b"
+    outcome = "loss"
+    status = "checkmate"
+  elseif result == "1/2-1/2" then
+    outcome = "draw"
+    status = "draw"
+  end
+
+  local color = params.color == "b" and "b" or "w"
+  local time_control = params.timeControl or {}
+  local key = "import_" .. progression.hash_key(table.concat(steps, " "))
+
+  local record = {
+    matchId = key,
+    mode = "imported",
+    rated = false,
+    color = color,
+    outcome = outcome,
+    status = status,
+    reason = "imported",
+    winnerColor = winner,
+    opponent = {
+      userId = "",
+      username = params.opponent or "Player",
+    },
+    moves = #steps,
+    steps = steps,
+    pgn = game:pgn(),
+    finalFen = game:fen(),
+    timeControl = {
+      initialMs = tonumber(time_control.initialMs) or 0,
+      incrementMs = tonumber(time_control.incrementMs) or 0,
+    },
+    ratingBefore = 0,
+    ratingAfter = 0,
+    ratingDelta = 0,
+    endedAt = nk.time(),
+  }
+
+  local ok, write_error = pcall(nk.storage_write, {
+    {
+      collection = progression.HISTORY_COLLECTION,
+      key = key,
+      user_id = user_id,
+      value = record,
+    },
+  })
+
+  if not ok then
+    return error_payload("storage_unavailable", tostring(write_error))
+  end
+
+  return {
+    ok = true,
+    entry = record,
+  }
+end
+
+--- A short name for a game, so the same game is not kept twice.
+function progression.hash_key(text)
+  local hash = 5381
+  for index = 1, #text do
+    hash = (hash * 33 + text:byte(index)) % 4294967296
+  end
+  return string.format("%08x", hash)
+end
+
+function progression.profile_payload(context)
+  local user_id = context and context.user_id  if not user_id or user_id == "" then
     return error_payload("unauthenticated", "A user session is required")
   end
 

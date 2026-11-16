@@ -337,3 +337,19 @@ local function get_leaderboard(context, payload)
   return nk.json_encode(progression.leaderboard_payload(context, params))
 end
 nk.register_rpc(get_leaderboard, "chess_get_leaderboard")
+
+--- A game the player brought from somewhere else, added to their games.
+local function import_game(context, payload)
+  local params, decode_error = decode_payload(payload)
+  if not params then
+    return response_error("invalid_payload", decode_error)
+  end
+
+  local ok, result = pcall(progression.import_game, context, params)
+  if not ok then
+    return response_error("import_failed", tostring(result))
+  end
+
+  return nk.json_encode(result)
+end
+nk.register_rpc(import_game, "chess_import_game")

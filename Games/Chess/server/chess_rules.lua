@@ -993,8 +993,32 @@ function Game:move(input)
   return chosen
 end
 
-function Game:undo()
-  local record = table.remove(self.history)
+--- Play a move that is written the way a player writes it.
+--
+-- The mark for check and the mark for mate are left off when the move is
+-- compared, for a player may leave them out.
+function Game:move_san(text)
+  if type(text) ~= "string" or text == "" then
+    return nil, "a move must be written"
+  end
+
+  local wanted = text:gsub("[+#?!]", "")
+  local legal_moves = self:generate_legal_moves(self.turn)
+
+  for _, move in ipairs(legal_moves) do
+    local san = self:san_for(move, legal_moves)
+    local plain = san:gsub("[+#?!]", "")
+    if plain == wanted then
+      move.san = san
+      self:apply_move(move, true, san)
+      return move
+    end
+  end
+
+  return nil, "illegal move"
+end
+
+function Game:undo()  local record = table.remove(self.history)
   if not record then
     return nil
   end

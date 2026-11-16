@@ -185,6 +185,53 @@ async function main() {
     const aliceEvents = createCollector(alice.socket, "alice");
     let bobEvents = createCollector(bob.socket, "bob");
 
+    // A game the player brought from somewhere else is kept, and it is
+    // played out again by the rules of the server first.
+    const imported = await alice.client.rpc(
+      alice.session,
+      "chess_import_game",
+      {
+        steps: ["e4", "e5", "Nf3", "Nc6", "Bb5"],
+        result: "1-0",
+        color: "w",
+        opponent: "Someone else",
+      },
+    );
+    assert(
+      imported.payload?.ok === true,
+      "the game was not imported: " + JSON.stringify(imported.payload),
+    );
+    assert(
+      imported.payload.entry?.moves === 5,
+      "the imported game does not have its moves",
+    );
+    console.log("[ok] a game brought from elsewhere is kept");
+
+    const profileAfterImport = await alice.client.rpc(
+      alice.session,
+      "chess_get_profile",
+      {},
+    );
+    const importedEntry = (profileAfterImport.payload?.history ?? []).find(
+      (entry) => entry.mode === "imported",
+    );
+    assert(
+      importedEntry !== undefined,
+      "the imported game is not in the history",
+    );
+    console.log("[ok] the imported game is in the player's games");
+
+    const refusedImport = await alice.client.rpc(
+      alice.session,
+      "chess_import_game",
+      { steps: ["e4", "e5", "Nf6"] },
+    );
+    assert(
+      refusedImport.payload?.ok === false,
+      "a game that cannot be played was accepted",
+    );
+    console.log("[ok] a game that cannot be played is refused");
+
     const privateRpc = await alice.client.rpc(
       alice.session,
       "chess_create_private_match",

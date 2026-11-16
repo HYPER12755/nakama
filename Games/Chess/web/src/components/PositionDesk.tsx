@@ -5,6 +5,7 @@ import {
   openGame,
   openPosition,
   readDeskInput,
+  readDeskTags,
   type DeskPosition,
 } from "../lib/desk";
 import { ChessBoard } from "./ChessBoard";
@@ -21,6 +22,13 @@ export interface PositionDeskProps {
   theme?: Parameters<typeof ChessBoard>[0]["theme"];
   /** The coordinates, as the player has chosen them. */
   coordinates?: Parameters<typeof ChessBoard>[0]["coordinates"];
+  /** Called when the game at the desk is added to the player's games. */
+  onImport?: (input: {
+    steps: string[];
+    result?: string;
+    color?: "w" | "b";
+    opponent?: string;
+  }) => Promise<{ ok: boolean; message: string | null }>;
   /** Called when the player wants to play from the position on the board. */
   onPlayFrom: (fen: string) => void;
   /** Called when the desk is closed. */
@@ -39,6 +47,7 @@ export function PositionDesk({
   pieceSet = "moongames",
   theme,
   coordinates,
+  onImport,
   onPlayFrom,
   onClose,
 }: PositionDeskProps) {
@@ -48,6 +57,14 @@ export function PositionDesk({
   const [flipped, setFlipped] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  /** The side the player was in the game that was brought in. */
+  const [importColor, setImportColor] = useState<"w" | "b">("w");
+  /** The names the game carries in its tags. */
+  const [importTags, setImportTags] = useState({
+    result: "*",
+    white: "",
+    black: "",
+  });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -81,6 +98,9 @@ export function PositionDesk({
   const lastPly = Math.max(0, frames.length - 1);
   const frame = frames[Math.min(ply, lastPly)];
   const steps = useMemo(() => position?.steps ?? [], [position]);
+  const importResult = importTags.result;
+  const importOpponent =
+    importColor === "w" ? importTags.black : importTags.white;
 
   const open = () => {
     const input = readDeskInput(text);
@@ -99,6 +119,7 @@ export function PositionDesk({
       input.kind === "fen" ? openPosition(input.fen) : openGame(input.pgn);
     setPosition(loaded);
     setPly(0);
+    setImportTags(readDeskTags(input.kind === "pgn" ? input.pgn : ""));
   };
 
   const copyFen = async () => {
@@ -125,6 +146,27 @@ export function PositionDesk({
     setPosition(loaded);
     setPly(0);
     setEditing(false);
+  };
+
+  /**
+   * Add the game at the desk to the player's own games.
+   *
+   * The server plays the moves out again with its own rules, so a game
+   * that cannot be played is refused there and not here.
+   */
+  const importGame = async () => {
+    if (onImport === undefined || steps.length === 0) {
+      return;
+    }
+    const result = await onImport({
+      steps,
+      result: importResult,
+      color: importColor,
+      opponent: importOpponent,
+    });
+    setNotice(
+      result.ok ? "The game is in your games now." : result.message,
+    );
   };
 
   return (
@@ -270,6 +312,14 @@ export function PositionDesk({
               <button
                 type="button"
                 className="action-button"
+                onClick={() => void importGame()}
+                disabled={steps.length === 0 || onImport === undefined}
+              >
+                Add to my games
+              </button>
+              <button
+                type="button"
+                className="action-button"
                 onClick={() => setEditing(true)}
               >
                 Edit the position
@@ -296,9 +346,30 @@ export function PositionDesk({
             )}
 
             {steps.length > 0 && (
-              <div className="desk-moves">
-                <MoveList history={frames[lastPly]?.state.history ?? []} />
-              </div>
+              <>
+                <div className="editor-turn">
+                  <span className="editor-label">You were</span>
+                  {(["w", "b"] as const).map((side) => (
+                    <button
+                      key={side}
+                      type="button"
+                      className={`editor-turn__button${
+                        importColor === side ? " is-chosen" : ""
+                      }`}
+                      onClick={() => setImportColor(side)}
+                    >
+                      <span
+                        className={`editor-dot editor-dot--${side}`}
+                        aria-hidden="true"
+                      />
+                      {side === "w" ? "White" : "Black"}
+                    </button>
+                  ))}
+                </div>
+                <div className="desk-moves">
+                  <MoveList history={frames[lastPly]?.state.history ?? []} />
+                </div>
+              </>
             )}
 
             {notice !== null && <p className="desk-notice">{notice}</p>}

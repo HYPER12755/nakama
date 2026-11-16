@@ -76,6 +76,10 @@ export interface PreferenceFeatures {
   resizeHandle?: boolean;
   /** A finished game of the game can be played back. */
   replay?: boolean;
+  /** The notation of the game can hide the names of the pieces. */
+  blindMode?: boolean;
+  /** A move of the game can be written with the keyboard. */
+  keyboardMoves?: boolean;
 }
 
 export interface GamePreferencesPanelProps {
@@ -573,6 +577,30 @@ export function GamePreferencesPanel({
               />
               <span>Mark the last move</span>
             </label>
+            {features.blindMode === true && (
+              <label className="pref-toggle">
+                <input
+                  type="checkbox"
+                  checked={preferences.blindMode}
+                  onChange={(event) =>
+                    choose("blindMode", event.target.checked)
+                  }
+                />
+                <span>Hide the names of the pieces in the moves</span>
+              </label>
+            )}
+            {features.keyboardMoves === true && (
+              <label className="pref-toggle">
+                <input
+                  type="checkbox"
+                  checked={preferences.keyboardMoves}
+                  onChange={(event) =>
+                    choose("keyboardMoves", event.target.checked)
+                  }
+                />
+                <span>Write a move with the keyboard</span>
+              </label>
+            )}
           </PreferenceGroup>
         </div>
       )}

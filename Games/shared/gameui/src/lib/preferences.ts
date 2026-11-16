@@ -213,6 +213,10 @@ export interface GamePreferences {
   resizeHandle: ShowResizeHandle;
   /** When a finished game is played back on the board. */
   replay: Replay;
+  /** Whether the notation hides the names of the pieces. */
+  blindMode: boolean;
+  /** Whether a move may be written with the keyboard. */
+  keyboardMoves: boolean;
 }
 
 export const DEFAULT_PREFERENCES: GamePreferences = {
@@ -230,6 +234,8 @@ export const DEFAULT_PREFERENCES: GamePreferences = {
   clockTenths: ShowClockTenths.Below10Seconds,
   resizeHandle: ShowResizeHandle.Always,
   replay: Replay.Never,
+  blindMode: false,
+  keyboardMoves: false,
 };
 
 export type PreferenceKey = keyof GamePreferences;

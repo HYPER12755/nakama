@@ -544,6 +544,73 @@ test("leaderboard payload does not invent a record for new players", function()
   assert_nil(payload.me)
 end)
 
+-- A game the player brought from somewhere else is kept, and it is
+-- played out again by the rules of the server first.
+
+test("a game that is brought in is kept", function()
+  reset()
+  local result = progression.import_game(
+    { user_id = "u-import" },
+    {
+      steps = { "e4", "e5", "Nf3", "Nc6" },
+      result = "1-0",
+      color = "w",
+      opponent = "Someone else",
+    }
+  )
+
+  assert_equal(result.ok, true)
+  assert_equal(result.entry.mode, "imported")
+  assert_equal(result.entry.rated, false)
+  assert_equal(result.entry.moves, 4)
+  assert_equal(result.entry.opponent.username, "Someone else")
+  assert_equal(result.entry.winnerColor, "w")
+
+  -- The game is in the history of the player.
+  local payload = progression.profile_payload({ user_id = "u-import" })
+  assert_equal(payload.ok, true)
+  assert_equal(#payload.history, 1)
+  assert_equal(payload.history[1].mode, "imported")
+end)
+
+test("a game that cannot be played is not kept", function()
+  reset()
+  local result = progression.import_game(
+    { user_id = "u-import-bad" },
+    { steps = { "e4", "e5", "Nf6" } }
+  )
+
+  assert_equal(result.ok, false)
+  assert_equal(result.error.code, "invalid_game")
+
+  local payload = progression.profile_payload({ user_id = "u-import-bad" })
+  assert_equal(#payload.history, 0)
+end)
+
+test("the same game brought in twice is kept once", function()
+  reset()
+  local first = progression.import_game(
+    { user_id = "u-import-twice" },
+    { steps = { "e4", "e5" } }
+  )
+  local second = progression.import_game(
+    { user_id = "u-import-twice" },
+    { steps = { "e4", "e5" } }
+  )
+
+  assert_equal(first.entry.matchId, second.entry.matchId)
+  local payload = progression.profile_payload({ user_id = "u-import-twice" })
+  assert_equal(#payload.history, 1)
+end)
+
+test("a game brought in needs a session", function()
+  reset()
+  local result = progression.import_game({}, { steps = { "e4" } })
+
+  assert_equal(result.ok, false)
+  assert_equal(result.error.code, "unauthenticated")
+end)
+
 print("")
 print(string.format("%d/%d tests passed", tests_passed, tests_run))
 

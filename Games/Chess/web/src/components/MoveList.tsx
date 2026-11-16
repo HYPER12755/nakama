@@ -1,11 +1,14 @@
 import { useEffect, useRef } from "react";
 import type { MoveRecord } from "@moongames/chess-core";
+import { blindSan } from "../lib/notation";
 
 export interface MoveListProps {
   history: MoveRecord[];
+  /** Whether the names of the pieces are hidden. */
+  blind?: boolean;
 }
 
-export function MoveList({ history }: MoveListProps) {
+export function MoveList({ history, blind = false }: MoveListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,8 +46,20 @@ export function MoveList({ history }: MoveListProps) {
             {rows.map((row) => (
               <li key={row.number} className="move-row">
                 <span className="move-number">{row.number}.</span>
-                <span className="move-san">{row.white?.san ?? ""}</span>
-                <span className="move-san">{row.black?.san ?? ""}</span>
+                <span className="move-san">
+                  {row.white === undefined
+                    ? ""
+                    : blind
+                      ? blindSan(row.white.san)
+                      : row.white.san}
+                </span>
+                <span className="move-san">
+                  {row.black === undefined
+                    ? ""
+                    : blind
+                      ? blindSan(row.black.san)
+                      : row.black.san}
+                </span>
               </li>
             ))}
           </ol>

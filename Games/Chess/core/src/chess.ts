@@ -237,6 +237,22 @@ export class ChessEngine {
     };
   }
 
+  /**
+   * The moves of the piece on a square, whoever's turn it is.
+   *
+   * A player who is waiting for the other side can still see where their
+   * own pieces may go, which is what a move ready for the next turn needs.
+   */
+  movesFrom(square: Square): MoveRecord[] {
+    try {
+      return this.chess
+        .moves({ square: square as unknown as ChessSquare, verbose: true })
+        .map(toMoveRecord);
+    } catch {
+      return [];
+    }
+  }
+
   pgn(): string {
     return this.chess.pgn();
   }

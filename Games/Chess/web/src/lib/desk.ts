@@ -62,6 +62,50 @@ export function isValidFen(fen: string): boolean {
   }
 }
 
+/** The names a game carries in its tags. */
+export interface DeskTags {
+  /** How the game ended. */
+  result: string;
+  /** The name of the white player. */
+  white: string;
+  /** The name of the black player. */
+  black: string;
+}
+
+/**
+ * Read the tags of a game: how it ended, and who played it.
+ *
+ * A game without tags has no names and no result, and that is allowed.
+ */
+export function readDeskTags(text: string): DeskTags {
+  const tags: DeskTags = { result: "*", white: "", black: "" };
+
+  const tag = (name: string): string | null => {
+    const match = new RegExp(
+      `\\[${name}\\s+"([^"]*)"\\]`,
+      "i",
+    ).exec(text);
+    return match === null ? null : match[1];
+  };
+
+  const result = tag("Result");
+  if (result !== null && result.trim().length > 0) {
+    tags.result = result.trim();
+  }
+
+  const white = tag("White");
+  if (white !== null) {
+    tags.white = white.trim();
+  }
+
+  const black = tag("Black");
+  if (black !== null) {
+    tags.black = black.trim();
+  }
+
+  return tags;
+}
+
 /**
  * Put a game on the desk, so it can be walked through.
  */

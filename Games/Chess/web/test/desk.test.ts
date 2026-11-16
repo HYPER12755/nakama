@@ -5,6 +5,7 @@ import {
   openGame,
   openPosition,
   readDeskInput,
+  readDeskTags,
 } from "../src/lib/desk";
 
 /**
@@ -90,5 +91,25 @@ describe("a game carried away from the desk", () => {
   it("is written in moves again", () => {
     expect(deskPgn(["e4", "e5", "Nf3"])).toBe("1. e4 e5 2. Nf3 *");
     expect(deskPgn([])).toBe("");
+  });
+});
+
+describe("the names a game carries", () => {
+  it("are read from its tags", () => {
+    const tags = readDeskTags(
+      '[Event "A game"]\n[White "Someone"]\n[Black "Another"]\n[Result "1-0"]\n\n1. e4 e5',
+    );
+
+    expect(tags.white).toBe("Someone");
+    expect(tags.black).toBe("Another");
+    expect(tags.result).toBe("1-0");
+  });
+
+  it("are empty when the game has no tags", () => {
+    const tags = readDeskTags("1. e4 e5");
+
+    expect(tags.white).toBe("");
+    expect(tags.black).toBe("");
+    expect(tags.result).toBe("*");
   });
 });

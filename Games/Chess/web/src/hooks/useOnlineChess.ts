@@ -62,6 +62,7 @@ import {
 } from "../lib/onlineProtocol";
 import { playOpponentLeft } from "../lib/audio";
 import { promotionPiece } from "../lib/promotion";
+import { findKeyboardMove, readKeyboardMove } from "../lib/notation";
 
 /**
  * The identifiers of this title come from the build, so the client never
@@ -150,6 +151,14 @@ export interface OnlineChessController {
   profileLoading: boolean;
   profileError: string | null;
   refreshProfile: () => void;
+  /** Add a game brought from somewhere else to the player's games. */
+  importGame: (input: {
+    steps: string[];
+    result?: string;
+    color?: Color;
+    opponent?: string;
+    timeControl?: { initialMs: number; incrementMs: number };
+  }) => Promise<{ ok: boolean; message: string | null }>;
   connect: () => Promise<void>;
   disconnect: () => void;
   quickMatch: () => Promise<void>;
@@ -166,6 +175,14 @@ export interface OnlineChessController {
   selectSquare: (square: Square) => void;
   /** Move a piece from one square to another, as a drag does. */
   movePiece: (from: Square, to: Square) => void;
+  /** The move that is ready for the turn after this one. */
+  premove: { from: Square; to: Square } | null;
+  /** The squares the piece of the ready move may go to. */
+  premoveTargets: Square[];
+  /** Forget the move that is ready. */
+  clearPremove: () => void;
+  /** Play a move that was written with the keyboard. */
+  moveBySan: (san: string) => boolean;
   choosePromotion: (piece: PromotionPiece) => void;
   cancelPromotion: () => void;
   resign: () => void;
@@ -354,6 +371,14 @@ export function useOnlineChess(
   const [selected, setSelected] = useState<Square | null>(null);
   const [pendingPromotion, setPendingPromotion] =
     useState<PendingOnlinePromotion | null>(null);
+  /** The move that is ready for the turn after this one. */
+  const [premove, setPremove] = useState<{
+    from: Square;
+    to: Square;
+  } | null>(null);
+  /** The piece whose moves are being chosen for the next turn. */
+  const [premoveFrom, setPremoveFrom] = useState<Square | null>(null);
+  const [premoveTargets, setPremoveTargets] = useState<Square[]>([]);
   // True while a move is on its way to the server. The table waits for the
   // answer, so the player cannot send a second move on top of the first.
   const [pendingMove, setPendingMove] = useState(false);
@@ -1340,6 +1365,70 @@ export function useOnlineChess(
     setProfileRefresh((current) => current + 1);
   }, []);
 
+  /**
+   * Add a game the player brought from somewhere else to their games.
+   *
+   * The server plays the moves out again with its own rules, so a game
+   * that cannot be played is not kept.
+   */
+  const importGame = useCallback(
+    async (input: {
+      steps: string[];
+      result?: string;
+      color?: Color;
+      opponent?: string;
+      timeControl?: { initialMs: number; incrementMs: number };
+    }): Promise<{ ok: boolean; message: string | null }> => {
+      try {
+        await connect();
+      } catch {
+        return {
+          ok: false,
+          message: "The game server could not be reached.",
+        };
+      }
+
+      const client = clientRef.current;
+      const currentSession = sessionRef.current;
+      if (client === null || currentSession === null) {
+        return {
+          ok: false,
+          message: "Connect to the game server to add a game.",
+        };
+      }
+
+      try {
+        const response = await client.rpc(
+          currentSession,
+          "chess_import_game",
+          input,
+        );
+        const payload = (response.payload ?? {}) as {
+          ok?: boolean;
+          error?: { message?: string };
+        };
+        if (payload.ok !== true) {
+          return {
+            ok: false,
+            message:
+              payload.error?.message ?? "That game could not be added.",
+          };
+        }
+        refreshProfile();
+        return { ok: true, message: null };
+      } catch (cause) {
+        return {
+          ok: false,
+          message:
+            cause instanceof Error
+              ? cause.message
+              : "That game could not be added.",
+        };
+      }
+    },
+    [connect, refreshProfile],
+  );
+
   const requireSocket = useCallback(async (): Promise<Socket> => {
     if (socketRef.current === null) {
       await connect();
@@ -2079,6 +2168,13 @@ export function useOnlineChess(
         return;
       }
 
+      // While the other player is thinking, the move is chosen for the turn
+      // after this one.
+      if (state.turn !== myColor) {
+        choosePremove(square);
+        return;
+      }
+
       if (selected !== null) {
         const candidates = (state.legalMoves[selected] ?? []).filter(
           (move) => move.to === square,
@@ -2177,6 +2273,105 @@ export function useOnlineChess(
     [autoQueen, myColor, pendingMove, sendMove, serverState],
   );
 
+  /**
+   * Choose the move that is ready for the turn after this one.
+   *
+   * The first square is the piece, the second is where it goes.
+   */
+  const choosePremove = useCallback(
+    (square: Square) => {
+      if (serverState === null || myColor === null) {
+        return;
+      }
+
+      // The square the piece of the ready move may go to.
+      if (premoveFrom !== null && premoveTargets.includes(square)) {
+        setPremove({ from: premoveFrom, to: square });
+        setPremoveFrom(null);
+        setPremoveTargets([]);
+        return;
+      }
+
+      const piece = serverState.state.board.find(
+        (candidate) => candidate.square === square,
+      );
+      if (piece?.color !== myColor) {
+        setPremoveFrom(null);
+        setPremoveTargets([]);
+        return;
+      }
+
+      try {
+        const engine = createChessEngine(serverState.state.fen);
+        const moves = engine.movesFrom(square);
+        setPremoveFrom(square);
+        setPremoveTargets([...new Set(moves.map((move) => move.to))]);
+      } catch {
+        setPremoveFrom(null);
+        setPremoveTargets([]);
+      }
+    },
+    [myColor, premoveFrom, premoveTargets, serverState],
+  );
+
+  /** Forget the move that is ready for the next turn. */
+  const clearPremove = useCallback(() => {
+    setPremove(null);
+    setPremoveFrom(null);
+    setPremoveTargets([]);
+  }, []);
+
+  // The move that is ready is played as soon as it is the player's turn.
+  useEffect(() => {
+    if (premove === null || serverState === null || myColor === null) {
+      return;
+    }
+    if (serverState.state.turn !== myColor || pendingMove) {
+      return;
+    }
+    const ready = premove;
+    clearPremove();
+    sendMove(ready.from, ready.to);
+  }, [
+    clearPremove,
+    myColor,
+    pendingMove,
+    premove,
+    sendMove,
+    serverState,
+  ]);
+
+  /**
+   * Play a move that was written with the keyboard.
+   *
+   * The move is looked for among the moves that are legal, so a move
+   * written by hand is checked the same way a move made by clicking is.
+   */
+  const moveBySan = useCallback(
+    (san: string): boolean => {
+      if (serverState === null || myColor === null) {
+        return false;
+      }
+      const moves = Object.values(serverState.state.legalMoves).flat();
+      const found = findKeyboardMove(moves, readKeyboardMove(san));
+      if (found === null) {
+        return false;
+      }
+      if (found.promotion !== undefined) {
+        setPendingPromotion({
+          from: found.from,
+          to: found.to,
+          color: myColor,
+        });
+        setError(null);
+        return true;
+      }
+      sendMove(found.from, found.to);
+      return true;
+    },
+    [myColor, sendMove, serverState],
+  );
+
   const choosePromotion = useCallback(
     (promotion: PromotionPiece) => {
       if (pendingPromotion === null) {
@@ -2229,6 +2424,12 @@ export function useOnlineChess(
   );
 
   const legalTargets = useMemo(() => {
+    // While a move for the next turn is being chosen, the squares it may
+    // go to are the ones that are shown.
+    if (premoveFrom !== null) {
+      return premoveTargets;
+    }
+
     if (selected === null || serverState === null) {
       return [];
     }
@@ -2326,6 +2527,7 @@ export function useOnlineChess(
     profileLoading,
     profileError,
     refreshProfile,
+    importGame,
     connect,
     disconnect,
     quickMatch,
@@ -2337,6 +2539,10 @@ export function useOnlineChess(
     dismissOpponentLeft,
     selectSquare,
     movePiece,
+    premove,
+    premoveTargets,
+    clearPremove,
+    moveBySan,
     choosePromotion,
     cancelPromotion,
     resign,

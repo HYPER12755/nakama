@@ -124,6 +124,8 @@ const CHESS_FEATURES = {
   clockTenths: true,
   resizeHandle: true,
   replay: true,
+  blindMode: true,
+  keyboardMoves: true,
 };
 
 export interface AppProps {
@@ -359,10 +361,81 @@ export default function App({ bridge }: AppProps) {
       ? activeState
       : (replay.frames[replay.ply]?.state ?? activeState);
 
+  // The move that is ready for the turn after this one.
+  const premove = onlineMode ? online.premove : localController.premove;
+
   const isLive =
     matchStarted &&
     !finished &&
     (activeState.status === "active" || activeState.status === "check");
+
+  // What the player has written with the keyboard.
+  const [typedMove, setTypedMove] = useState("");
+
+  useEffect(() => {
+    if (!preferences.keyboardMoves) {
+      setTypedMove("");
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target !== null &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (!isLive) {
+        return;
+      }
+
+      if (event.key === "Enter") {
+        // The square that has the focus must not be played as well.
+        event.preventDefault();
+        const written = typedMove.trim();
+        if (written.length === 0) {
+          return;
+        }
+        const played = onlineMode
+          ? online.moveBySan(written)
+          : localController.moveBySan(written);
+        if (!played) {
+          setToast(`"${written}" is not a move that can be played.`);
+        }
+        setTypedMove("");
+        return;
+      }
+
+      if (event.key === "Backspace") {
+        event.preventDefault();
+        setTypedMove((current) => current.slice(0, -1));
+        return;
+      }
+
+      if (event.key === "Escape") {
+        setTypedMove("");
+        return;
+      }
+
+      if (/^[a-hKQRBNkqrbn1-8x=]$/.test(event.key)) {
+        event.preventDefault();
+        setTypedMove((current) => (current + event.key).slice(-8));
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    isLive,
+    localController,
+    online,
+    onlineMode,
+    preferences.keyboardMoves,
+    typedMove,
+  ]);
 
   const baseBottom: Color = onlineMode
     ? (online.myColor ?? "w")
@@ -1021,6 +1094,16 @@ export default function App({ bridge }: AppProps) {
             <span className="board-hud__label">
               {onlineMode ? "Online table" : aiMode ? "Practice table" : "Local table"}
             </span>
+            {typedMove.length > 0 && (
+              <span className="board-hud__typing" aria-live="polite">
+                {typedMove}
+              </span>
+            )}
+            {premove !== null && (
+              <span className="board-hud__premove" aria-live="polite">
+                Your move is ready
+              </span>
+            )}
             <button
               type="button"
               className="board-hud__fullscreen"
@@ -1060,6 +1143,7 @@ export default function App({ bridge }: AppProps) {
               showLegalMoves={preferences.showLegalMoves}
               highlightLastMove={preferences.highlightLastMove}
               moveEvent={preferences.moveEvent}
+              premove={premove}
               onMove={
                 onlineMode ? online.movePiece : localController.movePiece
               }
@@ -1158,7 +1242,7 @@ export default function App({ bridge }: AppProps) {
                         black: topColor === "b" ? topOnline.name ?? "Black" : bottomOnline.name ?? "Black",
                       }}
                     />
-                    <MoveList history={activeState.history} />
+                    <MoveList history={activeState.history} blind={preferences.blindMode} />
                     <ChessCaptured state={activeState} />
                     {online.drawOffer !== null &&
                     online.drawOffer.by !== online.myColor ? (
@@ -1247,7 +1331,7 @@ export default function App({ bridge }: AppProps) {
                 clockTenths={preferences.clockTenths}
               />
               <ChessCaptured state={activeState} />
-              <MoveList history={activeState.history} />
+              <MoveList history={activeState.history} blind={preferences.blindMode} />
               <GameToolbar
                 actions={[
                   { id: "new", label: "New game", onClick: handleNewGame },
@@ -1292,7 +1376,7 @@ export default function App({ bridge }: AppProps) {
                 clockTenths={preferences.clockTenths}
               />
               <ChessCaptured state={activeState} />
-              <MoveList history={activeState.history} />
+              <MoveList history={activeState.history} blind={preferences.blindMode} />
               <GameToolbar
                 actions={[
                   { id: "new", label: "New game", onClick: handleNewGame },
@@ -1372,6 +1456,7 @@ export default function App({ bridge }: AppProps) {
           pieceSet={preferences.pieceSet}
           theme={boardTheme}
           coordinates={preferences.coordinates}
+          onImport={(input) => online.importGame(input)}
           onPlayFrom={(fen) => {
             localGame.startFromFen(fen);
             setMode("local");

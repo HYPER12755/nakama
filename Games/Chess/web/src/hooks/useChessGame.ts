@@ -10,6 +10,7 @@ import {
 } from "@moongames/chess-core";
 import { AutoQueen, type MoveEvent } from "@moongames/game-ui";
 import { promotionPiece } from "../lib/promotion";
+import { findKeyboardMove, readKeyboardMove } from "../lib/notation";
 
 export interface PendingPromotion {
   from: Square;
@@ -44,6 +45,14 @@ export interface ChessGameController {
   selectSquare: (square: Square) => void;
   /** Move a piece from one square to another, as a drag does. */
   movePiece: (from: Square, to: Square) => void;
+  /** The move that is ready for the next turn. */
+  premove: { from: Square; to: Square } | null;
+  /** The squares the piece of the ready move may go to. */
+  premoveTargets: Square[];
+  /** Forget the move that is ready. */
+  clearPremove: () => void;
+  /** Play a move that was written with the keyboard. */
+  moveBySan: (san: string) => boolean;
   choosePromotion: (piece: PromotionPiece) => void;
   cancelPromotion: () => void;
   newGame: () => void;
@@ -90,6 +99,14 @@ export function useChessGame(
       : null,
   );
   const [aiThinking, setAiThinking] = useState(false);
+  /** The move that is ready for the turn after this one. */
+  const [premove, setPremove] = useState<{
+    from: Square;
+    to: Square;
+  } | null>(null);
+  /** The piece whose moves are being chosen for the next turn. */
+  const [premoveFrom, setPremoveFrom] = useState<Square | null>(null);
+  const [premoveTargets, setPremoveTargets] = useState<Square[]>([]);
   const aiGenerationRef = useRef(0);
   const aiTimerRef = useRef<number | null>(null);
   const active = options.active ?? true;
@@ -186,6 +203,69 @@ export function useChessGame(
     [engine, refresh],
   );
 
+  /**
+   * Choose the move that is ready for the turn after this one.
+   *
+   * The first square is the piece, the second is where it goes.
+   */
+  const choosePremove = useCallback(
+    (square: Square) => {
+      const humanColor = aiSettings?.humanColor ?? null;
+      if (humanColor === null) {
+        return;
+      }
+
+      // The square the piece of the ready move may go to.
+      if (premoveFrom !== null && premoveTargets.includes(square)) {
+        setPremove({ from: premoveFrom, to: square });
+        setPremoveFrom(null);
+        setPremoveTargets([]);
+        return;
+      }
+
+      const piece = state.board.find(
+        (candidate) => candidate.square === square,
+      );
+      if (piece?.color !== humanColor) {
+        setPremoveFrom(null);
+        setPremoveTargets([]);
+        return;
+      }
+
+      const moves = engine.movesFrom(square);
+      setPremoveFrom(square);
+      setPremoveTargets([...new Set(moves.map((move) => move.to))]);
+    },
+    [aiSettings, engine, premoveFrom, premoveTargets, state.board],
+  );
+
+  /** Forget the move that is ready for the next turn. */
+  const clearPremove = useCallback(() => {
+    setPremove(null);
+    setPremoveFrom(null);
+    setPremoveTargets([]);
+  }, []);
+
+  // The move that is ready is played as soon as it is the player's turn.
+  useEffect(() => {
+    if (premove === null) {
+      return;
+    }
+    const humanColor = aiSettings?.humanColor ?? null;
+    if (humanColor === null || state.turn !== humanColor) {
+      return;
+    }
+    const ready = premove;
+    clearPremove();
+    playMove(ready.from, ready.to);
+  }, [
+    aiSettings,
+    clearPremove,
+    playMove,
+    premove,
+    state.turn,
+  ]);
+
   const selectSquare = useCallback(
     (square: Square) => {
       const humanColor = aiSettings?.humanColor ?? null;
@@ -202,11 +282,18 @@ export function useChessGame(
         return;
       }
 
-      if (
-        terminal(state) ||
-        (humanColor !== null &&
-          (aiThinking || state.turn !== humanColor))
-      ) {
+      if (terminal(state)) {
+        return;
+      }
+
+      // While the computer is thinking, the move is chosen for the turn
+      // after this one.
+      if (humanColor !== null && state.turn !== humanColor) {
+        choosePremove(square);
+        return;
+      }
+
+      if (humanColor !== null && aiThinking) {
         return;
       }
 
@@ -251,11 +338,40 @@ export function useChessGame(
       aiSettings,
       aiThinking,
       autoQueen,
+      choosePremove,
       pendingPromotion,
       playMove,
       selected,
       state,
     ],
+  );
+
+  /**
+   * Play a move that was written with the keyboard.
+   *
+   * The move is looked for among the moves that are legal, so a move
+   * written by hand is checked the same way a move made by clicking is.
+   */
+  const moveBySan = useCallback(
+    (san: string): boolean => {
+      const moves = Object.values(state.legalMoves).flat();
+      const found = findKeyboardMove(moves, readKeyboardMove(san));
+      if (found === null) {
+        return false;
+      }
+      if (found.promotion !== undefined) {
+        setPendingPromotion({
+          from: found.from,
+          to: found.to,
+          color: state.turn,
+        });
+        setError(null);
+        return true;
+      }
+      playMove(found.from, found.to);
+      return true;
+    },
+    [playMove, state.legalMoves, state.turn],
   );
 
   /**
@@ -383,6 +499,12 @@ export function useChessGame(
   }, [aiSettings, cancelAi, engine, refresh, state.turn]);
 
   const legalTargets = useMemo(() => {
+    // While a move for the next turn is being chosen, the squares it may
+    // go to are the ones that are shown.
+    if (premoveFrom !== null) {
+      return premoveTargets;
+    }
+
     if (selected === null) {
       return [];
     }
@@ -392,7 +514,7 @@ export function useChessGame(
         (state.legalMoves[selected] ?? []).map((move) => move.to),
       ),
     ];
-  }, [selected, state.legalMoves]);
+  }, [premoveFrom, premoveTargets, selected, state.legalMoves]);
 
   const checkSquare = useMemo(() => {
     if (!state.inCheck) {
@@ -425,6 +547,10 @@ export function useChessGame(
     aiThinking,
     selectSquare,
     movePiece,
+    premove,
+    premoveTargets,
+    clearPremove,
+    moveBySan,
     choosePromotion,
     cancelPromotion,
     newGame,

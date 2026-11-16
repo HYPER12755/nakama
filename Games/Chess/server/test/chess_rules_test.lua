@@ -436,6 +436,39 @@ test("perft kiwipete", function()
   assert_equal(perft(game, 2), 2039)
 end)
 
+test("a move that is written is played", function()
+  local game = rules.new()
+  local move = game:move_san("e4")
+
+  assert_truthy(move, "the move was not found")
+  assert_equal(move.san, "e4")
+  assert_equal(move.uci, "e2e4")
+  assert_equal(game.turn, "b")
+end)
+
+test("a move that is written is found without its mark for mate", function()
+  local game = rules.new()
+  assert_truthy(game:move_san("e4"))
+  assert_truthy(game:move_san("e5"))
+  assert_truthy(game:move_san("Bc4"))
+  assert_truthy(game:move_san("Nc6"))
+  assert_truthy(game:move_san("Qh5"))
+  assert_truthy(game:move_san("Nf6"))
+
+  -- The scholar's mate. The mark for mate may be left out.
+  local mating = game:move_san("Qxf7")
+  assert_truthy(mating, "the move was not found")
+  assert_equal(mating.san, "Qxf7#")
+end)
+
+test("a move that cannot be played is refused", function()
+  local game = rules.new()
+  local move, message = game:move_san("e5")
+
+  assert_nil(move)
+  assert_truthy(message, "the move was refused without a reason")
+end)
+
 print("")
 print(
   string.format(
