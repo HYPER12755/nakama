@@ -331,6 +331,25 @@ local function set_result(context, dispatcher, state, result, now)
     )
   end
 
+  -- A game of a tournament is a game of the tournament as well, so the
+  -- standings are kept.
+  if state.mode == "tournament" then
+    local tournament_ok, tournament_error = pcall(
+      require("chess_tournament").finish_match,
+      context.match_id,
+      result.winnerUserId,
+      result.status
+    )
+    if not tournament_ok then
+      nk.logger_error(
+        "Chess tournament result failed for "
+          .. tostring(context.match_id)
+          .. ": "
+          .. tostring(tournament_error)
+      )
+    end
+  end
+
   refresh_label(state, dispatcher)
   broadcast(dispatcher, OP.GAME_OVER, state_payload(context, state, now))
 end
@@ -700,7 +719,10 @@ end
 local function match_init(context, params)
   params = params or {}
 
-  local mode = params.mode == "private" and "private" or "quick"
+  local mode = params.mode
+  if mode ~= "private" and mode ~= "tournament" then
+    mode = "quick"
+  end
   local time_control, time_error = protocol.parse_time_control(
     params.time_control or params.timeControl
   )

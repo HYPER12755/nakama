@@ -75,6 +75,11 @@ import {
   type PuzzleNext,
   type StormState,
 } from "../lib/puzzles";
+import {
+  readTournament,
+  readTournamentList,
+  type Tournament,
+} from "../lib/tournaments";
 
 /**
  * The identifiers of this title come from the build, so the client never
@@ -202,6 +207,22 @@ export interface OnlineChessController {
     id: string,
     move: string,
   ) => Promise<{ solved: boolean; score: number; solutionSan: string }>;
+  /** The tournaments there are. */
+  tournamentList: () => Promise<Tournament[]>;
+  /** A tournament and its standings. */
+  tournamentGet: (id: string) => Promise<Tournament | null>;
+  /** Make a tournament. */
+  tournamentCreate: (input: {
+    name: string;
+    rounds: number;
+    timeControl: { initialMs: number; incrementMs: number };
+  }) => Promise<{ ok: boolean; tournament: Tournament | null; message: string | null }>;
+  /** Take a seat in a tournament. */
+  tournamentJoin: (id: string) => Promise<{ ok: boolean; message: string | null }>;
+  /** Leave a tournament. */
+  tournamentLeave: (id: string) => Promise<{ ok: boolean; message: string | null }>;
+  /** Begin a tournament. */
+  tournamentStart: (id: string) => Promise<{ ok: boolean; message: string | null }>;
   connect: () => Promise<void>;
   disconnect: () => void;
   quickMatch: () => Promise<void>;
@@ -1739,6 +1760,232 @@ export function useOnlineChess(
     [],
   );
 
+  /** The tournaments there are. */
+  const tournamentList = useCallback(async (): Promise<Tournament[]> => {
+    const client = clientRef.current;
+    const currentSession = sessionRef.current;
+    if (client === null || currentSession === null) {
+      return [];
+    }
+
+    try {
+      const response = await client.rpc(
+        currentSession,
+        "chess_tournament_list",
+        {},
+      );
+      return readTournamentList(response.payload);
+    } catch {
+      return [];
+    }
+  }, []);
+
+  /** A tournament and its standings. */
+  const tournamentGet = useCallback(
+    async (id: string): Promise<Tournament | null> => {
+      const client = clientRef.current;
+      const currentSession = sessionRef.current;
+      if (client === null || currentSession === null) {
+        return null;
+      }
+
+      try {
+        const response = await client.rpc(currentSession, "chess_tournament_get", {
+          id,
+        });
+        const payload = (response.payload ?? {}) as {
+          ok?: boolean;
+          tournament?: unknown;
+          error?: { message?: string };
+        };
+        if (payload.ok !== true) {
+          return null;
+        }
+        return readTournament(payload.tournament);
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
+
+  /** Make a tournament. */
+  const tournamentCreate = useCallback(
+    async (input: {
+      name: string;
+      rounds: number;
+      timeControl: { initialMs: number; incrementMs: number };
+    }): Promise<{
+      ok: boolean;
+      tournament: Tournament | null;
+      message: string | null;
+    }> => {
+      const client = clientRef.current;
+      const currentSession = sessionRef.current;
+      if (client === null || currentSession === null) {
+        return {
+          ok: false,
+          tournament: null,
+          message: "Connect to the game server to make a tournament.",
+        };
+      }
+
+      try {
+        const response = await client.rpc(
+          currentSession,
+          "chess_tournament_create",
+          input,
+        );
+        const payload = (response.payload ?? {}) as {
+          ok?: boolean;
+          tournament?: unknown;
+          error?: { message?: string };
+        };
+        if (payload.ok !== true) {
+          return {
+            ok: false,
+            tournament: null,
+            message:
+              payload.error?.message ?? "The tournament could not be made.",
+          };
+        }
+        return { ok: true, tournament: readTournament(payload.tournament), message: null };
+      } catch (cause) {
+        return {
+          ok: false,
+          tournament: null,
+          message:
+            cause instanceof Error
+              ? cause.message
+              : "The tournament could not be made.",
+        };
+      }
+    },
+    [],
+  );
+
+  /** Take a seat in a tournament. */
+  const tournamentJoin = useCallback(
+    async (id: string): Promise<{ ok: boolean; message: string | null }> => {
+      const client = clientRef.current;
+      const currentSession = sessionRef.current;
+      if (client === null || currentSession === null) {
+        return {
+          ok: false,
+          message: "Connect to the game server to join a tournament.",
+        };
+      }
+
+      try {
+        const response = await client.rpc(currentSession, "chess_tournament_join", {
+          id,
+        });
+        const payload = (response.payload ?? {}) as {
+          ok?: boolean;
+          error?: { message?: string };
+        };
+        if (payload.ok !== true) {
+          return {
+            ok: false,
+            message:
+              payload.error?.message ?? "The tournament could not be joined.",
+          };
+        }
+        return { ok: true, message: null };
+      } catch (cause) {
+        return {
+          ok: false,
+          message:
+            cause instanceof Error
+              ? cause.message
+              : "The tournament could not be joined.",
+        };
+      }
+    },
+    [],
+  );
+
+  /** Leave a tournament. */
+  const tournamentLeave = useCallback(
+    async (id: string): Promise<{ ok: boolean; message: string | null }> => {
+      const client = clientRef.current;
+      const currentSession = sessionRef.current;
+      if (client === null || currentSession === null) {
+        return { ok: false, message: "Connect to the game server to leave." };
+      }
+
+      try {
+        const response = await client.rpc(
+          currentSession,
+          "chess_tournament_leave",
+          { id },
+        );
+        const payload = (response.payload ?? {}) as {
+          ok?: boolean;
+          error?: { message?: string };
+        };
+        if (payload.ok !== true) {
+          return {
+            ok: false,
+            message:
+              payload.error?.message ?? "The tournament could not be left.",
+          };
+        }
+        return { ok: true, message: null };
+      } catch (cause) {
+        return {
+          ok: false,
+          message:
+            cause instanceof Error
+              ? cause.message
+              : "The tournament could not be left.",
+        };
+      }
+    },
+    [],
+  );
+
+  /** Begin a tournament. */
+  const tournamentStart = useCallback(
+    async (id: string): Promise<{ ok: boolean; message: string | null }> => {
+      const client = clientRef.current;
+      const currentSession = sessionRef.current;
+      if (client === null || currentSession === null) {
+        return {
+          ok: false,
+          message: "Connect to the game server to begin the tournament.",
+        };
+      }
+
+      try {
+        const response = await client.rpc(currentSession, "chess_tournament_start", {
+          id,
+        });
+        const payload = (response.payload ?? {}) as {
+          ok?: boolean;
+          error?: { message?: string };
+        };
+        if (payload.ok !== true) {
+          return {
+            ok: false,
+            message:
+              payload.error?.message ?? "The tournament could not be begun.",
+          };
+        }
+        return { ok: true, message: null };
+      } catch (cause) {
+        return {
+          ok: false,
+          message:
+            cause instanceof Error
+              ? cause.message
+              : "The tournament could not be begun.",
+        };
+      }
+    },
+    [],
+  );
+
   const requireSocket = useCallback(async (): Promise<Socket> => {
     if (socketRef.current === null) {
       await connect();
@@ -2845,6 +3092,12 @@ export function useOnlineChess(
     stormStart,
     stormNext,
     stormAnswer,
+    tournamentList,
+    tournamentGet,
+    tournamentCreate,
+    tournamentJoin,
+    tournamentLeave,
+    tournamentStart,
     connect,
     disconnect,
     quickMatch,

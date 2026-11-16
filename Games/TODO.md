@@ -434,6 +434,25 @@ by it.
 - [x] The answer is kept back by the server until the move has been made,
   so it is not in the hands of the client before the player has found it.
 
+### The tournaments — done
+
+A tournament is a number of rounds in which everybody plays one game in
+every round, the way a swiss does on lichess: the players are paired by
+the points they have, the games are rated, and the standings are kept
+until the last round is done.
+
+- [x] A tournament is made by one player, who is its host, and other
+  players take their seats in it.
+- [x] The rounds are made by the server: the players are paired by the
+  points they have, the ones who have played each other already are kept
+  apart, and the player left over is given a point for the round.
+- [x] The games of a round are ordinary games of chess, with the same
+  rules and the same clocks as any other game here.
+- [x] The standings are kept as the games end, and the next round is
+  made when the last game of the round is done.
+- [x] The tournament is in the storage of the server, so every player
+  sees the same one.
+
 ### What lichess has that we do not — to take next
 
 - [x] The opening explorer: the openings people play, with the games they
@@ -444,7 +463,8 @@ by it.
   The storm is done; the racer, where the puzzles are solved against the
   clock and against other players, is not.
 - [ ] The opening trainer, and the practice game against the computer.
-- [ ] Tournaments: an arena, a swiss, and a round of games.
+- [ ] Tournaments: the arena, where everybody plays everybody and the
+  games are made as the seats fill, and the swiss, which is done.
 - [ ] The badges and the titles a player earns.
 - [ ] The dashboard: the puzzles, the streak, the ratings, and the games
   played, all in one place.

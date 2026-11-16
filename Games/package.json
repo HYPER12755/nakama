@@ -18,7 +18,7 @@
     "serve:releases": "node tools/serve-releases.mjs",
     "catalog:generate": "node tools/generate-catalog.mjs --public launcher/public",
     "test": "pnpm -r --if-present test",
-    "test:lua": "lua shared/server/test/moongames_social_test.lua && lua Chess/server/test/chess_rules_test.lua && lua Chess/server/test/chess_protocol_test.lua && lua Chess/server/test/chess_match_test.lua && lua Chess/server/test/chess_profile_test.lua && lua Chess/server/test/chess_opening_test.lua && lua Chess/server/test/chess_puzzle_test.lua && lua Chess/server/test/chess_glicko_test.lua && lua Carrom/server/test/carrom_rules_test.lua && lua Carrom/server/test/carrom_match_test.lua && lua Carrom/server/test/carrom_profile_test.lua",
+    "test:lua": "lua shared/server/test/moongames_social_test.lua && lua Chess/server/test/chess_rules_test.lua && lua Chess/server/test/chess_protocol_test.lua && lua Chess/server/test/chess_match_test.lua && lua Chess/server/test/chess_profile_test.lua && lua Chess/server/test/chess_opening_test.lua && lua Chess/server/test/chess_puzzle_test.lua && lua Chess/server/test/chess_tournament_test.lua && lua Chess/server/test/chess_glicko_test.lua && lua Carrom/server/test/carrom_rules_test.lua && lua Carrom/server/test/carrom_match_test.lua && lua Carrom/server/test/carrom_profile_test.lua",
     "test:tools": "node --test tools/test/*.test.mjs",
     "test:all": "pnpm test && pnpm test:lua && pnpm test:tools",
     "smoke:online": "pnpm --filter @moongames/chess-web smoke:online",

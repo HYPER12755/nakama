@@ -493,6 +493,82 @@ async function main() {
     );
     console.log("[ok] the wrong answer does not score in the storm");
 
+    // The tournaments: a number of rounds in which everybody plays one
+    // game in every round.
+    const createdTournament = await alice.client.rpc(
+      alice.session,
+      "chess_tournament_create",
+      {
+        name: "The smoke cup",
+        rounds: 2,
+        timeControl: { initialMs: 300000, incrementMs: 0 },
+      },
+    );
+    assert(
+      createdTournament.payload?.ok === true,
+      "the tournament was not made: " +
+        JSON.stringify(createdTournament.payload),
+    );
+    const tournament = createdTournament.payload.tournament;
+    assert(tournament?.id, "the tournament has no name of its own");
+    console.log(`[ok] the tournament was made: ${tournament.name}`);
+
+    const joinedTournament = await bob.client.rpc(
+      bob.session,
+      "chess_tournament_join",
+      { id: tournament.id },
+    );
+    assert(
+      joinedTournament.payload?.ok === true,
+      "the second player could not take a seat: " +
+        JSON.stringify(joinedTournament.payload),
+    );
+    assert(
+      joinedTournament.payload.tournament.players.length === 2,
+      "the tournament does not hold both players",
+    );
+    console.log("[ok] the second player took a seat");
+
+    const refusedStart = await bob.client.rpc(
+      bob.session,
+      "chess_tournament_start",
+      { id: tournament.id },
+    );
+    assert(
+      refusedStart.payload?.ok === false,
+      "a player who is not the host began the tournament",
+    );
+    console.log("[ok] only the host can begin the tournament");
+
+    const startedTournament = await alice.client.rpc(
+      alice.session,
+      "chess_tournament_start",
+      { id: tournament.id },
+    );
+    assert(
+      startedTournament.payload?.ok === true &&
+        startedTournament.payload.tournament.round === 1,
+      "the tournament did not begin: " +
+        JSON.stringify(startedTournament.payload),
+    );
+    const withGame = startedTournament.payload.tournament.players.filter(
+      (player) => player.matchId !== null && player.matchId !== undefined,
+    );
+    assert(withGame.length === 2, "the players were not given their game");
+    console.log("[ok] the first round was made and the players have their game");
+
+    const listedTournaments = await alice.client.rpc(
+      alice.session,
+      "chess_tournament_list",
+      {},
+    );
+    assert(
+      Array.isArray(listedTournaments.payload?.tournaments) &&
+        listedTournaments.payload.tournaments.length >= 1,
+      "the tournaments are not listed",
+    );
+    console.log("[ok] the tournaments are listed");
+
     const privateRpc = await alice.client.rpc(
       alice.session,
       "chess_create_private_match",

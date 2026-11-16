@@ -48,6 +48,7 @@ import { OnlineGameToolbar } from "./components/OnlineGameToolbar";
 import { OpeningExplorer } from "./components/OpeningExplorer";
 import { PuzzlePanel } from "./components/PuzzlePanel";
 import { StormPanel } from "./components/StormPanel";
+import { TournamentPanel } from "./components/TournamentPanel";
 import { OnlinePanel } from "./components/OnlinePanel";
 import { PositionDesk } from "./components/PositionDesk";
 import { PromotionPicker } from "./components/PromotionPicker";
@@ -231,6 +232,7 @@ export default function App({ bridge }: AppProps) {
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [puzzleOpen, setPuzzleOpen] = useState(false);
   const [stormOpen, setStormOpen] = useState(false);
+  const [tournamentOpen, setTournamentOpen] = useState(false);
   const boardPanelRef = useRef<HTMLElement>(null);
   const inviteConnectRef = useRef(false);
   const inviteHandledRef = useRef(false);
@@ -1575,6 +1577,11 @@ export default function App({ bridge }: AppProps) {
                     label: "The storm",
                     onClick: () => setStormOpen(true),
                   },
+                  {
+                    id: "tournaments",
+                    label: "The tournaments",
+                    onClick: () => setTournamentOpen(true),
+                  },
                 ]}
               />
             </>
@@ -1643,6 +1650,11 @@ export default function App({ bridge }: AppProps) {
                     id: "storm",
                     label: "The storm",
                     onClick: () => setStormOpen(true),
+                  },
+                  {
+                    id: "tournaments",
+                    label: "The tournaments",
+                    onClick: () => setTournamentOpen(true),
                   },
                 ]}
               />
@@ -1716,6 +1728,29 @@ export default function App({ bridge }: AppProps) {
           pieceSet={preferences.pieceSet}
           coordinates={preferences.coordinates}
           onClose={() => setStormOpen(false)}
+        />
+      )}
+
+      {tournamentOpen && (
+        <TournamentPanel
+          onList={() => online.tournamentList()}
+          onCreate={(input) => online.tournamentCreate(input)}
+          onJoin={(id) => online.tournamentJoin(id)}
+          onLeave={(id) => online.tournamentLeave(id)}
+          onStart={(id) => online.tournamentStart(id)}
+          onPlay={(matchId) => {
+            setTournamentOpen(false);
+            setMode("online");
+            void online.joinMatch(matchId).catch((cause) => {
+              setToast(
+                cause instanceof Error
+                  ? cause.message
+                  : "Could not open the game of the round.",
+              );
+            });
+          }}
+          userId={online.session?.userId ?? null}
+          onClose={() => setTournamentOpen(false)}
         />
       )}
 

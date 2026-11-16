@@ -5,6 +5,7 @@ local protocol = require("chess_protocol")
 local progression = require("chess_profile")
 local opening = require("chess_opening")
 local puzzle = require("chess_puzzle")
+local tournament = require("chess_tournament")
 local social = require("moongames_social")
 
 local PRIVATE_LOBBY_TIMEOUT_MS = social.INVITE_TTL_MS + 60000
@@ -454,3 +455,89 @@ local function storm_progress(context, payload)
   return nk.json_encode(puzzle.storm_progress(context))
 end
 nk.register_rpc(storm_progress, "chess_storm_progress")
+
+--- The tournaments there are.
+local function tournament_list(context, payload)
+  return nk.json_encode(tournament.list(context))
+end
+nk.register_rpc(tournament_list, "chess_tournament_list")
+
+--- A tournament and its standings.
+local function tournament_get(context, payload)
+  local params, decode_error = decode_payload(payload)
+  if not params then
+    return response_error("invalid_payload", decode_error)
+  end
+
+  local ok, result = pcall(tournament.get, context, params)
+  if not ok then
+    return response_error("tournament_failed", tostring(result))
+  end
+
+  return nk.json_encode(result)
+end
+nk.register_rpc(tournament_get, "chess_tournament_get")
+
+--- Make a tournament.
+local function tournament_create(context, payload)
+  local params, decode_error = decode_payload(payload)
+  if not params then
+    return response_error("invalid_payload", decode_error)
+  end
+
+  local ok, result = pcall(tournament.create, context, params)
+  if not ok then
+    return response_error("tournament_failed", tostring(result))
+  end
+
+  return nk.json_encode(result)
+end
+nk.register_rpc(tournament_create, "chess_tournament_create")
+
+--- Take a seat in a tournament.
+local function tournament_join(context, payload)
+  local params, decode_error = decode_payload(payload)
+  if not params then
+    return response_error("invalid_payload", decode_error)
+  end
+
+  local ok, result = pcall(tournament.join, context, params)
+  if not ok then
+    return response_error("tournament_failed", tostring(result))
+  end
+
+  return nk.json_encode(result)
+end
+nk.register_rpc(tournament_join, "chess_tournament_join")
+
+--- Leave a tournament.
+local function tournament_leave(context, payload)
+  local params, decode_error = decode_payload(payload)
+  if not params then
+    return response_error("invalid_payload", decode_error)
+  end
+
+  local ok, result = pcall(tournament.leave, context, params)
+  if not ok then
+    return response_error("tournament_failed", tostring(result))
+  end
+
+  return nk.json_encode(result)
+end
+nk.register_rpc(tournament_leave, "chess_tournament_leave")
+
+--- Begin a tournament.
+local function tournament_start(context, payload)
+  local params, decode_error = decode_payload(payload)
+  if not params then
+    return response_error("invalid_payload", decode_error)
+  end
+
+  local ok, result = pcall(tournament.start, context, params)
+  if not ok then
+    return response_error("tournament_failed", tostring(result))
+  end
+
+  return nk.json_encode(result)
+end
+nk.register_rpc(tournament_start, "chess_tournament_start")
