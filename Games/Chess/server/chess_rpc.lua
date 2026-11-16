@@ -3,6 +3,7 @@
 local nk = require("nakama")
 local protocol = require("chess_protocol")
 local progression = require("chess_profile")
+local opening = require("chess_opening")
 local social = require("moongames_social")
 
 local PRIVATE_LOBBY_TIMEOUT_MS = social.INVITE_TTL_MS + 60000
@@ -353,3 +354,19 @@ local function import_game(context, payload)
   return nk.json_encode(result)
 end
 nk.register_rpc(import_game, "chess_import_game")
+
+--- The openings people play here, and the games they came from.
+local function opening_explorer(context, payload)
+  local params, decode_error = decode_payload(payload)
+  if not params then
+    return response_error("invalid_payload", decode_error)
+  end
+
+  local ok, result = pcall(opening.explorer, params.path)
+  if not ok then
+    return response_error("explorer_failed", tostring(result))
+  end
+
+  return nk.json_encode(result)
+end
+nk.register_rpc(opening_explorer, "chess_opening_explorer")

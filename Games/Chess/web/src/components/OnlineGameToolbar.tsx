@@ -8,6 +8,8 @@ export interface OnlineGameToolbarProps {
   onOfferDraw: () => void;
   onFlip: () => void;
   onCopyPgn: () => void;
+  /** Show the tree of the openings people play here. */
+  onOpenings?: () => void;
   onLeave: () => void;
 }
 
@@ -21,6 +23,7 @@ export function OnlineGameToolbar({
   onOfferDraw,
   onFlip,
   onCopyPgn,
+  onOpenings,
   onLeave,
 }: OnlineGameToolbarProps) {
   return (
@@ -59,6 +62,11 @@ export function OnlineGameToolbar({
         >
           Copy PGN
         </button>
+        {onOpenings === undefined ? null : (
+          <button type="button" className="action-button" onClick={onOpenings}>
+            Explore the openings
+          </button>
+        )}
       </div>
       <button type="button" className="text-button" onClick={onLeave}>
         {spectating ? "Stop watching" : "Leave online match"}

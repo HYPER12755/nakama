@@ -231,6 +231,9 @@ function progression.history_record(
     mode = state.mode,
     rated = state.rated == true,
     color = color,
+    -- The name of the player the record belongs to, so the openings of the
+    -- platform can name both sides of a game.
+    username = context.username,
     outcome = outcome,
     status = result.status,
     reason = result.reason,
@@ -725,6 +728,7 @@ function progression.import_game(context, params)
     mode = "imported",
     rated = false,
     color = color,
+    username = context.username,
     outcome = outcome,
     status = status,
     reason = "imported",

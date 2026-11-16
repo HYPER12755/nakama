@@ -63,6 +63,10 @@ import {
 import { playOpponentLeft } from "../lib/audio";
 import { promotionPiece } from "../lib/promotion";
 import { findKeyboardMove, readKeyboardMove } from "../lib/notation";
+import {
+  readExplorerResult,
+  type ExplorerResult,
+} from "../lib/openingExplorer";
 
 /**
  * The identifiers of this title come from the build, so the client never
@@ -159,6 +163,8 @@ export interface OnlineChessController {
     opponent?: string;
     timeControl?: { initialMs: number; incrementMs: number };
   }) => Promise<{ ok: boolean; message: string | null }>;
+  /** The openings played from a place in the tree. */
+  explorer: (path: string[]) => Promise<ExplorerResult>;
   connect: () => Promise<void>;
   disconnect: () => void;
   quickMatch: () => Promise<void>;
@@ -1430,6 +1436,51 @@ export function useOnlineChess(
     [connect, refreshProfile],
   );
 
+  /**
+   * The openings played from a place in the tree.
+   *
+   * The tree itself is made on the server from the games on this platform,
+   * so the answer is the same for everybody.
+   */
+  const explorer = useCallback(
+    async (path: string[]): Promise<ExplorerResult> => {
+      const unavailable = (message: string): ExplorerResult => ({
+        ok: false,
+        path,
+        total: 0,
+        moves: [],
+        games: [],
+        error: { code: "unavailable", message },
+      });
+
+      try {
+        await connect();
+      } catch {
+        return unavailable("The game server could not be reached.");
+      }
+
+      const client = clientRef.current;
+      const currentSession = sessionRef.current;
+      if (client === null || currentSession === null) {
+        return unavailable("Connect to the game server to see the openings.");
+      }
+
+      try {
+        const response = await client.rpc(currentSession, "chess_opening_explorer", {
+          path,
+        });
+        return readExplorerResult(response.payload, path);
+      } catch (cause) {
+        return unavailable(
+          cause instanceof Error
+            ? cause.message
+            : "The openings could not be read.",
+        );
+      }
+    },
+    [connect],
+  );
+
   const requireSocket = useCallback(async (): Promise<Socket> => {
     if (socketRef.current === null) {
       await connect();
@@ -2529,6 +2580,7 @@ export function useOnlineChess(
     profileError,
     refreshProfile,
     importGame,
+    explorer,
     connect,
     disconnect,
     quickMatch,

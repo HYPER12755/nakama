@@ -45,6 +45,7 @@ import { GameReportDialog } from "./components/GameReportDialog";
 import { GameStatus } from "./components/GameStatus";
 import { MoveList } from "./components/MoveList";
 import { OnlineGameToolbar } from "./components/OnlineGameToolbar";
+import { OpeningExplorer } from "./components/OpeningExplorer";
 import { OnlinePanel } from "./components/OnlinePanel";
 import { PositionDesk } from "./components/PositionDesk";
 import { PromotionPicker } from "./components/PromotionPicker";
@@ -225,6 +226,7 @@ export default function App({ bridge }: AppProps) {
   const [deskOpen, setDeskOpen] = useState(false);
   const [trainerOpen, setTrainerOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [explorerOpen, setExplorerOpen] = useState(false);
   const boardPanelRef = useRef<HTMLElement>(null);
   const inviteConnectRef = useRef(false);
   const inviteHandledRef = useRef(false);
@@ -1465,6 +1467,7 @@ export default function App({ bridge }: AppProps) {
                       onOfferDraw={handleOfferDraw}
                       onFlip={() => setFlipped((current) => !current)}
                       onCopyPgn={() => void handleCopyPgn()}
+                      onOpenings={() => setExplorerOpen(true)}
                       onLeave={handleLeaveMatch}
                     />
                   </>
@@ -1553,6 +1556,11 @@ export default function App({ bridge }: AppProps) {
                     label: "Train the coordinates",
                     onClick: () => setTrainerOpen(true),
                   },
+                  {
+                    id: "openings",
+                    label: "Explore the openings",
+                    onClick: () => setExplorerOpen(true),
+                  },
                 ]}
               />
             </>
@@ -1606,6 +1614,11 @@ export default function App({ bridge }: AppProps) {
                     id: "trainer",
                     label: "Train the coordinates",
                     onClick: () => setTrainerOpen(true),
+                  },
+                  {
+                    id: "openings",
+                    label: "Explore the openings",
+                    onClick: () => setExplorerOpen(true),
                   },
                 ]}
               />
@@ -1669,6 +1682,16 @@ export default function App({ bridge }: AppProps) {
             setDeskOpen(false);
           }}
           onClose={() => setDeskOpen(false)}
+        />
+      )}
+
+      {explorerOpen && (
+        <OpeningExplorer
+          onExplore={(path) => online.explorer(path)}
+          pieceSet={preferences.pieceSet}
+          theme={boardTheme}
+          coordinates={preferences.coordinates}
+          onClose={() => setExplorerOpen(false)}
         />
       )}
 

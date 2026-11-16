@@ -388,12 +388,29 @@ works the same on every device.
   whether they are right. It needs the opening book that the explorer
   needs.
 
+### The opening explorer — done
+
+The explorer is the tree of the openings people play here. The book is made
+on the server from the games that were played on this platform, so the
+tree is the tree of the moves, as it is on lichess, and every player sees
+the same one.
+
+- [x] The book is read from the history of every game on the server, each
+  game counted once though each player has a record of it, and the older
+  games that kept only their PGN count too.
+- [x] The tree is walked by clicking a move; the board shows the place
+  the player has come to, and the path can be walked back.
+- [x] The moves are shown with how many games played them, and the games
+  behind the place are named, with both players and the result.
+
 ### What lichess has that we do not — to take next
 
-- [ ] The opening explorer: the openings people play, with the games they
-  came from. It needs an opening book.
+- [x] The opening explorer: the openings people play, with the games they
+  came from. The book is the games of this platform, since there is no
+  other book to read.
 - [ ] Puzzles: positions to solve, a streak, and a board of what has been
-  solved. It needs positions that are worth solving.
+  solved. It needs positions that are worth solving. The engine can find
+  them now, in the games that were played here.
 - [ ] The opening trainer, and the practice game against the computer.
 - [ ] Tournaments: an arena, a swiss, and a round of games.
 - [ ] The badges and the titles a player earns.
