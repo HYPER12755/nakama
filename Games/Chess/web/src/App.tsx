@@ -41,6 +41,7 @@ import { GameStatus } from "./components/GameStatus";
 import { MoveList } from "./components/MoveList";
 import { OnlineGameToolbar } from "./components/OnlineGameToolbar";
 import { OnlinePanel } from "./components/OnlinePanel";
+import { PositionDesk } from "./components/PositionDesk";
 import { PromotionPicker } from "./components/PromotionPicker";
 import { PieceImage, PiecePreview } from "./components/Piece";
 import { ReplayDialog } from "./components/ReplayDialog";
@@ -204,6 +205,7 @@ export default function App({ bridge }: AppProps) {
   const [replayEntry, setReplayEntry] = useState<OnlineHistoryEntry | null>(
     null,
   );
+  const [deskOpen, setDeskOpen] = useState(false);
   const boardPanelRef = useRef<HTMLElement>(null);
   const inviteConnectRef = useRef(false);
   const inviteHandledRef = useRef(false);
@@ -1266,6 +1268,11 @@ export default function App({ bridge }: AppProps) {
                     onClick: () => void handleCopyPgn(),
                     disabled: !aiGame.canUndo,
                   },
+                  {
+                    id: "desk",
+                    label: "Open a game",
+                    onClick: () => setDeskOpen(true),
+                  },
                 ]}
               />
               <GamePreferencesPanel
@@ -1305,6 +1312,11 @@ export default function App({ bridge }: AppProps) {
                     label: "Copy PGN",
                     onClick: () => void handleCopyPgn(),
                     disabled: !localGame.canUndo,
+                  },
+                  {
+                    id: "desk",
+                    label: "Open a game",
+                    onClick: () => setDeskOpen(true),
                   },
                 ]}
               />
@@ -1352,6 +1364,20 @@ export default function App({ bridge }: AppProps) {
         <ReplayDialog
           entry={replayEntry}
           onClose={() => setReplayEntry(null)}
+        />
+      )}
+
+      {deskOpen && (
+        <PositionDesk
+          pieceSet={preferences.pieceSet}
+          theme={boardTheme}
+          coordinates={preferences.coordinates}
+          onPlayFrom={(fen) => {
+            localGame.startFromFen(fen);
+            setMode("local");
+            setDeskOpen(false);
+          }}
+          onClose={() => setDeskOpen(false)}
         />
       )}
 

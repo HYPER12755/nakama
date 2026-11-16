@@ -47,6 +47,8 @@ export interface ChessGameController {
   choosePromotion: (piece: PromotionPiece) => void;
   cancelPromotion: () => void;
   newGame: () => void;
+  /** Start a game from a position. */
+  startFromFen: (fen: string) => void;
   startAiGame: (settings: AiGameSettings) => void;
   undo: () => void;
   pgn: () => string;
@@ -324,6 +326,29 @@ export function useChessGame(
     refresh();
   }, [cancelAi, engine, refresh]);
 
+  /**
+   * Start a game from a position, the way a player who has a position in
+   * mind plays from it.
+   */
+  const startFromFen = useCallback(
+    (fen: string) => {
+      cancelAi();
+      try {
+        engine.load(fen);
+      } catch (cause) {
+        setError(
+          cause instanceof Error ? cause.message : "That position cannot be played",
+        );
+        return;
+      }
+      setSelected(null);
+      setPendingPromotion(null);
+      setError(null);
+      refresh();
+    },
+    [cancelAi, engine, refresh],
+  );
+
   const startAiGame = useCallback(
     (settings: AiGameSettings) => {
       cancelAi();
@@ -403,6 +428,7 @@ export function useChessGame(
     choosePromotion,
     cancelPromotion,
     newGame,
+    startFromFen,
     startAiGame,
     undo,
     pgn,

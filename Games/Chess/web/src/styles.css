@@ -645,6 +645,102 @@ button {
   border-bottom-right-radius: 4px;
 }
 
+/* The desk: a game or a position, opened and walked through. */
+
+.desk-body {
+  display: grid;
+  grid-template-columns: minmax(260px, 560px) minmax(260px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.desk-board {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.desk-board .square {
+  cursor: default;
+}
+
+.desk-side {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+
+.desk-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.desk-input {
+  width: 100%;
+  min-height: 116px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.desk-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.desk-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.desk-moves {
+  max-height: 190px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: var(--panel);
+}
+
+.desk-moves .move-list {
+  max-height: none;
+}
+
+.desk-empty {
+  margin: 0;
+  padding: 28px 18px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.desk-notice {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+@media (max-width: 900px) {
+  .desk-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* The bar that is shown while a finished game is played back. */
 
 .replay-bar {

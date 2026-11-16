@@ -322,16 +322,22 @@ that offers them is shared by every title (`Games/shared/gameui/`).
 ### What lichess has that we do not — to take next
 
 - [ ] The analysis board: an engine that says what the position is worth,
-  an evaluation bar, and the moves it likes.
+  an evaluation bar, and the moves it likes. It needs a WASM engine in a
+  worker, which the file-backed host does not allow yet, so the engine has
+  to come to the client another way first.
+- [x] The desk: a game brought in as PGN or a position as FEN, walked
+  through move by move on the board, and a game of the player's own played
+  from the position on it.
 - [ ] The opening explorer: the openings people play, with the games they
   came from.
 - [ ] Puzzles: positions to solve, a streak, and a board of what has been
   solved.
 - [ ] The trainer: the coordinate trainer, the opening trainer, and the
   practice game against the computer.
-- [ ] The position editor, with FEN and PGN going in and out.
-- [ ] PGN import, so a game brought from elsewhere can be looked at and
-  played back.
+- [ ] The position editor, with the pieces put on a board by hand. The desk
+  opens a position and can play from it, but it cannot yet build one.
+- [ ] PGN import into the player's own history, so a game brought from
+  elsewhere is played back from the profile. The desk opens one for now.
 - [ ] Pre-moves: the move that is ready before it is the player's turn.
 - [ ] Blind mode: the notation that hides the names of the pieces.
 - [ ] The keyboard: writing a move without touching the board.
