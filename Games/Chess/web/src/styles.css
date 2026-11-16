@@ -1016,6 +1016,147 @@ button {
   border-color: rgba(120, 190, 255, 0.35);
 }
 
+/* The coordinate trainer. */
+
+.trainer-body {
+  display: grid;
+  grid-template-columns: minmax(260px, 520px) minmax(240px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.trainer-board {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.trainer-board__wrap {
+  position: relative;
+  width: 100%;
+}
+
+.trainer-target {
+  position: absolute;
+  width: 12.5%;
+  height: 12.5%;
+  border: 3px solid var(--accent);
+  border-radius: 4px;
+  pointer-events: none;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.35);
+}
+
+.trainer-target.is-wrong {
+  border-color: var(--danger);
+}
+
+.trainer-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.trainer-status__target {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  min-width: 52px;
+}
+
+.trainer-input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--panel-raised);
+  color: var(--text);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: lowercase;
+}
+
+.trainer-status__score {
+  margin-left: auto;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.trainer-status__time {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--muted);
+  min-width: 42px;
+  text-align: right;
+}
+
+.trainer-status__time.is-low {
+  color: var(--danger);
+}
+
+.trainer-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.trainer-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trainer-selection__row {
+  display: flex;
+  gap: 4px;
+}
+
+.trainer-selection__button {
+  width: 26px;
+  padding: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-raised);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.trainer-selection__button.is-chosen {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel-raised));
+}
+
+.trainer-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--accent);
+}
+
+.trainer-actions {
+  display: flex;
+  gap: 7px;
+}
+
+@media (max-width: 900px) {
+  .trainer-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* The bar that says who is better, and the line the engine is thinking
    about. Both are the way lichess keeps them. */
 

@@ -33,6 +33,7 @@ import {
 import { AiPanel } from "./components/AiPanel";
 import { BoardResizeHandle } from "./components/BoardResizeHandle";
 import { ChessBoard } from "./components/ChessBoard";
+import { CoordinateTrainer } from "./components/CoordinateTrainer";
 import { EngineEvalBar } from "./components/EngineEvalBar";
 import { EnginePv } from "./components/EnginePv";
 import { EnginePvBoard } from "./components/EnginePvBoard";
@@ -217,6 +218,7 @@ export default function App({ bridge }: AppProps) {
     null,
   );
   const [deskOpen, setDeskOpen] = useState(false);
+  const [trainerOpen, setTrainerOpen] = useState(false);
   const boardPanelRef = useRef<HTMLElement>(null);
   const inviteConnectRef = useRef(false);
   const inviteHandledRef = useRef(false);
@@ -1487,6 +1489,15 @@ export default function App({ bridge }: AppProps) {
                 features={CHESS_FEATURES}
                 onPreviewSound={() => playMove()}
               />
+              <GameToolbar
+                actions={[
+                  {
+                    id: "trainer",
+                    label: "Train the coordinates",
+                    onClick: () => setTrainerOpen(true),
+                  },
+                ]}
+              />
             </>
           ) : (
             <>
@@ -1532,6 +1543,15 @@ export default function App({ bridge }: AppProps) {
                 features={CHESS_FEATURES}
                 onPreviewSound={() => playMove()}
               />
+              <GameToolbar
+                actions={[
+                  {
+                    id: "trainer",
+                    label: "Train the coordinates",
+                    onClick: () => setTrainerOpen(true),
+                  },
+                ]}
+              />
             </>
           )}
         </aside>
@@ -1568,6 +1588,14 @@ export default function App({ bridge }: AppProps) {
         <ReplayDialog
           entry={replayEntry}
           onClose={() => setReplayEntry(null)}
+        />
+      )}
+
+      {trainerOpen && (
+        <CoordinateTrainer
+          theme={boardTheme}
+          pieceSet={preferences.pieceSet}
+          onClose={() => setTrainerOpen(false)}
         />
       )}
 

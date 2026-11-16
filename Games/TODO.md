@@ -367,8 +367,22 @@ works the same on every device.
 - [x] The engine is reached through the same address as the menu and the
   games, so a tunnel or a CDN needs that one address.
 - [x] The engine is a service of the stack, built and started with it.
-- [ ] The moves of the engine can be played on the board by clicking them,
+- [x] The moves of the engine can be played on the board by clicking them,
   the way lichess does. The line is shown for now.
+- [x] The line of the engine can be looked at on a little board, and the
+  engine can be asked to look deeper.
+
+### The trainer — done
+
+- [x] The coordinate trainer, ported from lichess: a coordinate is named
+  and the square is found, or a square is marked and the coordinate is
+  written. The clock runs for thirty seconds unless the time is turned
+  off, the side of the board may be random, only the files and the ranks
+  that were chosen are used, and the score of every round is kept and
+  drawn.
+- [ ] The opening trainer, which asks the moves of an opening and says
+  whether they are right. It needs the opening book that the explorer
+  needs.
 
 ### What lichess has that we do not — to take next
 
@@ -376,8 +390,7 @@ works the same on every device.
   came from. It needs an opening book.
 - [ ] Puzzles: positions to solve, a streak, and a board of what has been
   solved. It needs positions that are worth solving.
-- [ ] The trainer: the coordinate trainer, the opening trainer, and the
-  practice game against the computer.
+- [ ] The opening trainer, and the practice game against the computer.
 - [ ] Tournaments: an arena, a swiss, and a round of games.
 - [ ] The badges and the titles a player earns.
 - [ ] The dashboard: the puzzles, the streak, the ratings, and the games
