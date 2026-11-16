@@ -67,6 +67,12 @@ import {
   readExplorerResult,
   type ExplorerResult,
 } from "../lib/openingExplorer";
+import {
+  readPuzzleAnswer,
+  readPuzzleNext,
+  type PuzzleAnswer,
+  type PuzzleNext,
+} from "../lib/puzzles";
 
 /**
  * The identifiers of this title come from the build, so the client never
@@ -165,6 +171,26 @@ export interface OnlineChessController {
   }) => Promise<{ ok: boolean; message: string | null }>;
   /** The openings played from a place in the tree. */
   explorer: (path: string[]) => Promise<ExplorerResult>;
+  /** A puzzle to solve, and the game to make more of them when needed. */
+  puzzleNext: () => Promise<PuzzleNext>;
+  /** The puzzles the engine found in a game. */
+  puzzleSave: (input: {
+    gameId: string;
+    initialFen: string;
+    steps: string[];
+    puzzles: Array<{
+      fen: string;
+      solution: string;
+      loss: number;
+      cp: number;
+      ply: number;
+    }>;
+  }) => Promise<{ ok: boolean; kept: number; message: string | null }>;
+  /** The move a player made, and whether it was the answer. */
+  puzzleAnswer: (
+    id: string,
+    move: string,
+  ) => Promise<PuzzleAnswer>;
   connect: () => Promise<void>;
   disconnect: () => void;
   quickMatch: () => Promise<void>;
@@ -1481,6 +1507,124 @@ export function useOnlineChess(
     [connect],
   );
 
+  /** A puzzle to solve, and the game to make more of them when needed. */
+  const puzzleNext = useCallback(async (): Promise<PuzzleNext> => {
+    const empty: PuzzleNext = {
+      puzzle: null,
+      game: null,
+      streak: 0,
+      best: 0,
+      solved: 0,
+      remaining: 0,
+    };
+
+    try {
+      await connect();
+    } catch {
+      return empty;
+    }
+
+    const client = clientRef.current;
+    const currentSession = sessionRef.current;
+    if (client === null || currentSession === null) {
+      return empty;
+    }
+
+    try {
+      const response = await client.rpc(currentSession, "chess_puzzle_next", {});
+      return readPuzzleNext(response.payload);
+    } catch {
+      return empty;
+    }
+  }, [connect]);
+
+  /** The puzzles the engine found in a game. */
+  const puzzleSave = useCallback(
+    async (input: {
+      gameId: string;
+      initialFen: string;
+      steps: string[];
+      puzzles: Array<{
+        fen: string;
+        solution: string;
+        loss: number;
+        cp: number;
+        ply: number;
+      }>;
+    }): Promise<{ ok: boolean; kept: number; message: string | null }> => {
+      const client = clientRef.current;
+      const currentSession = sessionRef.current;
+      if (client === null || currentSession === null) {
+        return {
+          ok: false,
+          kept: 0,
+          message: "Connect to the game server to keep the puzzles.",
+        };
+      }
+
+      try {
+        const response = await client.rpc(
+          currentSession,
+          "chess_puzzle_save",
+          input,
+        );
+        const payload = (response.payload ?? {}) as {
+          ok?: boolean;
+          kept?: number;
+          error?: { message?: string };
+        };
+        if (payload.ok !== true) {
+          return {
+            ok: false,
+            kept: 0,
+            message:
+              payload.error?.message ?? "The puzzles could not be kept.",
+          };
+        }
+        return { ok: true, kept: payload.kept ?? 0, message: null };
+      } catch (cause) {
+        return {
+          ok: false,
+          kept: 0,
+          message:
+            cause instanceof Error
+              ? cause.message
+              : "The puzzles could not be kept.",
+        };
+      }
+    },
+    [],
+  );
+
+  /** The move a player made, and whether it was the answer. */
+  const puzzleAnswer = useCallback(
+    async (id: string, move: string): Promise<PuzzleAnswer> => {
+      const empty: PuzzleAnswer = {
+        solved: false,
+        streak: 0,
+        best: 0,
+        played: 0,
+      };
+
+      const client = clientRef.current;
+      const currentSession = sessionRef.current;
+      if (client === null || currentSession === null) {
+        return empty;
+      }
+
+      try {
+        const response = await client.rpc(currentSession, "chess_puzzle_answer", {
+          id,
+          move,
+        });
+        return readPuzzleAnswer(response.payload);
+      } catch {
+        return empty;
+      }
+    },
+    [],
+  );
+
   const requireSocket = useCallback(async (): Promise<Socket> => {
     if (socketRef.current === null) {
       await connect();
@@ -2581,6 +2725,9 @@ export function useOnlineChess(
     refreshProfile,
     importGame,
     explorer,
+    puzzleNext,
+    puzzleSave,
+    puzzleAnswer,
     connect,
     disconnect,
     quickMatch,

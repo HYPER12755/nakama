@@ -221,6 +221,13 @@ function progression.history_record(
     final_fen = state.game:fen()
   end
 
+  -- The position the game began from, so the game can be played out again
+  -- from the beginning.
+  local initial_fen = nil
+  if state.game and state.game.initial_fen then
+    initial_fen = state.game.initial_fen
+  end
+
   local time_control = state.time_control or {
     initial_ms = 0,
     increment_ms = 0,
@@ -246,6 +253,7 @@ function progression.history_record(
     steps = history,
     pgn = pgn,
     finalFen = final_fen,
+    initialFen = initial_fen,
     timeControl = {
       initialMs = time_control.initial_ms,
       incrementMs = time_control.increment_ms,

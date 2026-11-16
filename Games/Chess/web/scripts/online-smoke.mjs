@@ -126,6 +126,88 @@ async function authenticate(deviceId) {
   return { client, session, socket };
 }
 
+/**
+ * The chances of winning, the way lichess keeps them.
+ */
+function winningChances(cp) {
+  const multiplier = -0.00368208;
+  const clamped = Math.min(Math.max(-1000, cp), 1000);
+  return 2 / (1 + Math.exp(multiplier * clamped)) - 1;
+}
+
+/**
+ * The engine looks at every position of a game, and the mistakes in it
+ * become puzzles.
+ */
+async function mineGame(source) {
+  const positions = source.positions ?? [];
+  const before = [];
+  const best = [];
+
+  for (let index = 0; index < positions.length; index += 1) {
+    const response = await fetch(
+      "http://127.0.0.1:4174/api/external-engine/moongames/analyse",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientSecret: "",
+          mode: "local",
+          work: {
+            sessionId: "puzzles",
+            threads: 1,
+            hash: 16,
+            multiPv: 1,
+            variant: "chess",
+            initialFen: source.initialFen,
+            moves: positions.slice(0, index).map((position) => position.uci),
+            by: "depth",
+            value: 12,
+          },
+        }),
+      },
+    );
+    assert(response.ok, `the engine said ${response.status}`);
+    const text = await response.text();
+    const lines = text
+      .split("\n")
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line))
+      .filter((line) => line.pvs && line.pvs.length > 0);
+    const line = lines[lines.length - 1];
+    const pv = line?.pvs?.[0];
+    const flipped = index % 2 === 1;
+    before.push(winningChances(flipped ? -(pv?.cp ?? 0) : (pv?.cp ?? 0)));
+    best.push(pv?.moves?.[0] ?? "");
+  }
+
+  const puzzles = [];
+  for (let index = 0; index + 1 < positions.length; index += 1) {
+    const mover = index % 2 === 0 ? "w" : "b";
+    const loss =
+      (mover === "w"
+        ? before[index] - before[index + 1]
+        : before[index + 1] - before[index]) / 2;
+    const chancesOfMover = mover === "w" ? before[index] : -before[index];
+    if (chancesOfMover > 0.8 || chancesOfMover < -0.8) {
+      continue;
+    }
+    if (loss <= 0.2 || best[index] === "") {
+      continue;
+    }
+    puzzles.push({
+      fen: positions[index].fen,
+      solution: best[index],
+      loss: Math.max(0, Math.min(1, loss)),
+      cp: Math.round(((before[index] + 1) / 2) * 100),
+      ply: index,
+    });
+  }
+
+  puzzles.sort((left, right) => right.loss - left.loss);
+  return puzzles.slice(0, 5);
+}
+
 function close(connection) {
   try {
     connection.socket.disconnect(false);
@@ -255,6 +337,111 @@ async function main() {
       "the engine is not given in a game against oneself",
     );
     console.log("[ok] the engine is given in a game against oneself");
+
+    // The puzzles: the server gives a game, the engine finds the mistakes
+    // in it, the server keeps them, and a player solves one.
+    const puzzleNext = await alice.client.rpc(
+      alice.session,
+      "chess_puzzle_next",
+      {},
+    );
+    assert(
+      puzzleNext.payload?.ok === true,
+      "the puzzle RPC failed: " + JSON.stringify(puzzleNext.payload),
+    );
+    const source = puzzleNext.payload?.game ?? null;
+    const ready = puzzleNext.payload?.puzzle ?? null;
+    assert(
+      source !== null || ready !== null,
+      "the server gave neither a puzzle nor a game to make one of",
+    );
+
+    if (source !== null) {
+      const mined = await mineGame(source);
+      assert(
+        mined.length > 0,
+        "the engine did not find a mistake in the game the server named",
+      );
+      const saved = await alice.client.rpc(
+        alice.session,
+        "chess_puzzle_save",
+        {
+          gameId: source.gameId,
+          initialFen: source.initialFen,
+          steps: source.steps,
+          puzzles: mined,
+        },
+      );
+      assert(
+        saved.payload?.ok === true && saved.payload.kept > 0,
+        "the puzzles were not kept: " + JSON.stringify(saved.payload),
+      );
+      console.log(`[ok] ${saved.payload.kept} puzzles were kept`);
+
+      // A puzzle whose position is not in the game is refused.
+      const forged = await alice.client.rpc(
+        alice.session,
+        "chess_puzzle_save",
+        {
+          gameId: source.gameId,
+          initialFen: source.initialFen,
+          steps: source.steps,
+          puzzles: [
+            {
+              fen: "8/8/8/8/8/8/8/4K3 w - - 0 1",
+              solution: "e1e2",
+              loss: 0.9,
+              cp: 0,
+              ply: 0,
+            },
+          ],
+        },
+      );
+      assert(
+        forged.payload?.ok === false,
+        "a puzzle that is not in the game was kept",
+      );
+      console.log("[ok] a puzzle that is not in the game is refused");
+    }
+
+    const withPuzzle = await alice.client.rpc(
+      alice.session,
+      "chess_puzzle_next",
+      {},
+    );
+    const puzzle = withPuzzle.payload?.puzzle ?? null;
+    assert(puzzle !== null, "the server gave no puzzle to solve");
+    assert(
+      typeof puzzle.fen === "string" && typeof puzzle.solution === "string",
+      "the puzzle is not written properly",
+    );
+
+    const wrong = await alice.client.rpc(
+      alice.session,
+      "chess_puzzle_answer",
+      { id: puzzle.id, move: "a1a1" },
+    );
+    assert(
+      wrong.payload?.ok === true && wrong.payload.solved === false,
+      "the wrong answer solved the puzzle",
+    );
+    console.log("[ok] the wrong answer does not solve the puzzle");
+
+    const right = await alice.client.rpc(
+      alice.session,
+      "chess_puzzle_answer",
+      { id: puzzle.id, move: puzzle.solution },
+    );
+    assert(
+      right.payload?.ok === true && right.payload.solved === true,
+      "the right answer did not solve the puzzle",
+    );
+    assert(
+      right.payload.streak >= 1,
+      "the streak did not go on after the puzzle was solved",
+    );
+    console.log(`[ok] the puzzle was solved, the streak is ${right.payload.streak}`);
+
     const privateRpc = await alice.client.rpc(
       alice.session,
       "chess_create_private_match",

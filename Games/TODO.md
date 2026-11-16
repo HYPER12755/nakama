@@ -403,14 +403,32 @@ the same one.
 - [x] The moves are shown with how many games played them, and the games
   behind the place are named, with both players and the result.
 
+### The puzzles — done
+
+The puzzles are the positions to solve, and they are made from the games
+that were played here: the engine looks at a game and the moves where a
+player gave away the most become puzzles. The lines the mistakes are
+drawn at are the ones lichess draws them at.
+
+- [x] The engine looks at every position of a game and the mistakes in it
+  become puzzles: the position before the mistake, and the move that
+  should have been played there. A position that is already won, or
+  already lost, is not worth a puzzle.
+- [x] The server does not take a puzzle on trust: the game is played out
+  again with the rules of the server, and a puzzle whose position is not
+  in that game, or whose answer cannot be played there, is refused.
+- [x] The puzzles are the same for everybody, and each player keeps their
+  own record of the ones they have solved.
+- [x] The streak: the puzzles solved in a row, and the most in a row. A
+  wrong answer ends the run, the way it does on lichess.
+
 ### What lichess has that we do not — to take next
 
 - [x] The opening explorer: the openings people play, with the games they
   came from. The book is the games of this platform, since there is no
   other book to read.
-- [ ] Puzzles: positions to solve, a streak, and a board of what has been
-  solved. It needs positions that are worth solving. The engine can find
-  them now, in the games that were played here.
+- [x] Puzzles: positions to solve, and a streak.
+- [ ] The storm and the racer, which are the puzzles with a clock on them.
 - [ ] The opening trainer, and the practice game against the computer.
 - [ ] Tournaments: an arena, a swiss, and a round of games.
 - [ ] The badges and the titles a player earns.

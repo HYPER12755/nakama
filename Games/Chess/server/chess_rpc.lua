@@ -4,6 +4,7 @@ local nk = require("nakama")
 local protocol = require("chess_protocol")
 local progression = require("chess_profile")
 local opening = require("chess_opening")
+local puzzle = require("chess_puzzle")
 local social = require("moongames_social")
 
 local PRIVATE_LOBBY_TIMEOUT_MS = social.INVITE_TTL_MS + 60000
@@ -370,3 +371,52 @@ local function opening_explorer(context, payload)
   return nk.json_encode(result)
 end
 nk.register_rpc(opening_explorer, "chess_opening_explorer")
+
+--- A puzzle to solve, and the game to make more of them when there is
+--- none.
+local function puzzle_next(context, payload)
+  return nk.json_encode(puzzle.next(context))
+end
+nk.register_rpc(puzzle_next, "chess_puzzle_next")
+
+--- The puzzles the engine found in a game.
+--
+-- The server plays the game out again with its own rules, so a puzzle
+-- whose position is not in that game, or whose answer cannot be played,
+-- is refused.
+local function puzzle_save(context, payload)
+  local params, decode_error = decode_payload(payload)
+  if not params then
+    return response_error("invalid_payload", decode_error)
+  end
+
+  local ok, result = pcall(puzzle.save, context, params)
+  if not ok then
+    return response_error("puzzle_failed", tostring(result))
+  end
+
+  return nk.json_encode(result)
+end
+nk.register_rpc(puzzle_save, "chess_puzzle_save")
+
+--- The move a player made, and whether it was the answer.
+local function puzzle_answer(context, payload)
+  local params, decode_error = decode_payload(payload)
+  if not params then
+    return response_error("invalid_payload", decode_error)
+  end
+
+  local ok, result = pcall(puzzle.answer, context, params)
+  if not ok then
+    return response_error("puzzle_failed", tostring(result))
+  end
+
+  return nk.json_encode(result)
+end
+nk.register_rpc(puzzle_answer, "chess_puzzle_answer")
+
+--- How the player is doing with the puzzles.
+local function puzzle_progress(context, payload)
+  return nk.json_encode(puzzle.progress(context))
+end
+nk.register_rpc(puzzle_progress, "chess_puzzle_progress")

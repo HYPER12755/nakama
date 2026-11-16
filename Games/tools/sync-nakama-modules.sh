@@ -23,7 +23,8 @@ for module in \
   chess_match.lua \
   chess_rpc.lua \
   chess_profile.lua \
-  chess_opening.lua; do
+  chess_opening.lua \
+  chess_puzzle.lua; do
   if [[ -f "$CHESS_DIR/$module" ]]; then
     cp "$CHESS_DIR/$module" "$DESTINATION/$module"
   fi

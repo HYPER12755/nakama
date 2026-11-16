@@ -4,6 +4,7 @@ import {
   type GameReport,
   type ReportMove,
 } from "../lib/engine/report";
+import { winningPercent } from "../lib/engine/winningChances";
 import type { EngineMode } from "../lib/engine/externalEngine";
 import { Icon } from "./Icon";
 
@@ -148,7 +149,7 @@ export function GameReportDialog({
               )}
               {move.before !== null && (
                 <span className="report-move__chance">
-                  {Math.round(move.before * 100)}%
+                  {Math.round(winningPercent(move.before) * 100)}%
                 </span>
               )}
             </li>
@@ -159,8 +160,9 @@ export function GameReportDialog({
           hovered.after !== null &&
           hovered.before !== null && (
             <p className="report-detail">
-              {hovered.san} left {Math.round(hovered.before * 100)} percent and{" "}
-              {Math.round(hovered.after * 100)} percent.
+              {hovered.san} left{" "}
+              {Math.round(winningPercent(hovered.before) * 100)} percent and{" "}
+              {Math.round(winningPercent(hovered.after) * 100)} percent.
             </p>
           )}
       </div>

@@ -46,6 +46,7 @@ import { GameStatus } from "./components/GameStatus";
 import { MoveList } from "./components/MoveList";
 import { OnlineGameToolbar } from "./components/OnlineGameToolbar";
 import { OpeningExplorer } from "./components/OpeningExplorer";
+import { PuzzlePanel } from "./components/PuzzlePanel";
 import { OnlinePanel } from "./components/OnlinePanel";
 import { PositionDesk } from "./components/PositionDesk";
 import { PromotionPicker } from "./components/PromotionPicker";
@@ -227,6 +228,7 @@ export default function App({ bridge }: AppProps) {
   const [trainerOpen, setTrainerOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [explorerOpen, setExplorerOpen] = useState(false);
+  const [puzzleOpen, setPuzzleOpen] = useState(false);
   const boardPanelRef = useRef<HTMLElement>(null);
   const inviteConnectRef = useRef(false);
   const inviteHandledRef = useRef(false);
@@ -1561,6 +1563,11 @@ export default function App({ bridge }: AppProps) {
                     label: "Explore the openings",
                     onClick: () => setExplorerOpen(true),
                   },
+                  {
+                    id: "puzzles",
+                    label: "Solve the puzzles",
+                    onClick: () => setPuzzleOpen(true),
+                  },
                 ]}
               />
             </>
@@ -1620,6 +1627,11 @@ export default function App({ bridge }: AppProps) {
                     label: "Explore the openings",
                     onClick: () => setExplorerOpen(true),
                   },
+                  {
+                    id: "puzzles",
+                    label: "Solve the puzzles",
+                    onClick: () => setPuzzleOpen(true),
+                  },
                 ]}
               />
             </>
@@ -1666,6 +1678,20 @@ export default function App({ bridge }: AppProps) {
           theme={boardTheme}
           pieceSet={preferences.pieceSet}
           onClose={() => setTrainerOpen(false)}
+        />
+      )}
+
+      {puzzleOpen && (
+        <PuzzlePanel
+          onNext={() => online.puzzleNext()}
+          onSave={(input) => online.puzzleSave(input)}
+          onAnswer={(id, move) => online.puzzleAnswer(id, move)}
+          mode={engineMode}
+          token={engineToken ?? undefined}
+          theme={boardTheme}
+          pieceSet={preferences.pieceSet}
+          coordinates={preferences.coordinates}
+          onClose={() => setPuzzleOpen(false)}
         />
       )}
 

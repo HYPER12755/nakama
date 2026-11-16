@@ -168,7 +168,11 @@ export async function analyseGame(
   try {
     for (let index = 0; index < uciMoves.length; index += 1) {
       const after = await look(index + 1);
-      const loss = before !== null && after !== null ? before - after : 0;
+      // Lichess measures how much a move gave away as half the difference
+      // of the winning chances, so the marks are drawn at the same lines
+      // there.
+      const loss =
+        before !== null && after !== null ? (before - after) / 2 : 0;
       moves.push({
         san: sanMoves[index] ?? uciMoves[index],
         uci: uciMoves[index],
