@@ -15,6 +15,8 @@ export interface ChessGameOverDialogProps {
   draw: boolean;
   /** Offers a rematch, which is how every chess app handles a finished game. */
   onRematch?: () => void;
+  /** Offers the report of the game, when the engine may be asked. */
+  onReport?: () => void;
   onClose: () => void;
 }
 
@@ -32,6 +34,7 @@ export function ChessGameOverDialog({
   won,
   draw,
   onRematch,
+  onReport,
   onClose,
 }: ChessGameOverDialogProps) {
   const title = draw
@@ -78,6 +81,16 @@ export function ChessGameOverDialog({
             >
               <Icon name="sparkles" size={17} />
               Rematch
+            </button>
+          )}
+          {onReport === undefined ? null : (
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={onReport}
+            >
+              <Icon name="sparkle" size={17} />
+              Analyse the game
             </button>
           )}
           <button

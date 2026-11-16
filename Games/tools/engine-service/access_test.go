@@ -26,8 +26,9 @@ func TestMayUseEngine(t *testing.T) {
 		httpClient: theSharedClient,
 	}
 
-	// The games against yourself and against the computer need no account.
-	for _, mode := range []string{"local", "ai", ""} {
+	// The games against yourself and against the computer are for practice,
+	// so the engine is for them.
+	for _, mode := range []string{"local", "ai"} {
 		if !current.mayUseEngine(context.Background(), httptest.NewRequest("POST", "/", nil), mode) {
 			t.Fatalf("the engine is not allowed in a %s game", mode)
 		}

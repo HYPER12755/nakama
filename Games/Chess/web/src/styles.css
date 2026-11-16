@@ -1166,6 +1166,72 @@ button {
   pointer-events: none;
 }
 
+/* The report of a finished game. */
+
+.report-dialog {
+  width: min(720px, 100%);
+}
+
+.report-progress,
+.report-summary,
+.report-detail {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.report-summary strong {
+  color: var(--text);
+}
+
+.report-moves {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.report-move {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 12px;
+  cursor: default;
+}
+
+.report-move--marked {
+  border-color: color-mix(in srgb, var(--warning) 55%, transparent);
+  background: color-mix(in srgb, var(--warning) 12%, var(--panel));
+}
+
+.report-move__number {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+
+.report-move__san {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-weight: 700;
+}
+
+.report-move__glyph {
+  color: var(--warning);
+  font-weight: 800;
+}
+
+.report-move__chance {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* The bar that says who is better, and the line the engine is thinking
    about. Both are the way lichess keeps them. */
 

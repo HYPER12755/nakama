@@ -92,12 +92,10 @@ func (s *service) accountEmail(ctx context.Context, token string) (string, error
 // mayUseEngine tells whether the caller may have the engine.
 //
 // The engine is for the games against yourself and against the computer,
-// and for the accounts that were named. In a game against a person it is
-// only for those accounts, for it would be cheating.
+// which is what a practice game is for. In a game against a person it would
+// be cheating, so it is only for the accounts that were named.
 func (s *service) mayUseEngine(ctx context.Context, r *http.Request, mode string) bool {
 	if mode != "online" {
-		// The game is against yourself or against the computer, so the
-		// engine is of no use to anybody else.
 		return true
 	}
 

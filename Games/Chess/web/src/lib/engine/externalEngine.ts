@@ -41,12 +41,15 @@ export type EngineMode = "local" | "ai" | "online";
 /**
  * Whether the engine is to be shown at all.
  *
- * The engine is for the games against yourself and against the computer. In
- * a game against a person it is only for the accounts the server has
- * named, so the server is asked before it is shown.
+ * The engine is for the games against yourself and against the computer,
+ * which is what a practice game is for. In a game against a person it
+ * would be cheating, so it is only for the accounts the server has named.
  */
 export function engineVisible(mode: EngineMode, allowed: boolean): boolean {
-  return mode !== "online" || allowed;
+  if (mode === "online") {
+    return allowed;
+  }
+  return true;
 }
 
 /** The work the engine is asked to do. */

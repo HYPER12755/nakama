@@ -14,12 +14,19 @@ import {
 } from "@moongames/host-core";
 
 /**
- * Local development uses the checked-in dev signer. Production operators must
- * provide `VITE_MOONGAMES_TRUSTED_KEYS` with their own pinned public key(s).
+ * The public keys the menu trusts.
+ *
+ * The keys are pinned when the menu is built: an operator who publishes
+ * games gives their own key with `VITE_MOONGAMES_TRUSTED_KEYS`, and the
+ * stack that packages the games on a machine reads the keys of the signed
+ * manifest of that machine. Nothing is written into the source, so the menu
+ * trusts the games that were packaged beside it, on any machine.
  */
-const DEV_TRUSTED_KEYS: TrustedBundleKeys = {
-  "dev-1": "yBxRYs6iBo79VGJX3V2lcyShDL9GuhEG/m3V72RaHIs=",
-};
+export function configuredTrustedKeys(): TrustedBundleKeys {
+  return parseTrustedKeys(
+    import.meta.env.VITE_MOONGAMES_TRUSTED_KEYS as string | undefined,
+  );
+}
 
 export type OfficialGameRecord = VerifiedCatalogRelease;
 export type OfficialRegistry = VerifiedCatalogRegistry;
@@ -42,13 +49,6 @@ export function parseTrustedKeys(value: string | undefined): TrustedBundleKeys {
     }
   }
   return keys;
-}
-
-export function configuredTrustedKeys(): TrustedBundleKeys {
-  const configured = parseTrustedKeys(
-    import.meta.env.VITE_MOONGAMES_TRUSTED_KEYS as string | undefined,
-  );
-  return Object.keys(configured).length > 0 ? configured : DEV_TRUSTED_KEYS;
 }
 
 export function defaultReleaseManifestUrl(baseUri: string): string {

@@ -15,17 +15,15 @@ function entry(
     matchId: `m${ratingAfter}-${endedAt}`,
     mode: "quick",
     rated,
-    color: "w",
     outcome: "win",
     status: "checkmate",
+    reason: "checkmate",
     opponent: { userId: "u2", username: "Someone" },
-    moves: 10,
     steps: [],
     ratingBefore: ratingAfter - 10,
     ratingAfter,
     ratingDelta: 10,
     endedAt,
-    timeControl: { initialMs: 300000, incrementMs: 0 },
   };
 }
 

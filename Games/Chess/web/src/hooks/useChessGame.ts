@@ -34,6 +34,8 @@ export interface ChessGameOptions {
 
 export interface ChessGameController {
   state: ChessState;
+  /** The position the game began from. */
+  startFen: string;
   selected: Square | null;
   legalTargets: Square[];
   checkSquare: Square | null;
@@ -86,6 +88,8 @@ export function useChessGame(
   const engine = engineRef.current;
 
   const [state, setState] = useState<ChessState>(() => engine.getState());
+  /** The position the game began from, so the report can replay it. */
+  const [startFen, setStartFen] = useState<string>(() => engine.fen);
   const [selected, setSelected] = useState<Square | null>(null);
   const [pendingPromotion, setPendingPromotion] =
     useState<PendingPromotion | null>(null);
@@ -457,6 +461,7 @@ export function useChessGame(
         );
         return;
       }
+      setStartFen(engine.fen);
       setSelected(null);
       setPendingPromotion(null);
       setError(null);
@@ -537,6 +542,7 @@ export function useChessGame(
 
   return {
     state,
+    startFen,
     selected,
     legalTargets,
     checkSquare,

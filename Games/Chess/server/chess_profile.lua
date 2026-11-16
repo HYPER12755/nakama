@@ -776,7 +776,8 @@ function progression.hash_key(text)
 end
 
 function progression.profile_payload(context)
-  local user_id = context and context.user_id  if not user_id or user_id == "" then
+  local user_id = context and context.user_id
+  if not user_id or user_id == "" then
     return error_payload("unauthenticated", "A user session is required")
   end
 

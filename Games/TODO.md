@@ -371,6 +371,10 @@ works the same on every device.
   the way lichess does. The line is shown for now.
 - [x] The line of the engine can be looked at on a little board, and the
   engine can be asked to look deeper.
+- [x] The report of a finished game: the engine looks at every position and
+  the moves that gave the most away are marked `?!`, `?` and `??`, on the
+  same lines lichess draws them, so a move that is a blunder there is a
+  blunder here. The biggest mistake is named at the top.
 
 ### The trainer — done
 

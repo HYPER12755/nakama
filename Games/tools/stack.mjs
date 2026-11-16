@@ -30,7 +30,25 @@ const GAMES_ROOT = path.resolve(
 );
 const REPO_ROOT = path.dirname(GAMES_ROOT);
 const HOME = os.homedir();
-const PREFIX = process.env.PREFIX ?? "/data/data/com.termux/files/usr";
+
+/**
+ * Where the programs of the machine may live.
+ *
+ * The stack does not assume where PostgreSQL was installed: it looks in the
+ * places it is usually found, and the one that has the data is used. A
+ * machine that keeps its programs somewhere else is told with
+ * MOONGAMES_PREFIX.
+ */
+const PREFIX_CANDIDATES = [
+  process.env.MOONGAMES_PREFIX,
+  process.env.PREFIX,
+  "/data/data/com.termux/files/usr",
+  "/usr",
+  "/usr/local",
+  "/opt/homebrew",
+  "/opt/local",
+].filter((candidate) => typeof candidate === "string" && candidate.length > 0);
+
 const SERVICES = ["postgres", "nakama", "web", "releases", "engine"];
 const START_ORDER = ["postgres", "nakama", "engine", "web", "releases"];
 const STOP_ORDER = [...START_ORDER].reverse();
@@ -150,23 +168,31 @@ function findNakamaConfig() {
 }
 
 function postgresDataCandidates() {
-  return [
-    process.env.MOONGAMES_PG_DATA,
-    path.join(PREFIX, "var", "lib", "postgresql"),
+  const candidates = [process.env.MOONGAMES_PG_DATA];
+  for (const prefix of PREFIX_CANDIDATES) {
+    candidates.push(path.join(prefix, "var", "lib", "postgresql"));
+  }
+  candidates.push(
     "/var/lib/postgresql/data",
     "/usr/local/var/postgres",
     "/opt/homebrew/var/postgres",
     path.join(HOME, ".local", "share", "postgresql"),
-  ];
+    path.join(GAMES_ROOT, "runtime", "postgres", "data"),
+  );
+  return candidates.filter(
+    (candidate) => typeof candidate === "string" && candidate.length > 0,
+  );
 }
 
 function postgresSocketCandidates() {
-  return [
-    process.env.MOONGAMES_PG_SOCKET,
-    path.join(PREFIX, "var", "run", "postgresql"),
-    "/var/run/postgresql",
-    "/tmp",
-  ];
+  const candidates = [process.env.MOONGAMES_PG_SOCKET];
+  for (const prefix of PREFIX_CANDIDATES) {
+    candidates.push(path.join(prefix, "var", "run", "postgresql"));
+  }
+  candidates.push("/var/run/postgresql", "/tmp");
+  return candidates.filter(
+    (candidate) => typeof candidate === "string" && candidate.length > 0,
+  );
 }
 
 function resolvePostgresDataDir() {
@@ -179,7 +205,7 @@ function resolvePostgresDataDir() {
     candidates
       .slice(1)
       .find((candidate) => existsSync(path.join(candidate, "PG_VERSION"))) ??
-    candidates[1]
+    candidates[candidates.length - 1]
   );
 }
 
@@ -188,11 +214,12 @@ function resolvePostgresSocketDir() {
   if (explicit) {
     return path.resolve(explicit);
   }
+  const candidates = postgresSocketCandidates();
   return (
-    postgresSocketCandidates()
+    candidates
       .slice(1)
       .find((candidate) => existsSync(candidate)) ??
-    path.join(PREFIX, "var", "run", "postgresql")
+    candidates[candidates.length - 1]
   );
 }
 
@@ -291,6 +318,12 @@ async function loadSettings() {
       port: enginePort,
       binary: ENGINE_BINARY,
       source: ENGINE_SOURCE,
+      // The engine program and the tool that builds the service. Both are
+      // found on the machine, so the stack works the same everywhere.
+      program: await findExecutable(
+        process.env.MOONGAMES_ENGINE_PATH ?? "stockfish",
+      ),
+      builder: await findExecutable("go"),
       logPath: path.join(logDir, SERVICE_LOGS.engine),
     },
     pg: {
@@ -1119,10 +1152,20 @@ async function startEngine(settings, state) {
   }
 
   // The engine is a program of its own, so it is built before it starts.
+  if (settings.engine.program === undefined) {
+    fail(
+      "Stockfish was not found. Install it, or point MOONGAMES_ENGINE_PATH at it.",
+    );
+  }
+  if (settings.engine.builder === undefined) {
+    fail(
+      "The Go toolchain was not found, and the engine service needs it to be built.",
+    );
+  }
   if (!(await exists(settings.engine.binary))) {
     console.log("Building the engine service…");
     const built = await spawnAndWait(
-      "go",
+      settings.engine.builder,
       ["build", "-o", settings.engine.binary, "."],
       {
         cwd: settings.engine.source,
@@ -1140,7 +1183,7 @@ async function startEngine(settings, state) {
     args: [],
     env: {
       MOONGAMES_ENGINE_ADDRESS: `${settings.engine.host}:${settings.engine.port}`,
-      MOONGAMES_ENGINE_PATH: process.env.MOONGAMES_ENGINE_PATH ?? "stockfish",
+      MOONGAMES_ENGINE_PATH: settings.engine.program,
       MOONGAMES_ENGINE_SECRET: process.env.MOONGAMES_ENGINE_SECRET ?? "",
       // The engine asks the server of the games who is asking, so a player
       // may only have the engine in a game against a person if the server
@@ -1523,6 +1566,8 @@ async function commandDoctor(settings) {
   console.log(
     `  Release manifest: ${(await exists(RELEASE_MANIFEST)) ? "ready" : "MISSING (release server will still start)"}`,
   );
+  console.log(`  Engine program:   ${settings.engine.program ?? "MISSING (the engine will not answer)"}`);
+  console.log(`  Engine builder:   ${settings.engine.builder ?? "MISSING (the engine service cannot be built)"}`);
   const required = [
     ["pnpm", settings.pnpm],
     ["pg_ctl", settings.pg.pgCtl],

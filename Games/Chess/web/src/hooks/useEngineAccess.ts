@@ -11,9 +11,9 @@ export interface UseEngineAccessResult {
 /**
  * Whether the engine may be used in this game.
  *
- * The engine is for the games against yourself and against the computer.
- * In a game against a person it is only for the accounts the server has
- * named, so the client asks the server rather than deciding for itself.
+ * The engine is for the games against yourself. In a game against a person
+ * it is only for the accounts the server has named, so the client asks the
+ * server rather than deciding for itself.
  */
 export function useEngineAccess(
   mode: EngineMode,

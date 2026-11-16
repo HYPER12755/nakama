@@ -41,6 +41,7 @@ import { ChessGameOverDialog } from "./components/ChessGameOverDialog";
 import { ChessCaptured } from "./components/ChessCaptured";
 import { ChessGameStats } from "./components/ChessGameStats";
 import { GameReplayBar } from "./components/GameReplayBar";
+import { GameReportDialog } from "./components/GameReportDialog";
 import { GameStatus } from "./components/GameStatus";
 import { MoveList } from "./components/MoveList";
 import { OnlineGameToolbar } from "./components/OnlineGameToolbar";
@@ -223,6 +224,7 @@ export default function App({ bridge }: AppProps) {
   );
   const [deskOpen, setDeskOpen] = useState(false);
   const [trainerOpen, setTrainerOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const boardPanelRef = useRef<HTMLElement>(null);
   const inviteConnectRef = useRef(false);
   const inviteHandledRef = useRef(false);
@@ -391,9 +393,9 @@ export default function App({ bridge }: AppProps) {
   /**
    * The kind of game the engine is being asked about.
    *
-   * The engine is for the games against yourself and against the computer.
-   * In a game against a person it is only for the accounts the server has
-   * named, and the opponent never sees it.
+   * The engine is for the games against yourself. In a game against the
+   * computer it is of no use, and in a game against a person it would be
+   * cheating, so it is only for the accounts the server has named.
    */
   const engineMode: EngineMode = onlineMode
     ? "online"
@@ -403,6 +405,15 @@ export default function App({ bridge }: AppProps) {
   const engineToken = onlineMode ? (online.session?.token ?? null) : null;
   const engineAccess = useEngineAccess(engineMode, engineToken);
   const engineAllowed = engineVisible(engineMode, engineAccess.allowed);
+
+  // The report of the game looks at the positions from the start, so it
+  // needs to know where the game began and which side the report is about.
+  const reportStartFen = localGame.startFen;
+  const reportColor: "w" | "b" = onlineMode
+    ? (online.myColor ?? "w")
+    : aiMode
+      ? (aiGame.aiSettings?.humanColor ?? "w")
+      : "w";
 
   const analysis = useEngineAnalysis({
     initialFen: analysisStartFen,
@@ -1692,8 +1703,28 @@ export default function App({ bridge }: AppProps) {
               : undefined
           }
           onClose={() => setResultOpen(false)}
+          onReport={
+            engineAllowed
+              ? () => {
+                  setResultOpen(false);
+                  setReportOpen(true);
+                }
+              : undefined
+          }
         />
       ) : null}
+
+      {reportOpen && (
+        <GameReportDialog
+          uciMoves={activeState.history.map((move) => move.uci)}
+          sanMoves={activeState.history.map((move) => move.san)}
+          initialFen={reportStartFen}
+          color={reportColor}
+          mode={engineMode}
+          token={engineToken ?? undefined}
+          onClose={() => setReportOpen(false)}
+        />
+      )}
 
       {toast !== null && (
         <div className="toast" role="status">
