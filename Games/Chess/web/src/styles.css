@@ -1016,6 +1016,147 @@ button {
   border-color: rgba(120, 190, 255, 0.35);
 }
 
+/* The bar that says who is better, and the line the engine is thinking
+   about. Both are the way lichess keeps them. */
+
+.board-with-eval {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.eval-gauge {
+  position: relative;
+  flex: 0 0 12px;
+  align-self: stretch;
+  min-height: 120px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: linear-gradient(
+    to bottom,
+    var(--board-dark) var(--eval-percent, 50%),
+    var(--board-light) var(--eval-percent, 50%)
+  );
+  transition: --eval-percent 0.6s ease;
+}
+
+.eval-gauge.empty {
+  opacity: 0.5;
+}
+
+.eval-gauge.reverse {
+  transform: rotateX(180deg);
+}
+
+.eval-gauge::after {
+  content: "";
+  display: block;
+  position: absolute;
+  inset: 0;
+  box-shadow: 0 0 5px rgb(0 0 0 / 0.5) inset;
+}
+
+.eval-gauge__zero {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  width: 100%;
+  opacity: 1;
+  border-bottom: 7px solid var(--accent);
+  margin-top: -3px;
+}
+
+.engine-panel {
+  width: 100%;
+  max-width: 560px;
+  margin: 8px auto 0;
+}
+
+.pv-box {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.pv {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  line-height: 1.9;
+  padding: 4px 12px;
+  min-height: 2em;
+  font-size: 12.5px;
+}
+
+.pv__score {
+  display: inline-block;
+  min-width: 58px;
+  text-align: center;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-weight: 800;
+}
+
+.pv__depth,
+.pv__nodes {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pv__moves {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: 6px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  color: var(--text);
+}
+
+.engine-panel__waiting,
+.engine-panel__error {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.engine-panel__error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+.board-hud__engine {
+  padding: 3px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.board-hud__engine:hover {
+  color: var(--text);
+}
+
+.board-hud__engine.is-on {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
 /* Dragging a piece across the board. */
 
 .board--drag .square {

@@ -720,3 +720,6 @@ MigrationBackup/
 .ionide/
 
 # End of https://www.toptal.com/developers/gitignore/api/go,angular,node,intellij+all,visualstudiocode,visualstudio,sublimetext,windows,linux,macos
+
+# The engine service is built by the stack, not kept in the repository.
+Games/tools/engine-service/engine-service

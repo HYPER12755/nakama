@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   GAME_PROTOCOL_VERSION,
   readLauncherHandoff,
@@ -33,6 +33,8 @@ import {
 import { AiPanel } from "./components/AiPanel";
 import { BoardResizeHandle } from "./components/BoardResizeHandle";
 import { ChessBoard } from "./components/ChessBoard";
+import { EngineEvalBar } from "./components/EngineEvalBar";
+import { EnginePv } from "./components/EnginePv";
 import { ChessGameOverDialog } from "./components/ChessGameOverDialog";
 import { ChessCaptured } from "./components/ChessCaptured";
 import { ChessGameStats } from "./components/ChessGameStats";
@@ -79,6 +81,7 @@ import {
   type AiGameSettings,
 } from "./hooks/useChessGame";
 import { useOnlineChess } from "./hooks/useOnlineChess";
+import { useEngineAnalysis } from "./hooks/useEngineAnalysis";
 
 type GameMode = "local" | "ai" | "online";
 
@@ -93,6 +96,10 @@ const launcherHandoff = readLauncherHandoff(__MOONGAMES_GAME_ID__);
 
 /** The identifiers of this title come from the build. */
 const GAME_ID = __MOONGAMES_GAME_ID__;
+
+/** The position every game starts from. */
+const START_FEN =
+  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 /**
  * The sets of pieces the player may choose.
@@ -363,6 +370,20 @@ export default function App({ bridge }: AppProps) {
 
   // The move that is ready for the turn after this one.
   const premove = onlineMode ? online.premove : localController.premove;
+
+  // The engine on the server, and what it says about the position.
+  const [analysisOn, setAnalysisOn] = useState(false);
+  const [analysisStartFen, setAnalysisStartFen] = useState(START_FEN);
+  const analysisUciMoves = useMemo(
+    () => activeState.history.map((move) => move.uci),
+    [activeState.history],
+  );
+  const analysis = useEngineAnalysis({
+    initialFen: analysisStartFen,
+    moves: analysisUciMoves,
+    turn: activeState.turn,
+    enabled: analysisOn,
+  });
 
   const isLive =
     matchStarted &&
@@ -1099,6 +1120,15 @@ export default function App({ bridge }: AppProps) {
                 {typedMove}
               </span>
             )}
+            <button
+              type="button"
+              className={`board-hud__engine${analysisOn ? " is-on" : ""}`}
+              onClick={() => setAnalysisOn((current) => !current)}
+              aria-pressed={analysisOn}
+              title="Ask the engine what it thinks of the position"
+            >
+              Engine
+            </button>
             {premove !== null && (
               <span className="board-hud__premove" aria-live="polite">
                 Your move is ready
@@ -1123,12 +1153,13 @@ export default function App({ bridge }: AppProps) {
             </button>
           </div>
 
-          <div
-            className="board-wrap"
-            style={
-              boardSize === null ? undefined : { width: `${boardSize}px` }
-            }
-          >
+          <div className="board-with-eval">
+            <div
+              className="board-wrap"
+              style={
+                boardSize === null ? undefined : { width: `${boardSize}px` }
+              }
+            >
             <ChessBoard
               board={shownState.board}
               selected={activeSelected}
@@ -1202,7 +1233,38 @@ export default function App({ bridge }: AppProps) {
                 }}
               />
             )}
+            </div>
+
+            {analysisOn && (
+              <EngineEvalBar
+                cp={analysis.evaluation?.cp}
+                mate={analysis.evaluation?.mate}
+                color={bottomColor}
+                empty={analysis.evaluation === null}
+              />
+            )}
           </div>
+
+          {analysisOn && (
+            <div className="engine-panel">
+              {analysis.error !== null ? (
+                <p className="engine-panel__error">{analysis.error}</p>
+              ) : analysis.pvs.length > 0 ? (
+                <EnginePv
+                  san={analysis.pvs[0].san}
+                  cp={analysis.pvs[0].score.cp}
+                  mate={analysis.pvs[0].score.mate}
+                  depth={analysis.evaluation?.depth ?? 0}
+                  nodes={analysis.evaluation?.nodes ?? 0}
+                  millis={analysis.evaluation?.millis ?? 0}
+                />
+              ) : (
+                <p className="engine-panel__waiting">
+                  {analysis.thinking ? "The engine is thinking…" : "The engine has not said yet."}
+                </p>
+              )}
+            </div>
+          )}
 
           <PlayerCard
             name={bottomOnline.name ?? (bottomColor === "w" ? "White" : "Black")}
@@ -1459,6 +1521,7 @@ export default function App({ bridge }: AppProps) {
           onImport={(input) => online.importGame(input)}
           onPlayFrom={(fen) => {
             localGame.startFromFen(fen);
+            setAnalysisStartFen(fen);
             setMode("local");
             setDeskOpen(false);
           }}

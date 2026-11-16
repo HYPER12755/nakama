@@ -10,6 +10,8 @@ const SERVICE_ALIASES = new Map([
   ["menu", "web"],
   ["releases", "releases"],
   ["release", "releases"],
+  ["engine", "engine"],
+  ["stockfish", "engine"],
 ]);
 
 function unquote(value) {

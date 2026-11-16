@@ -182,6 +182,7 @@ async function main() {
       port: { type: "string", default: "4174" },
       host: { type: "string", default: "0.0.0.0" },
       server: { type: "string", default: "127.0.0.1:7350" },
+      engine: { type: "string", default: "127.0.0.1:7352" },
       help: { type: "boolean", short: "h", default: false },
     },
     allowPositionals: false,
@@ -207,10 +208,25 @@ async function main() {
     host: serverHost && serverHost.length > 0 ? serverHost : "127.0.0.1",
     port: Number(serverPort) > 0 ? Number(serverPort) : 7350,
   };
+  // Where the engine on the server lives.
+  const [engineHost, enginePort] = values.engine.split(":");
+  const engineServer = {
+    host: engineHost && engineHost.length > 0 ? engineHost : "127.0.0.1",
+    port: Number(enginePort) > 0 ? Number(enginePort) : 7352,
+  };
   // The calls the server answers and the socket it holds.
   const SERVER_PATHS = ["/v2", "/v1", "/ws", "/healthcheck", "/status"];
   const isServerPath = (pathname) =>
     SERVER_PATHS.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    );
+
+  // The engine on the server, which says what a position is worth. It is
+  // asked through the same address as everything else, so the client does
+  // not need to know where it lives.
+  const ENGINE_PATHS = ["/api/external-engine"];
+  const isEnginePath = (pathname) =>
+    ENGINE_PATHS.some(
       (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
     );
   try {
@@ -255,6 +271,35 @@ async function main() {
       upstream.on("error", () => {
         response.writeHead(502, { "content-type": "text/plain" });
         response.end("The game server could not be reached.");
+      });
+      request.pipe(upstream);
+      return;
+    }
+
+    // The engine is asked the same way, through the address the player
+    // came to.
+    if (isEnginePath(pathname)) {
+      const upstream = httpRequest(
+        {
+          host: engineServer.host,
+          port: engineServer.port,
+          path: request.url,
+          method,
+          headers: {
+            ...request.headers,
+            host: `${engineServer.host}:${engineServer.port}`,
+          },
+        },
+        (upstreamResponse) => {
+          response.writeHead(upstreamResponse.statusCode ?? 502, {
+            ...upstreamResponse.headers,
+          });
+          upstreamResponse.pipe(response);
+        },
+      );
+      upstream.on("error", () => {
+        response.writeHead(502, { "content-type": "text/plain" });
+        response.end("The engine could not be reached.");
       });
       request.pipe(upstream);
       return;

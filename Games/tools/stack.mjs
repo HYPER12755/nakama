@@ -31,20 +31,22 @@ const GAMES_ROOT = path.resolve(
 const REPO_ROOT = path.dirname(GAMES_ROOT);
 const HOME = os.homedir();
 const PREFIX = process.env.PREFIX ?? "/data/data/com.termux/files/usr";
-const SERVICES = ["postgres", "nakama", "web", "releases"];
-const START_ORDER = ["postgres", "nakama", "web", "releases"];
+const SERVICES = ["postgres", "nakama", "web", "releases", "engine"];
+const START_ORDER = ["postgres", "nakama", "engine", "web", "releases"];
 const STOP_ORDER = [...START_ORDER].reverse();
 const SERVICE_LABELS = {
   postgres: "PostgreSQL",
   nakama: "Nakama",
   web: "Launcher",
   releases: "Releases",
+  engine: "Engine",
 };
 const SERVICE_LOGS = {
   postgres: "postgres.log",
   nakama: "nakama.log",
   web: "web.log",
   releases: "releases.log",
+  engine: "engine.log",
 };
 const CHESS_ENTRY = path.join(GAMES_ROOT, "launcher", "dist", "chess", "index.html");
 const WEB_ENTRY = path.join(GAMES_ROOT, "launcher", "dist", "index.html");
@@ -55,6 +57,8 @@ const MODULE_SOURCES = [
   path.join(GAMES_ROOT, "shared", "server"),
 ];
 const RELEASE_MANIFEST = path.join(GAMES_ROOT, "releases", "release-manifest.json");
+const ENGINE_SOURCE = path.join(GAMES_ROOT, "tools", "engine-service");
+const ENGINE_BINARY = path.join(ENGINE_SOURCE, "engine-service");
 
 function fail(message) {
   throw new Error(message);
@@ -236,6 +240,7 @@ async function loadSettings() {
   );
   const webPort = integerFrom(process.env.MOONGAMES_WEB_PORT, 4174);
   const releasesPort = integerFrom(process.env.MOONGAMES_RELEASES_PORT, 8099);
+  const enginePort = integerFrom(process.env.MOONGAMES_ENGINE_PORT, 7352);
   const nakamaHost = process.env.MOONGAMES_NAKAMA_HOST ?? "0.0.0.0";
   const consoleHost = process.env.MOONGAMES_CONSOLE_HOST ?? nakamaHost;
 
@@ -280,6 +285,13 @@ async function loadSettings() {
       port: releasesPort,
       manifest: RELEASE_MANIFEST,
       logPath: path.join(logDir, SERVICE_LOGS.releases),
+    },
+    engine: {
+      host: process.env.MOONGAMES_ENGINE_HOST ?? "0.0.0.0",
+      port: enginePort,
+      binary: ENGINE_BINARY,
+      source: ENGINE_SOURCE,
+      logPath: path.join(logDir, SERVICE_LOGS.engine),
     },
     pg: {
       host: pgHost,
@@ -594,6 +606,8 @@ async function serviceUp(settings, service) {
       return (await httpStatus(webUrl(settings))) === 200;
     case "releases":
       return releasesUp(settings);
+    case "engine":
+      return engineUp(settings);
     default:
       return false;
   }
@@ -1004,6 +1018,9 @@ async function startWeb(settings, state, options) {
       // address, so one name is enough for a tunnel or a CDN.
       "--server",
       `${urlHost(settings.nakama.socketAddress)}:${settings.nakama.socketPort}`,
+      // The engine is asked through the same address as everything else.
+      "--engine",
+      `${urlHost(settings.engine.host)}:${settings.engine.port}`,
     ],
     logPath: settings.web.logPath,
     displayCommand: "serve-web",
@@ -1089,6 +1106,72 @@ async function stopReleases(settings, state) {
   await stopManagedService(settings, state, "releases");
 }
 
+// The engine that says what a position is worth.
+async function startEngine(settings, state) {
+  if (await serviceUp(settings, "engine")) {
+    console.log("The engine is already running.");
+    return;
+  }
+  if (await isPortOpen("127.0.0.1", settings.engine.port)) {
+    fail(
+      `Engine port ${settings.engine.port} is already in use by another process.`,
+    );
+  }
+
+  // The engine is a program of its own, so it is built before it starts.
+  if (!(await exists(settings.engine.binary))) {
+    console.log("Building the engine service…");
+    const built = await spawnAndWait(
+      "go",
+      ["build", "-o", settings.engine.binary, "."],
+      {
+        cwd: settings.engine.source,
+        stdio: "inherit",
+        env: process.env,
+      },
+    ).catch(() => null);
+    if (built === null) {
+      fail("The engine service could not be built.");
+    }
+  }
+
+  await startManaged(settings, state, "engine", {
+    command: settings.engine.binary,
+    args: [],
+    env: {
+      MOONGAMES_ENGINE_ADDRESS: `${settings.engine.host}:${settings.engine.port}`,
+      MOONGAMES_ENGINE_PATH: process.env.MOONGAMES_ENGINE_PATH ?? "stockfish",
+      MOONGAMES_ENGINE_SECRET: process.env.MOONGAMES_ENGINE_SECRET ?? "",
+    },
+    logPath: settings.engine.logPath,
+    displayCommand: "engine-service",
+  });
+
+  if (!(await waitFor("The engine", () => serviceUp(settings, "engine"), 20_000))) {
+    await stopManagedService(settings, state, "engine", { quiet: true });
+    await showLogHint(settings, "engine");
+    fail("The engine failed to start.");
+  }
+  console.log(
+    `The engine is listening at ${engineUrl(settings)}.`,
+  );
+}
+
+async function stopEngine(settings, state) {
+  await stopManagedService(settings, state, "engine");
+}
+
+async function engineUp(settings) {
+  return (
+    (await httpStatus(`http://127.0.0.1:${settings.engine.port}/healthcheck`)) ===
+    200
+  );
+}
+
+function engineUrl(settings) {
+  return `http://${settings.engine.host}:${settings.engine.port}/`;
+}
+
 function resolveServices(names, addDependencies = false) {
   if (names.length === 0) {
     return new Set(SERVICES);
@@ -1122,6 +1205,8 @@ async function startService(settings, state, service, options) {
       return startWeb(settings, state, options);
     case "releases":
       return startReleases(settings, state);
+    case "engine":
+      return startEngine(settings, state);
     default:
       fail(`Unknown service "${service}".`);
   }
@@ -1137,6 +1222,8 @@ async function stopService(settings, state, service, options) {
       return stopWeb(settings, state, options);
     case "releases":
       return stopReleases(settings, state, options);
+    case "engine":
+      return stopEngine(settings, state, options);
     default:
       fail(`Unknown service "${service}".`);
   }
@@ -1242,6 +1329,7 @@ function printUrls(settings) {
   console.log(`  Nakama API:    http://${urlHost(settings.nakama.socketAddress)}:${settings.nakama.socketPort}`);
   console.log(`  Console:       ${consoleUrl(settings)}`);
   console.log(`  Releases:      ${releasesUrl(settings)}`);
+  console.log(`  Engine:        ${engineUrl(settings)}`);
 
   const addresses = ipv4Addresses();
   const lanMenu = bindIncludesLan(settings.web.host);
@@ -1308,6 +1396,8 @@ async function collectStatus(settings, state) {
       url = nakamaHealthUrl(settings);
     } else if (service === "web") {
       url = webUrl(settings);
+    } else if (service === "engine") {
+      url = engineUrl(settings);
     } else {
       url = releasesUrl(settings);
     }

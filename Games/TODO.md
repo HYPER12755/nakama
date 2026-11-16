@@ -347,12 +347,31 @@ that offers them is shared by every title (`Games/shared/gameui/`).
 - [x] The profile shows how far the rating may be from the truth, and the
   rating over the games that were played is drawn as a line.
 
+### The engine — done
+
+The engine runs on the server, the way it does on lichess, and the client
+asks it over the network. The engine never runs inside the phone, so it
+works the same on every device.
+
+- [x] The engine service (`Games/tools/engine-service/`), which owns
+  Stockfish and answers the same call lichess answers:
+  `POST /api/external-engine/{id}/analyse`, answered with a stream of
+  lines, each one an evaluation deeper than the last.
+- [x] The client of that call, ported from lichess's external engine: the
+  position and the search are sent, and the answer is read line by line so
+  the player sees the engine think.
+- [x] The bar that says who is better, and the line the engine is thinking
+  about, ported from lichess's gauge and principal variation.
+- [x] The winning chances of a number, with the same constant lichess uses,
+  so a number means the same thing here as it does there.
+- [x] The engine is reached through the same address as the menu and the
+  games, so a tunnel or a CDN needs that one address.
+- [x] The engine is a service of the stack, built and started with it.
+- [ ] The moves of the engine can be played on the board by clicking them,
+  the way lichess does. The line is shown for now.
+
 ### What lichess has that we do not — to take next
 
-- [ ] The analysis board: an engine that says what the position is worth,
-  an evaluation bar, and the moves it likes. It needs a WASM engine in a
-  worker, which the file-backed host does not allow yet, so the engine has
-  to come to the client another way first.
 - [ ] The opening explorer: the openings people play, with the games they
   came from. It needs an opening book.
 - [ ] Puzzles: positions to solve, a streak, and a board of what has been
