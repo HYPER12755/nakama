@@ -35,6 +35,7 @@ import { BoardResizeHandle } from "./components/BoardResizeHandle";
 import { ChessBoard } from "./components/ChessBoard";
 import { EngineEvalBar } from "./components/EngineEvalBar";
 import { EnginePv } from "./components/EnginePv";
+import { EnginePvBoard } from "./components/EnginePvBoard";
 import { ChessGameOverDialog } from "./components/ChessGameOverDialog";
 import { ChessCaptured } from "./components/ChessCaptured";
 import { ChessGameStats } from "./components/ChessGameStats";
@@ -82,6 +83,7 @@ import {
 } from "./hooks/useChessGame";
 import { useOnlineChess } from "./hooks/useOnlineChess";
 import { useEngineAnalysis } from "./hooks/useEngineAnalysis";
+import { positionAfter, type PvPosition } from "./lib/engine/pvBoard";
 
 type GameMode = "local" | "ai" | "online";
 
@@ -373,6 +375,7 @@ export default function App({ bridge }: AppProps) {
 
   // The engine on the server, and what it says about the position.
   const [analysisOn, setAnalysisOn] = useState(false);
+  const [analysisDepth, setAnalysisDepth] = useState(12);
   const [analysisStartFen, setAnalysisStartFen] = useState(START_FEN);
   const analysisUciMoves = useMemo(
     () => activeState.history.map((move) => move.uci),
@@ -383,7 +386,10 @@ export default function App({ bridge }: AppProps) {
     moves: analysisUciMoves,
     turn: activeState.turn,
     enabled: analysisOn,
+    depth: analysisDepth,
   });
+  // The little board that shows where the line of the engine goes.
+  const [pvPreview, setPvPreview] = useState<PvPosition | null>(null);
 
   const isLive =
     matchStarted &&
@@ -1250,14 +1256,66 @@ export default function App({ bridge }: AppProps) {
               {analysis.error !== null ? (
                 <p className="engine-panel__error">{analysis.error}</p>
               ) : analysis.pvs.length > 0 ? (
-                <EnginePv
-                  san={analysis.pvs[0].san}
-                  cp={analysis.pvs[0].score.cp}
-                  mate={analysis.pvs[0].score.mate}
-                  depth={analysis.evaluation?.depth ?? 0}
-                  nodes={analysis.evaluation?.nodes ?? 0}
-                  millis={analysis.evaluation?.millis ?? 0}
-                />
+                <>
+                  <EnginePv
+                    san={analysis.pvs[0].san}
+                    cp={analysis.pvs[0].score.cp}
+                    mate={analysis.pvs[0].score.mate}
+                    depth={analysis.evaluation?.depth ?? 0}
+                    nodes={analysis.evaluation?.nodes ?? 0}
+                    millis={analysis.evaluation?.millis ?? 0}
+                    onShow={(index) => {
+                      const moves = analysis.pvs[0]?.uci ?? [];
+                      setPvPreview(
+                        positionAfter(analysisStartFen, moves.slice(0, index + 1)),
+                      );
+                    }}
+                    onPlay={(index) => {
+                      // The first move of the line can be played on the
+                      // board, for the line begins at the position that is
+                      // on it now.
+                      if (index !== 0) {
+                        return;
+                      }
+                      const move = analysis.pvs[0]?.san[0];
+                      if (move === undefined) {
+                        return;
+                      }
+                      const played = onlineMode
+                        ? online.moveBySan(move)
+                        : localController.moveBySan(move);
+                      if (!played) {
+                        setToast("That move cannot be played here.");
+                      }
+                    }}
+                  />
+                  <div className="engine-panel__tools">
+                    <button
+                      type="button"
+                      className="mini-button"
+                      onClick={() =>
+                        setAnalysisDepth((current) =>
+                          Math.min(40, current + 4),
+                        )
+                      }
+                      title="Ask the engine to look deeper"
+                    >
+                      Deeper
+                    </button>
+                    <span className="engine-panel__depth">
+                      depth {analysisDepth}
+                    </span>
+                  </div>
+                  {pvPreview !== null && (
+                    <EnginePvBoard
+                      board={pvPreview.board}
+                      lastMove={pvPreview.lastMove}
+                      color={activeState.turn}
+                      theme={boardTheme}
+                      pieceSet={preferences.pieceSet}
+                    />
+                  )}
+                </>
               ) : (
                 <p className="engine-panel__waiting">
                   {analysis.thinking ? "The engine is thinking…" : "The engine has not said yet."}

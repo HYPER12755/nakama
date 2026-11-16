@@ -1112,10 +1112,55 @@ button {
 .pv__moves {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   margin-left: 6px;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.pv__move {
+  border: 0;
+  border-radius: 5px;
+  padding: 1px 5px;
+  background: transparent;
   color: var(--text);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pv__move:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--text);
+}
+
+.engine-panel__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.engine-panel__depth {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* The little board that shows where the line of the engine goes. */
+
+.pv-board {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.pv-board__square {
+  width: min(220px, 70%);
+  opacity: 0.94;
+}
+
+.pv-board__square .square {
+  cursor: default;
 }
 
 .engine-panel__waiting,

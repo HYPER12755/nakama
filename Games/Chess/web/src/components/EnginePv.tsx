@@ -11,13 +11,19 @@ export interface EnginePvProps {
   nodes: number;
   /** How long the engine has been thinking, in milliseconds. */
   millis: number;
+  /** Called when a move of the line is touched. */
+  onShow?: (index: number) => void;
+  /** Called when a move of the line is played on the board. */
+  onPlay?: (index: number) => void;
 }
 
 /**
  * The line the engine is thinking about.
  *
  * This is lichess's principal variation: the moves the engine likes, the
- * number it gives them, and how deep it has looked.
+ * number it gives them, and how deep it has looked. A move of the line can
+ * be touched to see where the line goes, and the first move of the line can
+ * be played on the board.
  */
 export function EnginePv({
   san,
@@ -26,6 +32,8 @@ export function EnginePv({
   depth,
   nodes,
   millis,
+  onShow,
+  onPlay,
 }: EnginePvProps) {
   const score =
     mate !== undefined
@@ -45,7 +53,24 @@ export function EnginePv({
         {san.length > 0 && (
           <span className="pv__moves">
             {san.map((move, index) => (
-              <span key={`${move}-${index}`}>{move}</span>
+              <button
+                key={`${move}-${index}`}
+                type="button"
+                className="pv__move"
+                onMouseEnter={() => onShow?.(index)}
+                onFocus={() => onShow?.(index)}
+                onClick={() => {
+                  onShow?.(index);
+                  onPlay?.(index);
+                }}
+                title={
+                  index === 0
+                    ? "Play this move on the board"
+                    : "See where this line goes"
+                }
+              >
+                {move}
+              </button>
             ))}
           </span>
         )}

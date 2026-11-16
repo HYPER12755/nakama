@@ -26,7 +26,12 @@ export interface EngineAnalysis {
   /** The evaluation of the position. */
   evaluation: EngineEvaluation | null;
   /** The lines of the engine, written the way a player writes them. */
-  pvs: Array<{ depth: number; score: { cp?: number; mate?: number }; san: string[] }>;
+  pvs: Array<{
+    depth: number;
+    score: { cp?: number; mate?: number };
+    san: string[];
+    uci: string[];
+  }>;
   /** Whether the engine is thinking. */
   thinking: boolean;
   /** What went wrong, when something did. */
@@ -155,6 +160,7 @@ export function useEngineAnalysis(
       depth: pv.depth,
       score: pv.score,
       san: movesToSan(initialFen, pv.moves),
+      uci: pv.moves,
     }));
   }, [evaluation, initialFen]);
 

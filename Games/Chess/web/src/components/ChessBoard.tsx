@@ -14,7 +14,8 @@ export interface ChessBoardProps {
   board: BoardPiece[];
   selected: Square | null;
   legalTargets: Square[];
-  lastMove: MoveRecord | null;
+  /** The move that was played last, so it can be marked. */
+  lastMove: { from: Square; to: Square } | null;
   checkSquare: Square | null;
   flipped: boolean;
   onSquareClick: (square: Square) => void;
