@@ -1,18 +1,34 @@
 /**
- * The colourings of the board.
+ * The boards a player can choose.
  *
- * Lichess gives each board a name and a picture. The pictures live in a
- * separate place, so the colourings here are our own, named after the boards
- * they remind a player of.
+ * The boards are the boards of lichess: real wood with a grain, marble,
+ * leather, plastic, and the rest. The pictures are copied with the game and
+ * named beside it in `public/boards/BOARDS.txt`.
+ *
+ * Every one of them is a whole board, the squares and all, so the board is
+ * drawn as one picture and the pieces are put on top of it, the way lichess
+ * draws them.
+ *
+ * The colours of the coordinates are the ones lichess uses, so the letters
+ * on a board are as readable there as they are here.
+ *
+ * The MoonGames board is the one of the game itself. It has no picture, so
+ * its squares are painted with their own colours.
  */
 
 export interface BoardTheme {
   id: string;
   label: string;
-  /** The colour of the light squares. */
-  light: string;
-  /** The colour of the dark squares. */
-  dark: string;
+  /** The picture of the board, when it has one. */
+  texture?: string;
+  /** The colour of the light squares, when the board has no picture. */
+  light?: string;
+  /** The colour of the dark squares, when the board has no picture. */
+  dark?: string;
+  /** The colour of the coordinates on the light squares. */
+  coordLight?: string;
+  /** The colour of the coordinates on the dark squares. */
+  coordDark?: string;
 }
 
 export const BOARD_THEMES: BoardTheme[] = [
@@ -22,23 +38,181 @@ export const BOARD_THEMES: BoardTheme[] = [
     light: "#e9dfcb",
     dark: "#64766c",
   },
-  { id: "wood", label: "Wood", light: "#f0e0c8", dark: "#b58863" },
-  { id: "maple", label: "Maple", light: "#f7e9c3", dark: "#c19a5b" },
-  { id: "blue", label: "Blue", light: "#d6e3f0", dark: "#6d8fb3" },
-  { id: "green", label: "Green", light: "#eef3dd", dark: "#779556" },
-  { id: "brown", label: "Brown", light: "#f0d9b5", dark: "#946f51" },
-  { id: "marble", label: "Marble", light: "#cfe0cd", dark: "#4f644e" },
-  { id: "canvas", label: "Canvas", light: "#e4e7f4", dark: "#547388" },
-  { id: "leather", label: "Leather", light: "#e8dcc0", dark: "#8a6a3c" },
-  { id: "grey", label: "Grey", light: "#e4e4e4", dark: "#9b9b9b" },
-  { id: "metal", label: "Metal", light: "#e6e8ea", dark: "#8a8f94" },
-  { id: "olive", label: "Olive", light: "#dcd6c4", dark: "#6d6655" },
-  { id: "purple", label: "Purple", light: "#e9e0f2", dark: "#9f90b0" },
-  { id: "purple-diag", label: "Purple Diag", light: "#e5daf0", dark: "#957ab0" },
-  { id: "ocean", label: "Ocean", light: "#dceef0", dark: "#3f7f8c" },
-  { id: "rosewood", label: "Rosewood", light: "#f3d9c9", dark: "#8c4a3f" },
-  { id: "ice", label: "Ice", light: "#eaf4fb", dark: "#8fb8d6" },
-  { id: "newspaper", label: "Newspaper", light: "#f4f1e8", dark: "#9a9a93" },
+  {
+    id: "wood",
+    label: "Wood",
+    texture: "boards/wood.jpg",
+    coordLight: "#d8a45b",
+    coordDark: "#9b4d0f",
+  },
+  {
+    id: "wood2",
+    label: "Wood 2",
+    texture: "boards/wood2.jpg",
+    coordLight: "#a38b5d",
+    coordDark: "#6c5017",
+  },
+  {
+    id: "wood3",
+    label: "Wood 3",
+    texture: "boards/wood3.jpg",
+    coordLight: "#d0ceca",
+    coordDark: "#755839",
+  },
+  {
+    id: "wood4",
+    label: "Wood 4",
+    texture: "boards/wood4.jpg",
+    coordLight: "#caaf7d",
+    coordDark: "#7b5330",
+  },
+  {
+    id: "maple",
+    label: "Maple",
+    texture: "boards/maple.jpg",
+    coordLight: "#e8ceab",
+    coordDark: "#bc7944",
+  },
+  {
+    id: "maple2",
+    label: "Maple 2",
+    texture: "boards/maple2.jpg",
+    coordLight: "#e2c89f",
+    coordDark: "#963",
+  },
+  {
+    id: "horsey",
+    label: "Horsey",
+    texture: "boards/horsey.jpg",
+    coordLight: "#f0d9b5",
+    coordDark: "#946f51",
+  },
+  {
+    id: "leather",
+    label: "Leather",
+    texture: "boards/leather.jpg",
+    coordLight: "#d1d1c9",
+    coordDark: "#c28e16",
+  },
+  {
+    id: "brown",
+    label: "Brown",
+    texture: "boards/brown.png",
+    coordLight: "#f0d9b5",
+    coordDark: "#946f51",
+  },
+  {
+    id: "marble",
+    label: "Marble",
+    texture: "boards/marble.jpg",
+    coordLight: "#93ab91",
+    coordDark: "#4f644e",
+  },
+  {
+    id: "blue-marble",
+    label: "Blue Marble",
+    texture: "boards/blue-marble.jpg",
+    coordLight: "#eae6dd",
+    coordDark: "#7c7f87",
+  },
+  {
+    id: "canvas",
+    label: "Canvas",
+    texture: "boards/canvas2.jpg",
+    coordLight: "#d7daeb",
+    coordDark: "#547388",
+  },
+  {
+    id: "olive",
+    label: "Olive",
+    texture: "boards/olive.jpg",
+    coordLight: "#b8b19f",
+    coordDark: "#6d6655",
+  },
+  {
+    id: "grey",
+    label: "Grey",
+    texture: "boards/grey.jpg",
+    coordLight: "#b8b8b8",
+    coordDark: "#7d7d7d",
+  },
+  {
+    id: "metal",
+    label: "Metal",
+    texture: "boards/metal.jpg",
+    coordLight: "#c9c9c9",
+    coordDark: "#727272",
+  },
+  {
+    id: "green-plastic",
+    label: "Green Plastic",
+    texture: "boards/green-plastic.png",
+    coordLight: "#f2f9bb",
+    coordDark: "#59935d",
+  },
+  {
+    id: "green",
+    label: "Green",
+    texture: "boards/green.png",
+    coordLight: "#ffffdd",
+    coordDark: "#6d8753",
+  },
+  {
+    id: "blue",
+    label: "Blue",
+    texture: "boards/blue.png",
+    coordLight: "#dee3e6",
+    coordDark: "#788a94",
+  },
+  {
+    id: "blue2",
+    label: "Blue 2",
+    texture: "boards/blue2.jpg",
+    coordLight: "#97b2c7",
+    coordDark: "#546f82",
+  },
+  {
+    id: "blue3",
+    label: "Blue 3",
+    texture: "boards/blue3.jpg",
+    coordLight: "#d9e0e6",
+    coordDark: "#315991",
+  },
+  {
+    id: "purple",
+    label: "Purple",
+    texture: "boards/purple.png",
+    coordLight: "#9f90b0",
+    coordDark: "#7d4a8d",
+  },
+  {
+    id: "purple-diag",
+    label: "Purple Diagonal",
+    texture: "boards/purple-diag.png",
+    coordLight: "#e5daf0",
+    coordDark: "#957ab0",
+  },
+  {
+    id: "pink",
+    label: "Pink",
+    texture: "boards/pink-pyramid.png",
+    coordLight: "#e8e9b7",
+    coordDark: "#ed7272",
+  },
+  {
+    id: "ic",
+    label: "IC",
+    texture: "boards/ic.png",
+    coordLight: "#ececec",
+    coordDark: "#c1c18e",
+  },
+  {
+    id: "newspaper",
+    label: "Newspaper",
+    texture: "boards/newspaper.svg",
+    coordLight: "#fff",
+    coordDark: "#8d8d8d",
+  },
 ];
 
 /** The colouring with the given name, or the house colouring. */
@@ -51,12 +225,31 @@ export function boardTheme(id: string): BoardTheme {
 /**
  * The style of a board, ready to be put on the board itself.
  *
- * The colours of the coordinates follow the colours of the squares, so a
- * player who chooses a dark board does not get dark numbers on it.
+ * The picture carries the squares, so the squares of the board are not
+ * painted over it. The colours of the coordinates are the ones of the
+ * board, so the letters are readable on it.
  */
 export function boardThemeStyle(theme: BoardTheme): Record<string, string> {
-  return {
-    "--board-light": theme.light,
-    "--board-dark": theme.dark,
-  };
+  const style: Record<string, string> = {};
+
+  if (theme.texture !== undefined) {
+    style["--board-texture"] = `url("${theme.texture}")`;
+    // The picture carries the squares, so they are not painted over it.
+    style["--board-squares"] = "transparent";
+    style["--board-sheen"] = "transparent";
+  } else {
+    style["--board-texture"] = "none";
+    style["--board-squares"] = "var(--board-light)";
+    style["--board-light"] = theme.light ?? "#e9dfcb";
+    style["--board-dark"] = theme.dark ?? "#64766c";
+  }
+
+  if (theme.coordLight !== undefined) {
+    style["--coord-light"] = theme.coordLight;
+  }
+  if (theme.coordDark !== undefined) {
+    style["--coord-dark"] = theme.coordDark;
+  }
+
+  return style;
 }

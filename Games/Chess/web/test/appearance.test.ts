@@ -7,7 +7,7 @@ import {
   pieceSetLabel,
   PIECE_SET_IDS,
 } from "../src/lib/pieceSets";
-import { boardTheme, BOARD_THEMES } from "../src/lib/boardThemes";
+import { boardTheme, boardThemeStyle, BOARD_THEMES } from "../src/lib/boardThemes";
 import { isSoundSet, SOUND_SETS } from "../src/lib/soundSets";
 import { configureSound, soundSet } from "../src/lib/audio";
 
@@ -66,15 +66,31 @@ describe("the sets of pieces", () => {
 });
 
 describe("the colouring of the board", () => {
-  it("has a colour for every board it offers", () => {
-    for (const theme of BOARD_THEMES) {
-      expect(theme.light).toMatch(/^#[0-9a-f]{6}$/i);
-      expect(theme.dark).toMatch(/^#[0-9a-f]{6}$/i);
-    }
+  it("takes the boards of lichess, the pictures and all", () => {
+    const wood = boardTheme("wood");
+    expect(wood.texture).toBe("boards/wood.jpg");
+    expect(wood.coordLight).toBe("#d8a45b");
+    expect(wood.coordDark).toBe("#9b4d0f");
+
+    // The canvases and the papers are there too.
+    expect(boardTheme("marble").texture).toBe("boards/marble.jpg");
+    expect(boardTheme("newspaper").texture).toBe("boards/newspaper.svg");
+    expect(boardTheme("canvas").texture).toBe("boards/canvas2.jpg");
   });
 
-  it("falls back to the house colouring for a board it does not know", () => {
-    expect(boardTheme("ocean").id).toBe("ocean");
+  it("paints the squares only for the board of the game itself", () => {
+    const house = boardTheme("moongames");
+    expect(house.texture).toBeUndefined();
+    expect(house.light).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(house.dark).toMatch(/^#[0-9a-f]{6}$/i);
+
+    const style = boardThemeStyle(boardTheme("wood"));
+    expect(style["--board-texture"]).toBe('url("boards/wood.jpg")');
+    expect(style["--board-squares"]).toBe("transparent");
+  });
+
+  it("falls back to the house board for a board it does not know", () => {
+    expect(boardTheme("olive").id).toBe("olive");
     expect(boardTheme("not a board").id).toBe(BOARD_THEMES[0].id);
   });
 });

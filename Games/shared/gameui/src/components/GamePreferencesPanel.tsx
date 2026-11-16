@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 import {
@@ -43,10 +44,12 @@ export interface PieceChoice {
 export interface ThemeChoice {
   id: string;
   label: string;
-  /** The colour of the light squares. */
-  light: string;
-  /** The colour of the dark squares. */
-  dark: string;
+  /** The picture of the board, when the board has one. */
+  texture?: string;
+  /** The colour of the light squares, when the board has no picture. */
+  light?: string;
+  /** The colour of the dark squares, when the board has no picture. */
+  dark?: string;
 }
 
 /** A set of sounds a player can choose. */
@@ -204,13 +207,7 @@ export function GamePreferencesPanel({
           >
             <span
               className="pref-row__preview pref-row__preview--board"
-              style={
-                chosenTheme === undefined
-                  ? undefined
-                  : {
-                      background: `linear-gradient(135deg, ${chosenTheme.light} 50%, ${chosenTheme.dark} 50%)`,
-                    }
-              }
+              style={boardPreviewStyle(chosenTheme)}
             />
             <span className="pref-row__label">Board</span>
             <span className="pref-row__value">
@@ -626,9 +623,7 @@ export function GamePreferencesPanel({
               >
                 <span
                   className="pref-picker__boardArt"
-                  style={{
-                    background: `linear-gradient(135deg, ${choice.light} 50%, ${choice.dark} 50%)`,
-                  }}
+                  style={boardPreviewStyle(choice)}
                 />
                 <small>{choice.label}</small>
               </button>
@@ -660,6 +655,27 @@ export function GamePreferencesPanel({
       )}
     </section>
   );
+}
+
+/**
+ * The picture of a board, for the row and for the picker.
+ *
+ * A board that has a picture is shown as that picture, so the player sees
+ * the board itself and not a colour that stands in for it.
+ */
+function boardPreviewStyle(theme: ThemeChoice | undefined): CSSProperties | undefined {
+  if (theme === undefined) {
+    return undefined;
+  }
+  if (theme.texture !== undefined) {
+    return { backgroundImage: `url("${theme.texture}")` };
+  }
+  if (theme.light === undefined || theme.dark === undefined) {
+    return undefined;
+  }
+  return {
+    background: `linear-gradient(135deg, ${theme.light} 50%, ${theme.dark} 50%)`,
+  };
 }
 
 /**

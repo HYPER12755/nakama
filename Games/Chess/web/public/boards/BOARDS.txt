@@ -1,0 +1,50 @@
+The boards of the table
+=======================
+
+The boards in this folder are the boards of lichess, which are real
+boards: wood with a grain, marble, leather, plastic, canvas, and the
+rest. They are copied with the game, so a table looks the same on every
+device and with no internet.
+
+    https://github.com/lichess-org/lila/tree/master/public/images/board
+
+Every one of them is a whole board, the squares and all, so the board is
+drawn as one picture and the pieces are put on top of it.
+
+  blue-marble.jpg   the marble with a blue in it
+  blue.png          a blue board
+  blue2.jpg         a blue board, painted
+  blue3.jpg         a blue board, a deeper blue
+  brown.png         a brown board
+  canvas2.jpg       canvas
+  green-plastic.png green plastic
+  green.png         a green board
+  grey.jpg          grey
+  horsey.jpg        the board of the horsey set
+  ic.png            the board of the international chess federation
+  leather.jpg       leather
+  maple.jpg         maple
+  maple2.jpg        maple, a deeper grain
+  marble.jpg        marble
+  metal.jpg         metal
+  newspaper.svg      newsprint
+  olive.jpg         olive
+  pink-pyramid.png  pink
+  purple.png        purple
+  purple-diag.png   purple, in diagonals
+  wood.jpg          wood
+  wood2.jpg         wood, a deeper grain
+  wood3.jpg         wood, pale
+  wood4.jpg         wood, warm
+
+The licence
+-----------
+
+The boards are the work of the lichess authors and of pirouetti, and they
+are released under the AGPLv3+:
+
+    https://github.com/lichess-org/lila/blob/master/COPYING.md
+
+The colours of the coordinates on each board are the ones lichess uses, so
+the letters on a board are as readable here as they are there. They are
+in `src/lib/boardThemes.ts`.
