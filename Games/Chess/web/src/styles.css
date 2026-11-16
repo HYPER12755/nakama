@@ -1157,6 +1157,15 @@ button {
   }
 }
 
+/* The arrow that shows the move the engine likes. */
+
+.engine-arrow {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
 /* The bar that says who is better, and the line the engine is thinking
    about. Both are the way lichess keeps them. */
 

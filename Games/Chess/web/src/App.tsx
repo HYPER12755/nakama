@@ -65,6 +65,7 @@ import {
   configureSound,
 } from "./lib/audio";
 import type { OnlineHistoryEntry } from "./lib/onlineProtocol";
+import type { Square } from "@moongames/chess-core";
 import {
   BOARD_THEMES,
   boardTheme as boardThemeOf,
@@ -389,7 +390,27 @@ export default function App({ bridge }: AppProps) {
     turn: activeState.turn,
     enabled: analysisOn,
     depth: analysisDepth,
+    multiPv: 3,
   });
+
+  /**
+   * The move the engine likes, as the two squares it goes between.
+   *
+   * It is drawn on the board as an arrow, the way lichess draws it.
+   */
+  const engineArrow = useMemo(() => {
+    if (!analysisOn) {
+      return null;
+    }
+    const move = analysis.pvs[0]?.uci[0];
+    if (move === undefined || move.length < 4) {
+      return null;
+    }
+    return {
+      from: move.slice(0, 2) as Square,
+      to: move.slice(2, 4) as Square,
+    };
+  }, [analysis.pvs, analysisOn]);
   // The little board that shows where the line of the engine goes.
   const [pvPreview, setPvPreview] = useState<PvPosition | null>(null);
 
@@ -1183,6 +1204,7 @@ export default function App({ bridge }: AppProps) {
               highlightLastMove={preferences.highlightLastMove}
               moveEvent={preferences.moveEvent}
               premove={premove}
+              arrow={engineArrow}
               onMove={
                 onlineMode ? online.movePiece : localController.movePiece
               }
@@ -1259,38 +1281,39 @@ export default function App({ bridge }: AppProps) {
                 <p className="engine-panel__error">{analysis.error}</p>
               ) : analysis.pvs.length > 0 ? (
                 <>
-                  <EnginePv
-                    san={analysis.pvs[0].san}
-                    cp={analysis.pvs[0].score.cp}
-                    mate={analysis.pvs[0].score.mate}
-                    depth={analysis.evaluation?.depth ?? 0}
-                    nodes={analysis.evaluation?.nodes ?? 0}
-                    millis={analysis.evaluation?.millis ?? 0}
-                    onShow={(index) => {
-                      const moves = analysis.pvs[0]?.uci ?? [];
-                      setPvPreview(
-                        positionAfter(analysisStartFen, moves.slice(0, index + 1)),
-                      );
-                    }}
-                    onPlay={(index) => {
-                      // The first move of the line can be played on the
-                      // board, for the line begins at the position that is
-                      // on it now.
-                      if (index !== 0) {
-                        return;
-                      }
-                      const move = analysis.pvs[0]?.san[0];
-                      if (move === undefined) {
-                        return;
-                      }
-                      const played = onlineMode
-                        ? online.moveBySan(move)
-                        : localController.moveBySan(move);
-                      if (!played) {
-                        setToast("That move cannot be played here.");
-                      }
-                    }}
-                  />
+                  {analysis.pvs.map((pv, line) => (
+                    <EnginePv
+                      key={line}
+                      san={pv.san}
+                      cp={pv.score.cp}
+                      mate={pv.score.mate}
+                      depth={analysis.evaluation?.depth ?? 0}
+                      nodes={analysis.evaluation?.nodes ?? 0}
+                      millis={analysis.evaluation?.millis ?? 0}
+                      onShow={(move) => {
+                        const moves = pv.uci.slice(0, move + 1);
+                        setPvPreview(positionAfter(analysisStartFen, moves));
+                      }}
+                      onPlay={(move) => {
+                        // The first move of the first line can be played on
+                        // the board, for the line begins at the position
+                        // that is on it now.
+                        if (line !== 0 || move !== 0) {
+                          return;
+                        }
+                        const san = pv.san[0];
+                        if (san === undefined) {
+                          return;
+                        }
+                        const played = onlineMode
+                          ? online.moveBySan(san)
+                          : localController.moveBySan(san);
+                        if (!played) {
+                          setToast("That move cannot be played here.");
+                        }
+                      }}
+                    />
+                  ))}
                   <div className="engine-panel__tools">
                     <button
                       type="button"

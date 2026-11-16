@@ -8,6 +8,7 @@ import { Coordinates, MoveEvent } from "@moongames/game-ui";
 import { getDisplaySquares, isLightSquare } from "../lib/coordinates";
 import { boardThemeStyle, type BoardTheme } from "../lib/boardThemes";
 import { pieceName } from "../lib/pieces";
+import { EngineArrow } from "./EngineArrow";
 import { Piece, type PieceMotion } from "./Piece";
 
 export interface ChessBoardProps {
@@ -37,6 +38,8 @@ export interface ChessBoardProps {
   highlightLastMove?: boolean;
   /** The move that is ready for the turn after this one. */
   premove?: { from: Square; to: Square } | null;
+  /** The move the engine likes, shown as an arrow. */
+  arrow?: { from: Square; to: Square } | null;
 }
 
 function displayPosition(square: Square, flipped: boolean) {
@@ -79,6 +82,7 @@ export const ChessBoard = memo(function ChessBoard({
   showLegalMoves = true,
   highlightLastMove = true,
   premove = null,
+  arrow = null,
 }: ChessBoardProps) {
   const pieces = new Map(board.map((piece) => [piece.square, piece]));
   const targets = new Set(legalTargets);
@@ -306,6 +310,13 @@ export const ChessBoard = memo(function ChessBoard({
           </button>
         );
       },
+      )}
+      {arrow !== null && (
+        <EngineArrow
+          from={arrow.from}
+          to={arrow.to}
+          flipped={flipped}
+        />
       )}
     </div>
   );
