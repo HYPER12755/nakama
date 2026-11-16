@@ -334,8 +334,9 @@ that offers them is shared by every title (`Games/shared/gameui/`).
   solved.
 - [ ] The trainer: the coordinate trainer, the opening trainer, and the
   practice game against the computer.
-- [ ] The position editor, with the pieces put on a board by hand. The desk
-  opens a position and can play from it, but it cannot yet build one.
+- [x] The position editor: the pieces put on a board by hand, the side to
+  move, the castling rights, and the counters, written down as a position
+  the engine can play from.
 - [ ] PGN import into the player's own history, so a game brought from
   elsewhere is played back from the profile. The desk opens one for now.
 - [ ] Pre-moves: the move that is ready before it is the player's turn.

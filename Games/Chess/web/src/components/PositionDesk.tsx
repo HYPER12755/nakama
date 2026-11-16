@@ -10,6 +10,7 @@ import {
 import { ChessBoard } from "./ChessBoard";
 import { Icon } from "./Icon";
 import { MoveList } from "./MoveList";
+import { PositionEditor } from "./PositionEditor";
 
 export interface PositionDeskProps {
   /** The game that is already open at the desk, if there is one. */
@@ -46,6 +47,7 @@ export function PositionDesk({
   const [ply, setPly] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -115,6 +117,14 @@ export function PositionDesk({
     }
     const copied = await copyText(pgn);
     setNotice(copied ? "Game copied" : "Could not copy the game");
+  };
+
+  /** Put a position that was built by hand on the desk. */
+  const useBuiltPosition = (fen: string) => {
+    const loaded = openPosition(fen);
+    setPosition(loaded);
+    setPly(0);
+    setEditing(false);
   };
 
   return (
@@ -259,6 +269,13 @@ export function PositionDesk({
               </button>
               <button
                 type="button"
+                className="action-button"
+                onClick={() => setEditing(true)}
+              >
+                Edit the position
+              </button>
+              <button
+                type="button"
                 className="action-button action-button--primary"
                 onClick={() => {
                   const fen = frame?.state.fen;
@@ -287,6 +304,17 @@ export function PositionDesk({
             {notice !== null && <p className="desk-notice">{notice}</p>}
           </div>
         </div>
+
+        {editing && (
+          <PositionEditor
+            fen={frame?.state.fen}
+            pieceSet={pieceSet}
+            theme={theme}
+            coordinates={coordinates}
+            onUse={useBuiltPosition}
+            onClose={() => setEditing(false)}
+          />
+        )}
       </div>
     </div>
   );
