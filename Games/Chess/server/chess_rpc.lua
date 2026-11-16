@@ -420,3 +420,37 @@ local function puzzle_progress(context, payload)
   return nk.json_encode(puzzle.progress(context))
 end
 nk.register_rpc(puzzle_progress, "chess_puzzle_progress")
+
+--- A run of puzzles with a clock on them.
+local function storm_start(context, payload)
+  return nk.json_encode(puzzle.storm_start(context, payload))
+end
+nk.register_rpc(storm_start, "chess_storm_start")
+
+--- The next puzzle of the run.
+local function storm_next(context, payload)
+  return nk.json_encode(puzzle.storm_next(context))
+end
+nk.register_rpc(storm_next, "chess_storm_next")
+
+--- The move a player made in the run.
+local function storm_answer(context, payload)
+  local params, decode_error = decode_payload(payload)
+  if not params then
+    return response_error("invalid_payload", decode_error)
+  end
+
+  local ok, result = pcall(puzzle.storm_answer, context, params)
+  if not ok then
+    return response_error("storm_failed", tostring(result))
+  end
+
+  return nk.json_encode(result)
+end
+nk.register_rpc(storm_answer, "chess_storm_answer")
+
+--- How the run is going.
+local function storm_progress(context, payload)
+  return nk.json_encode(puzzle.storm_progress(context))
+end
+nk.register_rpc(storm_progress, "chess_storm_progress")

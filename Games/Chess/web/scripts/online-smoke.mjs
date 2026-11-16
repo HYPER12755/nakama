@@ -425,12 +425,17 @@ async function main() {
       wrong.payload?.ok === true && wrong.payload.solved === false,
       "the wrong answer solved the puzzle",
     );
+    assert(
+      typeof wrong.payload.solution === "string" &&
+        wrong.payload.solution.length > 0,
+      "the server did not say what the answer was",
+    );
     console.log("[ok] the wrong answer does not solve the puzzle");
 
     const right = await alice.client.rpc(
       alice.session,
       "chess_puzzle_answer",
-      { id: puzzle.id, move: puzzle.solution },
+      { id: puzzle.id, move: wrong.payload.solution },
     );
     assert(
       right.payload?.ok === true && right.payload.solved === true,
@@ -441,6 +446,52 @@ async function main() {
       "the streak did not go on after the puzzle was solved",
     );
     console.log(`[ok] the puzzle was solved, the streak is ${right.payload.streak}`);
+
+    // The storm: the puzzles with a clock on them.
+    const stormStart = await alice.client.rpc(
+      alice.session,
+      "chess_storm_start",
+      {},
+    );
+    assert(
+      stormStart.payload?.ok === true && stormStart.payload.seconds > 0,
+      "the storm did not begin: " + JSON.stringify(stormStart.payload),
+    );
+    console.log(`[ok] the storm began with ${stormStart.payload.seconds} seconds`);
+
+    const stormNext = await alice.client.rpc(
+      alice.session,
+      "chess_storm_next",
+      {},
+    );
+    const stormPuzzle = stormNext.payload?.puzzle ?? null;
+    assert(
+      stormPuzzle !== null && typeof stormPuzzle.fen === "string",
+      "the storm gave no puzzle",
+    );
+    assert(
+      stormPuzzle.solution === "",
+      "the storm gave the answer before the move was made",
+    );
+    console.log("[ok] the storm gives a puzzle and keeps the answer back");
+
+    const stormAnswer = await alice.client.rpc(
+      alice.session,
+      "chess_storm_answer",
+      { id: stormPuzzle.id, move: "a1a1" },
+    );
+    assert(
+      stormAnswer.payload?.ok === true &&
+        stormAnswer.payload.solved === false &&
+        stormAnswer.payload.score === 0,
+      "the wrong answer scored in the storm: " +
+        JSON.stringify(stormAnswer.payload),
+    );
+    assert(
+      typeof stormAnswer.payload.solutionSan === "string",
+      "the storm did not say what the answer was",
+    );
+    console.log("[ok] the wrong answer does not score in the storm");
 
     const privateRpc = await alice.client.rpc(
       alice.session,

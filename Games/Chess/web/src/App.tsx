@@ -47,6 +47,7 @@ import { MoveList } from "./components/MoveList";
 import { OnlineGameToolbar } from "./components/OnlineGameToolbar";
 import { OpeningExplorer } from "./components/OpeningExplorer";
 import { PuzzlePanel } from "./components/PuzzlePanel";
+import { StormPanel } from "./components/StormPanel";
 import { OnlinePanel } from "./components/OnlinePanel";
 import { PositionDesk } from "./components/PositionDesk";
 import { PromotionPicker } from "./components/PromotionPicker";
@@ -229,6 +230,7 @@ export default function App({ bridge }: AppProps) {
   const [reportOpen, setReportOpen] = useState(false);
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [puzzleOpen, setPuzzleOpen] = useState(false);
+  const [stormOpen, setStormOpen] = useState(false);
   const boardPanelRef = useRef<HTMLElement>(null);
   const inviteConnectRef = useRef(false);
   const inviteHandledRef = useRef(false);
@@ -1568,6 +1570,11 @@ export default function App({ bridge }: AppProps) {
                     label: "Solve the puzzles",
                     onClick: () => setPuzzleOpen(true),
                   },
+                  {
+                    id: "storm",
+                    label: "The storm",
+                    onClick: () => setStormOpen(true),
+                  },
                 ]}
               />
             </>
@@ -1632,6 +1639,11 @@ export default function App({ bridge }: AppProps) {
                     label: "Solve the puzzles",
                     onClick: () => setPuzzleOpen(true),
                   },
+                  {
+                    id: "storm",
+                    label: "The storm",
+                    onClick: () => setStormOpen(true),
+                  },
                 ]}
               />
             </>
@@ -1692,6 +1704,18 @@ export default function App({ bridge }: AppProps) {
           pieceSet={preferences.pieceSet}
           coordinates={preferences.coordinates}
           onClose={() => setPuzzleOpen(false)}
+        />
+      )}
+
+      {stormOpen && (
+        <StormPanel
+          onStart={() => online.stormStart()}
+          onNext={() => online.stormNext()}
+          onAnswer={(id, move) => online.stormAnswer(id, move)}
+          theme={boardTheme}
+          pieceSet={preferences.pieceSet}
+          coordinates={preferences.coordinates}
+          onClose={() => setStormOpen(false)}
         />
       )}
 

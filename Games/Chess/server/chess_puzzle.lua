@@ -187,17 +187,26 @@ local function write_progress(user_id, record)
 end
 
 --- The puzzle as it is shown to a player.
-local function puzzle_view(value)
-  return {
+--
+-- The answer is left out when the player is to find it, so that it is
+-- not in the hands of the client before the move is made.
+local function puzzle_view(value, with_solution)
+  local view = {
     id = value.id,
     fen = value.fen,
-    solution = value.solution,
-    solutionSan = value.solutionSan,
     loss = number(value.loss, 0),
     cp = number(value.cp, 0),
     ply = math.floor(number(value.ply, 0)),
     game = value.game or "",
   }
+  if with_solution then
+    view.solution = value.solution
+    view.solutionSan = value.solutionSan
+  else
+    view.solution = ""
+    view.solutionSan = ""
+  end
+  return view
 end
 
 --- A game that has not been made into puzzles yet.
@@ -414,7 +423,7 @@ function puzzle.next(context)
   if #candidates > 0 then
     return {
       ok = true,
-      puzzle = puzzle_view(candidates[1]),
+      puzzle = puzzle_view(candidates[1], false),
       streak = progress.streak,
       best = progress.best,
       solved = count_solved(progress),
@@ -471,6 +480,8 @@ function puzzle.answer(context, params)
       streak = progress.streak,
       best = progress.best,
       played = progress.played,
+      solutionSan = stored.solutionSan,
+      solution = stored.solution,
     }
   end
 
@@ -500,6 +511,8 @@ function puzzle.answer(context, params)
     streak = progress.streak,
     best = progress.best,
     played = progress.played,
+    solutionSan = stored.solutionSan,
+    solution = stored.solution,
   }
 end
 
@@ -516,6 +529,148 @@ function puzzle.progress(context)
     best = progress.best,
     solved = count_solved(progress),
     played = progress.played,
+  }
+end
+
+-- The storm: the puzzles with a clock on them.
+--
+-- A storm is a run of puzzles with three minutes on the clock. The
+-- puzzles are the same ones the practice board uses, and the run is
+-- kept while it lasts, so the server knows which puzzle is next and how
+-- many have been solved.
+
+puzzle.STORM_SECONDS = 180
+
+local storms = {}
+
+local function storm_of(user_id)
+  return storms[user_id]
+end
+
+--- Start a run of puzzles with a clock on them.
+function puzzle.storm_start(context, params)
+  if not context or not context.user_id or context.user_id == "" then
+    return error_payload("unauthenticated", "A user session is required")
+  end
+
+  local puzzles = all_puzzles()
+  if #puzzles == 0 then
+    return error_payload("no_puzzles", "there are no puzzles to solve yet")
+  end
+
+  -- The puzzles the player has not solved, and after those the ones they
+  -- have, so a run is never empty.
+  local progress = puzzle.progress_of(context.user_id)
+  table.sort(puzzles, function(left, right)
+    local left_solved = progress.solved[left.id] == true
+    local right_solved = progress.solved[right.id] == true
+    if left_solved == right_solved then
+      return tostring(left.id) < tostring(right.id)
+    end
+    return not left_solved
+  end)
+
+  storms[context.user_id] = {
+    puzzles = puzzles,
+    index = 1,
+    score = 0,
+    startedAt = nk.time(),
+    seconds = puzzle.STORM_SECONDS,
+  }
+
+  return {
+    ok = true,
+    seconds = puzzle.STORM_SECONDS,
+    total = #puzzles,
+  }
+end
+
+--- The next puzzle of the run.
+function puzzle.storm_next(context)
+  if not context or not context.user_id or context.user_id == "" then
+    return error_payload("unauthenticated", "A user session is required")
+  end
+
+  local storm = storm_of(context.user_id)
+  if storm == nil then
+    return error_payload("no_storm", "there is no run of puzzles going")
+  end
+
+  local value = storm.puzzles[storm.index]
+  if value == nil then
+    return {
+      ok = true,
+      puzzle = nil,
+      score = storm.score,
+      finished = true,
+    }
+  end
+
+  return {
+    ok = true,
+    puzzle = puzzle_view(value, false),
+    score = storm.score,
+    index = storm.index,
+    total = #storm.puzzles,
+    finished = false,
+  }
+end
+
+--- The move a player made in the run.
+--
+-- The run keeps its own score: the streak of the practice board is not
+-- touched by it.
+function puzzle.storm_answer(context, params)
+  if not context or not context.user_id or context.user_id == "" then
+    return error_payload("unauthenticated", "A user session is required")
+  end
+
+  local storm = storm_of(context.user_id)
+  if storm == nil then
+    return error_payload("no_storm", "there is no run of puzzles going")
+  end
+
+  local id = params.id
+  local value = storm.puzzles[storm.index]
+  if value == nil or type(id) ~= "string" or value.id ~= id then
+    return error_payload("unknown_puzzle", "that is not the puzzle of the run")
+  end
+
+  local move = params.move
+  local right = type(move) == "string" and move == value.solution
+  if right then
+    storm.score = storm.score + 1
+  end
+  storm.index = storm.index + 1
+
+  return {
+    ok = true,
+    solved = right,
+    score = storm.score,
+    index = storm.index,
+    total = #storm.puzzles,
+    solutionSan = value.solutionSan,
+  }
+end
+
+--- How the run is going.
+function puzzle.storm_progress(context)
+  if not context or not context.user_id or context.user_id == "" then
+    return error_payload("unauthenticated", "A user session is required")
+  end
+
+  local storm = storm_of(context.user_id)
+  if storm == nil then
+    return error_payload("no_storm", "there is no run of puzzles going")
+  end
+
+  local left = storm.seconds - math.floor((nk.time() - storm.startedAt) / 1000)
+  return {
+    ok = true,
+    score = storm.score,
+    index = storm.index,
+    total = #storm.puzzles,
+    seconds = math.max(0, left),
   }
 end
 

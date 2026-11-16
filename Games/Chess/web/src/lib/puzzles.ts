@@ -64,6 +64,73 @@ export interface PuzzleAnswer {
   best: number;
   /** The attempts made. */
   played: number;
+  /** The answer, given now that the move has been made. */
+  solutionSan: string;
+  /** The answer in the engine's way, given now that the move was made. */
+  solution: string;
+}
+
+/** A run of puzzles with a clock on them. */
+export interface StormState {
+  /** The puzzle to solve, when there is one. */
+  puzzle: Puzzle | null;
+  /** The puzzles solved in the run. */
+  score: number;
+  /** Which puzzle of the run this is. */
+  index: number;
+  /** How many puzzles there are. */
+  total: number;
+  /** The seconds left on the clock. */
+  seconds: number;
+  /** Whether the run is over. */
+  finished: boolean;
+}
+
+/**
+ * Read the answer of the server to a run of puzzles.
+ */
+export function readStormState(payload: unknown): StormState {
+  const state: StormState = {
+    puzzle: null,
+    score: 0,
+    index: 0,
+    total: 0,
+    seconds: 0,
+    finished: false,
+  };
+  if (payload === null || typeof payload !== "object") {
+    return state;
+  }
+  const value = payload as Record<string, unknown>;
+  if (value.ok !== true) {
+    return state;
+  }
+
+  state.score = Number(value.score) || 0;
+  state.index = Number(value.index) || 0;
+  state.total = Number(value.total) || 0;
+  state.seconds = Number(value.seconds) || 0;
+  state.finished = value.finished === true;
+
+  const raw = value.puzzle;
+  if (raw !== null && typeof raw === "object") {
+    const puzzle = raw as Record<string, unknown>;
+    if (typeof puzzle.fen === "string" && typeof puzzle.id === "string") {
+      state.puzzle = {
+        id: puzzle.id,
+        fen: puzzle.fen,
+        solution: typeof puzzle.solution === "string" ? puzzle.solution : "",
+        solutionSan:
+          typeof puzzle.solutionSan === "string" ? puzzle.solutionSan : "",
+        loss: Number(puzzle.loss) || 0,
+        cp: Number(puzzle.cp) || 0,
+        ply: Number(puzzle.ply) || 0,
+        game: typeof puzzle.game === "string" ? puzzle.game : "",
+      };
+    }
+  }
+
+  return state;
 }
 
 function emptyNext(): PuzzleNext {
@@ -158,6 +225,8 @@ export function readPuzzleAnswer(payload: unknown): PuzzleAnswer {
     streak: 0,
     best: 0,
     played: 0,
+    solutionSan: "",
+    solution: "",
   };
   if (payload === null || typeof payload !== "object") {
     return answer;
@@ -170,5 +239,8 @@ export function readPuzzleAnswer(payload: unknown): PuzzleAnswer {
   answer.streak = Number(value.streak) || 0;
   answer.best = Number(value.best) || 0;
   answer.played = Number(value.played) || 0;
+  answer.solutionSan =
+    typeof value.solutionSan === "string" ? value.solutionSan : "";
+  answer.solution = typeof value.solution === "string" ? value.solution : "";
   return answer;
 }

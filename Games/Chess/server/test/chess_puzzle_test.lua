@@ -157,16 +157,17 @@ local next_result = puzzle.next(context("player"))
 ok(next_result.ok, "a puzzle is offered")
 ok(next_result.puzzle ~= nil, "the puzzle is there")
 ok(next_result.puzzle.fen == positions[4].fen, "the puzzle is the position kept")
-ok(next_result.puzzle.solutionSan ~= nil, "the answer is written the way a player writes it")
+ok(next_result.puzzle.solution == "", "the answer is not given before the move")
 
 -- The right answer solves the puzzle and lengthens the streak.
 local answer = puzzle.answer(context("player"), {
   id = next_result.puzzle.id,
-  move = next_result.puzzle.solution,
+  move = positions[4].uci,
 })
 ok(answer.ok, "the answer is taken")
 ok(answer.solved, "the right answer solves the puzzle")
 ok(answer.streak == 1, "the streak is one")
+ok(answer.solutionSan ~= nil, "the answer is given once the move is made")
 
 -- The same puzzle is not given again.
 local again = puzzle.next(context("player"))
@@ -220,4 +221,57 @@ local unknown = puzzle.answer(context("player"), { id = "p-nothing", move = "e2e
 ok(unknown.ok == false, "a puzzle that is not there is refused")
 ok(unknown.error.code == "unknown_puzzle", "with the right reason")
 
+-- The storm: the puzzles with a clock on them.
+reset()
+put("chess_puzzles", "p-one", {
+  id = "p-one",
+  fen = positions[1].fen,
+  solution = positions[1].uci,
+  solutionSan = positions[1].san,
+  loss = 0.4,
+  cp = 0,
+  ply = 0,
+  game = "game-1",
+}, nil)
+put("chess_puzzles", "p-two", {
+  id = "p-two",
+  fen = positions[2].fen,
+  solution = positions[2].uci,
+  solutionSan = positions[2].san,
+  loss = 0.3,
+  cp = 0,
+  ply = 1,
+  game = "game-1",
+}, nil)
+
+local started = puzzle.storm_start(context("stormer"), {})
+ok(started.ok, "the run begins")
+ok(started.seconds == 180, "the run has three minutes on it")
+ok(started.total == 2, "the run has the puzzles of the practice board")
+
+local first_puzzle = puzzle.storm_next(context("stormer"))
+ok(first_puzzle.ok, "the next puzzle of the run is given")
+ok(first_puzzle.puzzle ~= nil, "the puzzle is there")
+ok(first_puzzle.puzzle.solution == "", "the answer is not given before the move")
+
+local storm_answer = puzzle.storm_answer(context("stormer"), {
+  id = first_puzzle.puzzle.id,
+  move = first_puzzle.puzzle.id == "p-one" and positions[1].uci or positions[2].uci,
+})
+ok(storm_answer.ok, "the move is taken")
+ok(storm_answer.solved, "the right answer solves the puzzle")
+ok(storm_answer.score == 1, "the run is scored")
+
+local second_puzzle = puzzle.storm_next(context("stormer"))
+ok(second_puzzle.index == 2, "the run moves on to the next puzzle")
+
+-- The run of one player does not touch the streak of another.
+local streak = puzzle.progress(context("player"))
+ok(streak.streak == 0, "the run does not change the streak")
+
+-- A run that has not begun has no puzzles to give.
+local no_run = puzzle.storm_next(context("someone-else"))
+ok(no_run.ok == false, "there is no run for a player who has not begun one")
+
 print("chess puzzle ok")
+

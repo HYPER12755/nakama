@@ -992,6 +992,46 @@ button {
   color: var(--muted);
 }
 
+/* The storm: the puzzles with a clock on them. */
+
+.storm-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.storm-score {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.storm-clock {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.storm-clock--low {
+  color: var(--warning);
+}
+
+.storm-score__count {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.storm-score__count strong {
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.storm-board {
+  width: 100%;
+}
+
 /* The editor: a position built by hand. */
 
 .editor-label {

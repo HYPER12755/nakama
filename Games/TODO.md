@@ -422,6 +422,18 @@ drawn at are the ones lichess draws them at.
 - [x] The streak: the puzzles solved in a row, and the most in a row. A
   wrong answer ends the run, the way it does on lichess.
 
+### The storm — done
+
+The storm is the puzzles with a clock on them: as many as can be solved in
+three minutes. It is the same puzzles as the practice board, and the run
+keeps its own score, so the streak of the practice board is not touched
+by it.
+
+- [x] A run of three minutes, the puzzles one at a time, and the score of
+  the ones solved.
+- [x] The answer is kept back by the server until the move has been made,
+  so it is not in the hands of the client before the player has found it.
+
 ### What lichess has that we do not — to take next
 
 - [x] The opening explorer: the openings people play, with the games they
@@ -429,6 +441,8 @@ drawn at are the ones lichess draws them at.
   other book to read.
 - [x] Puzzles: positions to solve, and a streak.
 - [ ] The storm and the racer, which are the puzzles with a clock on them.
+  The storm is done; the racer, where the puzzles are solved against the
+  clock and against other players, is not.
 - [ ] The opening trainer, and the practice game against the computer.
 - [ ] Tournaments: an arena, a swiss, and a round of games.
 - [ ] The badges and the titles a player earns.

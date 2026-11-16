@@ -166,6 +166,15 @@ export function PuzzlePanel({
 
   const state = useMemo(() => engineRef.current?.getState() ?? null, [puzzle]);
 
+  /** The side to move is the side the player has. */
+  const flipped = useMemo(() => {
+    if (puzzle === null) {
+      return false;
+    }
+    const fields = puzzle.fen.split(" ");
+    return fields[1] === "b";
+  }, [puzzle]);
+
   /** The player picks a piece. */
   const pick = (square: Square) => {
     const engine = engineRef.current;
@@ -195,12 +204,20 @@ export function PuzzlePanel({
     setBest(result.best);
 
     if (result.solved) {
-      setNotice("That is the move. The streak goes on.");
+      setNotice(
+        result.solutionSan.length > 0
+          ? `That is the move: ${result.solutionSan}. The streak goes on.`
+          : "That is the move. The streak goes on.",
+      );
       setSolved((count) => count + 1);
       setRemaining((count) => Math.max(0, count - 1));
       return;
     }
-    setNotice("Not that one. Try again.");
+    setNotice(
+      result.solutionSan.length > 0
+        ? `Not that one. The answer was ${result.solutionSan}.`
+        : "Not that one. Try again.",
+    );
     // The board is put back the way it was, so the move can be tried again.
     const engine = new ChessEngine();
     engine.load(current.fen);
@@ -237,7 +254,7 @@ export function PuzzlePanel({
             legalTargets={legalTargets}
             lastMove={state.lastMove ?? null}
             checkSquare={null}
-            flipped={false}
+            flipped={flipped}
             pieceSet={pieceSet}
             theme={theme}
             coordinates={coordinates}
@@ -275,7 +292,7 @@ export function PuzzlePanel({
         </button>
         {puzzle !== null && notice !== null && (
           <span className="puzzle-answer">
-            {notice.startsWith("That is the move")
+            {puzzle.solutionSan.length > 0
               ? `the answer was ${puzzle.solutionSan}`
               : ""}
           </span>

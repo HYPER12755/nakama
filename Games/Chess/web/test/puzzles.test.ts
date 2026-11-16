@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { gamePositions } from "../src/lib/engine/puzzleMining";
-import { readPuzzleAnswer, readPuzzleNext } from "../src/lib/puzzles";
+import {
+  readPuzzleAnswer,
+  readPuzzleNext,
+  readStormState,
+} from "../src/lib/puzzles";
 
 /**
  * The puzzles: what the server says, and the positions of a game.
@@ -90,8 +94,51 @@ describe("the answer to a move", () => {
   });
 });
 
-describe("the positions of a game", () => {
-  it("are the positions the game was played through", () => {
+describe("the run of puzzles with a clock on them", () => {
+  it("is read as it is written", () => {
+    const state = readStormState({
+      ok: true,
+      puzzle: {
+        id: "p1",
+        fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        solution: "",
+        solutionSan: "",
+        loss: 0.4,
+        cp: 60,
+        ply: 4,
+        game: "game-1",
+      },
+      score: 3,
+      index: 4,
+      total: 10,
+      seconds: 120,
+      finished: false,
+    });
+
+    expect(state.puzzle?.id).toBe("p1");
+    expect(state.puzzle?.solution).toBe("");
+    expect(state.score).toBe(3);
+    expect(state.index).toBe(4);
+    expect(state.total).toBe(10);
+    expect(state.seconds).toBe(120);
+    expect(state.finished).toBe(false);
+  });
+
+  it("is over when the server says so", () => {
+    const state = readStormState({ ok: true, puzzle: null, score: 7, finished: true });
+    expect(state.puzzle).toBeNull();
+    expect(state.score).toBe(7);
+    expect(state.finished).toBe(true);
+  });
+
+  it("has nothing to say when the answer is not there", () => {
+    const state = readStormState(null);
+    expect(state.puzzle).toBeNull();
+    expect(state.score).toBe(0);
+  });
+});
+
+describe("the positions of a game", () => {  it("are the positions the game was played through", () => {
     const positions = gamePositions(
       "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
       ["e4", "e5", "Nf3"],

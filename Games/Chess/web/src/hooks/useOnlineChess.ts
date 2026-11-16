@@ -70,8 +70,10 @@ import {
 import {
   readPuzzleAnswer,
   readPuzzleNext,
+  readStormState,
   type PuzzleAnswer,
   type PuzzleNext,
+  type StormState,
 } from "../lib/puzzles";
 
 /**
@@ -191,6 +193,15 @@ export interface OnlineChessController {
     id: string,
     move: string,
   ) => Promise<PuzzleAnswer>;
+  /** Start a run of puzzles with a clock on them. */
+  stormStart: () => Promise<{ seconds: number; total: number } | null>;
+  /** The next puzzle of the run. */
+  stormNext: () => Promise<StormState>;
+  /** The move a player made in the run. */
+  stormAnswer: (
+    id: string,
+    move: string,
+  ) => Promise<{ solved: boolean; score: number; solutionSan: string }>;
   connect: () => Promise<void>;
   disconnect: () => void;
   quickMatch: () => Promise<void>;
@@ -1604,6 +1615,8 @@ export function useOnlineChess(
         streak: 0,
         best: 0,
         played: 0,
+        solutionSan: "",
+        solution: "",
       };
 
       const client = clientRef.current;
@@ -1618,6 +1631,107 @@ export function useOnlineChess(
           move,
         });
         return readPuzzleAnswer(response.payload);
+      } catch {
+        return empty;
+      }
+    },
+    [],
+  );
+
+  /** Start a run of puzzles with a clock on them. */
+  const stormStart = useCallback(async (): Promise<{
+    seconds: number;
+    total: number;
+  } | null> => {
+    try {
+      await connect();
+    } catch {
+      return null;
+    }
+
+    const client = clientRef.current;
+    const currentSession = sessionRef.current;
+    if (client === null || currentSession === null) {
+      return null;
+    }
+
+    try {
+      const response = await client.rpc(currentSession, "chess_storm_start", {});
+      const payload = (response.payload ?? {}) as {
+        ok?: boolean;
+        seconds?: number;
+        total?: number;
+      };
+      if (payload.ok !== true) {
+        return null;
+      }
+      return {
+        seconds: payload.seconds ?? 180,
+        total: payload.total ?? 0,
+      };
+    } catch {
+      return null;
+    }
+  }, [connect]);
+
+  /** The next puzzle of the run. */
+  const stormNext = useCallback(async (): Promise<StormState> => {
+    const empty: StormState = {
+      puzzle: null,
+      score: 0,
+      index: 0,
+      total: 0,
+      seconds: 0,
+      finished: false,
+    };
+
+    const client = clientRef.current;
+    const currentSession = sessionRef.current;
+    if (client === null || currentSession === null) {
+      return empty;
+    }
+
+    try {
+      const response = await client.rpc(currentSession, "chess_storm_next", {});
+      return readStormState(response.payload);
+    } catch {
+      return empty;
+    }
+  }, []);
+
+  /** The move a player made in the run. */
+  const stormAnswer = useCallback(
+    async (
+      id: string,
+      move: string,
+    ): Promise<{ solved: boolean; score: number; solutionSan: string }> => {
+      const empty = { solved: false, score: 0, solutionSan: "" };
+
+      const client = clientRef.current;
+      const currentSession = sessionRef.current;
+      if (client === null || currentSession === null) {
+        return empty;
+      }
+
+      try {
+        const response = await client.rpc(currentSession, "chess_storm_answer", {
+          id,
+          move,
+        });
+        const payload = (response.payload ?? {}) as {
+          ok?: boolean;
+          solved?: boolean;
+          score?: number;
+          solutionSan?: string;
+        };
+        if (payload.ok !== true) {
+          return empty;
+        }
+        return {
+          solved: payload.solved === true,
+          score: payload.score ?? 0,
+          solutionSan: payload.solutionSan ?? "",
+        };
       } catch {
         return empty;
       }
@@ -2728,6 +2842,9 @@ export function useOnlineChess(
     puzzleNext,
     puzzleSave,
     puzzleAnswer,
+    stormStart,
+    stormNext,
+    stormAnswer,
     connect,
     disconnect,
     quickMatch,
