@@ -38,6 +38,8 @@ export { PlayerCard } from "./components/PlayerCard";
 export type { PlayerCardProps } from "./components/PlayerCard";
 export { ProfilePanel } from "./components/ProfilePanel";
 export type { ProfilePanelProps } from "./components/ProfilePanel";
+export { RatingChart, ratingPath } from "./components/RatingChart";
+export type { RatingChartProps } from "./components/RatingChart";
 export { ReplayShell } from "./components/ReplayShell";
 export type { ReplayShellProps } from "./components/ReplayShell";
 export { Icon } from "./components/Icon";

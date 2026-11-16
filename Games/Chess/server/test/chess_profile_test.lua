@@ -320,13 +320,13 @@ test("a rated resignation persists ratings, stats, history, and leaderboard", fu
   local bob = exposed_record("u2", progression.PROFILE_COLLECTION, "profile")
   assert_truthy(alice)
   assert_truthy(bob)
-  assert_equal(alice.value.rating, 1184)
+  assert_equal(alice.value.rating, 1190)
   assert_equal(alice.value.games, 1)
   assert_equal(alice.value.losses, 1)
   assert_equal(alice.value.ratedGames, 1)
-  assert_equal(bob.value.rating, 1216)
+  assert_equal(bob.value.rating, 1210)
   assert_equal(bob.value.wins, 1)
-  assert_equal(bob.value.peakRating, 1216)
+  assert_equal(bob.value.peakRating, 1210)
 
   local history = exposed_record(
     "u1",
@@ -341,13 +341,13 @@ test("a rated resignation persists ratings, stats, history, and leaderboard", fu
   assert_equal(history.value.steps[2], "e5")
   assert_equal(history.value.pgn, "1. e4 e5")
   assert_equal(history.value.ratingBefore, 1200)
-  assert_equal(history.value.ratingAfter, 1184)
-  assert_equal(history.value.ratingDelta, -16)
+  assert_equal(history.value.ratingAfter, 1190)
+  assert_equal(history.value.ratingDelta, -10)
 
   local leaderboard = leaderboards[progression.LEADERBOARD_ID]
   assert_truthy(leaderboard)
-  assert_equal(leaderboard.records.u1.score, 1184)
-  assert_equal(leaderboard.records.u2.score, 1216)
+  assert_equal(leaderboard.records.u1.score, 1190)
+  assert_equal(leaderboard.records.u2.score, 1210)
   assert_equal(leaderboard.records.u2.username, "Bob")
   assert_equal(leaderboard.records.u2.metadata.wins, 1)
 
@@ -367,7 +367,7 @@ test("a rated resignation persists ratings, stats, history, and leaderboard", fu
   assert_equal(alice_again.version, alice.version)
   assert_equal(alice_again.value.games, 1)
   assert_equal(alice_again.value.losses, 1)
-  assert_equal(leaderboard.records.u1.score, 1184)
+  assert_equal(leaderboard.records.u1.score, 1190)
 end)
 
 test("an unrated draw updates stats but not rating", function()
@@ -514,14 +514,14 @@ test("leaderboard payload returns ranked entries and the caller's record", funct
   assert_equal(payload.ok, true)
   assert_equal(#payload.entries, 2)
   assert_equal(payload.entries[1].username, "Bob")
-  assert_equal(payload.entries[1].rating, 1216)
+  assert_equal(payload.entries[1].rating, 1210)
   assert_equal(payload.entries[1].rank, 1)
   assert_equal(payload.entries[2].username, "Alice")
-  assert_equal(payload.entries[2].rating, 1184)
+  assert_equal(payload.entries[2].rating, 1190)
 
   assert_truthy(payload.me)
   assert_equal(payload.me.userId, "u1")
-  assert_equal(payload.me.rating, 1184)
+  assert_equal(payload.me.rating, 1190)
   assert_equal(payload.me.rank, 2)
 end)
 

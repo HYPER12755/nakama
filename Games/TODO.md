@@ -277,10 +277,10 @@ hosts are file-backed and should load only the single-entry subset.
 - [ ] Chess and Carrom private rooms keep their room code after the table
   is left, so a code can be read for a table that no longer exists. The
   code has to be dropped with the table.
-- [ ] The Chess online smoke test fails on "alice history should include
-  replay SANs". The failure is there before this round, so the replay steps
-  a finished Chess game writes are not reaching the history the client
-  reads back.
+- [x] The Chess online smoke test failed on "alice history should include
+  replay SANs". The history carried the moves under `steps`, and the test
+  looked for them under `sans`, so the test was wrong and the history was
+  right. The smoke test passes from end to end now.
 - [ ] The local stack has to be started by hand after the machine wakes
   up, and the launcher then says "MoonGames is offline" until the page is
   reloaded. The launcher now keeps trying on its own, but the stack itself
@@ -301,8 +301,10 @@ that offers them is shared by every title (`Games/shared/gameui/`).
 - [x] The sets of pieces: forty-two sets came with the game, each with its
   own licence named in `Games/Chess/web/public/pieces/PIECES.txt`. The
   pieces the game draws itself stay the default.
-- [x] The colourings of the board: eighteen, named after the boards they
-  remind a player of.
+- [x] The boards: the boards of lichess themselves, wood with its grain,
+  marble, leather, plastic, canvas, newspaper, and the rest, copied with
+  the game and named in `Games/Chess/web/public/boards/BOARDS.txt`. The
+  board of the game itself keeps its own colours.
 - [x] The coordinates: hidden, inside every square, on the edge, or both.
 - [x] How fast a piece travels: off, fast, normal, slow.
 - [x] The sound: nine sets of sounds, the volume, and a table that can be
@@ -316,8 +318,34 @@ that offers them is shared by every title (`Games/shared/gameui/`).
 - [x] The corner of the board that is dragged to make the board bigger or
   smaller, and the size kept on the device.
 - [x] The replay of a finished game: never, only for slow games, or always.
+- [x] The names of the pieces hidden in the notation.
+- [x] A move written with the keyboard.
+- [x] A move ready for the turn after this one, while the other side
+  thinks.
 - [x] The choices are kept on the device, per game, with a shared room
   underneath for the choice made once for every game.
+- [x] The screen is three lines, the way lichess keeps it: the pieces, the
+  board, and the sound, each with a picture of what is chosen, and the rest
+  behind "More settings".
+
+### The desk and the editor — done
+
+- [x] The desk: a game brought in as PGN or a position as FEN, walked
+  through move by move on the board, and a game of the player's own played
+  from the position on it.
+- [x] The editor: the pieces put on a board by hand, the side to move, the
+  castling rights, and the counters, written down as a position the engine
+  can play from.
+- [x] A game brought in can be added to the player's own games. The server
+  plays the moves out again with its own rules first, so a game that cannot
+  be played is refused, and the rating is not touched.
+
+### The ratings — done
+
+- [x] The ratings are in the Glicko-2 system, so a player who has played
+  little is treated as uncertain and their rating settles down.
+- [x] The profile shows how far the rating may be from the truth, and the
+  rating over the games that were played is drawn as a line.
 
 ### What lichess has that we do not — to take next
 
@@ -325,26 +353,12 @@ that offers them is shared by every title (`Games/shared/gameui/`).
   an evaluation bar, and the moves it likes. It needs a WASM engine in a
   worker, which the file-backed host does not allow yet, so the engine has
   to come to the client another way first.
-- [x] The desk: a game brought in as PGN or a position as FEN, walked
-  through move by move on the board, and a game of the player's own played
-  from the position on it.
 - [ ] The opening explorer: the openings people play, with the games they
-  came from.
+  came from. It needs an opening book.
 - [ ] Puzzles: positions to solve, a streak, and a board of what has been
-  solved.
+  solved. It needs positions that are worth solving.
 - [ ] The trainer: the coordinate trainer, the opening trainer, and the
   practice game against the computer.
-- [x] The position editor: the pieces put on a board by hand, the side to
-  move, the castling rights, and the counters, written down as a position
-  the engine can play from.
-- [ ] PGN import into the player's own history, so a game brought from
-  elsewhere is played back from the profile. The desk opens one for now.
-- [ ] Pre-moves: the move that is ready before it is the player's turn.
-- [ ] Blind mode: the notation that hides the names of the pieces.
-- [ ] The keyboard: writing a move without touching the board.
-- [ ] Takeback and rematch offers in a game that is being played.
-- [ ] The rating system of lichess (Glicko), with a provisional mark, a
-  deviation, and the history of a rating drawn as a chart.
 - [ ] Tournaments: an arena, a swiss, and a round of games.
 - [ ] The badges and the titles a player earns.
 - [ ] The dashboard: the puzzles, the streak, the ratings, and the games

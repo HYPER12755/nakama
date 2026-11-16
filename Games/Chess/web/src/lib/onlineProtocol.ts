@@ -135,6 +135,8 @@ export interface OnlineProfile {
   username: string;
   rating: number;
   peakRating: number;
+  /** How far the rating may be from the truth. */
+  ratingDeviation?: number;
   games: number;
   wins: number;
   losses: number;

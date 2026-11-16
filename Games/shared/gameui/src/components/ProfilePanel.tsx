@@ -4,6 +4,7 @@ import {
   type GameOutcome,
   type GameProfile,
 } from "../types";
+import { RatingChart } from "./RatingChart";
 
 export interface ProfilePanelProps {
   connected: boolean;
@@ -161,7 +162,13 @@ export function ProfilePanel({
           <div className="profile-summary">
             <div className="profile-rating">
               <strong>{profile.rating}</strong>
-              <span>rating</span>
+              <span>
+                rating
+                {profile.ratingDeviation !== undefined &&
+                profile.ratingDeviation > 0
+                  ? ` ± ${profile.ratingDeviation}`
+                  : ""}
+              </span>
             </div>
             <div className="profile-stats">
               <div className="profile-stat">
@@ -193,6 +200,7 @@ export function ProfilePanel({
           {profile.games === 0 ? (
             <p className="profile-note">{emptyProfileText}</p>
           ) : null}
+          <RatingChart history={history} />
         </>
       ) : null}
 

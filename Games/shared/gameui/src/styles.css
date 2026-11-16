@@ -3397,3 +3397,33 @@
   color: var(--muted);
   opacity: 0.8;
 }
+
+/* The rating of a player, drawn as a line. */
+
+.rating-chart {
+  margin: 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--accent);
+}
+
+.rating-chart__line {
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.25));
+}
+
+.rating-chart__dot {
+  fill: var(--panel-solid);
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.rating-chart__caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}

@@ -31,6 +31,11 @@ export interface GameProfile {
   username: string;
   rating: number;
   peakRating: number;
+  /**
+   * How far the rating may be from the truth. A player who has played
+   * little has a wide one, and their rating moves more.
+   */
+  ratingDeviation?: number;
   games: number;
   wins: number;
   losses: number;

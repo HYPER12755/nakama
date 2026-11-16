@@ -555,7 +555,7 @@ async function main() {
     );
     assert(aliceHistory.pgn.includes("e4"), "alice history should include PGN");
     assert(
-      Array.isArray(aliceHistory.sans) && aliceHistory.sans[0] === "e4",
+      Array.isArray(aliceHistory.steps) && aliceHistory.steps[0] === "e4",
       "alice history should include replay SANs",
     );
 
@@ -637,6 +637,12 @@ async function main() {
     const carolDrawProfile = await fetchProfile(carol, "carol after draw");
     const daveDrawProfile = await fetchProfile(dave, "dave after draw");
     assert(carolDrawProfile.profile.rating === 1200, "draw leaves rating at 1200");
+    assert(
+      typeof carolDrawProfile.profile.ratingDeviation === "number" &&
+        carolDrawProfile.profile.ratingDeviation > 0,
+      "the profile does not carry the Glicko deviation",
+    );
+    console.log("[ok] the profile carries the Glicko deviation");
     assert(carolDrawProfile.profile.draws === 1, "carol draw is recorded");
     assert(carolDrawProfile.profile.ratedGames === 1, "quick draw is rated");
     assert(daveDrawProfile.profile.draws === 1, "dave draw is recorded");
@@ -647,7 +653,7 @@ async function main() {
     assert(carolDrawHistory, "carol history should include the rated draw");
     assert(carolDrawHistory.outcome === "draw", "draw history outcome");
     assert(carolDrawHistory.rated === true, "draw history should be rated");
-    assert(carolDrawHistory.ratingDelta === 0, "equal draw has zero Elo delta");
+    assert(carolDrawHistory.ratingDelta === 0, "equal draw has no rating change");
 
     const carolDrawLeaderboard = await fetchLeaderboard(carol, "carol after draw");
     const daveDrawLeaderboard = await fetchLeaderboard(dave, "dave after draw");
@@ -736,16 +742,16 @@ async function main() {
 
     const carolFinal = await fetchProfile(carol, "carol after resignation");
     const daveFinal = await fetchProfile(dave, "dave after resignation");
-    assert(carolFinal.profile.rating === 1184, "carol rating drops to 1184");
+    assert(carolFinal.profile.rating === 1190, "carol rating drops to 1190");
     assert(carolFinal.profile.games === 2, "carol has two recorded games");
     assert(carolFinal.profile.losses === 1, "carol has one loss");
     assert(carolFinal.profile.draws === 1, "carol has one draw");
     assert(carolFinal.profile.ratedGames === 2, "both carol games are rated");
     assert(carolFinal.profile.peakRating === 1200, "carol peak stays at 1200");
-    assert(daveFinal.profile.rating === 1216, "dave rating rises to 1216");
+    assert(daveFinal.profile.rating === 1210, "dave rating rises to 1210");
     assert(daveFinal.profile.wins === 1, "dave has one win");
     assert(daveFinal.profile.draws === 1, "dave has one draw");
-    assert(daveFinal.profile.peakRating === 1216, "dave peak rises to 1216");
+    assert(daveFinal.profile.peakRating === 1210, "dave peak rises to 1210");
 
     const carolDecisiveHistory = carolFinal.history.find(
       (entry) => entry.matchId === decisiveMatch.match_id,
@@ -753,23 +759,23 @@ async function main() {
     assert(carolDecisiveHistory, "carol decisive history should exist");
     assert(carolDecisiveHistory.outcome === "loss", "carol decisive loss");
     assert(carolDecisiveHistory.ratingBefore === 1200, "carol rating before");
-    assert(carolDecisiveHistory.ratingAfter === 1184, "carol rating after");
-    assert(carolDecisiveHistory.ratingDelta === -16, "carol Elo delta is -16");
+    assert(carolDecisiveHistory.ratingAfter === 1190, "carol rating after");
+    assert(carolDecisiveHistory.ratingDelta === -10, "carol rating change is -10");
 
     const daveDecisiveHistory = daveFinal.history.find(
       (entry) => entry.matchId === decisiveMatch.match_id,
     );
     assert(daveDecisiveHistory, "dave decisive history should exist");
     assert(daveDecisiveHistory.outcome === "win", "dave decisive win");
-    assert(daveDecisiveHistory.ratingDelta === 16, "dave Elo delta is +16");
-    console.log("[ok] rated resignation updates Elo and match history");
+    assert(daveDecisiveHistory.ratingDelta === 10, "dave rating change is +10");
+    console.log("[ok] rated resignation updates the rating and the match history");
 
     const carolLeaderboard = await fetchLeaderboard(carol, "carol final");
     const daveLeaderboard = await fetchLeaderboard(dave, "dave final");
-    assert(carolLeaderboard.me?.rating === 1184, "carol leaderboard is 1184");
-    assert(daveLeaderboard.me?.rating === 1216, "dave leaderboard is 1216");
+    assert(carolLeaderboard.me?.rating === 1190, "carol leaderboard is 1190");
+    assert(daveLeaderboard.me?.rating === 1210, "dave leaderboard is 1210");
     assert(carolLeaderboard.me?.rank >= 1, "carol has a leaderboard rank");
-    console.log("[ok] rating leaderboard reflects current Elo");
+    console.log("[ok] rating leaderboard reflects the current rating");
 
     // The web client falls back to the quick-match RPC when the atomic
     // matchmaker does not find a concurrent partner. That path must let a

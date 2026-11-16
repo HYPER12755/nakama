@@ -5,6 +5,7 @@
 -- for the profile/history writes so clients can refresh immediately.
 
 local nk = require("nakama")
+local glicko = require("chess_glicko")
 
 local progression = {}
 
@@ -117,6 +118,13 @@ function progression.normalize_profile(value, username, now)
   normalized.peakRating = math.floor(
     number(normalized.peakRating, normalized.rating)
   )
+  normalized.ratingDeviation = math.floor(
+    number(normalized.ratingDeviation, glicko.DEFAULT_DEVIATION)
+  )
+  normalized.volatility = number(
+    normalized.volatility,
+    glicko.DEFAULT_VOLATILITY
+  )
   normalized.games = math.max(0, math.floor(number(normalized.games, 0)))
   normalized.wins = math.max(0, math.floor(number(normalized.wins, 0)))
   normalized.losses = math.max(0, math.floor(number(normalized.losses, 0)))
@@ -177,6 +185,7 @@ function progression.public_profile(value)
     username = value.username,
     rating = value.rating,
     peakRating = value.peakRating,
+    ratingDeviation = value.ratingDeviation,
     games = value.games,
     wins = value.wins,
     losses = value.losses,
@@ -328,7 +337,7 @@ local function ensure_leaderboard()
     {
       title = "MoonGames Chess Rating",
       game = "chess",
-      rating = "Elo",
+      rating = "Glicko",
     },
     true
   )
@@ -464,19 +473,56 @@ function progression.finalize_match(context, state, result, now)
     local black_before = values[black.user_id].rating
     local white_after = white_before
     local black_after = black_before
+    local white_deviation = values[white.user_id].ratingDeviation
+    local black_deviation = values[black.user_id].ratingDeviation
+    local white_volatility = values[white.user_id].volatility
+    local black_volatility = values[black.user_id].volatility
 
     if
       state.rated == true
       and white_outcome ~= "abandoned"
       and black_outcome ~= "abandoned"
     then
-      local delta = progression.rating_delta(
-        white_before,
-        black_before,
+      -- The two ratings are moved by the Glicko-2 system, and each player
+      -- is looked at with how certain the other one is, so the two are not
+      -- moved by the same amount.
+      local white_update = glicko.update(
+        {
+          rating = white_before,
+          deviation = white_deviation,
+          volatility = white_volatility,
+        },
+        {
+          rating = black_before,
+          deviation = black_deviation,
+          volatility = black_volatility,
+        },
         white_outcome
       )
-      white_after = math.max(progression.MIN_RATING, white_before + delta)
-      black_after = math.max(progression.MIN_RATING, black_before - delta)
+      local black_update = glicko.update(
+        {
+          rating = black_before,
+          deviation = black_deviation,
+          volatility = black_volatility,
+        },
+        {
+          rating = white_before,
+          deviation = white_deviation,
+          volatility = white_volatility,
+        },
+        black_outcome
+      )
+
+      if white_update then
+        white_after = math.max(glicko.MIN_RATING, white_update.rating)
+        white_deviation = white_update.deviation
+        white_volatility = white_update.volatility
+      end
+      if black_update then
+        black_after = math.max(glicko.MIN_RATING, black_update.rating)
+        black_deviation = black_update.deviation
+        black_volatility = black_update.volatility
+      end
     end
 
     local writes = {}
@@ -489,6 +535,11 @@ function progression.finalize_match(context, state, result, now)
       local value = values[player.user_id]
 
       value.username = player.username or value.username
+      value.rating = after
+      value.ratingDeviation = player.color == "w" and white_deviation
+        or black_deviation
+      value.volatility = player.color == "w" and white_volatility
+        or black_volatility
       progression.record_outcome(
         value,
         outcome,

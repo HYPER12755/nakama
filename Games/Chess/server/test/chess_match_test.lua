@@ -540,10 +540,10 @@ test("finished rated match persists profiles, history, and leaderboard", functio
   local bob = storage_record("u2", "chess_profile", "profile")
   assert_truthy(alice)
   assert_truthy(bob)
-  assert_equal(alice.value.rating, 1184)
+  assert_equal(alice.value.rating, 1190)
   assert_equal(alice.value.losses, 1)
   assert_equal(alice.value.ratedGames, 1)
-  assert_equal(bob.value.rating, 1216)
+  assert_equal(bob.value.rating, 1210)
   assert_equal(bob.value.wins, 1)
 
   local history = storage_record("u1", "chess_history", "match-1")
@@ -554,15 +554,15 @@ test("finished rated match persists profiles, history, and leaderboard", functio
 
   local leaderboard = fake_nk.leaderboards["chess_rating"]
   assert_truthy(leaderboard)
-  assert_equal(leaderboard.records.u1.score, 1184)
-  assert_equal(leaderboard.records.u2.score, 1216)
+  assert_equal(leaderboard.records.u1.score, 1190)
+  assert_equal(leaderboard.records.u2.score, 1210)
 
   local profile_response = fake_nk.rpcs["chess_get_profile"]({
     user_id = "u1",
     username = "Alice",
   }, "{}")
   assert_equal(profile_response.ok, true)
-  assert_equal(profile_response.profile.rating, 1184)
+  assert_equal(profile_response.profile.rating, 1190)
   assert_equal(#profile_response.history, 1)
 
   local leaderboard_response = fake_nk.rpcs["chess_get_leaderboard"]({
@@ -570,7 +570,7 @@ test("finished rated match persists profiles, history, and leaderboard", functio
   }, "{}")
   assert_equal(leaderboard_response.ok, true)
   assert_equal(#leaderboard_response.entries, 2)
-  assert_equal(leaderboard_response.me.rating, 1184)
+  assert_equal(leaderboard_response.me.rating, 1190)
 end)
 
 test("draw offer can be accepted", function()
