@@ -47,3 +47,28 @@ The service is built and started with the rest of the stack:
 
 The client reaches it through the address the player came to, so a tunnel,
 a proxy or a CDN needs that one address and nothing more.
+
+Who may have the engine
+-----------------------
+
+The engine is for the games against yourself and against the computer. In a
+game against a person it would be cheating, so it is only for the accounts
+that were named. The addresses are kept in `access.go`, on the server:
+
+    var engineAccounts = []string{
+        "hyper14917374@gmail.com",
+    }
+
+The list is checked against the account itself and not against anything the
+client says: the service asks the server of the games who the player is
+(`/v2/account` with the token of the session) and compares the address that
+comes back. So a player cannot claim to be somebody else.
+
+The client asks the service before it shows the engine:
+
+    GET /api/engine/access?mode=online
+
+and the answer is `{"allowed":true}` or `{"allowed":false}`. In a game
+against a person the client only shows the engine when the service says so,
+so the player who is not allowed never sees it at all, and their opponent
+never sees it either.

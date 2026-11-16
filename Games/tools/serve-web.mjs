@@ -224,7 +224,7 @@ async function main() {
   // The engine on the server, which says what a position is worth. It is
   // asked through the same address as everything else, so the client does
   // not need to know where it lives.
-  const ENGINE_PATHS = ["/api/external-engine"];
+  const ENGINE_PATHS = ["/api/external-engine", "/api/engine"];
   const isEnginePath = (pathname) =>
     ENGINE_PATHS.some(
       (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),

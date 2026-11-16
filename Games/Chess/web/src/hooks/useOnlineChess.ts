@@ -981,6 +981,7 @@ export function useOnlineChess(
         setSession({
           userId: resolvedAccount.userId,
           username: resolvedAccount.username,
+          token: sessionResult.token,
         });
         setConnection("connected");
 

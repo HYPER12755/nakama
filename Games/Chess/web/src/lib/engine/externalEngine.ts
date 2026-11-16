@@ -35,6 +35,20 @@ export interface EngineOutput {
   }>;
 }
 
+/** The kind of game the analysis is for. */
+export type EngineMode = "local" | "ai" | "online";
+
+/**
+ * Whether the engine is to be shown at all.
+ *
+ * The engine is for the games against yourself and against the computer. In
+ * a game against a person it is only for the accounts the server has
+ * named, so the server is asked before it is shown.
+ */
+export function engineVisible(mode: EngineMode, allowed: boolean): boolean {
+  return mode !== "online" || allowed;
+}
+
 /** The work the engine is asked to do. */
 export interface EngineWork {
   /** The position the game starts from. */
@@ -49,6 +63,10 @@ export interface EngineWork {
   threads: number;
   /** How much memory the engine may use. */
   hash: number;
+  /** The kind of game the analysis is for. */
+  mode: EngineMode;
+  /** The token of the session, so the server knows who is asking. */
+  token?: string;
 }
 
 /** One evaluation, as the client keeps it. */
@@ -148,10 +166,18 @@ export class ExternalEngine {
       `${this.endpoint}/api/external-engine/${this.id}/analyse`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // The server checks who is asking, so a player may only have the
+          // engine in a game against a person if the server says so.
+          ...(work.token !== undefined && work.token.length > 0
+            ? { Authorization: `Bearer ${work.token}` }
+            : {}),
+        },
         signal: controller.signal,
         body: JSON.stringify({
           clientSecret: "",
+          mode: work.mode,
           work: {
             sessionId: "moongames",
             threads: work.threads,

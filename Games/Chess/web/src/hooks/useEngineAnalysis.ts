@@ -4,6 +4,7 @@ import {
   ExternalEngine,
   readEngineOutput,
   type EngineEvaluation,
+  type EngineMode,
   type EngineWork,
 } from "../lib/engine/externalEngine";
 
@@ -20,6 +21,10 @@ export interface UseEngineAnalysisOptions {
   depth?: number;
   /** How many lines the engine should think about. */
   multiPv?: number;
+  /** The kind of game the analysis is for. */
+  mode?: EngineMode;
+  /** The token of the session, so the server knows who is asking. */
+  token?: string;
 }
 
 export interface EngineAnalysis {
@@ -87,6 +92,8 @@ export function useEngineAnalysis(
     enabled,
     depth = 12,
     multiPv = 1,
+    mode = "local",
+    token,
   } = options;
 
   const [evaluation, setEvaluation] = useState<EngineEvaluation | null>(null);
@@ -113,6 +120,8 @@ export function useEngineAnalysis(
       multiPv,
       threads: 1,
       hash: 16,
+      mode,
+      token,
     };
 
     // The engine is asked a moment after the position settles, so the

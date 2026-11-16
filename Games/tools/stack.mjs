@@ -1142,6 +1142,12 @@ async function startEngine(settings, state) {
       MOONGAMES_ENGINE_ADDRESS: `${settings.engine.host}:${settings.engine.port}`,
       MOONGAMES_ENGINE_PATH: process.env.MOONGAMES_ENGINE_PATH ?? "stockfish",
       MOONGAMES_ENGINE_SECRET: process.env.MOONGAMES_ENGINE_SECRET ?? "",
+      // The engine asks the server of the games who is asking, so a player
+      // may only have the engine in a game against a person if the server
+      // says so.
+      MOONGAMES_NAKAMA_URL: `http://${urlHost(
+        settings.nakama.socketAddress,
+      )}:${settings.nakama.socketPort}`,
     },
     logPath: settings.engine.logPath,
     displayCommand: "engine-service",

@@ -232,6 +232,29 @@ async function main() {
     );
     console.log("[ok] a game that cannot be played is refused");
 
+    // The engine is for the games against yourself and against the
+    // computer. In a game against a person it is only for the accounts
+    // the server has named, so an ordinary player is refused.
+    const engineAccess = await fetch(
+      "http://127.0.0.1:4174/api/engine/access?mode=online",
+      { headers: { Authorization: `Bearer ${alice.session.token}` } },
+    );
+    const engineAllowed = await engineAccess.json();
+    assert(
+      engineAllowed.allowed === false,
+      "an ordinary player was given the engine in an online game",
+    );
+    console.log("[ok] the engine is not given in an online game");
+
+    const localEngineAccess = await fetch(
+      "http://127.0.0.1:4174/api/engine/access?mode=local",
+    );
+    const localAllowed = await localEngineAccess.json();
+    assert(
+      localAllowed.allowed === true,
+      "the engine is not given in a game against oneself",
+    );
+    console.log("[ok] the engine is given in a game against oneself");
     const privateRpc = await alice.client.rpc(
       alice.session,
       "chess_create_private_match",

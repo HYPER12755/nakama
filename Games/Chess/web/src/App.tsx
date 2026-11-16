@@ -84,8 +84,11 @@ import {
   type AiGameSettings,
 } from "./hooks/useChessGame";
 import { useOnlineChess } from "./hooks/useOnlineChess";
+import { useEngineAccess } from "./hooks/useEngineAccess";
 import { useEngineAnalysis } from "./hooks/useEngineAnalysis";
 import { positionAfter, type PvPosition } from "./lib/engine/pvBoard";
+import type { EngineMode } from "./lib/engine/externalEngine";
+import { engineVisible } from "./lib/engine/externalEngine";
 
 type GameMode = "local" | "ai" | "online";
 
@@ -384,13 +387,32 @@ export default function App({ bridge }: AppProps) {
     () => activeState.history.map((move) => move.uci),
     [activeState.history],
   );
+
+  /**
+   * The kind of game the engine is being asked about.
+   *
+   * The engine is for the games against yourself and against the computer.
+   * In a game against a person it is only for the accounts the server has
+   * named, and the opponent never sees it.
+   */
+  const engineMode: EngineMode = onlineMode
+    ? "online"
+    : aiMode
+      ? "ai"
+      : "local";
+  const engineToken = onlineMode ? (online.session?.token ?? null) : null;
+  const engineAccess = useEngineAccess(engineMode, engineToken);
+  const engineAllowed = engineVisible(engineMode, engineAccess.allowed);
+
   const analysis = useEngineAnalysis({
     initialFen: analysisStartFen,
     moves: analysisUciMoves,
     turn: activeState.turn,
-    enabled: analysisOn,
+    enabled: analysisOn && engineAllowed,
     depth: analysisDepth,
     multiPv: 3,
+    mode: engineMode,
+    token: engineToken ?? undefined,
   });
 
   /**
@@ -1155,6 +1177,7 @@ export default function App({ bridge }: AppProps) {
               onClick={() => setAnalysisOn((current) => !current)}
               aria-pressed={analysisOn}
               title="Ask the engine what it thinks of the position"
+              hidden={!engineAllowed}
             >
               Engine
             </button>

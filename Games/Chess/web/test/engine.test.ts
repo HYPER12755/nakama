@@ -5,7 +5,10 @@ import {
   povChances,
   winningPercent,
 } from "../src/lib/engine/winningChances";
-import { readEngineOutput } from "../src/lib/engine/externalEngine";
+import {
+  engineVisible,
+  readEngineOutput,
+} from "../src/lib/engine/externalEngine";
 import { movesToSan } from "../src/hooks/useEngineAnalysis";
 
 const START_FEN =
@@ -72,6 +75,18 @@ describe("the answer of the engine", () => {
   it("is nothing when the engine has not said anything yet", () => {
     expect(readEngineOutput({ keepalive: true }, false)).toBeNull();
     expect(readEngineOutput({ depth: 1 }, false)).toBeNull();
+  });
+});
+
+describe("whether the engine is shown", () => {
+  it("is shown in the games against yourself and against the computer", () => {
+    expect(engineVisible("local", false)).toBe(true);
+    expect(engineVisible("ai", false)).toBe(true);
+  });
+
+  it("is hidden in a game against a person, unless the server says so", () => {
+    expect(engineVisible("online", false)).toBe(false);
+    expect(engineVisible("online", true)).toBe(true);
   });
 });
 

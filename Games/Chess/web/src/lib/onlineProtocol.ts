@@ -206,6 +206,12 @@ export interface OnlineLeaderboardPayload {
 export interface OnlineSessionInfo {
   userId: string;
   username: string;
+  /**
+   * The token of the session. The server of the games checks it to know
+   * who the player is, so a feature that is only for some accounts can ask
+   * the server rather than believe the client.
+   */
+  token: string;
 }
 
 export interface ServerAddress {

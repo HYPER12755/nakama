@@ -32,6 +32,15 @@ import (
 type analyseRequest struct {
 	ClientSecret string `json:"clientSecret"`
 	Work         work   `json:"work"`
+	// The kind of game the analysis is for: "local" or "online".
+	Mode string `json:"mode"`
+}
+
+// The service, and where it keeps the things it needs.
+type service struct {
+	enginePath string
+	nakamaURL  string
+	httpClient *http.Client
 }
 
 type work struct {
@@ -69,13 +78,23 @@ func main() {
 	address := envOr("MOONGAMES_ENGINE_ADDRESS", "127.0.0.1:7352")
 	enginePath := envOr("MOONGAMES_ENGINE_PATH", "stockfish")
 	secret := os.Getenv("MOONGAMES_ENGINE_SECRET")
+	nakamaURL := envOr("MOONGAMES_NAKAMA_URL", "http://127.0.0.1:7350")
 
 	pool := newPool(enginePath)
 	defer pool.close()
 
+	current := &service{
+		enginePath: enginePath,
+		nakamaURL:  strings.TrimSuffix(nakamaURL, "/"),
+		httpClient: theSharedClient,
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/external-engine/", func(w http.ResponseWriter, r *http.Request) {
-		serveAnalyse(w, r, pool, secret)
+		serveAnalyse(w, r, pool, secret, current)
+	})
+	mux.HandleFunc("/api/engine/access", func(w http.ResponseWriter, r *http.Request) {
+		current.serveAccess(w, r)
 	})
 	mux.HandleFunc("/healthcheck", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -101,7 +120,13 @@ func envOr(name string, fallback string) string {
 }
 
 // The analysis of one position.
-func serveAnalyse(w http.ResponseWriter, r *http.Request, pool *pool, secret string) {
+func serveAnalyse(
+	w http.ResponseWriter,
+	r *http.Request,
+	pool *pool,
+	secret string,
+	current *service,
+) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "only a post is wanted here", http.StatusMethodNotAllowed)
 		return
@@ -120,6 +145,17 @@ func serveAnalyse(w http.ResponseWriter, r *http.Request, pool *pool, secret str
 
 	if request.Work.InitialFen == "" {
 		http.Error(w, "the position is missing", http.StatusBadRequest)
+		return
+	}
+
+	// The engine is for the games against yourself, and for the accounts
+	// that were named. In a game against a person it is only for those.
+	if !current.mayUseEngine(r.Context(), r, request.Mode) {
+		http.Error(
+			w,
+			"the engine is not allowed in this game",
+			http.StatusForbidden,
+		)
 		return
 	}
 
