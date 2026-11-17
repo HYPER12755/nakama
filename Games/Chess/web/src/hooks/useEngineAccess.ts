@@ -31,6 +31,10 @@ export function useEngineAccess(
     }
 
     let alive = true;
+    // While the server is deciding again, the old answer must not keep the
+    // engine button alive. A stale "allowed" can start a request with a token
+    // the server no longer accepts.
+    setAllowed(false);
     setLoading(true);
 
     const controller = new AbortController();

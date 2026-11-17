@@ -178,7 +178,29 @@ func serveAnalyse(
 	defer pool.release(engine)
 
 	lines := make(chan output, 64)
-	go engine.analyse(request.Work, lines)
+	// The worker must not outlive this request. If the client goes away while
+	// the worker is blocked sending a line, that worker keeps reading the
+	// engine's stdout. Reusing the engine then splits its bestmove between two
+	// requests, and the new one waits forever. A done channel lets the worker
+	// leave, and finished tells us when it has really gone.
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go engine.analyse(request.Work, lines, done, finished)
+	var stopOnce sync.Once
+	stopWorker := func() {
+		stopOnce.Do(func() {
+			engine.stop()
+			close(done)
+		})
+		select {
+		case <-finished:
+		case <-time.After(500 * time.Millisecond):
+			engine.kill()
+			<-finished
+		}
+	}
+	// Every exit stops the worker before the engine goes back to the pool.
+	defer stopWorker()
 
 	encoder.Encode(output{Keepalive: true})
 	flusher.Flush()
@@ -202,7 +224,6 @@ func serveAnalyse(
 			}
 			flusher.Flush()
 		case <-r.Context().Done():
-			engine.stop()
 			return
 		}
 	}
@@ -246,6 +267,13 @@ func (e *engine) close() {
 	}
 }
 
+// kill stops the process at once. It is used when a worker did not leave in
+// time after its request ended, so the engine cannot be handed on in a bad
+// state.
+func (e *engine) kill() {
+	e.close()
+}
+
 func (e *engine) send(command string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -265,8 +293,23 @@ func (e *engine) stop() {
 }
 
 // The analysis of one position, read from the engine.
-func (e *engine) analyse(job work, out chan<- output) {
+//
+// `done` is closed when the request that started this analysis ends. Every
+// send watches it, so a worker blocked on a full channel can always leave.
+// `finished` tells the caller when the worker has really gone.
+func (e *engine) analyse(job work, out chan<- output, done <-chan struct{}, finished chan<- struct{}) {
 	defer close(out)
+	defer close(finished)
+
+	// A line is offered to the request, or dropped when the request has gone.
+	publish := func(line output) bool {
+		select {
+		case out <- line:
+			return true
+		case <-done:
+			return false
+		}
+	}
 
 	threads := job.Threads
 	if threads < 1 {
@@ -350,11 +393,13 @@ func (e *engine) analyse(job work, out chan<- output) {
 					list = append(list, pv)
 				}
 			}
-			out <- output{
+			if !publish(output{
 				Time:  time.Since(started).Milliseconds(),
 				Depth: depth,
 				Nodes: nodes,
 				Pvs:   list,
+			}) {
+				return
 			}
 		case "bestmove":
 			best := ""
@@ -365,13 +410,13 @@ func (e *engine) analyse(job work, out chan<- output) {
 			if len(parts) > 3 && parts[2] == "ponder" {
 				ponder = parts[3]
 			}
-			out <- output{
+			publish(output{
 				Time:     time.Since(started).Milliseconds(),
 				Depth:    depth,
 				Nodes:    nodes,
 				Bestmove: best,
 				Ponder:   ponder,
-			}
+			})
 			return
 		}
 	}
@@ -452,31 +497,30 @@ func parseInfo(parts []string, expected int) (infoLine, bool) {
 }
 
 // The engines, kept for the players that ask for them.
+//
+// An engine lives in exactly one place: it is held by one request, or it is
+// in `available`. The old pool kept a pointer in both a slice and a channel,
+// so two requests could be given the same process. Their UCI commands and
+// stdout reads tangled together and one request never saw its bestmove.
 type pool struct {
-	path    string
-	mu      sync.Mutex
-	idle    []*engine
-	waiting chan *engine
-	closed  bool
+	path      string
+	mu        sync.Mutex
+	available chan *engine
+	all       map[*engine]struct{}
+	closed    bool
 }
 
 func newPool(path string) *pool {
-	return &pool{path: path, waiting: make(chan *engine, 8)}
+	return &pool{
+		path:      path,
+		available: make(chan *engine, 8),
+		all:       make(map[*engine]struct{}),
+	}
 }
 
 func (p *pool) acquire(ctx context.Context) (*engine, error) {
-	p.mu.Lock()
-	if !p.closed && len(p.idle) > 0 {
-		engine := p.idle[len(p.idle)-1]
-		p.idle = p.idle[:len(p.idle)-1]
-		p.mu.Unlock()
-		return engine, nil
-	}
-	p.mu.Unlock()
-
-	// An engine that is not waiting for anyone starts a new one.
 	select {
-	case engine := <-p.waiting:
+	case engine := <-p.available:
 		return engine, nil
 	default:
 	}
@@ -485,31 +529,44 @@ func (p *pool) acquire(ctx context.Context) (*engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	return engine, nil
-}
-
-func (p *pool) release(engine *engine) {
 	p.mu.Lock()
 	if p.closed {
 		p.mu.Unlock()
 		engine.close()
-		return
+		return nil, fmt.Errorf("the engine service is stopping")
 	}
-	p.idle = append(p.idle, engine)
+	p.all[engine] = struct{}{}
 	p.mu.Unlock()
+	return engine, nil
+}
+
+func (p *pool) release(engine *engine) {
 	select {
-	case p.waiting <- engine:
+	case p.available <- engine:
+		return
 	default:
 	}
+	// The pool is full: this process is of no further use.
+	p.mu.Lock()
+	delete(p.all, engine)
+	p.mu.Unlock()
+	engine.close()
 }
 
 func (p *pool) close() {
 	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return
+	}
 	p.closed = true
-	idle := p.idle
-	p.idle = nil
+	engines := make([]*engine, 0, len(p.all))
+	for engine := range p.all {
+		engines = append(engines, engine)
+	}
+	p.all = make(map[*engine]struct{})
 	p.mu.Unlock()
-	for _, engine := range idle {
+	for _, engine := range engines {
 		engine.close()
 	}
 }

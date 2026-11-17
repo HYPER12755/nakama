@@ -94,6 +94,7 @@ import { useEngineAnalysis } from "./hooks/useEngineAnalysis";
 import { positionAfter, type PvPosition } from "./lib/engine/pvBoard";
 import type { EngineMode } from "./lib/engine/externalEngine";
 import { engineVisible } from "./lib/engine/externalEngine";
+import { mayShowEngineArrow } from "./lib/engine/arrow";
 
 type GameMode = "local" | "ai" | "online";
 
@@ -421,6 +422,15 @@ export default function App({ bridge }: AppProps) {
   const engineAccess = useEngineAccess(engineMode, engineToken);
   const engineAllowed = engineVisible(engineMode, engineAccess.allowed);
 
+  // An engine that is no longer allowed, or a game that has ended, must stop
+  // at once. Otherwise the panel and the arrow keep the last position's
+  // answer on the board long after the engine has been switched off.
+  useEffect(() => {
+    if (!engineAllowed && analysisOn) {
+      setAnalysisOn(false);
+    }
+  }, [engineAllowed, analysisOn]);
+
   // The report of the game looks at the positions from the start, so it
   // needs to know where the game began and which side the report is about.
   const reportStartFen = localGame.startFen;
@@ -447,18 +457,36 @@ export default function App({ bridge }: AppProps) {
    * It is drawn on the board as an arrow, the way lichess draws it.
    */
   const engineArrow = useMemo(() => {
-    if (!analysisOn) {
-      return null;
-    }
     const move = analysis.pvs[0]?.uci[0];
-    if (move === undefined || move.length < 4) {
+    if (
+      !mayShowEngineArrow({
+        analysisOn,
+        allowed: engineAllowed,
+        error: analysis.error,
+        mode: engineMode,
+        turn: activeState.turn,
+        myColor: onlineMode ? online.myColor : null,
+        humanColor: reportColor,
+        bestMove: move,
+      })
+    ) {
       return null;
     }
     return {
-      from: move.slice(0, 2) as Square,
-      to: move.slice(2, 4) as Square,
+      from: move!.slice(0, 2) as Square,
+      to: move!.slice(2, 4) as Square,
     };
-  }, [analysis.pvs, analysisOn]);
+  }, [
+    analysis.pvs,
+    analysis.error,
+    analysisOn,
+    engineAllowed,
+    engineMode,
+    onlineMode,
+    online.myColor,
+    activeState.turn,
+    reportColor,
+  ]);
   // The little board that shows where the line of the engine goes.
   const [pvPreview, setPvPreview] = useState<PvPosition | null>(null);
 
@@ -1380,6 +1408,12 @@ export default function App({ bridge }: AppProps) {
                         setPvPreview(positionAfter(analysisStartFen, moves));
                       }}
                       onPlay={(move) => {
+                        // In an online game only the player's own move may be
+                        // played. Otherwise the panel would let a player make
+                        // the opponent's move for them.
+                        if (onlineMode && activeState.turn !== online.myColor) {
+                          return;
+                        }
                         // The first move of the first line can be played on
                         // the board, for the line begins at the position
                         // that is on it now.

@@ -140,13 +140,25 @@ export function useEngineAnalysis(
   const [error, setError] = useState<string | null>(null);
   const engineRef = useRef<ExternalEngine | null>(null);
   const key = `${initialFen}|${moves.join(" ")}`;
+  // The position an answer belongs to. An answer from an older position must
+  // never drive the arrow, even if it arrives after the board has moved on.
+  const answerKeyRef = useRef("");
 
   useEffect(() => {
+    answerKeyRef.current = "";
     if (!enabled) {
       setEvaluation(null);
       setThinking(false);
+      setError(null);
       return;
     }
+
+    // A new position starts with a clean panel. Without this the arrow keeps
+    // pointing at the last move while the engine works out the new one, and
+    // a failed request leaves that arrow on the board for good.
+    setEvaluation(null);
+    setError(null);
+    setThinking(false);
 
     const engine = new ExternalEngine("");
     engineRef.current = engine;
@@ -174,7 +186,21 @@ export function useEngineAnalysis(
           }
           const read = readEngineOutput(line, turn === "b");
           if (read !== null) {
+            answerKeyRef.current = key;
             setEvaluation(read);
+            setError(null);
+            // A `bestmove` line means the search is done. readEngineOutput
+            // returns null for it, so the stream's end is handled below.
+          }
+        })
+        .then(() => {
+          if (!alive) {
+            return;
+          }
+          setThinking(false);
+          // If only keepalives came back, there is no answer to show.
+          if (answerKeyRef.current !== key) {
+            setEvaluation(null);
           }
         })
         .catch((cause: unknown) => {
@@ -182,6 +208,7 @@ export function useEngineAnalysis(
             return;
           }
           setThinking(false);
+          setEvaluation(null);
           setError(
             cause instanceof Error
               ? cause.message
@@ -196,9 +223,10 @@ export function useEngineAnalysis(
       engine.stop();
       engineRef.current = null;
     };
-    // The engine is asked again when the position changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, enabled, depth, multiPv, turn]);
+    // The engine is asked again when the position, the access or the account
+    // changes. Omitting the mode or the token left a request running under an
+    // old account after a sign-in, which looked like a hung engine.
+  }, [key, enabled, depth, multiPv, turn, mode, token]);
 
   const pvs = useMemo(() => {
     // The engine's lines begin at the position it was asked about, which

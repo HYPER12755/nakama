@@ -143,8 +143,18 @@ export function readEngineOutput(
  * The request is stopped when the caller stops listening, so a position
  * that is no longer on the board costs the engine nothing.
  */
+/**
+ * How long the client waits for a real engine line before it gives up.
+ *
+ * The server sends keepalives while the engine works, so a stream that only
+ * carries keepalives can stay open forever. A deadline turns that hang into
+ * an error the panel can show, instead of an arrow frozen on an old move.
+ */
+export const ENGINE_LINE_TIMEOUT_MS = 12000;
+
 export class ExternalEngine {
   private controller: AbortController | null = null;
+  private watchdog: number | null = null;
 
   constructor(
     private readonly endpoint: string,
@@ -165,7 +175,27 @@ export class ExternalEngine {
     const controller = new AbortController();
     this.controller = controller;
 
-    const response = await fetch(
+    // Restart the deadline on every real line. Keepalives do not count: they
+    // only prove the HTTP connection is alive, not that the engine is working.
+    const armWatchdog = () => {
+      if (this.watchdog !== null) {
+        window.clearTimeout(this.watchdog);
+      }
+      this.watchdog = window.setTimeout(() => {
+        controller.abort();
+      }, ENGINE_LINE_TIMEOUT_MS);
+    };
+    armWatchdog();
+    const clearWatchdog = () => {
+      if (this.watchdog !== null) {
+        window.clearTimeout(this.watchdog);
+        this.watchdog = null;
+      }
+    };
+
+    let response: Response;
+    try {
+      response = await fetch(
       `${this.endpoint}/api/external-engine/${this.id}/analyse`,
       {
         method: "POST",
@@ -194,9 +224,14 @@ export class ExternalEngine {
           },
         }),
       },
-    );
+      );
+    } catch (cause) {
+      clearWatchdog();
+      throw cause;
+    }
 
     if (!response.ok || response.body === null) {
+      clearWatchdog();
       throw new Error("the engine could not be reached");
     }
 
@@ -230,12 +265,18 @@ export class ExternalEngine {
         if (line.keepalive === true) {
           continue;
         }
+        armWatchdog();
         onEvaluation(line);
       }
     }
+    clearWatchdog();
   }
   /** Stop the analysis. */
   stop(): void {
+    if (this.watchdog !== null) {
+      window.clearTimeout(this.watchdog);
+      this.watchdog = null;
+    }
     this.controller?.abort();
     this.controller = null;
   }
