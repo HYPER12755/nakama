@@ -212,8 +212,23 @@ function drawFrame(
   }
 }
 
-// Real wood photographs, loaded once and drawn under the ICF markings.
+// Real wood photographs and piece art, loaded once and kept for the table.
 const textures = new Map<string, HTMLImageElement | null>();
+const artImages = new Map<string, HTMLImageElement | null>();
+
+function pieceArtImage(path: string): HTMLImageElement | null {
+  if (artImages.has(path)) {
+    return artImages.get(path) ?? null;
+  }
+  if (typeof Image === "undefined") {
+    return null;
+  }
+  const image = new Image();
+  image.src = new URL(path, document.baseURI).toString();
+  artImages.set(path, null);
+  image.onload = () => artImages.set(path, image);
+  return null;
+}
 
 function boardTexture(path: string): HTMLImageElement | null {
   if (textures.has(path)) {
@@ -726,6 +741,19 @@ function paintPiece(
   ctx.fillStyle = face;
   ctx.fill();
 
+  // Real striker artwork from the game, clipped to the face when available.
+  if (kind === "striker" && visuals.striker.image !== undefined) {
+    const image = pieceArtImage(visuals.striker.image);
+    if (image !== null) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(image, -radius, -radius, radius * 2, radius * 2);
+      ctx.restore();
+    }
+  }
+
   // The grain of the wood under the paint. The pieces are turned on a lathe,
   // so the grain runs in rings around the middle.
   ctx.save();
@@ -771,6 +799,51 @@ function paintPiece(
       );
       ctx.fillStyle = "rgba(30, 16, 6, 0.12)";
       ctx.fill();
+    }
+  }
+
+  // A hand-picked face pattern: each striker reads as a different piece even
+  // when two of them are close together.
+  if (kind === "striker") {
+    ctx.strokeStyle = palette.ring;
+    ctx.fillStyle = palette.ring;
+    ctx.lineWidth = Math.max(0.6, radius * 0.06);
+    const pattern = visuals.striker.pattern;
+    if (pattern === "ring") {
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.62, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (pattern === "cross") {
+      ctx.beginPath();
+      ctx.moveTo(-radius * 0.5, 0);
+      ctx.lineTo(radius * 0.5, 0);
+      ctx.moveTo(0, -radius * 0.5);
+      ctx.lineTo(0, radius * 0.5);
+      ctx.stroke();
+    } else if (pattern === "star") {
+      for (let index = 0; index < 4; index += 1) {
+        const angle = (index * Math.PI) / 2;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(angle) * radius * 0.6, Math.sin(angle) * radius * 0.6);
+        ctx.stroke();
+      }
+    } else if (pattern === "dots") {
+      for (let index = 0; index < 6; index += 1) {
+        const angle = (index * Math.PI) / 3;
+        ctx.beginPath();
+        ctx.arc(Math.cos(angle) * radius * 0.55, Math.sin(angle) * radius * 0.55, radius * 0.09, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (pattern === "spiral") {
+      for (let index = 0; index < 18; index += 1) {
+        const angle = index * 0.7;
+        const distance = radius * 0.08 * index;
+        if (distance > radius * 0.75) break;
+        ctx.beginPath();
+        ctx.arc(Math.cos(angle) * distance, Math.sin(angle) * distance, radius * 0.05, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
   ctx.restore();

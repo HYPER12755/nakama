@@ -16,6 +16,9 @@ import {
 import { CARROM_FEATURES, SOUND_SETS } from "../lib/preferences";
 import type { Theme } from "../lib/theme";
 import { DesignPreview } from "./DesignPreview";
+import { ArtPicker } from "./ArtPicker";
+import { readArtChoices, writeArtChoices } from "../lib/storage";
+import { useState as useReactState } from "react";
 import { Icon } from "./Icon";
 
 export interface CarromPreferencesProps {
@@ -28,6 +31,10 @@ const themeChoices: ThemeChoice[] = BOARD_DESIGNS.map((design) => ({
   label: design.label,
   light: design.surface[0],
   dark: design.frame[0],
+  texture:
+    design.texture === undefined
+      ? undefined
+      : new URL(`../public/${design.texture}`, import.meta.url).toString(),
 }));
 
 const pieceChoices: PieceChoice[] = PIECE_SETS.map((set) => ({
@@ -61,6 +68,7 @@ export function CarromPreferences({ gameId, theme }: CarromPreferencesProps) {
   const { preferences, setPreference } = useGamePreferences(gameId);
   const [strikerOpen, setStrikerOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [artChoices, setArtChoices] = useReactState(readArtChoices);
 
   const visuals = tableVisuals(
     preferences.boardTheme,
@@ -122,6 +130,15 @@ export function CarromPreferences({ gameId, theme }: CarromPreferencesProps) {
           </div>
         ) : null}
       </section>
+
+      <ArtPicker
+        choices={artChoices}
+        onChoose={(group, file) => {
+          const next = { ...artChoices, [group]: file };
+          setArtChoices(next);
+          writeArtChoices(next);
+        }}
+      />
 
       <GamePreferencesPanel
         gameId={gameId}

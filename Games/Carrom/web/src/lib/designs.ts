@@ -5,6 +5,8 @@
  * into the drawing code by hand.
  */
 
+import type { CarromPlayer } from "@moongames/carrom-core";
+
 export interface Palette {
   /** The light face of a turned piece. */
   top: string;
@@ -111,19 +113,28 @@ export interface StrikerDesign {
   id: string;
   label: string;
   palette: Palette;
+  /** The real striker artwork from the game, shown in the picker. */
+  image: string;
+  /** A hand-picked pattern drawn on the playing piece. */
+  pattern: "plain" | "star" | "ring" | "cross" | "dots" | "spiral";
 }
 
+/**
+ * Each striker is hand-picked from the game's own artwork and given its own
+ * face pattern, so the pieces look and feel different on the table rather
+ * than being one shape in ten colours.
+ */
 export const STRIKER_DESIGNS: StrikerDesign[] = [
-  { id: "brass", label: "Brass", palette: { top: "#f6e7c8", mid: "#cbae7c", low: "#8d6f44", rim: "#4b3820", ring: "rgba(110,84,48,0.5)" } },
-  { id: "steel", label: "Steel", palette: { top: "#f2f5f7", mid: "#b9c4cc", low: "#6f7d88", rim: "#3a454e", ring: "rgba(40,55,65,0.4)" } },
-  { id: "ebony", label: "Ebony", palette: { top: "#5a5148", mid: "#2e2823", low: "#171310", rim: "#080706", ring: "rgba(230,210,180,0.3)" } },
-  { id: "copper", label: "Copper", palette: { top: "#f4c7a1", mid: "#c67a4c", low: "#8a4a29", rim: "#4d2614", ring: "rgba(255,220,180,0.45)" } },
-  { id: "ivory-striker", label: "Ivory", palette: { top: "#fffdf4", mid: "#ece0c4", low: "#c6b28c", rim: "#8a7452", ring: "rgba(120,96,60,0.4)" } },
-  { id: "jade-striker", label: "Jade", palette: { top: "#a8e6c8", mid: "#4a9c73", low: "#225c40", rim: "#10301f", ring: "rgba(220,255,235,0.4)" } },
-  { id: "ruby", label: "Ruby", palette: { top: "#f4a3a3", mid: "#b84049", low: "#7d1d27", rim: "#440a10", ring: "rgba(255,215,215,0.45)" } },
-  { id: "sapphire", label: "Sapphire", palette: { top: "#a9c8f4", mid: "#4a73b8", low: "#244270", rim: "#11233f", ring: "rgba(215,230,255,0.45)" } },
-  { id: "gold", label: "Gold", palette: { top: "#fff0b3", mid: "#d9a92e", low: "#9a7212", rim: "#5c4206", ring: "rgba(255,245,190,0.5)" } },
-  { id: "carbon", label: "Carbon", palette: { top: "#8d9399", mid: "#4b5157", low: "#262a2e", rim: "#101214", ring: "rgba(200,210,220,0.3)" } },
+  { id: "brass", label: "Brass", image: "art/strikers/brass.webp", pattern: "ring", palette: { top: "#f6e7c8", mid: "#cbae7c", low: "#8d6f44", rim: "#4b3820", ring: "rgba(110,84,48,0.5)" } },
+  { id: "steel", label: "Steel", image: "art/strikers/steel.webp", pattern: "cross", palette: { top: "#f2f5f7", mid: "#b9c4cc", low: "#6f7d88", rim: "#3a454e", ring: "rgba(40,55,65,0.4)" } },
+  { id: "ebony", label: "Ebony", image: "art/strikers/ebony.webp", pattern: "plain", palette: { top: "#5a5148", mid: "#2e2823", low: "#171310", rim: "#080706", ring: "rgba(230,210,180,0.3)" } },
+  { id: "copper", label: "Copper", image: "art/strikers/copper.webp", pattern: "dots", palette: { top: "#f4c7a1", mid: "#c67a4c", low: "#8a4a29", rim: "#4d2614", ring: "rgba(255,220,180,0.45)" } },
+  { id: "ivory-striker", label: "Ivory", image: "art/strikers/ivory.webp", pattern: "plain", palette: { top: "#fffdf4", mid: "#ece0c4", low: "#c6b28c", rim: "#8a7452", ring: "rgba(120,96,60,0.4)" } },
+  { id: "jade-striker", label: "Jade", image: "art/strikers/jade.webp", pattern: "star", palette: { top: "#a8e6c8", mid: "#4a9c73", low: "#225c40", rim: "#10301f", ring: "rgba(220,255,235,0.4)" } },
+  { id: "ruby", label: "Ruby", image: "art/strikers/ruby.webp", pattern: "spiral", palette: { top: "#f4a3a3", mid: "#b84049", low: "#7d1d27", rim: "#440a10", ring: "rgba(255,215,215,0.45)" } },
+  { id: "sapphire", label: "Sapphire", image: "art/strikers/sapphire.webp", pattern: "star", palette: { top: "#a9c8f4", mid: "#4a73b8", low: "#244270", rim: "#11233f", ring: "rgba(215,230,255,0.45)" } },
+  { id: "gold", label: "Gold", image: "art/strikers/gold.webp", pattern: "ring", palette: { top: "#fff0b3", mid: "#d9a92e", low: "#9a7212", rim: "#5c4206", ring: "rgba(255,245,190,0.5)" } },
+  { id: "carbon", label: "Carbon", image: "art/strikers/carbon.webp", pattern: "cross", palette: { top: "#8d9399", mid: "#4b5157", low: "#262a2e", rim: "#101214", ring: "rgba(200,210,220,0.3)" } },
 ];
 
 export interface PieceSet {
@@ -255,17 +266,45 @@ export interface TableVisuals {
   board: BoardDesign;
   striker: StrikerDesign;
   pieces: PieceSet;
+  /** Optional real art paths picked from the game assets. */
+  boardArt?: string;
+  strikerArt?: string;
+  puckArt?: Partial<Record<CarromPlayer, string>>;
+}
+
+function boardArt(design: BoardDesign, path?: string): BoardDesign {
+  return path === undefined ? design : { ...design, texture: path };
+}
+
+function strikerArt(design: StrikerDesign, path?: string): StrikerDesign {
+  return path === undefined ? design : { ...design, image: path };
 }
 
 export function tableVisuals(
   boardId: string,
   strikerId: string,
   pieceId: string,
+  art: {
+    boards?: string;
+    strikers?: string;
+    pucks?: string;
+  } = {},
 ): TableVisuals {
+  const board = boardDesign(boardId);
   return {
-    board: boardDesign(boardId),
-    striker: strikerDesign(strikerId),
+    board: boardArt(board, art.boards),
+    striker: strikerArt(strikerDesign(strikerId), art.strikers),
     pieces: pieceSet(pieceId),
+    boardArt: art.boards,
+    strikerArt: art.strikers,
+    puckArt: art.pucks
+      ? {
+          white: art.pucks,
+          black: art.pucks,
+          green: art.pucks,
+          yellow: art.pucks,
+        }
+      : undefined,
   };
 }
 

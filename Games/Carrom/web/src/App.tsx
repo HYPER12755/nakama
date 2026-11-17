@@ -88,6 +88,7 @@ import {
 } from "./lib/preferences";
 import { tableVisuals } from "./lib/designs";
 import { positionFor } from "./lib/striker";
+import { readArtChoices } from "./lib/storage";
 import { shotEvents, type TableEvent } from "./lib/events";
 import {
   persistTheme,
@@ -301,6 +302,7 @@ export default function App({ bridge }: AppProps) {
     data: ReplayData;
   } | null>(null);
   const { preferences } = useGamePreferences(GAME_ID);
+  const [artChoices] = useState(readArtChoices);
 
   const appRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<CarromShotResult | null>(null);
@@ -1318,6 +1320,11 @@ export default function App({ bridge }: AppProps) {
                   preferences.boardTheme,
                   preferences.strikerDesign,
                   preferences.pieceSet,
+                  {
+                    boards: artChoices.boards,
+                    strikers: artChoices.strikers,
+                    pucks: artChoices.pucks,
+                  },
                 )}
               />
             </div>

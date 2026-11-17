@@ -673,6 +673,89 @@ button {
   color: var(--accent);
 }
 
+/* The full artwork picker, grouped by the family of each real asset. */
+.art-picker .pref-row__preview--board img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.art-grid-wrap {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.art-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.art-search input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--panel-raised);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.art-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin-top: 8px;
+  padding: 2px;
+}
+
+.art-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  color: var(--muted);
+  font-size: 8px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.art-tile--active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+
+.art-tile img {
+  width: 100%;
+  height: 46px;
+  object-fit: contain;
+  image-rendering: auto;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+.art-tile span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* A stack of short event messages, newest at the bottom. */
 .event-toasts {
   position: fixed;

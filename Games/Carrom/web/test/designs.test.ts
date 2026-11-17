@@ -55,7 +55,8 @@ describe("the designs of a carrom table", () => {
 
 describe("the looks and sounds a player can choose", () => {
   it("offers real sound sets", () => {
-    expect(SOUND_SETS.length).toBeGreaterThanOrEqual(3);
+    expect(SOUND_SETS.length).toBeGreaterThanOrEqual(5);
+    expect(soundSet("synth").label).toBe("Synth");
     expect(soundSet("soft").label).toBe("Soft pads");
     expect(soundSet("missing").id).toBe("standard");
   });

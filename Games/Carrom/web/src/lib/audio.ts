@@ -85,6 +85,10 @@ export function playEvent(event: BoardEvent): void {
   if (!currentEnabled || currentVolume <= 0) {
     return;
   }
+  if (currentSet === "synth") {
+    playSynth(event);
+    return;
+  }
   const files = soundsFor(currentSet, event);
   if (files.length === 0) {
     return;
@@ -114,6 +118,51 @@ export function playEvent(event: BoardEvent): void {
       // A missing sound must never stop the table.
     }
   });
+}
+
+/** The generated set: short tones mapped to the events, like the old table. */
+function playSynth(event: BoardEvent): void {
+  const ctx = context();
+  if (ctx === null) {
+    return;
+  }
+  if (ctx.state === "suspended") {
+    void ctx.resume().catch(() => undefined);
+  }
+  const notes: Record<BoardEvent, { from: number; to: number; type: OscillatorType; length: number }> = {
+    strike: { from: 185, to: 72, type: "triangle", length: 0.12 },
+    hitPuck: { from: 420, to: 160, type: "square", length: 0.05 },
+    puckHit: { from: 320, to: 120, type: "triangle", length: 0.06 },
+    hitEdge: { from: 140, to: 60, type: "sine", length: 0.08 },
+    pot: { from: 150, to: 58, type: "sine", length: 0.16 },
+    break: { from: 220, to: 80, type: "triangle", length: 0.18 },
+    queenCover: { from: 520, to: 390, type: "triangle", length: 0.16 },
+    queenFail: { from: 170, to: 82, type: "sawtooth", length: 0.28 },
+    queenScore: { from: 440, to: 330, type: "triangle", length: 0.12 },
+    puckScore: { from: 300, to: 220, type: "sine", length: 0.1 },
+    puckBack: { from: 200, to: 120, type: "sine", length: 0.1 },
+    foul: { from: 170, to: 82, type: "sawtooth", length: 0.28 },
+    turn: { from: 520, to: 520, type: "triangle", length: 0.08 },
+    start: { from: 392, to: 392, type: "triangle", length: 0.1 },
+    win: { from: 523, to: 659, type: "triangle", length: 0.3 },
+    lose: { from: 300, to: 180, type: "sawtooth", length: 0.3 },
+    rematch: { from: 392, to: 523, type: "triangle", length: 0.2 },
+  };
+  const note = notes[event];
+  const gainValue = currentVolume * EVENT_GAIN[event] * 0.5;
+  const at = ctx.currentTime;
+  const oscillator = ctx.createOscillator();
+  const gain = ctx.createGain();
+  oscillator.type = note.type;
+  oscillator.frequency.setValueAtTime(note.from, at);
+  oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, note.to), at + note.length);
+  gain.gain.setValueAtTime(0.0001, at);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, gainValue), at + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, at + note.length);
+  oscillator.connect(gain);
+  gain.connect(ctx.destination);
+  oscillator.start(at);
+  oscillator.stop(at + note.length + 0.02);
 }
 
 function load(url: string): Promise<AudioBuffer | null> {
