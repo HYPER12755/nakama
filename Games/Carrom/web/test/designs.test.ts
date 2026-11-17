@@ -60,6 +60,21 @@ describe("the looks and sounds a player can choose", () => {
     expect(soundSet("missing").id).toBe("standard");
   });
 
+  it("keeps the three small sets distinct from one another", () => {
+    const { readFileSync } = require("node:fs") as typeof import("node:fs");
+    const { createHash } = require("node:crypto") as typeof import("node:crypto");
+    const hash = (set: string, file: string) =>
+      createHash("md5")
+        .update(readFileSync(new URL(`../public/sounds/${set}/${file}.mp3`, import.meta.url)))
+        .digest("hex");
+    // The three sets ship genuinely different recordings behind the same
+    // event names, so choosing a set changes what the table sounds like.
+    for (const file of ["strike1", "pocket1", "turn1", "win1"]) {
+      const hashes = ["standard", "soft", "bright"].map((set) => hash(set, file));
+      expect(new Set(hashes).size).toBe(3);
+    }
+  });
+
   it("maps the shared animation speed to a playback scale", () => {
     expect(playbackSpeed(AnimationSpeed.None)).toBe(0);
     expect(playbackSpeed(AnimationSpeed.Fast)).toBeLessThan(1);

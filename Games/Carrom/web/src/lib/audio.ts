@@ -6,7 +6,7 @@
  * Carrom Pool set share this one player.
  */
 
-import { soundsFor, type BoardEvent } from "./soundCatalog";
+import { EVENT_GAIN, soundsFor, type BoardEvent } from "./soundCatalog";
 
 export type CarromSound =
   | "strike" | "pocket" | "queen" | "foul" | "win" | "turn" | "start";
@@ -106,7 +106,7 @@ export function playEvent(event: BoardEvent): void {
       const source = ctx.createBufferSource();
       const gain = ctx.createGain();
       source.buffer = buffer;
-      gain.gain.value = currentVolume;
+      gain.gain.value = currentVolume * EVENT_GAIN[event];
       source.connect(gain);
       gain.connect(ctx.destination);
       source.start();

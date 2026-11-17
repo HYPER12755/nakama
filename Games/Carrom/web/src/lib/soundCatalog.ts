@@ -72,32 +72,47 @@ for (let index = 1; index <= 15; index += 1) {
   CARROM_POOL_SOUNDS.break.push(`sfx_breakshot_${index}`);
 }
 
-/** The smaller sets use one representative recording per event. */
-export const STANDARD_SOUNDS: Record<BoardEvent, string[]> = {
-  strike: ["strike1", "strike2", "strike3", "strike4", "strike5"],
-  hitPuck: ["strike1", "strike2", "strike3"],
-  puckHit: ["strike4", "strike5"],
-  hitEdge: ["strike2", "strike3"],
-  pot: ["pocket1", "pocket2", "pocket3", "pocket4", "pocket5"],
-  break: ["start1", "start2", "start3"],
-  queenCover: ["queen1", "queen2", "queen3"],
-  queenFail: ["foul2"],
-  queenScore: ["queen2"],
-  puckScore: ["pocket2"],
-  puckBack: ["turn3"],
-  foul: ["foul1", "foul2", "foul3"],
-  turn: ["turn1", "turn2", "turn3", "turn4", "turn5"],
-  start: ["start1", "start2", "start3"],
-  win: ["win1", "win2", "win3"],
-  lose: ["foul1"],
-  rematch: ["start2"],
-} as Record<BoardEvent, string[]>;
+/** Build a catalog from a folder of numbered real recordings. */
+function numberedSet(max: Partial<Record<BoardEvent, number>>): Record<BoardEvent, string[]> {
+  const counts: Record<BoardEvent, number> = {
+    strike: 5, hitPuck: 3, puckHit: 2, hitEdge: 2, pot: 5,
+    break: 3, queenCover: 3, queenFail: 1, queenScore: 1, puckScore: 1,
+    puckBack: 1, foul: 3, turn: 5, start: 3, win: 3, lose: 1, rematch: 1,
+    ...max,
+  };
+  const files = (prefix: string, count: number) =>
+    Array.from({ length: count }, (_, index) => `${prefix}${index + 1}`);
+  return {
+    strike: files("strike", counts.strike),
+    hitPuck: files("strike", counts.hitPuck),
+    puckHit: files("strike", counts.puckHit),
+    hitEdge: files("strike", counts.hitEdge),
+    pot: files("pocket", counts.pot),
+    break: files("start", counts.break),
+    queenCover: files("queen", counts.queenCover),
+    queenFail: ["foul2"],
+    queenScore: ["queen2"],
+    puckScore: ["pocket2"],
+    puckBack: ["turn3"],
+    foul: files("foul", counts.foul),
+    turn: files("turn", counts.turn),
+    start: files("start", counts.start),
+    win: files("win", counts.win),
+    lose: ["foul1"],
+    rematch: ["start2"],
+  };
+}
+
+/** Three genuinely different sets, each from its own real recordings. */
+export const STANDARD_SOUNDS = numberedSet({});
+export const SOFT_SOUNDS = numberedSet({ hitPuck: 3, puckHit: 2 });
+export const BRIGHT_SOUNDS = numberedSet({ hitPuck: 3, puckHit: 2 });
 
 /** The sound sets a player can choose, each built from these catalogs. */
 export const SOUND_CATALOGS: Record<string, Record<BoardEvent, string[]>> = {
   standard: STANDARD_SOUNDS,
-  soft: STANDARD_SOUNDS,
-  bright: STANDARD_SOUNDS,
+  soft: SOFT_SOUNDS,
+  bright: BRIGHT_SOUNDS,
   carrompool: CARROM_POOL_SOUNDS,
 };
 
@@ -108,3 +123,24 @@ export function soundsFor(
   const catalog = SOUND_CATALOGS[set] ?? STANDARD_SOUNDS;
   return catalog[event];
 }
+
+/** How loud each event is, relative to the player's chosen volume. */
+export const EVENT_GAIN: Record<BoardEvent, number> = {
+  strike: 0.85,
+  hitPuck: 1,
+  puckHit: 0.7,
+  hitEdge: 0.55,
+  pot: 1,
+  break: 0.95,
+  queenCover: 1,
+  queenFail: 0.8,
+  queenScore: 0.9,
+  puckScore: 0.8,
+  puckBack: 0.6,
+  foul: 0.9,
+  turn: 0.55,
+  start: 0.6,
+  win: 1,
+  lose: 0.9,
+  rematch: 0.7,
+};
