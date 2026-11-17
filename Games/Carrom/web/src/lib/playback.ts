@@ -13,16 +13,21 @@ export const SHOT_MIN_SECONDS = 1.9;
 /** Shots are played a little slower than they happen. */
 export const SHOT_TIME_SCALE = 0.85;
 
-/**
- * How long a shot of this length is played for, in seconds. The board and
- * the sounds use the same number, so a pocket is heard when the piece
- * reaches the pocket.
- */
+let speedScale = 1;
+
+/** Set how fast shots are played; zero means no animation at all. */
+export function setPlaybackSpeed(scale: number): void {
+  speedScale = Math.max(0, Number.isFinite(scale) ? scale : 1);
+}
+
 export function shotPlaybackSeconds(duration: number): number {
-  if (!Number.isFinite(duration) || duration <= 0) {
-    return SHOT_MIN_SECONDS;
+  if (speedScale === 0) {
+    return 0;
   }
-  return Math.max(duration * SHOT_TIME_SCALE, SHOT_MIN_SECONDS);
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return SHOT_MIN_SECONDS * speedScale;
+  }
+  return Math.max(duration * SHOT_TIME_SCALE, SHOT_MIN_SECONDS) * speedScale;
 }
 
 /** The moment in the playback, in seconds, when the shot happened at `time`. */
