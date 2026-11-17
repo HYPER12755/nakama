@@ -219,6 +219,8 @@ export interface GamePreferences {
   blindMode: boolean;
   /** Whether a move may be written with the keyboard. */
   keyboardMoves: boolean;
+  /** Whether the table plays its background music. */
+  musicEnabled: boolean;
 }
 
 export const DEFAULT_PREFERENCES: GamePreferences = {
@@ -239,6 +241,7 @@ export const DEFAULT_PREFERENCES: GamePreferences = {
   replay: Replay.Never,
   blindMode: false,
   keyboardMoves: false,
+  musicEnabled: false,
 };
 
 export type PreferenceKey = keyof GamePreferences;

@@ -78,7 +78,14 @@ import {
   useGamePreferences,
   type GameHistoryEntry,
 } from "@moongames/game-ui";
-import { configureSound, playEvent, playSound } from "./lib/audio";
+import {
+  configureSound,
+  playEvent,
+  playSound,
+  playMusic,
+  stopMusic,
+} from "./lib/audio";
+import { MUSIC_FILES } from "./lib/soundCatalog";
 import { setPlaybackSpeed } from "./lib/playback";
 import {
   CARROM_FEATURES,
@@ -475,6 +482,17 @@ export default function App({ bridge }: AppProps) {
     setPlaybackSpeed(playbackSpeed(preferences.animationSpeed));
   }, [preferences.animationSpeed]);
 
+  // The real game's music loops in the background when the player wants it.
+  useEffect(() => {
+    const track = MUSIC_FILES[preferences.soundSet]?.[0];
+    if (preferences.musicEnabled && track !== undefined) {
+      playMusic(track);
+    } else {
+      stopMusic();
+    }
+    return () => stopMusic();
+  }, [preferences.musicEnabled, preferences.soundSet]);
+
   useEffect(() => {
     try {
       window.localStorage.setItem(AIM_KEY, aimMode);
@@ -621,6 +639,15 @@ export default function App({ bridge }: AppProps) {
           playbackTime(event.time, result.duration) * 1000,
         );
         soundTimers.current.push(timer);
+      }
+      if (result.outcome.queenCovered) {
+        playEvent("queenCover");
+      }
+      if (result.outcome.queenReturned) {
+        playEvent("queenFail");
+      }
+      if (result.outcome.returnedDisc !== null) {
+        playEvent("puckBack");
       }
       if (result.outcome.foul) {
         const timer = window.setTimeout(
@@ -817,12 +844,18 @@ export default function App({ bridge }: AppProps) {
     [mode, online, resetBoard],
   );
 
+  const lastPlaceSound = useRef(0);
   const handleStrikerChange = useCallback(
     (value: number, player: CarromPlayer) => {
       setPositions((current) => ({
         ...current,
         [player]: nearestValidStrikerPosition(activeGame ?? game, value),
       }));
+      // One placement click per short burst, not one per pixel of slider.
+      if (Date.now() - lastPlaceSound.current > 180) {
+        lastPlaceSound.current = Date.now();
+        playEvent("place");
+      }
     },
     [activeGame, game],
   );
@@ -995,6 +1028,19 @@ export default function App({ bridge }: AppProps) {
   const clockSeconds = activeDeadline === null
     ? null
     : Math.max(0, Math.ceil((activeDeadline - now) / 1000));
+
+  // The real game ticks the clock in the last seconds of a shot.
+  const lastClockTick = useRef<number | null>(null);
+  useEffect(() => {
+    if (clockSeconds !== null && clockSeconds > 0 && clockSeconds <= 5) {
+      if (lastClockTick.current !== clockSeconds) {
+        lastClockTick.current = clockSeconds;
+        playEvent("clock");
+      }
+    } else {
+      lastClockTick.current = null;
+    }
+  }, [clockSeconds]);
 
   // The server finishes an online table, so the result dialog follows the
   // server and not the local board. The result is watched by its key, so the

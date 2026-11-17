@@ -23,10 +23,19 @@ export type BoardEvent =
   | "start"
   | "win"
   | "lose"
-  | "rematch";
+  | "rematch"
+  | "clock"
+  | "move"
+  | "aim"
+  | "place";
 
 /** The quiet background tracks from the game, for the player who wants them. */
 export const CARROM_POOL_MUSIC = ["carrom_pet", "carrominho"];
+
+/** Music is played as a loop, not as an event, but it is still used. */
+export const MUSIC_FILES: Record<string, string[]> = {
+  carrompool: CARROM_POOL_MUSIC,
+};
 
 /** The Carrom Pool set: each entry is a real file from the game. */
 export const CARROM_POOL_SOUNDS: Record<BoardEvent, string[]> = {
@@ -53,6 +62,10 @@ export const CARROM_POOL_SOUNDS: Record<BoardEvent, string[]> = {
   win: ["sfx_you_win", "sfx_winner_victoryMenu"],
   lose: ["sfx_you_lose"],
   rematch: ["sfx_rematchButton_victoryMenu"],
+  clock: ["sfx_clock_LOOP"],
+  move: ["sfx_puck_move_LOOP_1", "sfx_puck_move_LOOP_2", "sfx_puck_move_LOOP_3"],
+  aim: ["sfx_striker_drag_LOOP"],
+  place: ["sfx_striker_placeOnBoard"],
 };
 
 // Fill the numbered families in order. Nothing is skipped or left out.
@@ -75,9 +88,11 @@ for (let index = 1; index <= 15; index += 1) {
 /** Build a catalog from a folder of numbered real recordings. */
 function numberedSet(max: Partial<Record<BoardEvent, number>>): Record<BoardEvent, string[]> {
   const counts: Record<BoardEvent, number> = {
-    strike: 5, hitPuck: 3, puckHit: 2, hitEdge: 2, pot: 5,
+    // Use every recording shipped in each set, not a hand-picked subset.
+    strike: 17, hitPuck: 3, puckHit: 2, hitEdge: 2, pot: 10,
     break: 3, queenCover: 3, queenFail: 1, queenScore: 1, puckScore: 1,
     puckBack: 1, foul: 3, turn: 5, start: 3, win: 3, lose: 1, rematch: 1,
+    clock: 0, move: 0, aim: 0, place: 0,
     ...max,
   };
   const files = (prefix: string, count: number) =>
@@ -100,13 +115,18 @@ function numberedSet(max: Partial<Record<BoardEvent, number>>): Record<BoardEven
     win: files("win", counts.win),
     lose: ["foul1"],
     rematch: ["start2"],
+    clock: [],
+    move: [],
+    aim: [],
+    place: [],
   };
 }
 
 /** Three genuinely different sets, each from its own real recordings. */
 export const STANDARD_SOUNDS = numberedSet({});
-export const SOFT_SOUNDS = numberedSet({ hitPuck: 3, puckHit: 2 });
-export const BRIGHT_SOUNDS = numberedSet({ hitPuck: 3, puckHit: 2 });
+const SMALL = { strike: 5, pot: 5 };
+export const SOFT_SOUNDS = numberedSet(SMALL);
+export const BRIGHT_SOUNDS = numberedSet(SMALL);
 
 /** The sound sets a player can choose, each built from these catalogs. */
 export const SOUND_CATALOGS: Record<string, Record<BoardEvent, string[]>> = {
@@ -143,4 +163,8 @@ export const EVENT_GAIN: Record<BoardEvent, number> = {
   win: 1,
   lose: 0.9,
   rematch: 0.7,
+  clock: 0.35,
+  move: 0.3,
+  aim: 0.25,
+  place: 0.4,
 };

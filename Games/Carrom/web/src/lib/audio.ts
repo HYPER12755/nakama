@@ -147,6 +147,10 @@ function playSynth(event: BoardEvent): void {
     win: { from: 523, to: 659, type: "triangle", length: 0.3 },
     lose: { from: 300, to: 180, type: "sawtooth", length: 0.3 },
     rematch: { from: 392, to: 523, type: "triangle", length: 0.2 },
+    clock: { from: 880, to: 880, type: "square", length: 0.04 },
+    move: { from: 90, to: 70, type: "sine", length: 0.08 },
+    aim: { from: 60, to: 55, type: "sine", length: 0.05 },
+    place: { from: 300, to: 200, type: "triangle", length: 0.05 },
   };
   const note = notes[event];
   const gainValue = currentVolume * EVENT_GAIN[event] * 0.5;
@@ -163,6 +167,47 @@ function playSynth(event: BoardEvent): void {
   gain.connect(ctx.destination);
   oscillator.start(at);
   oscillator.stop(at + note.length + 0.02);
+}
+
+let musicNode: AudioBufferSourceNode | null = null;
+
+/** Loop one of the game's music tracks, when the set has one. */
+export function playMusic(file: string): void {
+  const ctx = context();
+  if (ctx === null || !currentEnabled || currentVolume <= 0) {
+    return;
+  }
+  stopMusic();
+  const url = new URL(`sounds/${currentSet}/${file}.mp3`, document.baseURI).toString();
+  void load(url).then((buffer) => {
+    if (buffer === null || ctx.state === "closed") {
+      return;
+    }
+    try {
+      const source = ctx.createBufferSource();
+      const gain = ctx.createGain();
+      source.buffer = buffer;
+      source.loop = true;
+      gain.gain.value = currentVolume * 0.25;
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      source.start();
+      musicNode = source;
+    } catch {
+      // A missing track must never stop the table.
+    }
+  });
+}
+
+export function stopMusic(): void {
+  if (musicNode !== null) {
+    try {
+      musicNode.stop();
+    } catch {
+      // Already stopped.
+    }
+    musicNode = null;
+  }
 }
 
 function load(url: string): Promise<AudioBuffer | null> {

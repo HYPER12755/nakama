@@ -9,7 +9,7 @@ const files = readdirSync(root).filter((name) => name.endsWith(".png") || name.e
 
 const families = [
   ["boards", /^(Table_|Slider_|IngameBG_Table_|Wornboard_BG|shadow_board|CE_CarromTrials_Table)/],
-  ["strikers", /^Striker_(?![0-9]+_Base)/],
+  ["strikers", /^Striker_(?!Buff_)/],
   ["pucks", /^Puck_/],
   ["trails", /^(Particle_Trails_|Texture_Trails_)/],
   ["pockets", /^(Pocket_effect|Pocket_Vfx|particle_pocket_vfx)/],
