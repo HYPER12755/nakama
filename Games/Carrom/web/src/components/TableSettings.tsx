@@ -30,6 +30,9 @@ export interface TableSettingsProps {
   /** The seats the computer is playing in a local game. */
   computerPlayers?: CarromPlayer[];
   onComputerPlayersChange?: (seats: CarromPlayer[]) => void;
+  /** Whether partners share the pieces in a four player table. */
+  teams?: boolean;
+  onTeamsChange?: (teams: boolean) => void;
 }
 
 /**
@@ -53,6 +56,8 @@ export function TableSettings({
   computerSeats,
   computerPlayers = [],
   onComputerPlayersChange,
+  teams = false,
+  onTeamsChange,
 }: TableSettingsProps) {
   const offered = variants ?? (Object.keys(CARROM_VARIANTS) as GameVariant[]);
   const skin = CARROM_STRIKERS.find((entry) => entry.id === striker);
@@ -118,6 +123,42 @@ export function TableSettings({
           <p className="setting__note">
             Any seat can be played by the computer. A seat left to a player
             passes the device around the table.
+          </p>
+        </div>
+      ) : null}
+
+      {onTeamsChange !== undefined && tableSize === 4 ? (
+        <div className="setting">
+          <span className="setting__label">Sides</span>
+          <div className="setting__options" role="radiogroup" aria-label="Teams">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={!teams}
+              className={`setting__option setting__option--wide${
+                !teams ? " setting__option--active" : ""
+              }`}
+              disabled={locked}
+              onClick={() => onTeamsChange(false)}
+            >
+              Everyone for themselves
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={teams}
+              className={`setting__option setting__option--wide${
+                teams ? " setting__option--active" : ""
+              }`}
+              disabled={locked}
+              onClick={() => onTeamsChange(true)}
+            >
+              Two against two
+            </button>
+          </div>
+          <p className="setting__note">
+            Partners sit opposite, share their pieces and the queen, and take
+            the turn in turn.
           </p>
         </div>
       ) : null}

@@ -73,6 +73,7 @@ export interface CarromMatchResult {
   status: string;
   winnerColour?: CarromPlayer;
   winnerUserId?: string;
+  winnerTeam?: "A" | "B";
   reason?: string;
   /** When the table finished, in epoch milliseconds. */
   endedAt?: number;
@@ -222,6 +223,8 @@ export interface OnlineCarromOptions {
 export interface CarromTableSettings {
   variant?: GameVariant;
   turnSeconds?: number;
+  /** Play two against two, with partners sitting opposite. */
+  teams?: boolean;
 }
 
 /** A friend to invite to the table. */
@@ -854,8 +857,9 @@ export function useOnlineCarrom(
         // as well as the properties: players with different clocks must not be
         // paired, and the matched table has to know the chosen clock.
         const turnSeconds = settings.turnSeconds ?? 0;
+        const teams = settings.teams === true && seats === 4;
         const ticket = await socket.addMatchmaker(
-          `+properties.game:carrom +properties.seats:${seats} +properties.variant:${variant} +properties.turnSeconds:${turnSeconds}`,
+          `+properties.game:carrom +properties.seats:${seats} +properties.variant:${variant} +properties.turnSeconds:${turnSeconds} +properties.teams:${teams}`,
           seats,
           seats,
           {
@@ -863,6 +867,7 @@ export function useOnlineCarrom(
             seats: String(seats),
             variant,
             turnSeconds: String(turnSeconds),
+            teams: String(teams),
           },
         );
         ticketRef.current = ticket.ticket;
@@ -880,6 +885,7 @@ export function useOnlineCarrom(
                 seats,
                 variant: settings.variant,
                 turnSeconds,
+                teams,
               });
               const parsed = (response.payload ?? {}) as {
                 ok?: boolean;
@@ -924,6 +930,7 @@ export function useOnlineCarrom(
             seats,
             variant: settings.variant,
             turnSeconds: settings.turnSeconds,
+            teams: settings.teams === true && seats === 4,
           },
         );
         const parsed = (response.payload ?? {}) as {

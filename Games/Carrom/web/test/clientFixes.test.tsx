@@ -70,6 +70,21 @@ describe("the copy at the end of a table", () => {
     );
     expect(html).toContain("cleared their pieces first at this table");
   });
+
+  it("names the winning side in doubles", () => {
+    const html = renderToStaticMarkup(
+      <GameOverDialog
+        {...base}
+        variant="classic"
+        seats={4}
+        winnerTeam="A"
+        winnerTeamLabel="Ivory & Onyx"
+      />,
+    );
+    expect(html).toContain("Doubles");
+    expect(html).toContain("Ivory &amp; Onyx wins");
+    expect(html).toContain("cleared both partners&#x27; pieces");
+  });
 });
 
 describe("the rules guide", () => {

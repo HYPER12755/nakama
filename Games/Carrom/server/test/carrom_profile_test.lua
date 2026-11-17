@@ -411,6 +411,58 @@ test("a player who leaves loses and the ones who stayed win", function()
   )
 end)
 
+test("a team result is won by everybody on the winning side", function()
+  assert_equal(
+    progression.outcome_for_result({ winnerTeam = "A" }, "white", "u1", "A"),
+    "win",
+    "a white player"
+  )
+  assert_equal(
+    progression.outcome_for_result({ winnerTeam = "A" }, "black", "u2", "A"),
+    "win",
+    "a black player"
+  )
+  assert_equal(
+    progression.outcome_for_result({ winnerTeam = "A" }, "yellow", "u3", "B"),
+    "loss",
+    "a yellow player"
+  )
+  assert_equal(
+    progression.outcome_for_result({ winnerTeam = "A" }, "green", "u4", "B"),
+    "loss",
+    "a green player"
+  )
+end)
+
+test("a team win writes the result for both partners", function()
+  for key in pairs(storage) do
+    storage[key] = nil
+  end
+  local state = {
+    mode = "quick",
+    rated = true,
+    teams = true,
+    player_order = { "u1", "u2", "u3", "u4" },
+    players = {
+      ["u1"] = { user_id = "u1", username = "Ivory", colour = "white" },
+      ["u2"] = { user_id = "u2", username = "Onyx", colour = "black" },
+      ["u3"] = { user_id = "u3", username = "Amber", colour = "yellow" },
+      ["u4"] = { user_id = "u4", username = "Jade", colour = "green" },
+    },
+    shots = {},
+  }
+  progression.finalize_match(
+    { match_id = "match-doubles" },
+    state,
+    { status = "finished", winnerColour = "white", winnerTeam = "A", endedAt = fake_time },
+    fake_time
+  )
+  local winner = storage[storage_key("u2", "carrom_profile", "u2")]
+  local loser = storage[storage_key("u3", "carrom_profile", "u3")]
+  assert_equal(winner.value.wins, 1, "the partner won")
+  assert_equal(loser.value.losses, 1, "the rival lost")
+end)
+
 if failures > 0 then
   print(failures .. " carrom profile test(s) failed")
   os.exit(1)

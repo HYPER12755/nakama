@@ -754,6 +754,47 @@ test("a draw offer is cleared by a decline or a shot", function()
   assert_equal(state.draw_offer, nil, "the shot cleared it")
 end)
 
+test("a four player table can be set up as doubles", function()
+  local dispatcher = new_dispatcher()
+  local state = match.match_init({ match_id = "m1" }, {
+    mode = "private",
+    seats = 4,
+    teams = true,
+    variant = "freestyle",
+    turnSeconds = 30,
+  })
+  for index = 1, 4 do
+    state = match.match_join(
+      { match_id = "m1" },
+      dispatcher,
+      0,
+      state,
+      { presence("u" .. index, "Player " .. index) }
+    )
+  end
+  assert_equal(state.teams, true, "the table is doubles")
+  assert_equal(state.game.teams, true, "the game knows it is doubles")
+  assert_equal(state.game.turn, "white", "white takes the first shot")
+  local payload = match.match_signal(
+    { match_id = "m1" },
+    dispatcher,
+    0,
+    state,
+    nil
+  )
+  local decoded = fake_nk.json_decode(payload)
+  assert_equal(decoded.teams, true, "the clients are told it is doubles")
+end)
+
+test("a two player table cannot be doubles", function()
+  local state = match.match_init({ match_id = "m1" }, {
+    mode = "quick",
+    seats = 2,
+    teams = true,
+  })
+  assert_equal(state.teams, false, "the flag is ignored for two players")
+end)
+
 if failures > 0 then
   print(failures .. " carrom match test(s) failed")
   os.exit(1)

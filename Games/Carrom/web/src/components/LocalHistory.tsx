@@ -52,9 +52,11 @@ export function LocalHistory({ progress, seats, onClear }: LocalHistoryProps) {
           {progress.history.slice(0, 5).map((game) => (
             <li key={game.id}>
               <span className="local-history__result">
-                {game.winner === null
-                  ? "Draw"
-                  : `${PLAYER_LABEL[game.winner]} won`}
+                {game.winnerTeam
+                  ? `${game.winnerTeam === "A" ? "Ivory & Onyx" : "Amber & Jade"} won`
+                  : game.winner === null
+                    ? "Draw"
+                    : `${PLAYER_LABEL[game.winner]} won`}
               </span>
               <span className="local-history__detail">
                 {game.seats.length} players · {CARROM_VARIANTS[game.variant]?.label ?? game.variant} · {game.shots} shots

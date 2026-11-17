@@ -150,6 +150,7 @@ local function state_payload(context, state, now)
     drawOffer = state.draw_offer,
     result = state.result,
     mode = state.mode,
+    teams = state.teams == true,
     seatsCount = state.seats,
     startedAt = state.started_at,
     shotSerial = state.shot_serial or 0,
@@ -242,6 +243,7 @@ local function maybe_start(context, dispatcher, state, now)
   state.game = rules.create_initial_state(table_colours(state.seats), {
     variant = state.variant,
     turnSeconds = state.turn_seconds,
+    teams = state.teams == true,
   })
   state.game.turnDeadline = rules.deadline(state.game, now)
   broadcast(dispatcher, OP.MATCH_STARTED, {
@@ -286,6 +288,7 @@ local function match_init(context, params)
     seats = seats,
     rated = params.rated == true,
     variant = protocol.clamp_variant(params.variant),
+    teams = params.teams == true and seats == 4,
     turn_seconds = protocol.clamp_turn_seconds(params.turnSeconds or params.turn_seconds),
     expected_by_user = expected_by_user,
     expected_count = expected_count,
@@ -588,6 +591,7 @@ local function handle_shot(context, dispatcher, state, message, payload, now)
       status = "finished",
       winnerColour = next_game.winner,
       winnerUserId = next_game.winner and user_for_colour(state, next_game.winner) or nil,
+      winnerTeam = next_game.winnerTeam,
       reason = "board cleared",
       endedAt = now,
     }, now)
@@ -648,6 +652,7 @@ local function handle_resign(context, dispatcher, state, message, now)
     status = "resign",
     winnerColour = winner,
     winnerUserId = winner and user_for_colour(state, winner) or nil,
+    winnerTeam = state.teams == true and winner and rules.team_of(winner) or nil,
     reason = "resign",
     endedAt = now,
   }, now)

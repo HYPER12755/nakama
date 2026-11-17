@@ -12,6 +12,7 @@ export interface LocalGameRecord {
   seats: CarromPlayer[];
   variant: GameVariant;
   winner: CarromPlayer | null;
+  winnerTeam?: "A" | "B" | null;
   shots: number;
   ratings: Partial<Record<CarromPlayer, LocalRatingChange>>;
 }
@@ -100,6 +101,7 @@ export function recordLocalGame(
     seats: CarromPlayer[];
     variant: GameVariant;
     winner: CarromPlayer | null;
+    winnerTeam?: "A" | "B" | null;
     shots: number;
     at?: number;
   },
@@ -120,8 +122,17 @@ export function recordLocalGame(
             0,
           ) / opponents.length;
     const before = numberOr(ratings[seat]?.after, DEFAULT_RATING);
+    const side = seat === "white" || seat === "black" ? "A" : "B";
     const outcome =
-      input.winner === null ? "draw" : input.winner === seat ? "win" : "loss";
+      input.winnerTeam !== undefined && input.winnerTeam !== null
+        ? input.winnerTeam === side
+          ? "win"
+          : "loss"
+        : input.winner === null
+          ? "draw"
+          : input.winner === seat
+            ? "win"
+            : "loss";
     const delta = round(K_FACTOR * (score(outcome) - expected(before, average)));
     const after = Math.max(100, before + delta);
     ratings[seat] = { before, after };
@@ -134,6 +145,7 @@ export function recordLocalGame(
     seats: [...input.seats],
     variant: input.variant,
     winner: input.winner,
+    winnerTeam: input.winnerTeam ?? null,
     shots: input.shots,
     ratings: changes,
   };

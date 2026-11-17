@@ -13,6 +13,59 @@ local ALL_PLAYERS = { "white", "black", "green", "yellow" }
 rules.ALL_PLAYERS = ALL_PLAYERS
 rules.PLAYER_LABEL = physics.PLAYER_LABEL
 
+-- Partners sit opposite one another. Team A is white and black, team B is
+-- yellow and green, so the clockwise turn crosses the teams at every shot.
+rules.TEAM_PLAYERS = {
+  A = { "white", "black" },
+  B = { "yellow", "green" },
+}
+rules.TEAM_LABEL = {
+  A = "Ivory & Onyx",
+  B = "Amber & Jade",
+}
+local PLAYER_TEAM = {
+  white = "A",
+  black = "A",
+  yellow = "B",
+  green = "B",
+}
+
+function rules.team_of(player)
+  return PLAYER_TEAM[player]
+end
+
+function rules.teammate_of(player)
+  local team = rules.TEAM_PLAYERS[PLAYER_TEAM[player]] or {}
+  for _, seat in ipairs(team) do
+    if seat ~= player then
+      return seat
+    end
+  end
+  return player
+end
+
+function rules.is_team_game(state)
+  return state.teams == true and #(state.players or {}) >= 4
+end
+
+-- The colours that count as ours for this shot: one in singles, our pair in
+-- doubles. Only colours with a seat are included.
+function rules.own_colours(state, player)
+  if not rules.is_team_game(state) then
+    return { player }
+  end
+  local result = {}
+  for _, seat in ipairs(rules.TEAM_PLAYERS[PLAYER_TEAM[player]] or {}) do
+    for _, seated in ipairs(state.players or {}) do
+      if seated == seat then
+        result[#result + 1] = seat
+        break
+      end
+    end
+  end
+  return result
+end
+
 -- The game types. They mirror Carrom/core/src/board.ts, and the keys are the
 -- ones the client reads, so the table and the interface always agree.
 rules.VARIANTS = {
@@ -218,9 +271,18 @@ function rules.return_queen_to_centre(state)
 end
 
 function rules.last_pocketed_disc(state, result, kind)
+  local kinds = type(kind) == "table" and kind or { kind }
+  local function wanted(value)
+    for _, candidate in ipairs(kinds) do
+      if candidate == value then
+        return true
+      end
+    end
+    return false
+  end
   for index = #(result.pocketed or {}), 1, -1 do
     local event = result.pocketed[index]
-    if event.kind == kind then
+    if wanted(event.kind) then
       for _, disc in ipairs(state.discs) do
         if disc.id == event.id and disc.pocketed then
           return disc
@@ -231,7 +293,7 @@ function rules.last_pocketed_disc(state, result, kind)
   local fallback
   for index = #(state.discs), 1, -1 do
     local disc = state.discs[index]
-    if disc.kind == kind and disc.pocketed then
+    if wanted(disc.kind) and disc.pocketed then
       fallback = disc
       break
     end
@@ -301,10 +363,12 @@ function rules.create_initial_state(players, options)
     turnSeconds = options.turnSeconds or 0,
     turnDeadline = options.turnDeadline,
     solo = options.solo == true,
+    teams = options.teams == true and #seated >= 4,
     queen = { status = "board" },
     scores = { white = 0, black = 0, green = 0, yellow = 0 },
     status = "aiming",
     winner = nil,
+    winnerTeam = nil,
     shotNumber = 0,
   }
 end
@@ -328,11 +392,21 @@ function rules.resolve(state, result, shot)
   local player = state.turn
   local seated = state.players or { player }
   local ruleset = rules.rules_of(state)
+  local teams = rules.is_team_game(state)
+  local own_colours = rules.own_colours(state, player)
   local own_pocketed = 0
   local opponent_pocketed = 0
   local queen_pocketed = false
+  local function is_own(kind)
+    for _, colour in ipairs(own_colours) do
+      if colour == kind then
+        return true
+      end
+    end
+    return false
+  end
   for _, event in ipairs(result.pocketed or {}) do
-    if event.kind == player then
+    if is_own(event.kind) then
       own_pocketed = own_pocketed + 1
     elseif event.kind ~= "queen" and event.kind ~= "striker" then
       opponent_pocketed = opponent_pocketed + 1
@@ -355,6 +429,8 @@ function rules.resolve(state, result, shot)
     turnSeconds = state.turnSeconds or 0,
     turnDeadline = nil,
     solo = state.solo == true,
+    teams = teams,
+    winnerTeam = nil,
     queen = { status = state.queen.status },
     scores = { white = 0, black = 0, green = 0, yellow = 0 },
     status = "aiming",
@@ -405,28 +481,54 @@ function rules.resolve(state, result, shot)
   end
 
   if striker_pocketed and ruleset.fouls then
-    local penalty = rules.last_pocketed_disc(next_state, result, player)
+    local penalty = rules.last_pocketed_disc(next_state, result, own_colours)
     if penalty then
       rules.return_disc_to_board(next_state, penalty)
-      returned_disc = player
+      returned_disc = penalty.kind
     end
   end
 
   rules.score_state(next_state)
 
-  local function try_finish(candidate)
-    if next_state.scores[candidate] < physics.PIECES_PER_PLAYER then
+  local function try_finish(side)
+    local cleared = {}
+    for _, seat in ipairs(side) do
+      for _, seated_player in ipairs(seated) do
+        if seat == seated_player then
+          cleared[#cleared + 1] = seat
+          break
+        end
+      end
+    end
+    if #cleared == 0 then
       return false
+    end
+    for _, seat in ipairs(cleared) do
+      if (next_state.scores[seat] or 0) < physics.PIECES_PER_PLAYER then
+        return false
+      end
     end
     if ruleset.coverQueen ~= true or next_state.queen.status == "covered" then
       next_state.status = "finished"
-      next_state.winner = candidate
+      -- The winner is the colour that took the last piece; the side is stored
+      -- so every player on it gets the result.
+      local winner = player
+      for index = #cleared, 1, -1 do
+        if (next_state.scores[cleared[index]] or 0) >= physics.PIECES_PER_PLAYER then
+          winner = cleared[index]
+          break
+        end
+      end
+      next_state.winner = winner
+      if teams then
+        next_state.winnerTeam = rules.team_of(winner)
+      end
       return true
     end
-    local blocker = rules.last_pocketed_disc(next_state, result, candidate)
+    local blocker = rules.last_pocketed_disc(next_state, result, cleared)
     if blocker then
       rules.return_disc_to_board(next_state, blocker)
-      returned_disc = candidate
+      returned_disc = blocker.kind
     end
     queen_blocked_finish = true
     rules.score_state(next_state)
@@ -434,15 +536,45 @@ function rules.resolve(state, result, shot)
   end
 
   local order = rules.players_in_turn_order(seated)
-  local finished = false
-  local candidates = { player }
-  for _, seat in ipairs(order) do
-    if seat ~= player then
-      candidates[#candidates + 1] = seat
+  local sides = {}
+  if teams then
+    local sides_by_team = {}
+    for _, team_id in ipairs({ "A", "B" }) do
+      local side = {}
+      for _, seat in ipairs(rules.TEAM_PLAYERS[team_id]) do
+        for _, seated_player in ipairs(seated) do
+          if seat == seated_player then
+            side[#side + 1] = seat
+            break
+          end
+        end
+      end
+      if #side > 0 then
+        sides_by_team[team_id] = side
+        sides[#sides + 1] = side
+      end
+    end
+    -- The shooter's side resolves first.
+    local shooter_team = rules.team_of(player)
+    if sides_by_team[shooter_team] then
+      table.sort(sides, function(left, right)
+        if left == sides_by_team[shooter_team] then
+          return true
+        end
+        if right == sides_by_team[shooter_team] then
+          return false
+        end
+        return false
+      end)
+    end
+  else
+    for _, seat in ipairs(order) do
+      sides[#sides + 1] = { seat }
     end
   end
-  for _, candidate in ipairs(candidates) do
-    if try_finish(candidate) then
+  local finished = false
+  for _, side in ipairs(sides) do
+    if try_finish(side) then
       finished = true
       break
     end
@@ -468,8 +600,13 @@ function rules.resolve(state, result, shot)
 
   local parts = {}
   if next_state.winner then
-    parts[#parts + 1] = physics.PLAYER_LABEL[next_state.winner]
-      .. " clears the board and wins."
+    if teams and next_state.winnerTeam then
+      parts[#parts + 1] = rules.TEAM_LABEL[next_state.winnerTeam]
+        .. " win the board."
+    else
+      parts[#parts + 1] = physics.PLAYER_LABEL[next_state.winner]
+        .. " clears the board and wins."
+    end
   else
     if queen_blocked_finish then
       parts[#parts + 1] = "The queen must be covered before the final piece."
@@ -527,6 +664,7 @@ function rules.resolve(state, result, shot)
     turnContinued = turn_continued,
     returnedDisc = returned_disc,
     winner = next_state.winner,
+    winnerTeam = next_state.winnerTeam,
     message = table.concat(parts, " "),
   }
   next_state.lastOutcome = outcome

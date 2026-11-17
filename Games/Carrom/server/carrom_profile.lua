@@ -53,7 +53,18 @@ function progression.rating_delta(rating, opponent_rating, outcome)
   return round_away(progression.K_FACTOR * (score - expected))
 end
 
-function progression.outcome_for_result(result, colour, user_id)
+local COLOUR_TEAM = {
+  white = "A",
+  black = "A",
+  yellow = "B",
+  green = "B",
+}
+
+function progression.team_of_colour(colour)
+  return COLOUR_TEAM[colour]
+end
+
+function progression.outcome_for_result(result, colour, user_id, team)
   if type(result) ~= "table" then
     return "draw"
   end
@@ -67,6 +78,12 @@ function progression.outcome_for_result(result, colour, user_id)
       return "loss"
     end
     return "win"
+  end
+  if result.winnerTeam ~= nil then
+    local side = team or progression.team_of_colour(colour)
+    if side ~= nil then
+      return result.winnerTeam == side and "win" or "loss"
+    end
   end
   if result.winnerColour == nil then
     return "draw"
@@ -409,7 +426,11 @@ function progression.finalize_match(context, state, result, now)
       math.floor(number(shot.power, 0) * 100)
     )
   end
-  if result.winnerColour ~= nil then
+  if result.winnerTeam ~= nil then
+    local labels = { A = "Ivory & Onyx", B = "Amber & Jade" }
+    summary = (labels[result.winnerTeam] or result.winnerTeam)
+      .. " won the board together"
+  elseif result.winnerColour ~= nil then
     summary = (result.winnerColour or "") .. " cleared the board"
   end
 
@@ -417,7 +438,8 @@ function progression.finalize_match(context, state, result, now)
     local outcome = progression.outcome_for_result(
       result,
       player.colour,
-      player.user_id
+      player.user_id,
+      progression.team_of_colour(player.colour)
     )
     local profile = progression.normalize_profile(
       stored[player.user_id],

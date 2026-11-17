@@ -31,6 +31,8 @@ import {
   tablePlayers,
   validateShot,
   variantRules,
+  teamOf,
+  CARROM_TEAM_LABEL,
   type CarromAiDifficulty,
   type CarromChallenge,
   type CarromPlayer,
@@ -238,6 +240,8 @@ export default function App({ bridge }: AppProps) {
     inviteMatchId === null ? "local" : "online",
   );
   const [localTable, setLocalTable] = useState(2);
+  // Two sides of two share the pieces and the queen in a doubles table.
+  const [teams, setTeams] = useState(false);
   // Any seat of a local table can be played by the computer, not only black.
   const [computerPlayers, setComputerPlayers] = useState<CarromPlayer[]>([
     "black",
@@ -663,6 +667,7 @@ export default function App({ bridge }: AppProps) {
           variant: solo ? "freestyle" : variant,
           turnSeconds,
           solo,
+          teams: teams && size === 4,
           strikers: {
             white: striker,
             black: solo
@@ -680,7 +685,7 @@ export default function App({ bridge }: AppProps) {
       setResultOpen(false);
       setToast(message);
     },
-    [clearSoundTimers, localTable, mode, striker, turnSeconds, variant],
+    [clearSoundTimers, localTable, mode, striker, teams, turnSeconds, variant],
   );
 
   const handleNewGame = useCallback(() => {
@@ -939,6 +944,7 @@ export default function App({ bridge }: AppProps) {
         seats: game.players,
         variant,
         winner: game.winner,
+        winnerTeam: game.winnerTeam,
         shots: game.shotNumber,
       }),
     );
@@ -1021,6 +1027,9 @@ export default function App({ bridge }: AppProps) {
   const winner: CarromPlayer | null = onlineMode
     ? (onlineResult?.winnerColour ?? null)
     : game.winner;
+  const winningTeam =
+    (onlineMode ? onlineResult?.winnerTeam : game.winnerTeam) ??
+    (teams && winner ? teamOf(winner) : null);
   const title = statusTitle(
     activeGame,
     activeAnimation,
@@ -1273,7 +1282,7 @@ export default function App({ bridge }: AppProps) {
               online={online}
               seats={onlineSeats}
               onSeatsChange={setOnlineSeats}
-              settings={{ variant, turnSeconds }}
+              settings={{ variant, turnSeconds, teams: teams && onlineSeats === 4 }}
             />
           ) : null}
 
@@ -1369,6 +1378,15 @@ export default function App({ bridge }: AppProps) {
             }
             computerPlayers={computerPlayers}
             onComputerPlayersChange={applyComputerPlayers}
+            teams={teams}
+            onTeamsChange={(next) => {
+              setTeams(next);
+              resetBoard(
+                next
+                  ? "Doubles: partners share their pieces and the queen."
+                  : "Everyone for themselves. Fresh board.",
+              );
+            }}
           />
 
           {!onlineMode && challengeId === null ? (
@@ -1601,6 +1619,10 @@ export default function App({ bridge }: AppProps) {
           winnerName={nameOf(winner)}
           variant={variant}
           seats={activeGame?.players.length ?? tablePlayers(onlineMode ? onlineSeats : localTable).length}
+          winnerTeam={winningTeam}
+          winnerTeamLabel={
+            winningTeam ? CARROM_TEAM_LABEL[winningTeam] : undefined
+          }
           onNewGame={handleNewGame}
           onRematch={
             onlineMode
@@ -1610,6 +1632,7 @@ export default function App({ bridge }: AppProps) {
                     online.createPrivateRoom(onlineSeats, {
                       variant,
                       turnSeconds,
+                      teams: teams && onlineSeats === 4,
                     }),
                   );
                 }

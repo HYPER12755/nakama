@@ -120,11 +120,11 @@ function close(connection) {
   }
 }
 
-async function createPrivateRoom(connection, seats) {
+async function createPrivateRoom(connection, seats, settings = {}) {
   const response = await connection.client.rpc(
     connection.session,
     "carrom_create_private_match",
-    { seats },
+    { seats, ...settings },
   );
   const payload = response.payload;
   assert(
@@ -641,6 +641,50 @@ async function playTableControls(runId) {
   }
 }
 
+async function playDoublesTable(runId) {
+  const players = [];
+  try {
+    for (let index = 0; index < 4; index += 1) {
+      players.push(await authenticate(`moongames-carrom-${runId}-team-${index}`));
+    }
+    const events = players.map((player) => createCollector(player.socket, "doubles"));
+    const room = await createPrivateRoom(players[0], 4, { teams: true });
+    for (const player of players) {
+      await player.socket.joinMatch(room.matchId);
+    }
+    const started = await events[0].waitFor(
+      (message) =>
+        message.op === OP.STATE && message.data?.game?.discs?.length === 37,
+      "the doubles table to start",
+    );
+    assert(
+      started.data.teams === true && started.data.game.teams === true,
+      `the table is not doubles: ${JSON.stringify(started.data.teams)}`,
+    );
+    const seats = started.data.game.players;
+    assert(
+      seats.length === 4,
+      `expected four seats: ${JSON.stringify(seats)}`,
+    );
+    // Partners sit opposite: white and black share a side, yellow and green
+    // the other. The clockwise turn order already crosses the teams.
+    const side = { white: "A", black: "A", yellow: "B", green: "B" };
+    assert(
+      seats[0] === "white" && seats[1] === "yellow" &&
+      side[seats[0]] !== side[seats[1]] &&
+      side[seats[1]] !== side[seats[2]] &&
+      side[seats[2]] !== side[seats[3]],
+      `the turn order does not cross the teams: ${JSON.stringify(seats)}`,
+    );
+    console.log("[ok] a four player table can be played as doubles");
+    console.log("[ok] the turn order crosses the teams in doubles");
+  } finally {
+    for (const player of players) {
+      close(player);
+    }
+  }
+}
+
 async function main() {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   await playTwoPlayerTable(runId);
@@ -650,6 +694,7 @@ async function main() {
   await playMatchmakerTable(runId);
   await playTableSettings(runId);
   await playTableControls(runId);
+  await playDoublesTable(runId);
   console.log("carrom online smoke test passed");
 }
 

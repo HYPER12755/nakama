@@ -5,6 +5,8 @@ import type {
   CarromPoint,
   CarromRuleSet,
   CarromState,
+  CarromTeam,
+  CarromTeamId,
   GameVariant,
 } from "./types";
 
@@ -136,6 +138,49 @@ export const PLAYER_LABEL: Record<CarromPlayer, string> = {
   green: "Jade",
   yellow: "Amber",
 };
+
+/**
+ * The two sides of a doubles table. Partners sit opposite: white faces black
+ * and yellow faces green. With the clockwise seating order this makes the
+ * turn cross the teams at every shot, the way a game of doubles is played.
+ */
+export const CARROM_TEAM_PLAYERS: Record<CarromTeamId, CarromPlayer[]> = {
+  A: ["white", "black"],
+  B: ["yellow", "green"],
+};
+
+export const CARROM_TEAM_LABEL: Record<CarromTeamId, string> = {
+  A: "Ivory & Onyx",
+  B: "Amber & Jade",
+};
+
+const PLAYER_TEAM: Record<CarromPlayer, CarromTeamId> = {
+  white: "A",
+  black: "A",
+  yellow: "B",
+  green: "B",
+};
+
+export function teamOf(player: CarromPlayer): CarromTeamId {
+  return PLAYER_TEAM[player];
+}
+
+/** The player who shares a side of the table with `player`. */
+export function teammateOf(player: CarromPlayer): CarromPlayer {
+  const team = CARROM_TEAM_PLAYERS[PLAYER_TEAM[player]];
+  return team.find((entry) => entry !== player) ?? player;
+}
+
+/** The sides of a doubles table that has these seats. */
+export function teamsFor(players: readonly CarromPlayer[]): CarromTeam[] {
+  return (["A", "B"] as CarromTeamId[])
+    .map((id) => ({
+      id,
+      label: CARROM_TEAM_LABEL[id],
+      players: CARROM_TEAM_PLAYERS[id].filter((seat) => players.includes(seat)),
+    }))
+    .filter((team) => team.players.length > 0);
+}
 
 /**
  * The tables a game can be played at, from the smallest to the largest.
@@ -443,6 +488,8 @@ export interface CarromStateOptions {
   turnDeadline?: number | null;
   /** A solo table: the player keeps the turn for every shot. */
   solo?: boolean;
+  /** A doubles table: partners share the pieces and the queen. */
+  teams?: boolean;
 }
 
 /**
@@ -522,10 +569,12 @@ export function createInitialState(
     turnSeconds: options.turnSeconds ?? DEFAULT_TURN_SECONDS,
     turnDeadline: options.turnDeadline ?? null,
     solo: options.solo ?? false,
+    teams: options.teams === true && seated.length >= 4,
     queen: { status: "board" },
     scores: { white: 0, black: 0, green: 0, yellow: 0 },
     status: "aiming",
     winner: null,
+    winnerTeam: null,
     shotNumber: 0,
   };
 }

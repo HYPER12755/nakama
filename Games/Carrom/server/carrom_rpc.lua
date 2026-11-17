@@ -49,10 +49,15 @@ local function seats_from(params)
 end
 
 -- The table settings a client asks for: the game type and the shot clock.
+local function truthy(value)
+  return value == true or value == "true" or value == "1" or value == 1
+end
+
 local function settings_from(params)
   return {
     variant = protocol.clamp_variant(params.variant),
     turnSeconds = protocol.clamp_turn_seconds(params.turnSeconds),
+    teams = truthy(params.teams) and protocol.clamp_seats(params.seats) == 4,
   }
 end
 
@@ -127,6 +132,7 @@ local function create_private_room(context, params, recipient)
     seats = seats,
     variant = settings.variant,
     turnSeconds = settings.turnSeconds,
+    teams = settings.teams,
     expected_users = expected_users,
     lobby_timeout_ms = PRIVATE_LOBBY_TIMEOUT_MS,
   })
@@ -184,6 +190,7 @@ local function quick_match(context, payload)
       seats = seats,
       variant = settings.variant,
       turnSeconds = settings.turnSeconds,
+      teams = settings.teams,
     })
   end
 
@@ -215,6 +222,7 @@ local function create_private_match(context, payload)
     seats = seats,
     variant = settings.variant,
     turnSeconds = settings.turnSeconds,
+    teams = settings.teams,
     expected_users = {
       {
         user_id = context.user_id,
@@ -289,6 +297,7 @@ local function matchmaker_matched(context, matched)
     seats = first_seats,
     variant = first_variant,
     turnSeconds = first_clock,
+    teams = truthy(first_properties.teams) and first_seats == 4,
     expected_users = {
       {
         user_id = first.presence.user_id,

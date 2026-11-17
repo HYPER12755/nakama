@@ -296,6 +296,66 @@ test("a solo table keeps the turn", function()
   assert_equal(next_state.turn, "white", "turn")
 end)
 
+local function doubles_state()
+  return rules.create_initial_state(
+    { "white", "yellow", "black", "green" },
+    { teams = true }
+  )
+end
+
+test("partners sit opposite and the turn crosses the teams", function()
+  assert_equal(rules.team_of("white"), "A", "white's team")
+  assert_equal(rules.team_of("green"), "B", "green's team")
+  assert_equal(rules.teammate_of("white"), "black", "white's partner")
+  assert_equal(rules.teammate_of("yellow"), "green", "yellow's partner")
+  assert_equal(doubles_state().teams, true, "the table is a doubles table")
+end)
+
+test("a partner's piece is our own in doubles", function()
+  local state = doubles_state()
+  local shot = { position = 0.5, angle = -math.pi / 2, power = 0.8 }
+  local next_state, outcome = rules.resolve(state, fabricate(state, { "b1" }), shot)
+  assert_equal(outcome.foul, false, "pocketing a partner is not a foul")
+  assert_equal(outcome.turnContinued, true, "the turn continues")
+  assert_equal(outcome.ownPocketed, 1, "the partner's piece counts as ours")
+
+  local _, rival = rules.resolve(state, fabricate(state, { "y1" }), shot)
+  assert_equal(rival.foul, true, "pocketing a rival is still a foul")
+end)
+
+test("a partner can cover the queen in doubles", function()
+  local shot = { position = 0.5, angle = -math.pi / 2, power = 0.8 }
+  local state = doubles_state()
+  local pending = rules.resolve(state, fabricate(state, { "queen" }), shot)
+  assert_equal(pending.queen.status, "pending", "the queen waits")
+  local covered = rules.resolve(pending, fabricate(pending, { "b1" }), shot)
+  assert_equal(covered.queen.status, "covered", "the partner covered it")
+end)
+
+test("a doubles table needs both partners to clear their men", function()
+  local shot = { position = 0.5, angle = -math.pi / 2, power = 0.8 }
+  local state = doubles_state()
+  for index = 1, 9 do
+    state = rules.resolve(state, fabricate(state, { "w" .. index }), shot)
+  end
+  assert_equal(state.scores.white, 9, "white is clear")
+  assert_equal(state.status, "aiming", "the team has not finished")
+
+  -- Cover the queen with another team piece, then clear the partner.
+  state = rules.resolve(state, fabricate(state, { "queen" }), shot)
+  state = rules.resolve(state, fabricate(state, { "w1" }), shot)
+  for index = 1, 9 do
+    local next_state = rules.resolve(state, fabricate(state, { "b" .. index }), shot)
+    if next_state.status == "finished" then
+      state = next_state
+      break
+    end
+    state = next_state
+  end
+  assert_equal(state.status, "finished", "the team finished")
+  assert_equal(state.winnerTeam, "A", "the winning side")
+end)
+
 if failures > 0 then
   print(failures .. " carrom rule test(s) failed")
   os.exit(1)

@@ -1,11 +1,14 @@
 import {
   CARROM_BOARD,
   PLAYER_LABEL,
+  CARROM_TEAM_LABEL,
+  CARROM_TEAM_PLAYERS,
   findOpenSpot,
   nextPlayerInTurnOrder,
   nearestValidStrikerPosition,
   playersInTurnOrder,
   strikerPoint,
+  teamOf,
   variantRules,
 } from "./board";
 import type {
@@ -57,21 +60,21 @@ function returnQueenToCentre(state: CarromState): void {
 function lastPocketedDisc(
   state: CarromState,
   physics: CarromPhysicsResult,
-  kind: CarromDiscKind,
+  kind: CarromDiscKind | readonly CarromDiscKind[],
 ): CarromDisc | undefined {
+  const kinds = typeof kind === "string" ? [kind] : kind;
   for (let index = physics.pocketed.length - 1; index >= 0; index -= 1) {
     const event = physics.pocketed[index]!;
-    if (event.kind === kind) {
+    if (kinds.includes(event.kind as CarromDiscKind)) {
       const disc = state.discs.find((candidate) => candidate.id === event.id);
       if (disc !== undefined && disc.pocketed) {
         return disc;
       }
     }
   }
-  const fallback = [...state.discs]
+  return [...state.discs]
     .reverse()
-    .find((disc) => disc.kind === kind && disc.pocketed);
-  return fallback;
+    .find((disc) => kinds.includes(disc.kind) && disc.pocketed);
 }
 
 function scoreState(state: CarromState): void {
@@ -96,14 +99,20 @@ export function resolveShotRules(
   const player = state.turn;
   const seated = state.players.length > 0 ? state.players : [player];
   const rules = state.rules ?? variantRules("classic");
+  const teams = state.teams === true && seated.length >= 4;
+  // At a doubles table a partner's men are ours: pocketing them is not a foul,
+  // it keeps the turn, and either partner can cover the queen.
+  const ownColours: readonly CarromPlayer[] = teams
+    ? CARROM_TEAM_PLAYERS[teamOf(player)].filter((seat) => seated.includes(seat))
+    : [player];
   const ownPocketed = physics.pocketed.filter(
-    (event) => event.kind === player,
+    (event) => ownColours.includes(event.kind as CarromPlayer),
   ).length;
   const opponentPocketed = physics.pocketed.filter(
     (event) =>
       event.kind !== "queen" &&
       event.kind !== "striker" &&
-      event.kind !== player,
+      !ownColours.includes(event.kind as CarromPlayer),
   ).length;
   const queenPocketedNow = physics.pocketed.some(
     (event) => event.kind === "queen",
@@ -121,6 +130,7 @@ export function resolveShotRules(
     scores: { ...state.scores },
     status: "aiming",
     winner: null,
+    winnerTeam: null,
     shotNumber: state.shotNumber + 1,
     // The clock belongs to whoever holds the table, so the deadline is
     // cleared here and set again by the table that owns the turn.
@@ -162,41 +172,69 @@ export function resolveShotRules(
 
   // A striker pocket is a foul: return one of the shooter's pocketed men.
   if (strikerPocketed && rules.fouls) {
-    const penalty = lastPocketedDisc(next, physics, player);
+    const penalty = lastPocketedDisc(next, physics, ownColours);
     if (penalty !== undefined) {
       returnDiscToBoard(next, penalty);
-      returnedDisc = player;
+      returnedDisc = penalty.kind as CarromPlayer;
     }
   }
 
   scoreState(next);
 
-  const tryFinish = (candidate: CarromPlayer): boolean => {
-    if (next.scores[candidate] < CARROM_BOARD.piecesPerPlayer) {
+  const tryFinish = (side: readonly CarromPlayer[]): boolean => {
+    const cleared = side.filter((seat) => seated.includes(seat));
+    if (
+      cleared.length === 0 ||
+      cleared.some((seat) => next.scores[seat] < CARROM_BOARD.piecesPerPlayer)
+    ) {
       return false;
     }
     if (!rules.coverQueen || next.queen.status === "covered") {
       next.status = "finished";
-      next.winner = candidate;
+      // The winner is the colour that took the last piece; the team is
+      // recorded too, so everyone on the side gets the result.
+      next.winner =
+        [...side].reverse().find((seat) => next.scores[seat] >= CARROM_BOARD.piecesPerPlayer) ??
+        side[0] ??
+        player;
+      if (teams) {
+        next.winnerTeam = teamOf(next.winner);
+      }
       return true;
     }
 
-    const blocker = lastPocketedDisc(next, physics, candidate);
+    const blocker = lastPocketedDisc(next, physics, cleared);
     if (blocker !== undefined) {
       returnDiscToBoard(next, blocker);
-      returnedDisc = candidate;
+      returnedDisc = blocker.kind as CarromPlayer;
     }
     queenBlockedFinish = true;
     scoreState(next);
     return false;
   };
 
-  // The shooter's action resolves first. Every seated player is then checked
-  // so a colour that was cleared by the same shot cannot slip through.
+  // The shooter's side resolves first. At a doubles table the sides are the
+  // two teams; otherwise every seated player is their own side. Either way
+  // the other side is checked too, so a side cleared by the same shot cannot
+  // slip through.
   const order = playersInTurnOrder(seated);
+  const sides: CarromPlayer[][] = teams
+    ? (["A", "B"] as const)
+        .map((id) =>
+          CARROM_TEAM_PLAYERS[id].filter((seat) => seated.includes(seat)),
+        )
+        .filter((side) => side.length > 0)
+        .sort((left, right) =>
+          left.includes(player) === right.includes(player)
+            ? 0
+            : left.includes(player)
+              ? -1
+              : 1,
+        )
+    : [player, ...order.filter((entry) => entry !== player)].map((seat) => [seat]);
   let finished = false;
-  for (const candidate of [player, ...order.filter((entry) => entry !== player)]) {
-    if (tryFinish(candidate)) {
+  for (const side of sides) {
+    if (tryFinish(side)) {
       finished = true;
       break;
     }
@@ -222,7 +260,11 @@ export function resolveShotRules(
 
   const parts: string[] = [];
   if (next.winner !== null) {
-    parts.push(`${PLAYER_LABEL[next.winner]} clears the board and wins.`);
+    parts.push(
+      teams && next.winnerTeam
+        ? `${CARROM_TEAM_LABEL[next.winnerTeam]} win the board.`
+        : `${PLAYER_LABEL[next.winner]} clears the board and wins.`,
+    );
   } else {
     if (queenBlockedFinish) {
       parts.push("The queen must be covered before the final piece.");
@@ -285,6 +327,7 @@ export function resolveShotRules(
     turnContinued,
     returnedDisc,
     winner: next.winner,
+    winnerTeam: next.winnerTeam,
     message: parts.join(" "),
   };
   next.lastOutcome = outcome;

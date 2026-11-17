@@ -13,6 +13,10 @@ interface GameOverDialogProps {
   variant?: GameVariant;
   /** How many seats were at the table. */
   seats?: number;
+  /** The winning side of a doubles table. */
+  winnerTeam?: "A" | "B" | null;
+  /** The label of the winning side. */
+  winnerTeamLabel?: string;
   onNewGame: () => void;
   onClose: () => void;
   /** Offers a rematch, which is how every carrom app handles a finished board. */
@@ -24,13 +28,17 @@ export function GameOverDialog({
   winnerName,
   variant = "classic",
   seats = 2,
+  winnerTeam,
+  winnerTeamLabel,
   onNewGame,
   onClose,
   onRematch,
 }: GameOverDialogProps) {
   const name = winnerName ?? PLAYER_LABEL[winner];
-  const finish =
-    variant === "freestyle"
+  const teamName = winnerTeamLabel ?? (winnerTeam ? `Team ${winnerTeam}` : "");
+  const finish = winnerTeam
+    ? `${teamName} cleared both partners' pieces and won the board together.`
+    : variant === "freestyle"
       ? `All of ${PLAYER_LABEL[winner].toLowerCase()}'s pieces are pocketed. The queen plays as an ordinary piece here.`
       : variant === "practice"
         ? `${PLAYER_LABEL[winner]} cleared their pieces. Practice tables keep no score and call no fouls.`
@@ -57,8 +65,8 @@ export function GameOverDialog({
         <span className={`result-dialog__mark result-dialog__mark--${winner}`}>
           <Icon name="trophy" size={34} strokeWidth={1.6} />
         </span>
-        <p className="eyebrow">Board cleared</p>
-        <h2 id="result-title">{name} wins</h2>
+        <p className="eyebrow">{winnerTeam ? "Doubles" : "Board cleared"}</p>
+        <h2 id="result-title">{winnerTeam ? teamName : name} wins</h2>
         <p className="result-dialog__copy">{finish}</p>
         <div className="result-dialog__actions">
           {onRematch === undefined ? (

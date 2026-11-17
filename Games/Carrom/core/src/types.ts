@@ -3,6 +3,15 @@ export type CarromDiscKind = CarromPlayer | "queen";
 export type CarromPocketKind = CarromDiscKind | "striker";
 export type QueenStatus = "board" | "pending" | "covered";
 
+/** The two sides of a doubles table. Partners sit opposite one another. */
+export type CarromTeamId = "A" | "B";
+
+export interface CarromTeam {
+  id: CarromTeamId;
+  label: string;
+  players: CarromPlayer[];
+}
+
 export interface CarromPoint {
   x: number;
   y: number;
@@ -78,10 +87,14 @@ export interface CarromState {
   turnDeadline: number | null;
   /** A solo table: the player keeps the turn for every shot. */
   solo: boolean;
+  /** A doubles table: partners sit opposite and share the pieces and queen. */
+  teams: boolean;
   queen: CarromQueen;
   scores: Record<CarromPlayer, number>;
   status: "aiming" | "finished";
   winner: CarromPlayer | null;
+  /** The winning side of a doubles table, when one has cleared the board. */
+  winnerTeam: CarromTeamId | null;
   shotNumber: number;
   lastOutcome?: ShotOutcome;
 }
@@ -99,6 +112,7 @@ export interface ShotOutcome {
   turnContinued: boolean;
   returnedDisc: CarromPlayer | null;
   winner: CarromPlayer | null;
+  winnerTeam?: CarromTeamId | null;
   message: string;
 }
 
