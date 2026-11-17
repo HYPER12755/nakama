@@ -30,8 +30,8 @@ const INFINITY = MATE_SCORE * 2;
 
 const DEPTHS: Record<AiDifficulty, number> = {
   easy: 1,
-  medium: 2,
-  hard: 3,
+  medium: 3,
+  hard: 4,
 };
 
 const TIME_LIMITS: Record<AiDifficulty, number> = {
@@ -135,6 +135,8 @@ function promotionOf(value: string | undefined): PromotionPiece | undefined {
 function evaluation(chess: Chess): number {
   let whiteScore = 0;
   const board = chess.board();
+  const pawns = { w: [] as number[], b: [] as number[] };
+  const bishops = { w: 0, b: 0 };
 
   for (let row = 0; row < 8; row += 1) {
     const boardRow = board[row];
@@ -152,9 +154,76 @@ function evaluation(chess: Chess): number {
         PIECE_TABLES[piece.type as PieceSymbol] ?? PIECE_TABLES.p;
       const tableRow = piece.color === "w" ? row : 7 - row;
       const positional = table[tableRow * 8 + file] ?? 0;
-      const value = (PIECE_VALUES[piece.type as PieceSymbol] ?? 0) + positional;
+      let value = (PIECE_VALUES[piece.type as PieceSymbol] ?? 0) + positional;
+
+      if (piece.type === "p") {
+        pawns[piece.color].push(file);
+      } else if (piece.type === "b") {
+        bishops[piece.color] += 1;
+      }
+
+      // Mobility: a piece with somewhere to go is worth more than one
+      // that is boxed in. The full legal-move list is too slow to ask for
+      // at every leaf, so the count of empty squares on the diagonals is
+      // used for bishops and rooks.
+      if (piece.type === "b" || piece.type === "r" || piece.type === "q") {
+        let reach = 0;
+        for (const [dr, df] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+          ...(piece.type !== "r" ? [[1, 1], [1, -1], [-1, 1], [-1, -1]] : []),
+        ]) {
+          let r = row + dr;
+          let f = file + df;
+          while (r >= 0 && r < 8 && f >= 0 && f < 8) {
+            const next = board[r]?.[f];
+            if (next !== undefined && next !== null) {
+              break;
+            }
+            reach += 1;
+            r += dr;
+            f += df;
+          }
+        }
+        value += Math.min(reach, 14) * 2;
+      }
+
       whiteScore += piece.color === "w" ? value : -value;
     }
+  }
+
+  // The bishop pair is a lasting advantage in an open game.
+  if (bishops.w >= 2) {
+    whiteScore += 30;
+  }
+  if (bishops.b >= 2) {
+    whiteScore -= 30;
+  }
+
+  // Pawns that share a file with another pawn of the same colour are
+  // doubled, and a pawn with no pawn of its colour on a neighbouring file
+  // is isolated. Both are weaknesses.
+  for (const color of ["w", "b"] as const) {
+    const files = pawns[color];
+    let penalty = 0;
+    for (let file = 0; file < 8; file += 1) {
+      const onFile = files.filter((pawnFile) => pawnFile === file).length;
+      if (onFile > 1) {
+        penalty += (onFile - 1) * 10;
+      }
+      if (onFile > 0) {
+        const neighbour =
+          files.filter(
+            (pawnFile) => pawnFile === file - 1 || pawnFile === file + 1,
+          ).length > 0;
+        if (!neighbour) {
+          penalty += 12;
+        }
+      }
+    }
+    whiteScore += color === "w" ? -penalty : penalty;
   }
 
   // Eval is always returned from the side-to-move perspective.
@@ -209,10 +278,11 @@ function negamax(
     return 0;
   }
 
-  // Leaf nodes only need a static evaluation. Checkmate is detected one ply
-  // above when the parent sees that this position has no legal replies.
+  // At a leaf, look at the captures still on the board before trusting the
+  // static evaluation. Checkmate is detected one ply above when the parent
+  // sees that this position has no legal replies.
   if (depth <= 0) {
-    return evaluation(chess);
+    return quiescence(chess, alpha, beta, ply, context);
   }
 
   // Generating moves once tells us whether this is a terminal position.
@@ -243,6 +313,64 @@ function negamax(
 
     if (context.aborted) {
       return 0;
+    }
+    if (score > best) {
+      best = score;
+    }
+    if (score > alpha) {
+      alpha = score;
+    }
+    if (alpha >= beta) {
+      break;
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Look at the captures that follow a quiet move.
+ *
+ * A plain search stops at a fixed depth and can think a piece is safe when
+ * it is about to be taken. Standing pat on a capture until the position is
+ * quiet is the cheapest way to avoid that mistake.
+ */
+function quiescence(
+  chess: Chess,
+  alpha: number,
+  beta: number,
+  ply: number,
+  context: SearchContext,
+): number {
+  context.nodes += 1;
+  if (expired(context) || ply > 12) {
+    return evaluation(chess);
+  }
+
+  const standPat = evaluation(chess);
+  if (standPat >= beta) {
+    return standPat;
+  }
+  if (standPat > alpha) {
+    alpha = standPat;
+  }
+
+  const captures = orderedMoves(chess).filter(
+    (move) => move.captured !== undefined || move.promotion !== undefined,
+  );
+
+  let best = standPat;
+  for (const move of captures) {
+    chess.move({
+      from: move.from,
+      to: move.to,
+      promotion: move.promotion,
+    });
+    const score = -quiescence(chess, -beta, -alpha, ply + 1, context);
+    chess.undo();
+
+    if (context.aborted) {
+      return best;
     }
     if (score > best) {
       best = score;

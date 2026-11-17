@@ -388,6 +388,20 @@ works the same on every device.
   whether they are right. It needs the opening book that the explorer
   needs.
 
+### The polish audit — done
+
+- [x] The tools that read the game server (the openings, the puzzles, the
+  storm and the tournaments) are only offered in the online mode. A local
+  game or a game against the computer has no server to answer them, so it
+  no longer shows buttons that cannot work.
+- [x] The panels below the board stayed in one column on a narrow screen,
+  where a two column grid squeezed them into thin lines and dropped the
+  third panel out of sight.
+- [x] The computer is stronger: the search looks at the captures after a
+  quiet move instead of trusting a position that is about to be taken,
+  looks further ahead, and values mobility, the bishop pair and the shape
+  of the pawns as well as the pieces.
+
 ### The opening explorer — done
 
 The explorer is the tree of the openings people play here. The book is made

@@ -408,9 +408,9 @@ export default function App({ bridge }: AppProps) {
   /**
    * The kind of game the engine is being asked about.
    *
-   * The engine is for the games against yourself. In a game against the
-   * computer it is of no use, and in a game against a person it would be
-   * cheating, so it is only for the accounts the server has named.
+   * The engine is for the games against yourself and against the computer.
+   * In a game against a person it would be cheating, so it is only for the
+   * accounts the server has named.
    */
   const engineMode: EngineMode = onlineMode
     ? "online"
@@ -988,6 +988,34 @@ export default function App({ bridge }: AppProps) {
     }
   };
 
+  /**
+   * The tools that read the game server: the openings, the puzzles, the
+   * storm and the tournaments. They are only shown online, since a local
+   * game has no server to answer them.
+   */
+  const serverTools = () => [
+    {
+      id: "openings",
+      label: "Explore the openings",
+      onClick: () => setExplorerOpen(true),
+    },
+    {
+      id: "puzzles",
+      label: "Solve the puzzles",
+      onClick: () => openPractice("puzzles"),
+    },
+    {
+      id: "storm",
+      label: "The storm",
+      onClick: () => openPractice("storm"),
+    },
+    {
+      id: "tournaments",
+      label: "The tournaments",
+      onClick: () => setTournamentOpen(true),
+    },
+  ];
+
   const handleNewGame = () => {
     if (
       localController.state.history.length > 0 &&
@@ -1515,6 +1543,9 @@ export default function App({ bridge }: AppProps) {
                 features={CHESS_FEATURES}
                 onPreviewSound={() => playMove()}
               />
+              {online.connection === "connected" && (
+                <GameToolbar actions={serverTools()} title="Learn and play" />
+              )}
             </>
           ) : aiMode ? (
             <>
@@ -1572,26 +1603,11 @@ export default function App({ bridge }: AppProps) {
                     label: "Train the coordinates",
                     onClick: () => openPractice("trainer"),
                   },
-                  {
-                    id: "openings",
-                    label: "Explore the openings",
-                    onClick: () => setExplorerOpen(true),
-                  },
-                  {
-                    id: "puzzles",
-                    label: "Solve the puzzles",
-                    onClick: () => openPractice("puzzles"),
-                  },
-                  {
-                    id: "storm",
-                    label: "The storm",
-                    onClick: () => openPractice("storm"),
-                  },
-                  {
-                    id: "tournaments",
-                    label: "The tournaments",
-                    onClick: () => setTournamentOpen(true),
-                  },
+                  // The rest of the tools read the game server, so they
+                  // are only offered in the online mode, where the server
+                  // is there to answer them. A local or AI game is played
+                  // without a server and must not show them.
+                  // Server tools are only in the online mode below.
                 ]}
               />
             </>
@@ -1646,26 +1662,11 @@ export default function App({ bridge }: AppProps) {
                     label: "Train the coordinates",
                     onClick: () => openPractice("trainer"),
                   },
-                  {
-                    id: "openings",
-                    label: "Explore the openings",
-                    onClick: () => setExplorerOpen(true),
-                  },
-                  {
-                    id: "puzzles",
-                    label: "Solve the puzzles",
-                    onClick: () => openPractice("puzzles"),
-                  },
-                  {
-                    id: "storm",
-                    label: "The storm",
-                    onClick: () => openPractice("storm"),
-                  },
-                  {
-                    id: "tournaments",
-                    label: "The tournaments",
-                    onClick: () => setTournamentOpen(true),
-                  },
+                  // The rest of the tools read the game server, so they
+                  // are only offered in the online mode, where the server
+                  // is there to answer them. A local or AI game is played
+                  // without a server and must not show them.
+                  // Server tools are only in the online mode below.
                 ]}
               />
             </>

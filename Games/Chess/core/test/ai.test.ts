@@ -48,6 +48,19 @@ describe("chooseAiMove", () => {
     expect(move?.san).toBe("Rxa8+");
   });
 
+  it("does not take a pawn that is guarded by another pawn", () => {
+    // The queen on a3 can take the pawn on d5, but the pawn on c6 would
+    // take the queen straight back.
+    const fen = "4k3/8/2p5/3p4/8/Q7/8/4K3 w - - 0 1";
+    const move = chooseAiMove(fen, {
+      difficulty: "hard",
+      timeLimitMs: 2_000,
+    });
+
+    expect(move).not.toBeNull();
+    expect(`${move?.from}${move?.to}`).not.toBe("a3d5");
+  });
+
   it("returns null when the position is already checkmate", () => {
     const move = chooseAiMove("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1");
     expect(move).toBeNull();

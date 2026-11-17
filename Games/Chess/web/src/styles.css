@@ -4145,18 +4145,18 @@ body.board-fullscreen-active {
     grid-template-columns: 1fr;
   }
 
+  /* The board is above the panels now. Keep the panels in one column: a
+     two column grid squeezes the move list and the counters into thin
+     slivers, and a panel with fewer than three children drops out of
+     sight altogether. */
   .sidebar {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    align-items: start;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
 
-  .status-panel,
-  .toolbar-panel,
-  .online-panel,
-  .ai-panel,
-  .profile-panel {
-    grid-column: 1 / -1;
+  .sidebar > .panel {
+    width: 100%;
   }
 
   .replay-body {
