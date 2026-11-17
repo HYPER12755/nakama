@@ -4,13 +4,21 @@ import { GameOverDialog } from "../src/components/GameOverDialog";
 import { RulesDialog } from "../src/components/RulesDialog";
 import { pieceGrain } from "../src/components/CarromBoard";
 import { boardPlayers } from "../src/lib/tableSetup";
+import { isAiPlayer } from "../src/App";
 
 describe("the board a mode change builds", () => {
   it("does not keep the seats of the old mode", () => {
     expect(boardPlayers("local", 4)).toHaveLength(4);
-    expect(boardPlayers("ai", 4)).toHaveLength(2);
+    expect(boardPlayers("ai", 4)).toHaveLength(4);
     expect(boardPlayers("online", 4)).toHaveLength(4);
     expect(boardPlayers("local", 4, true)).toHaveLength(2);
+  });
+
+  it("lets any seat be played by the computer", () => {
+    expect(isAiPlayer("ai", "white", ["white"])).toBe(true);
+    expect(isAiPlayer("ai", "green", ["green", "yellow"])).toBe(true);
+    expect(isAiPlayer("ai", "black", ["green"])).toBe(false);
+    expect(isAiPlayer("local", "black", ["black"])).toBe(false);
   });
 });
 

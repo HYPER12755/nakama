@@ -2,6 +2,8 @@ import {
   CARROM_CLOCKS,
   CARROM_STRIKERS,
   CARROM_VARIANTS,
+  PLAYER_LABEL,
+  type CarromPlayer,
   type GameVariant,
 } from "@moongames/carrom-core";
 import { Icon } from "./Icon";
@@ -23,6 +25,11 @@ export interface TableSettingsProps {
   onTurnSecondsChange: (seconds: number) => void;
   /** Whether the table settings are locked, for example while a table runs. */
   locked?: boolean;
+  /** The seats that can be handed to the computer in a local game. */
+  computerSeats?: CarromPlayer[];
+  /** The seats the computer is playing in a local game. */
+  computerPlayers?: CarromPlayer[];
+  onComputerPlayersChange?: (seats: CarromPlayer[]) => void;
 }
 
 /**
@@ -43,6 +50,9 @@ export function TableSettings({
   turnSeconds,
   onTurnSecondsChange,
   locked = false,
+  computerSeats,
+  computerPlayers = [],
+  onComputerPlayersChange,
 }: TableSettingsProps) {
   const offered = variants ?? (Object.keys(CARROM_VARIANTS) as GameVariant[]);
   const skin = CARROM_STRIKERS.find((entry) => entry.id === striker);
@@ -76,6 +86,41 @@ export function TableSettings({
           ))}
         </div>
       </div>
+
+      {computerSeats !== undefined && onComputerPlayersChange !== undefined ? (
+        <div className="setting">
+          <span className="setting__label">Computer</span>
+          <div className="setting__options" role="group" aria-label="Computer seats">
+            {computerSeats.map((seat) => {
+              const computer = computerPlayers.includes(seat);
+              return (
+                <button
+                  key={seat}
+                  type="button"
+                  aria-pressed={computer}
+                  className={`setting__option setting__option--wide${
+                    computer ? " setting__option--active" : ""
+                  }`}
+                  disabled={locked}
+                  onClick={() =>
+                    onComputerPlayersChange(
+                      computer
+                        ? computerPlayers.filter((entry) => entry !== seat)
+                        : [...computerPlayers, seat],
+                    )
+                  }
+                >
+                  {computer ? "CPU" : ""} {PLAYER_LABEL[seat]}
+                </button>
+              );
+            })}
+          </div>
+          <p className="setting__note">
+            Any seat can be played by the computer. A seat left to a player
+            passes the device around the table.
+          </p>
+        </div>
+      ) : null}
 
       <div className="setting">
         <span className="setting__label">Game</span>

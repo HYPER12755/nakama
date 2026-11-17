@@ -15,8 +15,18 @@ export function boardPlayers(
   tableSize: number,
   solo = false,
 ): CarromPlayer[] {
-  if (solo || mode === "ai") {
+  if (solo) {
     return tablePlayers(2);
   }
   return tablePlayers(tableSize);
+}
+
+/**
+ * The seats the computer is allowed to play at a local table.
+ *
+ * New seats are people until the player hands them over, so a four player
+ * table does not silently become a game against three computers.
+ */
+export function allowedComputerSeats(seats: CarromPlayer[]): CarromPlayer[] {
+  return seats;
 }

@@ -43,6 +43,7 @@ import {
 import { CarromBoard } from "./components/CarromBoard";
 import { ChallengePanel } from "./components/ChallengePanel";
 import { GameOverDialog } from "./components/GameOverDialog";
+import { LocalHistory } from "./components/LocalHistory";
 import { Icon } from "./components/Icon";
 import { OnlinePanel } from "./components/OnlinePanel";
 import { PocketBox } from "./components/PocketBox";
@@ -53,6 +54,12 @@ import { StrikerDock } from "./components/StrikerDock";
 import { TableSettings } from "./components/TableSettings";
 import { useOnlineCarrom } from "./hooks/useOnlineCarrom";
 import { type AimMode } from "./lib/aim";
+import {
+  clearLocalProgress,
+  readLocalProgress,
+  recordLocalGame,
+  type LocalProgress,
+} from "./lib/localProgress";
 import { boardPlayers } from "./lib/tableSetup";
 import {
   AccountPanel,
@@ -203,8 +210,12 @@ function statusDetail(
   return "Drag from the striker toward a pocket. A longer drag gives the shot more power.";
 }
 
-function isAiPlayer(mode: Mode, player: CarromPlayer): boolean {
-  return mode === "ai" && player === "black";
+export function isAiPlayer(
+  mode: Mode,
+  player: CarromPlayer,
+  computer: readonly CarromPlayer[],
+): boolean {
+  return mode === "ai" && computer.includes(player);
 }
 
 export interface AppProps {
@@ -227,6 +238,14 @@ export default function App({ bridge }: AppProps) {
     inviteMatchId === null ? "local" : "online",
   );
   const [localTable, setLocalTable] = useState(2);
+  // Any seat of a local table can be played by the computer, not only black.
+  const [computerPlayers, setComputerPlayers] = useState<CarromPlayer[]>([
+    "black",
+  ]);
+  const [localRecord, setLocalRecord] = useState<LocalProgress>(() =>
+    readLocalProgress(),
+  );
+  const recordedLocalGame = useRef<string | null>(null);
   const [variant, setVariant] = useState<GameVariant>(storedVariant);
   const [turnSeconds, setTurnSeconds] = useState(0);
   const [striker, setStriker] = useState<string>(CARROM_STRIKERS[0]!.id);
@@ -370,7 +389,7 @@ export default function App({ bridge }: AppProps) {
         const seat = online.seats.find((entry) => entry.colour === player);
         return seat?.username ?? PLAYER_LABEL[player];
       }
-      if (isAiPlayer(mode, player)) {
+      if (isAiPlayer(mode, player, computerPlayers)) {
         return "Computer";
       }
       if (mode === "ai") {
@@ -380,7 +399,7 @@ export default function App({ bridge }: AppProps) {
       const index = game.players.indexOf(player);
       return `Player ${index + 1}`;
     },
-    [accountName, game.players, mode, online.seats, onlineMode],
+    [accountName, computerPlayers, game.players, mode, online.seats, onlineMode],
   );
 
   /**
@@ -629,6 +648,7 @@ export default function App({ bridge }: AppProps) {
     ) => {
       clearSoundTimers();
       animationRef.current = null;
+      recordedLocalGame.current = null;
       setAnimation(null);
       const solo = options.solo === true;
       // The size and the mode are passed in, because React has not applied
@@ -767,10 +787,25 @@ export default function App({ bridge }: AppProps) {
     [onlineMode, resetBoard],
   );
 
+  const applyComputerPlayers = useCallback(
+    (next: CarromPlayer[]) => {
+      const seats = tablePlayers(localTable);
+      const allowed = next.filter((seat) => seats.includes(seat));
+      // One seat has to stay with a person, or nobody can start the game.
+      if (allowed.length >= seats.length) {
+        setToast("Leave at least one seat to a player.");
+        return;
+      }
+      setComputerPlayers(allowed);
+      resetBoard("Computer seats changed. Fresh board.", { mode: "ai" });
+    },
+    [localTable, resetBoard],
+  );
+
   useEffect(() => {
     if (
       mode !== "ai" ||
-      game.turn !== "black" ||
+      !isAiPlayer(mode, game.turn, computerPlayers) ||
       game.status !== "aiming" ||
       animation !== null ||
       paused
@@ -799,7 +834,7 @@ export default function App({ bridge }: AppProps) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [mode, game, animation, paused, handleShoot]);
+  }, [computerPlayers, mode, game, animation, paused, handleShoot]);
 
   const toggleFullscreen = useCallback(async () => {
     try {
@@ -852,7 +887,7 @@ export default function App({ bridge }: AppProps) {
       !paused &&
       !aiThinking &&
       !challengeFinished &&
-      !isAiPlayer(mode, game.turn);
+      !isAiPlayer(mode, game.turn, computerPlayers);
 
   // The shot clock. Online tables take the deadline from the server, local
   // tables run it here.
@@ -883,6 +918,31 @@ export default function App({ bridge }: AppProps) {
     seenResultRef.current = resultKey;
     setResultOpen(true);
   }, [resultKey]);
+
+  // A table played on this device keeps its own record. The key makes sure a
+  // finished game is written once, however many times the board is repainted.
+  useEffect(() => {
+    if (onlineMode || challengeId !== null) {
+      recordedLocalGame.current = null;
+      return;
+    }
+    if (game.status !== "finished" || game.winner === null) {
+      return;
+    }
+    const key = `${game.shotNumber}:${game.winner}`;
+    if (recordedLocalGame.current === key) {
+      return;
+    }
+    recordedLocalGame.current = key;
+    setLocalRecord(
+      recordLocalGame({
+        seats: game.players,
+        variant,
+        winner: game.winner,
+        shots: game.shotNumber,
+      }),
+    );
+  }, [challengeId, game.players, game.shotNumber, game.status, game.winner, onlineMode, variant]);
 
   /**
    * The table tells the player when it is their turn. A player should never
@@ -932,7 +992,7 @@ export default function App({ bridge }: AppProps) {
     if (game.status !== "aiming" || animation !== null || paused) {
       return;
     }
-    if (isAiPlayer(mode, game.turn)) {
+    if (isAiPlayer(mode, game.turn, computerPlayers)) {
       return;
     }
     if (clockSeconds === null || clockSeconds > 0) {
@@ -944,6 +1004,7 @@ export default function App({ bridge }: AppProps) {
   }, [
     animation,
     clockSeconds,
+    computerPlayers,
     game,
     mode,
     onlineMode,
@@ -954,7 +1015,9 @@ export default function App({ bridge }: AppProps) {
   const active = activeGame !== null && activeGame.status === "aiming"
     ? activeGame.turn
     : false;
-  const myTurn = onlineMode ? onlineMyTurn : !isAiPlayer(mode, activeTurn);
+  const myTurn = onlineMode
+    ? onlineMyTurn
+    : !isAiPlayer(mode, activeTurn, computerPlayers);
   const winner: CarromPlayer | null = onlineMode
     ? (onlineResult?.winnerColour ?? null)
     : game.winner;
@@ -1247,7 +1310,7 @@ export default function App({ bridge }: AppProps) {
                       left={Math.max(0, CARROM_BOARD.piecesPerPlayer - (tableScores[player] ?? 0))}
                       active={active === player}
                       queen={game.queen}
-                      ai={isAiPlayer(mode, player)}
+                      ai={isAiPlayer(mode, player, computerPlayers)}
                       seat={seat + 1}
                       striker={strikerLabel(player)}
                     />
@@ -1275,6 +1338,10 @@ export default function App({ bridge }: AppProps) {
                 return;
               }
               setLocalTable(size);
+              const seats = tablePlayers(size);
+              setComputerPlayers((current) =>
+                current.filter((seat) => seats.includes(seat)),
+              );
               resetBoard(`${size} player table ready. ${PLAYER_LABEL.white} to shoot.`, {
                 tableSize: size,
               });
@@ -1295,7 +1362,26 @@ export default function App({ bridge }: AppProps) {
             }
             onTurnSecondsChange={applyTurnSeconds}
             locked={onlineMode && online.matchId !== null}
+            computerSeats={
+              !onlineMode && challengeId === null
+                ? tablePlayers(localTable)
+                : undefined
+            }
+            computerPlayers={computerPlayers}
+            onComputerPlayersChange={applyComputerPlayers}
           />
+
+          {!onlineMode && challengeId === null ? (
+            <LocalHistory
+              progress={localRecord}
+              seats={tablePlayers(localTable)}
+              onClear={() => {
+                clearLocalProgress();
+                setLocalRecord(readLocalProgress());
+                setToast("The local table record was cleared.");
+              }}
+            />
+          ) : null}
 
           <section className="panel status-panel" aria-live="polite">
             <div className="status-panel__icon">
