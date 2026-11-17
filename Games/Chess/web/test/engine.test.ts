@@ -9,7 +9,10 @@ import {
   engineVisible,
   readEngineOutput,
 } from "../src/lib/engine/externalEngine";
-import { movesToSan } from "../src/hooks/useEngineAnalysis";
+import {
+  fillPvLines,
+  movesToSan,
+} from "../src/hooks/useEngineAnalysis";
 
 const START_FEN =
   "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -101,5 +104,42 @@ describe("the moves of the engine", () => {
 
   it("are nothing when the moves cannot be played", () => {
     expect(movesToSan(START_FEN, ["e2e5"])).toEqual([]);
+  });
+
+  it("are read from the position after the moves already played", () => {
+    // After e4 e5, the engine's line begins with Nf3. Replayed from the
+    // start, that move is not legal yet; played after e4 e5, it is.
+    expect(
+      movesToSan(START_FEN, ["g1f3", "b8c6"], ["e2e4", "e7e5"]),
+    ).toEqual(["Nf3", "Nc6"]);
+  });
+});
+
+describe("holding the place of every engine line", () => {
+  const line = {
+    depth: 12,
+    score: { cp: 25 },
+    san: ["e4"],
+    uci: ["e2e4"],
+  };
+
+  it("keeps all the rows when only the first line has arrived", () => {
+    const lines = fillPvLines([line], 3);
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toEqual(line);
+    expect(lines[1]).toEqual({ depth: 0, score: {}, san: [], uci: [] });
+    expect(lines[2]).toEqual({ depth: 0, score: {}, san: [], uci: [] });
+  });
+
+  it("fills the rows as the lines arrive", () => {
+    const lines = fillPvLines([line, line], 3);
+    expect(lines).toHaveLength(3);
+    expect(lines[0].san).toEqual(["e4"]);
+    expect(lines[1].san).toEqual(["e4"]);
+    expect(lines[2].san).toEqual([]);
+  });
+
+  it("holds no rows when the engine was not asked for any", () => {
+    expect(fillPvLines([], 0)).toEqual([]);
   });
 });

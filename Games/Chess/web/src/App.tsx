@@ -1364,6 +1364,7 @@ export default function App({ bridge }: AppProps) {
                   {analysis.pvs.map((pv, line) => (
                     <EnginePv
                       key={line}
+                      waiting={pv.san.length === 0 && analysis.thinking}
                       san={pv.san}
                       cp={pv.score.cp}
                       mate={pv.score.mate}
@@ -1371,7 +1372,11 @@ export default function App({ bridge }: AppProps) {
                       nodes={analysis.evaluation?.nodes ?? 0}
                       millis={analysis.evaluation?.millis ?? 0}
                       onShow={(move) => {
-                        const moves = pv.uci.slice(0, move + 1);
+                        // The line begins after the moves already played.
+                        const moves = [
+                          ...activeState.history.map((entry) => entry.uci),
+                          ...pv.uci.slice(0, move + 1),
+                        ];
                         setPvPreview(positionAfter(analysisStartFen, moves));
                       }}
                       onPlay={(move) => {

@@ -1,4 +1,6 @@
 export interface EnginePvProps {
+  /** Whether the engine is still working out this line. */
+  waiting?: boolean;
   /** The moves of the line, written the way a player writes them. */
   san: string[];
   /** The number of hundredths of a pawn, when the game is not a mate. */
@@ -26,6 +28,7 @@ export interface EnginePvProps {
  * be played on the board.
  */
 export function EnginePv({
+  waiting = false,
   san,
   cp,
   mate,
@@ -40,15 +43,19 @@ export function EnginePv({
       ? `mate in ${Math.abs(mate)}`
       : cp !== undefined
         ? `${(cp / 100).toFixed(2)}`
-        : "—";
+        : waiting
+          ? "…"
+          : "—";
 
   return (
-    <div className="pv-box">
+    <div className={`pv-box${waiting ? " pv-box--waiting" : ""}`}>
       <div className="pv">
         <strong className="pv__score">{score}</strong>
-        <span className="pv__depth">d{depth}</span>
+        <span className="pv__depth">{depth > 0 ? `d${depth}` : ""}</span>
         <span className="pv__nodes">
-          {Math.round(nodes / 1000)}k · {Math.round(millis / 1000)}s
+          {depth > 0
+            ? `${Math.round(nodes / 1000)}k · ${Math.round(millis / 1000)}s`
+            : ""}
         </span>
         {san.length > 0 && (
           <span className="pv__moves">

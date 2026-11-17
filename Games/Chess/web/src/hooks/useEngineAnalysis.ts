@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChessEngine } from "@moongames/chess-core";
+import {
+  ChessEngine,
+  type PromotionPiece,
+  type Square,
+} from "@moongames/chess-core";
 import {
   ExternalEngine,
   readEngineOutput,
@@ -43,21 +47,56 @@ export interface EngineAnalysis {
   error: string | null;
 }
 
+/** One line of the engine, held in a row of its own. */
+export interface PvLine {
+  depth: number;
+  score: { cp?: number; mate?: number };
+  san: string[];
+  uci: string[];
+}
+
+/**
+ * Keep a row for every line that was asked for.
+ *
+ * A fresh search reports the first line before the others, so dropping the
+ * lines that have not arrived yet makes the panel collapse into thin rows
+ * every time the position changes. Lichess holds the place of every line
+ * until the search has filled them all.
+ */
+export function fillPvLines(
+  lines: Array<PvLine | undefined>,
+  count: number,
+): PvLine[] {
+  return Array.from({ length: count }, (_, index) =>
+    lines[index] ?? { depth: 0, score: {}, san: [], uci: [] },
+  );
+}
+
 /**
  * The lines of the engine, written the way a player writes them.
  *
  * The engine writes its moves in its own way, and the moves are played out
- * again here so they can be read.
+ * again here so they can be read. `before` are the moves already played,
+ * which take the board to the position the engine looked at.
  */
 export function movesToSan(
   initialFen: string,
   moves: string[],
+  before: string[] = [],
 ): string[] {
   if (moves.length === 0) {
     return [];
   }
   try {
     const engine = new ChessEngine(initialFen);
+    for (const played of before) {
+      engine.move({
+        from: played.slice(0, 2) as Square,
+        to: played.slice(2, 4) as Square,
+        promotion:
+          played.length > 4 ? (played[4] as PromotionPiece) : undefined,
+      });
+    }
     const san: string[] = [];
     for (const move of moves) {
       const from = move.slice(0, 2);
@@ -162,16 +201,19 @@ export function useEngineAnalysis(
   }, [key, enabled, depth, multiPv, turn]);
 
   const pvs = useMemo(() => {
-    if (evaluation === null) {
-      return [];
-    }
-    return evaluation.pvs.map((pv) => ({
+    // The engine's lines begin at the position it was asked about, which
+    // is after the moves already played, not at the start of the game.
+    // Passing those moves first is what keeps a line readable after the
+    // first move; without them the moves are replayed from the start, are
+    // illegal, and the rows fall empty.
+    const written = (evaluation?.pvs ?? []).map((pv) => ({
       depth: pv.depth,
       score: pv.score,
-      san: movesToSan(initialFen, pv.moves),
+      san: movesToSan(initialFen, pv.moves, moves),
       uci: pv.moves,
     }));
-  }, [evaluation, initialFen]);
+    return fillPvLines(written, multiPv);
+  }, [evaluation, initialFen, moves, multiPv]);
 
   return { evaluation, pvs, thinking, error };
 }
