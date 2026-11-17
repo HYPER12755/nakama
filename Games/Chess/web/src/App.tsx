@@ -227,11 +227,18 @@ export default function App({ bridge }: AppProps) {
     null,
   );
   const [deskOpen, setDeskOpen] = useState(false);
-  const [trainerOpen, setTrainerOpen] = useState(false);
+  /**
+   * The practice modes take over the screen, one at a time. Each one has
+   * its own board, so the game board is hidden while one of them is open:
+   * otherwise a player who opens three of them sees three boards.
+   */
+  type PracticeMode = "trainer" | "puzzles" | "storm";
+  const [practiceMode, setPracticeMode] = useState<PracticeMode | null>(null);
+  const openPractice = (mode: PracticeMode) => setPracticeMode(mode);
+  const closePractice = () => setPracticeMode(null);
+
   const [reportOpen, setReportOpen] = useState(false);
   const [explorerOpen, setExplorerOpen] = useState(false);
-  const [puzzleOpen, setPuzzleOpen] = useState(false);
-  const [stormOpen, setStormOpen] = useState(false);
   const [tournamentOpen, setTournamentOpen] = useState(false);
   const boardPanelRef = useRef<HTMLElement>(null);
   const inviteConnectRef = useRef(false);
@@ -1167,7 +1174,10 @@ export default function App({ bridge }: AppProps) {
         </div>
       </header>
 
-      <main className="game-layout">
+      <main
+        className="game-layout"
+        hidden={practiceMode !== null}
+      >
         <section
           className={`board-panel${boardFullscreen ? " board-panel--fullscreen" : ""}`}
           aria-label="Chess game"
@@ -1560,7 +1570,7 @@ export default function App({ bridge }: AppProps) {
                   {
                     id: "trainer",
                     label: "Train the coordinates",
-                    onClick: () => setTrainerOpen(true),
+                    onClick: () => openPractice("trainer"),
                   },
                   {
                     id: "openings",
@@ -1570,12 +1580,12 @@ export default function App({ bridge }: AppProps) {
                   {
                     id: "puzzles",
                     label: "Solve the puzzles",
-                    onClick: () => setPuzzleOpen(true),
+                    onClick: () => openPractice("puzzles"),
                   },
                   {
                     id: "storm",
                     label: "The storm",
-                    onClick: () => setStormOpen(true),
+                    onClick: () => openPractice("storm"),
                   },
                   {
                     id: "tournaments",
@@ -1634,7 +1644,7 @@ export default function App({ bridge }: AppProps) {
                   {
                     id: "trainer",
                     label: "Train the coordinates",
-                    onClick: () => setTrainerOpen(true),
+                    onClick: () => openPractice("trainer"),
                   },
                   {
                     id: "openings",
@@ -1644,12 +1654,12 @@ export default function App({ bridge }: AppProps) {
                   {
                     id: "puzzles",
                     label: "Solve the puzzles",
-                    onClick: () => setPuzzleOpen(true),
+                    onClick: () => openPractice("puzzles"),
                   },
                   {
                     id: "storm",
                     label: "The storm",
-                    onClick: () => setStormOpen(true),
+                    onClick: () => openPractice("storm"),
                   },
                   {
                     id: "tournaments",
@@ -1697,38 +1707,74 @@ export default function App({ bridge }: AppProps) {
         />
       )}
 
-      {trainerOpen && (
-        <CoordinateTrainer
-          theme={boardTheme}
-          pieceSet={preferences.pieceSet}
-          onClose={() => setTrainerOpen(false)}
-        />
-      )}
+      {practiceMode !== null && (
+        <div className="practice-stage" role="dialog" aria-modal="true">
+          <div className="practice-tabs">
+            <button
+              type="button"
+              className={practiceMode === "trainer" ? "is-chosen" : ""}
+              onClick={() => openPractice("trainer")}
+            >
+              Coordinates
+            </button>
+            <button
+              type="button"
+              className={practiceMode === "puzzles" ? "is-chosen" : ""}
+              onClick={() => openPractice("puzzles")}
+            >
+              Puzzles
+            </button>
+            <button
+              type="button"
+              className={practiceMode === "storm" ? "is-chosen" : ""}
+              onClick={() => openPractice("storm")}
+            >
+              Storm
+            </button>
+            <button
+              type="button"
+              className="practice-tabs__close"
+              onClick={closePractice}
+              aria-label="Back to the game"
+            >
+              Back to the game
+            </button>
+          </div>
 
-      {puzzleOpen && (
-        <PuzzlePanel
-          onNext={() => online.puzzleNext()}
-          onSave={(input) => online.puzzleSave(input)}
-          onAnswer={(id, move) => online.puzzleAnswer(id, move)}
-          mode={engineMode}
-          token={engineToken ?? undefined}
-          theme={boardTheme}
-          pieceSet={preferences.pieceSet}
-          coordinates={preferences.coordinates}
-          onClose={() => setPuzzleOpen(false)}
-        />
-      )}
+          {practiceMode === "trainer" && (
+            <CoordinateTrainer
+              theme={boardTheme}
+              pieceSet={preferences.pieceSet}
+              onClose={closePractice}
+            />
+          )}
 
-      {stormOpen && (
-        <StormPanel
-          onStart={() => online.stormStart()}
-          onNext={() => online.stormNext()}
-          onAnswer={(id, move) => online.stormAnswer(id, move)}
-          theme={boardTheme}
-          pieceSet={preferences.pieceSet}
-          coordinates={preferences.coordinates}
-          onClose={() => setStormOpen(false)}
-        />
+          {practiceMode === "puzzles" && (
+            <PuzzlePanel
+              onNext={() => online.puzzleNext()}
+              onSave={(input) => online.puzzleSave(input)}
+              onAnswer={(id, move) => online.puzzleAnswer(id, move)}
+              mode={engineMode}
+              token={engineToken ?? undefined}
+              theme={boardTheme}
+              pieceSet={preferences.pieceSet}
+              coordinates={preferences.coordinates}
+              onClose={closePractice}
+            />
+          )}
+
+          {practiceMode === "storm" && (
+            <StormPanel
+              onStart={() => online.stormStart()}
+              onNext={() => online.stormNext()}
+              onAnswer={(id, move) => online.stormAnswer(id, move)}
+              theme={boardTheme}
+              pieceSet={preferences.pieceSet}
+              coordinates={preferences.coordinates}
+              onClose={closePractice}
+            />
+          )}
+        </div>
       )}
 
       {tournamentOpen && (

@@ -1,3 +1,23 @@
+/* The fonts lichess uses, from lichess itself. Noto Sans is the text of
+   the site, and lichess-chess draws the letters of a move as lichess does. */
+
+@font-face {
+  font-family: "Noto Sans";
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("fonts/noto-sans-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Noto Chess";
+  font-display: block;
+  src: url("fonts/lichess-chess.woff2") format("woff2");
+}
+
+[hidden] {
+  display: none !important;
+}
+
 :root {
   color-scheme: dark;
   --bg: #0b0d13;
@@ -82,9 +102,7 @@ body {
     radial-gradient(900px 600px at 100% 0%, var(--bg-glow-2), transparent 55%),
     var(--bg);
   color: var(--text);
-  font-family:
-    "Inter", "SF Pro Display", "Segoe UI", system-ui, -apple-system,
-    sans-serif;
+  font-family: "Noto Sans", sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -98,6 +116,61 @@ button {
   margin: 0 auto;
   padding: max(20px, env(safe-area-inset-top)) 20px
     max(24px, env(safe-area-inset-bottom));
+}
+
+/* The practice modes take over the screen, so only one board is shown. */
+
+.practice-stage {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 0 24px;
+}
+
+.practice-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+
+.practice-tabs button {
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.practice-tabs button.is-chosen {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.practice-tabs__close {
+  margin-left: auto;
+}
+
+.practice-stage .panel,
+.practice-stage .puzzle-panel,
+.practice-stage .storm-panel {
+  margin: 0 auto;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.practice-stage .puzzle-board,
+.practice-stage .storm-board,
+.practice-stage .trainer-board {
+  max-width: 480px;
+  margin: 0 auto;
 }
 
 .app-header {
@@ -2174,10 +2247,8 @@ button {
 }
 
 .move-san {
-  font-size: 14px;
-  font-weight: 700;
-  font-family:
-    "SF Mono", "Cascadia Code", "Roboto Mono", monospace;
+  font-size: 15px;
+  font-family: "Noto Chess", "Noto Sans", sans-serif;
 }
 
 .empty-state {
