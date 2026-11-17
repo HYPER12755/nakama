@@ -334,7 +334,19 @@ export function useOnlineCarrom(
   const clientRef = useRef<Client | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const sessionRef = useRef<Session | null>(null);
+  // The launcher labels a server with its full address. The same label is used
+  // to keep the email session, so a player stays signed in after a reload.
   const serverLabelRef = useRef("nakama-local");
+  // Signing in has to rebuild the socket with the new account. The wanted
+  // account travels through this ref into connect(), which is the only place
+  // that creates a socket.
+  const pendingEmailAuthRef = useRef<{
+    email: string;
+    password: string;
+    username?: string;
+    create: boolean;
+  } | null>(null);
+  const connectErrorRef = useRef<string | null>(null);
   const matchIdRef = useRef<string | null>(null);
   const serialRef = useRef(0);
   const gameRef = useRef<CarromState | null>(null);
@@ -468,11 +480,26 @@ export function useOnlineCarrom(
     });
   }, []);
 
+  const disconnect = useCallback(async (): Promise<void> => {
+    const socket = socketRef.current;
+    socketRef.current = null;
+    sessionRef.current = null;
+    if (socket !== null) {
+      try {
+        socket.disconnect(false);
+      } catch {
+        // The socket may already be closed.
+      }
+    }
+    setConnection("offline");
+  }, []);
+
   const connect = useCallback(async (): Promise<void> => {
     if (socketRef.current !== null || connectingRef.current) {
       return;
     }
     connectingRef.current = true;
+    connectErrorRef.current = null;
     setConnection("connecting");
     setError(null);
     try {
@@ -482,7 +509,7 @@ export function useOnlineCarrom(
       const handoff = hostConfigRef.current ?? readLauncherHandoff(GAME_ID);
       const hostSession = sessionFromConfig(handoff);
       const address = serverAddress(handoff?.nakama);
-      serverLabelRef.current = address.host;
+      serverLabelRef.current = address.label;
       const client = new Client(
         address.serverKey,
         address.host,
@@ -492,7 +519,11 @@ export function useOnlineCarrom(
       let session: Session;
       let accountKind: OnlineAuthAccount["kind"] = "guest";
       let accountEmail: string | null = null;
-      const storedEmail = readStoredEmailSession(address.label);
+      const storedEmail =
+        readStoredEmailSession(address.label)
+        ?? readStoredEmailSession(address.host);
+      const pendingEmail = pendingEmailAuthRef.current;
+      pendingEmailAuthRef.current = null;
       // A guest account is an account too, and the session that comes back is
       // a secret. It must not cross a public plain connection.
       if (
@@ -513,6 +544,17 @@ export function useOnlineCarrom(
         if (session.isexpired(Date.now() / 1000) && session.refresh_token.length > 0) {
           session = await client.sessionRefresh(hostSession);
         }
+      } else if (pendingEmail !== null) {
+        // The player just signed in. The socket is built from this session, so
+        // the table and the RPCs both use the same account.
+        session = await client.authenticateEmail(
+          pendingEmail.email,
+          pendingEmail.password,
+          pendingEmail.create,
+          pendingEmail.username,
+        );
+        accountKind = "email";
+        accountEmail = pendingEmail.email;
       } else if (storedEmail !== null) {
         // The shared account the launcher signed in with.
         try {
@@ -692,8 +734,11 @@ export function useOnlineCarrom(
         setSpectating(options.autoSpectate === true);
       }
     } catch (cause) {
+      const message =
+        cause instanceof Error ? cause.message : "The realtime connection failed.";
+      connectErrorRef.current = message;
       setConnection("error");
-      setError(cause instanceof Error ? cause.message : "The realtime connection failed.");
+      setError(message);
     } finally {
       connectingRef.current = false;
     }
@@ -1115,9 +1160,14 @@ export function useOnlineCarrom(
 
   const signIn = useCallback(
     async (email: string, password: string): Promise<void> => {
-      const client = clientRef.current;
-      if (client === null) {
-        setAuthError("The realtime connection is not ready yet.");
+      setAuthError(null);
+      setAuthNotice(null);
+      if (sessionFromConfig(hostConfigRef.current) !== null) {
+        setAuthError("This account is managed by the MoonGames app.");
+        return;
+      }
+      if (matchIdRef.current !== null) {
+        setAuthError("Leave the current match before switching accounts.");
         return;
       }
       const emailError = validateEmail(email);
@@ -1131,36 +1181,24 @@ export function useOnlineCarrom(
         return;
       }
       setAuthBusy(true);
-      setAuthError(null);
       try {
-        const session = await client.authenticateEmail(email, password, false);
-        sessionRef.current = session;
-        storeEmailSession({
-          server: serverLabelRef.current,
-          email,
-          token: session.token,
-          refreshToken: session.refresh_token,
-        });
-        // The player is known by the name on the account, not by the email
-        // they signed in with.
-        const info = (await client.getAccount(session).catch(() => null)) as
-          | { user?: { id?: string; username?: string } }
-          | null;
-        setAccount({
-          kind: "email",
-          username: info?.user?.username ?? email,
-          email,
-          userId: info?.user?.id ?? session.user_id ?? email,
-        });
-        setAuthNotice("Signed in. Your shared account is ready.");
-        await refreshProfile();
+        // A socket belongs to the session it was connected with. Drop the
+        // guest socket and build a new one for the signed-in account.
+        await disconnect();
+        pendingEmailAuthRef.current = { email, password, create: false };
+        await connect();
+        if (connectErrorRef.current !== null) {
+          throw new Error(connectErrorRef.current);
+        }
+        setAuthNotice("Signed in. Your rating and history are now synced.");
       } catch (cause) {
+        pendingEmailAuthRef.current = null;
         setAuthError(await authErrorMessage(cause, "sign-in"));
       } finally {
         setAuthBusy(false);
       }
     },
-    [refreshProfile],
+    [connect, disconnect],
   );
 
   const signUp = useCallback(
@@ -1169,9 +1207,14 @@ export function useOnlineCarrom(
       password: string,
       username: string,
     ): Promise<void> => {
-      const client = clientRef.current;
-      if (client === null) {
-        setAuthError("The realtime connection is not ready yet.");
+      setAuthError(null);
+      setAuthNotice(null);
+      if (sessionFromConfig(hostConfigRef.current) !== null) {
+        setAuthError("This account is managed by the MoonGames app.");
+        return;
+      }
+      if (matchIdRef.current !== null) {
+        setAuthError("Leave the current match before switching accounts.");
         return;
       }
       const emailError = validateEmail(email);
@@ -1190,48 +1233,46 @@ export function useOnlineCarrom(
         return;
       }
       setAuthBusy(true);
-      setAuthError(null);
       try {
-        const session = await client.authenticateEmail(
+        await disconnect();
+        pendingEmailAuthRef.current = {
           email,
           password,
-          true,
           username,
-        );
-        sessionRef.current = session;
-        storeEmailSession({
-          server: serverLabelRef.current,
-          email,
-          token: session.token,
-          refreshToken: session.refresh_token,
-        });
-        setAccount({
-          kind: "email",
-          username,
-          email,
-          userId: session.user_id ?? username,
-        });
+          create: true,
+        };
+        await connect();
+        if (connectErrorRef.current !== null) {
+          throw new Error(connectErrorRef.current);
+        }
         setAuthNotice("Account created. Your shared account is ready.");
-        await refreshProfile();
       } catch (cause) {
+        pendingEmailAuthRef.current = null;
         setAuthError(await authErrorMessage(cause, "sign-up"));
       } finally {
         setAuthBusy(false);
       }
     },
-    [refreshProfile],
+    [connect, disconnect],
   );
 
   const signOut = useCallback(async (): Promise<void> => {
+    if (matchIdRef.current !== null) {
+      setAuthError("Leave the current match before switching accounts.");
+      return;
+    }
     setAuthBusy(true);
     try {
       clearStoredEmailSession();
-      setAccount(null);
+      await disconnect();
+      await connect();
       setAuthNotice("Signed out. This device is a guest again.");
+    } catch (cause) {
+      setAuthError(await authErrorMessage(cause, "sign-in"));
     } finally {
       setAuthBusy(false);
     }
-  }, []);
+  }, [connect, disconnect]);
   const myColour =
     state?.seats.find((seat) => seat.user_id === myUserId)?.colour ?? null;
 

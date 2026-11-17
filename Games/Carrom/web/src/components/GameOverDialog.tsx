@@ -1,10 +1,18 @@
-import { PLAYER_LABEL, type CarromPlayer } from "@moongames/carrom-core";
+import {
+  PLAYER_LABEL,
+  type CarromPlayer,
+  type GameVariant,
+} from "@moongames/carrom-core";
 import { Icon } from "./Icon";
 
 interface GameOverDialogProps {
   winner: CarromPlayer;
   /** The name the winner is known by. */
   winnerName?: string;
+  /** The rules this table played, so the copy describes the right finish. */
+  variant?: GameVariant;
+  /** How many seats were at the table. */
+  seats?: number;
   onNewGame: () => void;
   onClose: () => void;
   /** Offers a rematch, which is how every carrom app handles a finished board. */
@@ -14,11 +22,21 @@ interface GameOverDialogProps {
 export function GameOverDialog({
   winner,
   winnerName,
+  variant = "classic",
+  seats = 2,
   onNewGame,
   onClose,
   onRematch,
 }: GameOverDialogProps) {
   const name = winnerName ?? PLAYER_LABEL[winner];
+  const finish =
+    variant === "freestyle"
+      ? `All of ${PLAYER_LABEL[winner].toLowerCase()}'s pieces are pocketed. The queen plays as an ordinary piece here.`
+      : variant === "practice"
+        ? `${PLAYER_LABEL[winner]} cleared their pieces. Practice tables keep no score and call no fouls.`
+        : seats > 2
+          ? `${PLAYER_LABEL[winner]} cleared their pieces first at this table, with the queen covered.`
+          : `Every piece of ${PLAYER_LABEL[winner].toLowerCase()} colour is in a pocket and the queen is covered. A clean finish.`;
   return (
     <div className="dialog-backdrop" onClick={onClose}>
       <section
@@ -41,10 +59,7 @@ export function GameOverDialog({
         </span>
         <p className="eyebrow">Board cleared</p>
         <h2 id="result-title">{name} wins</h2>
-        <p className="result-dialog__copy">
-          Every piece of {PLAYER_LABEL[winner].toLowerCase()} colour is in a
-          pocket and the queen is covered. A clean finish.
-        </p>
+        <p className="result-dialog__copy">{finish}</p>
         <div className="result-dialog__actions">
           {onRematch === undefined ? (
             <button

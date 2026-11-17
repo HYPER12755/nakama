@@ -573,9 +573,19 @@ function pieceSprite(
   return sprite;
 }
 
+/** A stable grain for a piece, taken from its id and not from where it sits. */
+export function pieceGrain(id: string): number {
+  let hash = 0;
+  for (let index = 0; index < id.length; index += 1) {
+    hash = (hash * 31 + id.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash) % 4;
+}
+
 function drawPiece(
   ctx: CanvasRenderingContext2D,
   kind: CarromDiscKind | "striker",
+  id: string,
   x: number,
   y: number,
   radius: number,
@@ -589,9 +599,9 @@ function drawPiece(
   }
   const scale = pocketed ? 0.42 : 1;
   const alpha = pocketed ? 0.4 : 1;
-  // The grain is fixed to a piece, so the same piece always looks the same.
-  const variant = Math.abs(Math.round(x * 1000) + Math.round(y * 1000)) % 4;
-  const sprite = pieceSprite(kind, radius, lite, variant, dpr);
+  // The grain is fixed to a piece, so the same piece always looks the same
+  // while it travels across the board.
+  const sprite = pieceSprite(kind, radius, lite, pieceGrain(id), dpr);
   const size = sprite.width;
   if (size === 0) {
     return;
@@ -1075,6 +1085,7 @@ export function CarromBoard({
         drawPiece(
           ctx,
           disc.kind,
+          disc.id,
           toCanvasX(disc.x),
           toCanvasY(disc.y),
           radius,
@@ -1089,6 +1100,7 @@ export function CarromBoard({
         drawPiece(
           ctx,
           "queen",
+          queen.id,
           toCanvasX(queen.x),
           toCanvasY(queen.y),
           radius,
@@ -1101,6 +1113,7 @@ export function CarromBoard({
 
       drawPiece(
         ctx,
+        "striker",
         "striker",
         toCanvasX(display.striker.x),
         toCanvasY(display.striker.y),

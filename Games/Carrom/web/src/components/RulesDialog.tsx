@@ -1,13 +1,26 @@
 import { useEffect } from "react";
-import { PLAYER_LABEL } from "@moongames/carrom-core";
+import {
+  PLAYER_LABEL,
+  type CarromPlayer,
+  type GameVariant,
+} from "@moongames/carrom-core";
 import { Icon } from "./Icon";
 
 interface RulesDialogProps {
   open: boolean;
   onClose: () => void;
+  /** The rules the table is playing, so the guide describes them. */
+  variant?: GameVariant;
+  /** The colours at the table; a two player table has two. */
+  colours?: CarromPlayer[];
 }
 
-export function RulesDialog({ open, onClose }: RulesDialogProps) {
+export function RulesDialog({
+  open,
+  onClose,
+  variant = "classic",
+  colours = ["white", "black"],
+}: RulesDialogProps) {
   useEffect(() => {
     if (!open) {
       return;
@@ -66,9 +79,13 @@ export function RulesDialog({ open, onClose }: RulesDialogProps) {
             <div>
               <h3>Pocket your colour</h3>
               <p>
-                {PLAYER_LABEL.white} pockets {PLAYER_LABEL.white.toLowerCase()}.{" "}
-                {PLAYER_LABEL.black} pockets {PLAYER_LABEL.black.toLowerCase()}. A
-                pocket of your own colour keeps you at the table for another
+                {colours.map((colour, index) => (
+                  <span key={colour}>
+                    {index > 0 ? " " : ""}
+                    {PLAYER_LABEL[colour]} pockets {PLAYER_LABEL[colour].toLowerCase()}.
+                  </span>
+                ))}{" "}
+                A pocket of your own colour keeps you at the table for another
                 shot.
               </p>
             </div>
@@ -76,11 +93,11 @@ export function RulesDialog({ open, onClose }: RulesDialogProps) {
           <article className="rule">
             <span className="rule__number">03</span>
             <div>
-              <h3>Cover the queen</h3>
+              <h3>{variant === "classic" ? "Cover the queen" : "The queen"}</h3>
               <p>
-                Pocket the red queen, then pocket one of your own pieces on the
-                same or next shot to cover it. If you miss, the queen returns to
-                the centre.
+                {variant === "classic"
+                  ? "Pocket the red queen, then pocket one of your own pieces on the same or next shot to cover it. If you miss, the queen returns to the centre."
+                  : "The queen is an ordinary piece here. Pocket it like any other man; there is no cover to make."}
               </p>
             </div>
           </article>
@@ -89,9 +106,10 @@ export function RulesDialog({ open, onClose }: RulesDialogProps) {
             <div>
               <h3>Fouls and finishing</h3>
               <p>
-                A striker in a pocket returns one of your pieces. Pocketing an
-                opponent&apos;s piece ends your turn. Clear all nine of your
-                colour after the queen is covered to win.
+                {variant === "practice"
+                  ? "Practice tables call no fouls. Clear your pieces to finish the board."
+                  : "A striker in a pocket returns one of your pieces. Pocketing an opponent's piece ends your turn. Clear all nine of your colour to win"}
+                {variant === "classic" ? ", with the queen covered." : "."}
               </p>
             </div>
           </article>
@@ -100,20 +118,21 @@ export function RulesDialog({ open, onClose }: RulesDialogProps) {
             <div>
               <h3>How the points are counted</h3>
               <p>
-                Every man you pocket is worth one point and the queen is worth
-                three, so a full table is worth twelve. The points bar above
-                the board always shows the count.
+                {variant === "practice"
+                  ? "Practice tables keep no score. The pocket box shows how many of each colour have gone in."
+                  : "Every man you pocket is worth one point and the queen is worth three. The points bar above the board always shows the count."}
               </p>
             </div>
           </article>
           <article className="rule">
             <span className="rule__number">06</span>
             <div>
-              <h3>Game types and the clock</h3>
+              <h3>Table, striker and clock</h3>
               <p>
-                Classic is the ICF game. Freestyle plays the queen as an
-                ordinary piece. Practice drops the penalties. A shot clock hands
-                the turn on when a player runs out of time.
+                Two, three or four players can share a table; on one device the
+                board turns to the player whose shot it is. The striker you
+                bring changes how hard it leaves the baseline. A shot clock,
+                when set, hands the turn on when a player runs out of time.
               </p>
             </div>
           </article>

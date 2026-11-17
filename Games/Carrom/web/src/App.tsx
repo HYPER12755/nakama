@@ -53,6 +53,7 @@ import { StrikerDock } from "./components/StrikerDock";
 import { TableSettings } from "./components/TableSettings";
 import { useOnlineCarrom } from "./hooks/useOnlineCarrom";
 import { type AimMode } from "./lib/aim";
+import { boardPlayers } from "./lib/tableSetup";
 import {
   AccountPanel,
   MatchChat,
@@ -624,20 +625,17 @@ export default function App({ bridge }: AppProps) {
   const resetBoard = useCallback(
     (
       message: string,
-      options: { solo?: boolean; tableSize?: number } = {},
+      options: { solo?: boolean; tableSize?: number; mode?: Mode } = {},
     ) => {
       clearSoundTimers();
       animationRef.current = null;
       setAnimation(null);
       const solo = options.solo === true;
-      // The table size is passed in, because the state of the picker is not
-      // updated yet when the board is built.
+      // The size and the mode are passed in, because React has not applied
+      // the new picker values yet when the board is built here.
       const size = options.tableSize ?? localTable;
-      const players = solo
-        ? tablePlayers(2)
-        : mode === "ai"
-          ? tablePlayers(2)
-          : tablePlayers(size);
+      const boardMode = options.mode ?? mode;
+      const players = boardPlayers(boardMode, size, solo);
       setGame(
         createInitialState(players, {
           // A challenge table is a freestyle solo table: the queen does not
@@ -649,7 +647,7 @@ export default function App({ bridge }: AppProps) {
             white: striker,
             black: solo
               ? CARROM_STRIKERS[0]!.id
-              : mode === "ai"
+              : boardMode === "ai"
                 ? CARROM_STRIKERS[0]!.id
                 : striker,
             green: striker,
@@ -707,6 +705,7 @@ export default function App({ bridge }: AppProps) {
           : next === "online"
             ? "Open a table to play online."
             : "Pass-and-play board ready.",
+        { mode: next },
       );
     },
     [mode, online, resetBoard],
@@ -1494,7 +1493,12 @@ export default function App({ bridge }: AppProps) {
         </div>
       ) : null}
 
-      <RulesDialog open={rulesOpen} onClose={() => setRulesOpen(false)} />
+      <RulesDialog
+        open={rulesOpen}
+        onClose={() => setRulesOpen(false)}
+        variant={variant}
+        colours={tablePlayers(onlineMode ? onlineSeats : localTable)}
+      />
       {online.opponentLeft !== null ? (
         <OpponentLeftDialog
           name={online.opponentLeft}
@@ -1509,6 +1513,8 @@ export default function App({ bridge }: AppProps) {
         <GameOverDialog
           winner={winner}
           winnerName={nameOf(winner)}
+          variant={variant}
+          seats={activeGame?.players.length ?? tablePlayers(onlineMode ? onlineSeats : localTable).length}
           onNewGame={handleNewGame}
           onRematch={
             onlineMode
