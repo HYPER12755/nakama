@@ -17,6 +17,8 @@ protocol.OP = {
   CHAT = 8,
   SPECTATOR_JOINED = 9,
   SPECTATOR_LEFT = 10,
+  DRAW_OFFER = 11,
+  DRAW_DECLINED = 12,
   PONG = 15,
 
   -- Client -> server
@@ -24,6 +26,10 @@ protocol.OP = {
   REQUEST_STATE = 102,
   CHAT_SEND = 103,
   PING = 104,
+  RESIGN = 105,
+  DRAW_OFFER_REQUEST = 106,
+  DRAW_ACCEPT = 107,
+  DRAW_DECLINE = 108,
 }
 
 protocol.CHAT_MAX_LENGTH = 240

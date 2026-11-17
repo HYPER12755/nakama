@@ -24,11 +24,17 @@ const OP = {
   CHAT: 8,
   SPECTATOR_JOINED: 9,
   SPECTATOR_LEFT: 10,
+  DRAW_OFFER: 11,
+  DRAW_DECLINED: 12,
   PONG: 15,
   SHOT_REQUEST: 101,
   REQUEST_STATE: 102,
   CHAT_SEND: 103,
   PING: 104,
+  RESIGN: 105,
+  DRAW_OFFER_REQUEST: 106,
+  DRAW_ACCEPT: 107,
+  DRAW_DECLINE: 108,
 };
 
 const decoder = new TextDecoder();
@@ -47,6 +53,7 @@ function createCollector(socket, label) {
   socket.onmatchdata = (matchData) => {
     const message = {
       op: matchData.op_code,
+      matchId: matchData.match_id,
       data: decodeData(matchData.data),
     };
     queue.push(message);
@@ -541,6 +548,99 @@ async function playTableSettings(runId) {
   }
 }
 
+async function playTableControls(runId) {
+  const alice = await authenticate(`moongames-carrom-${runId}-controls-a`);
+  const bob = await authenticate(`moongames-carrom-${runId}-controls-b`);
+  const watcher = await authenticate(`moongames-carrom-${runId}-controls-w`);
+  try {
+    const aliceEvents = createCollector(alice.socket, "controls-alice");
+    const bobEvents = createCollector(bob.socket, "controls-bob");
+    const room = await createPrivateRoom(alice, 2);
+    await alice.socket.joinMatch(room.matchId);
+    await bob.socket.joinMatch(room.matchId);
+    await aliceEvents.waitFor(
+      (message) => message.op === OP.STATE && message.data?.game?.discs?.length > 0,
+      "the table to start",
+    );
+
+    // A watcher is seated beside the table, not in a player's seat.
+    await bob.socket.sendMatchState(room.matchId, OP.PING, "{}");
+    await bobEvents.waitFor((message) => message.op === OP.PONG, "the ping reply");
+    console.log("[ok] the server answers a ping in a control table");
+
+    const watcherEvents = createCollector(watcher.socket, "controls-watcher");
+    await watcher.socket.joinMatch(room.matchId, undefined, { spectate: "1" });
+    const watching = await watcherEvents.waitFor(
+      (message) =>
+        message.op === OP.STATE && (message.data?.spectators?.length ?? 0) > 0,
+      "the spectator gallery",
+    );
+    assert(
+      watching.data.spectators.some(
+        (entry) => entry.user_id === watcher.session.user_id,
+      ),
+      `the watcher was not seated in the gallery: ${JSON.stringify(watching.data.spectators)}`,
+    );
+    console.log("[ok] a table can be watched by id");
+
+    await alice.socket.sendMatchState(
+      room.matchId,
+      OP.DRAW_OFFER_REQUEST,
+      "{}",
+    );
+    const offer = await bobEvents.waitFor(
+      (message) => message.op === OP.STATE && message.data?.drawOffer != null,
+      "the draw offer",
+    );
+    assert(
+      offer.data.drawOffer.by === alice.session.user_id,
+      `the offer came from the wrong player: ${JSON.stringify(offer.data.drawOffer)}`,
+    );
+    console.log("[ok] a draw offer reaches the other player");
+
+    await bob.socket.sendMatchState(room.matchId, OP.DRAW_ACCEPT, "{}");
+    const drawn = await aliceEvents.waitFor(
+      (message) => message.op === OP.GAME_OVER,
+      "the agreed draw",
+    );
+    assert(
+      drawn.data.status === "draw",
+      `the table did not end in a draw: ${JSON.stringify(drawn.data)}`,
+    );
+    console.log("[ok] an accepted draw ends the table");
+
+    // A second table is ended by a resignation, the way a player leaves a
+    // game that is still being played.
+    const second = await createPrivateRoom(alice, 2);
+    await alice.socket.joinMatch(second.matchId);
+    await bob.socket.joinMatch(second.matchId);
+    await aliceEvents.waitFor(
+      (message) =>
+        message.matchId === second.matchId &&
+        message.op === OP.STATE &&
+        message.data?.game?.discs?.length > 0 &&
+        (message.data?.result ?? null) === null,
+      "the second table to start",
+      8000,
+    );
+    await bob.socket.sendMatchState(second.matchId, OP.RESIGN, "{}");
+    const resigned = await aliceEvents.waitFor(
+      (message) =>
+        message.op === OP.GAME_OVER && message.matchId === second.matchId,
+      "the resignation",
+    );
+    assert(
+      resigned.data.status === "resign" && resigned.data.winnerColour === "white",
+      `the resignation was not recorded: ${JSON.stringify(resigned.data)}`,
+    );
+    console.log("[ok] a resignation gives the table to the other player");
+  } finally {
+    close(alice);
+    close(bob);
+    close(watcher);
+  }
+}
+
 async function main() {
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   await playTwoPlayerTable(runId);
@@ -549,6 +649,7 @@ async function main() {
   await playQuickTable(runId);
   await playMatchmakerTable(runId);
   await playTableSettings(runId);
+  await playTableControls(runId);
   console.log("carrom online smoke test passed");
 }
 

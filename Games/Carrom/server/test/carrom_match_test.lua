@@ -629,6 +629,131 @@ test("the matched quick table keeps the chosen shot clock", function()
   )
 end)
 
+local function started_two_player_table(dispatcher)
+  local state = match.match_init({ match_id = "m1" }, {
+    mode = "quick",
+    seats = 2,
+  })
+  state = match.match_join(
+    { match_id = "m1" },
+    dispatcher,
+    0,
+    state,
+    { presence("u1", "Ivory") }
+  )
+  state = match.match_join(
+    { match_id = "m1" },
+    dispatcher,
+    0,
+    state,
+    { presence("u2", "Onyx") }
+  )
+  return state
+end
+
+test("a player can resign the table", function()
+  local dispatcher = new_dispatcher()
+  local state = started_two_player_table(dispatcher)
+  state = match.match_loop(
+    { match_id = "m1" },
+    dispatcher,
+    1,
+    state,
+    {
+      {
+        op_code = protocol.OP.RESIGN,
+        sender = presence("u1", "Ivory"),
+        data = {},
+      },
+    }
+  )
+  assert_equal(state.result ~= nil, true, "the table ended")
+  assert_equal(state.result.status, "resign", "the reason")
+  assert_equal(state.result.winnerColour, "black", "the other player won")
+  assert_equal(last_message(dispatcher, protocol.OP.GAME_OVER) ~= nil, true, "game over was sent")
+end)
+
+test("a draw can be offered and accepted", function()
+  local dispatcher = new_dispatcher()
+  local state = started_two_player_table(dispatcher)
+  state = match.match_loop(
+    { match_id = "m1" },
+    dispatcher,
+    1,
+    state,
+    {
+      {
+        op_code = protocol.OP.DRAW_OFFER_REQUEST,
+        sender = presence("u1", "Ivory"),
+        data = {},
+      },
+    }
+  )
+  assert_equal(state.draw_offer ~= nil, true, "the offer was kept")
+  assert_equal(state.draw_offer.by, "u1", "the player who offered it")
+  assert_equal(last_message(dispatcher, protocol.OP.DRAW_OFFER) ~= nil, true, "the offer was sent")
+
+  state = match.match_loop(
+    { match_id = "m1" },
+    dispatcher,
+    2,
+    state,
+    {
+      {
+        op_code = protocol.OP.DRAW_ACCEPT,
+        sender = presence("u2", "Onyx"),
+        data = {},
+      },
+    }
+  )
+  assert_equal(state.result ~= nil, true, "the table ended")
+  assert_equal(state.result.status, "draw", "the reason")
+  assert_equal(state.result.winnerColour, nil, "there is no winner")
+end)
+
+test("a draw offer is cleared by a decline or a shot", function()
+  local dispatcher = new_dispatcher()
+  local state = started_two_player_table(dispatcher)
+  local offer = {
+    {
+      op_code = protocol.OP.DRAW_OFFER_REQUEST,
+      sender = presence("u1", "Ivory"),
+      data = {},
+    },
+  }
+  state = match.match_loop({ match_id = "m1" }, dispatcher, 1, state, offer)
+  state = match.match_loop(
+    { match_id = "m1" },
+    dispatcher,
+    2,
+    state,
+    {
+      {
+        op_code = protocol.OP.DRAW_DECLINE,
+        sender = presence("u2", "Onyx"),
+        data = {},
+      },
+    }
+  )
+  assert_equal(state.draw_offer, nil, "the decline cleared it")
+
+  state = match.match_loop({ match_id = "m1" }, dispatcher, 3, state, offer)
+  state = match.match_loop(
+    { match_id = "m1" },
+    dispatcher,
+    4,
+    state,
+    {
+      {
+        op_code = protocol.OP.SHOT_REQUEST,
+        sender = presence("u1", "Ivory"),
+        data = { position = 0.5, angle = -math.pi / 2, power = 0.8 },
+      },
+    }
+  )
+  assert_equal(state.draw_offer, nil, "the shot cleared it")
+end)
+
 if failures > 0 then
   print(failures .. " carrom match test(s) failed")
   os.exit(1)

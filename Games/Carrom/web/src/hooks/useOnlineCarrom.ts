@@ -84,6 +84,13 @@ export interface CarromServerState {
   spectators: CarromSpectator[];
   chat: CarromChatMessage[];
   result: CarromMatchResult | null;
+  /** A draw offer waiting for the other player to answer. */
+  drawOffer?: {
+    by: string;
+    colour: CarromPlayer;
+    username?: string;
+    at: number;
+  } | null;
   seatsCount: number;
   shotSerial: number;
   /** Every shot played at the table, oldest first. */
@@ -238,6 +245,8 @@ export interface OnlineCarromController {
   error: string | null;
   notice: string | null;
   searching: boolean;
+  /** The round trip to the server, in milliseconds, from the last ping. */
+  latencyMs: number | null;
   spectating: boolean;
   myColour: CarromPlayer | null;
   myUserId: string | null;
@@ -290,6 +299,12 @@ export interface OnlineCarromController {
   roomSeats: number | null;
   leaveMatch: () => Promise<void>;
   sendShot: (shot: CarromShotInput, striker?: string) => void;
+  /** The draw offer the other player is waiting on, if there is one. */
+  drawOffer: CarromServerState["drawOffer"];
+  resign: () => void;
+  offerDraw: () => void;
+  acceptDraw: () => void;
+  declineDraw: () => void;
   sendChat: (text: string) => void;
   requestState: () => void;
   clearAnimation: () => void;
@@ -306,6 +321,7 @@ export function useOnlineCarrom(
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [spectating, setSpectating] = useState(false);
   const [animation, setAnimation] = useState<CarromShotResult | null>(null);
   const [profile, setProfile] = useState<GameProfile | null>(null);
@@ -347,6 +363,7 @@ export function useOnlineCarrom(
     create: boolean;
   } | null>(null);
   const connectErrorRef = useRef<string | null>(null);
+  const pingRef = useRef<number | null>(null);
   const matchIdRef = useRef<string | null>(null);
   const serialRef = useRef(0);
   const gameRef = useRef<CarromState | null>(null);
@@ -482,6 +499,10 @@ export function useOnlineCarrom(
 
   const disconnect = useCallback(async (): Promise<void> => {
     const socket = socketRef.current;
+    if (pingRef.current !== null) {
+      window.clearInterval(pingRef.current);
+      pingRef.current = null;
+    }
     socketRef.current = null;
     sessionRef.current = null;
     if (socket !== null) {
@@ -624,6 +645,13 @@ export function useOnlineCarrom(
           return;
         }
         const message = parsed as Record<string, unknown>;
+        if (matchData.op_code === CARROM_OP.PONG) {
+          const sent = (message as { clientTime?: number }).clientTime;
+          if (typeof sent === "number") {
+            setLatencyMs(Math.max(0, Date.now() - sent));
+          }
+          return;
+        }
         if (matchData.op_code === CARROM_OP.STATE) {
           applyServerState(message as unknown as CarromServerState);
           return;
@@ -666,6 +694,16 @@ export function useOnlineCarrom(
               ],
             };
           });
+          return;
+        }
+        if (matchData.op_code === CARROM_OP.DRAW_OFFER) {
+          setNotice(
+            `${(message as { username?: string }).username ?? "A player"} offered a draw.`,
+          );
+          return;
+        }
+        if (matchData.op_code === CARROM_OP.DRAW_DECLINED) {
+          setNotice("The draw offer was declined.");
           return;
         }
         if (matchData.op_code === CARROM_OP.PLAYER_LEFT) {
@@ -711,9 +749,57 @@ export function useOnlineCarrom(
         setError("The realtime connection reported an error.");
       };
       socket.ondisconnect = () => {
+        if (pingRef.current !== null) {
+          window.clearInterval(pingRef.current);
+          pingRef.current = null;
+        }
         socketRef.current = null;
+        const current = matchIdRef.current;
         setConnection("offline");
+        // The server holds the seat for a grace period. Try to come back to
+        // the table before it is given to somebody else.
+        if (current !== null) {
+          window.setTimeout(() => {
+            if (socketRef.current !== null || matchIdRef.current === null) {
+              return;
+            }
+            setNotice("Reconnecting to the table…");
+            void connect().then(() => {
+              const joined = matchIdRef.current;
+              const live = socketRef.current;
+              if (joined === null || live === null) {
+                return;
+              }
+              void live.joinMatch(joined).catch(() => {
+                setNotice("The table could not be rejoined. Open a new one.");
+                matchIdRef.current = null;
+                setMatchId(null);
+                setState(null);
+              });
+            });
+          }, 1200);
+        }
       };
+
+      // A ping tells a slow table from a dead connection, and the pong gives
+      // the lobby something honest to show about the link.
+      if (pingRef.current !== null) {
+        window.clearInterval(pingRef.current);
+      }
+      pingRef.current = window.setInterval(() => {
+        const live = socketRef.current;
+        const current = matchIdRef.current;
+        if (live === null || current === null) {
+          return;
+        }
+        void live
+          .sendMatchState(
+            current,
+            CARROM_OP.PING,
+            JSON.stringify({ clientTime: Date.now() }),
+          )
+          .catch(() => undefined);
+      }, 10000);
 
       clientRef.current = client;
       socketRef.current = socket;
@@ -904,6 +990,33 @@ export function useOnlineCarrom(
     [],
   );
 
+  const sendTableAction = useCallback((op: number, message: string): void => {
+    const socket = socketRef.current;
+    const current = matchIdRef.current;
+    if (socket === null || current === null) {
+      return;
+    }
+    void socket.sendMatchState(current, op, "{}").catch(() => {
+      setError(message);
+    });
+  }, []);
+
+  const resign = useCallback(() => {
+    sendTableAction(CARROM_OP.RESIGN, "The resignation could not be sent.");
+  }, [sendTableAction]);
+
+  const offerDraw = useCallback(() => {
+    sendTableAction(CARROM_OP.DRAW_OFFER_REQUEST, "The draw offer could not be sent.");
+  }, [sendTableAction]);
+
+  const acceptDraw = useCallback(() => {
+    sendTableAction(CARROM_OP.DRAW_ACCEPT, "The draw could not be accepted.");
+  }, [sendTableAction]);
+
+  const declineDraw = useCallback(() => {
+    sendTableAction(CARROM_OP.DRAW_DECLINE, "The draw could not be declined.");
+  }, [sendTableAction]);
+
   const sendChat = useCallback((text: string): void => {
     const socket = socketRef.current;
     const current = matchIdRef.current;
@@ -951,6 +1064,10 @@ export function useOnlineCarrom(
 
   useEffect(() => {
     return () => {
+      if (pingRef.current !== null) {
+        window.clearInterval(pingRef.current);
+        pingRef.current = null;
+      }
       const socket = socketRef.current;
       if (socket !== null) {
         try {
@@ -1290,6 +1407,7 @@ export function useOnlineCarrom(
     error,
     notice,
     searching,
+    latencyMs,
     spectating,
     myColour,
     myUserId,
@@ -1329,6 +1447,11 @@ export function useOnlineCarrom(
     roomSeats,
     leaveMatch,
     sendShot,
+    drawOffer: state?.drawOffer ?? null,
+    resign,
+    offerDraw,
+    acceptDraw,
+    declineDraw,
     sendChat,
     requestState,
     clearAnimation,

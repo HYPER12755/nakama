@@ -147,6 +147,7 @@ local function state_payload(context, state, now)
     spectators = spectator_payload(state),
     chat = state.chat,
     shots = state.shots or {},
+    drawOffer = state.draw_offer,
     result = state.result,
     mode = state.mode,
     seatsCount = state.seats,
@@ -219,6 +220,17 @@ local function user_for_colour(state, colour)
   return nil
 end
 
+-- The player who takes the other side when someone resigns. On a table of
+-- three or four it is the first seated player who is still here.
+local function other_colour(state, colour)
+  for _, candidate in ipairs(table_colours(state.seats)) do
+    if candidate ~= colour and user_for_colour(state, candidate) then
+      return candidate
+    end
+  end
+  return nil
+end
+
 local function maybe_start(context, dispatcher, state, now)
   if state.started_at then
     return false
@@ -286,6 +298,7 @@ local function match_init(context, params)
     pending_joins = {},
     game = nil,
     shots = {},
+    draw_offer = nil,
     chat = {},
     created_at = now,
     started_at = nil,
@@ -459,6 +472,7 @@ local function finish_match(context, dispatcher, state, result, now)
     return
   end
   state.result = result
+  state.draw_offer = nil
   progression.finalize_match(context, state, result, now)
   broadcast(dispatcher, OP.GAME_OVER, result)
   refresh_label(state, dispatcher)
@@ -525,6 +539,7 @@ local function handle_shot(context, dispatcher, state, message, payload, now)
   state.game = next_game
   state.game.turnDeadline = rules.deadline(state.game, now)
   state.last_activity = now
+  state.draw_offer = nil
 
   -- The shot list is the replay: it is stored with the finished game so the
   -- history can show how the board was cleared.
@@ -614,6 +629,83 @@ local function handle_chat(dispatcher, state, message, payload, now)
   broadcast(dispatcher, OP.CHAT, entry)
 end
 
+local function seated_player(state, presence)
+  local player = state.players[presence.user_id]
+  if not player or not state.started_at or state.result then
+    return nil
+  end
+  return player
+end
+
+local function handle_resign(context, dispatcher, state, message, now)
+  local player = seated_player(state, message.sender)
+  if not player then
+    send_error(dispatcher, message.sender, "This table is not playing")
+    return
+  end
+  local winner = other_colour(state, player.colour)
+  finish_match(context, dispatcher, state, {
+    status = "resign",
+    winnerColour = winner,
+    winnerUserId = winner and user_for_colour(state, winner) or nil,
+    reason = "resign",
+    endedAt = now,
+  }, now)
+end
+
+local function handle_draw_offer(context, dispatcher, state, message, now)
+  local player = seated_player(state, message.sender)
+  if not player then
+    send_error(dispatcher, message.sender, "This table is not playing")
+    return
+  end
+  if state.draw_offer and state.draw_offer.by == player.user_id then
+    return
+  end
+  state.draw_offer = {
+    by = player.user_id,
+    colour = player.colour,
+    username = player.username,
+    at = now,
+  }
+  broadcast(dispatcher, OP.DRAW_OFFER, state.draw_offer)
+  broadcast_state(context, dispatcher, state)
+end
+
+local function handle_draw_accept(context, dispatcher, state, message, now)
+  local player = seated_player(state, message.sender)
+  if not player then
+    send_error(dispatcher, message.sender, "This table is not playing")
+    return
+  end
+  if
+    state.draw_offer == nil
+    or state.draw_offer.by == player.user_id
+  then
+    send_error(dispatcher, message.sender, "There is no draw offer to accept")
+    return
+  end
+  finish_match(context, dispatcher, state, {
+    status = "draw",
+    reason = "draw agreed",
+    endedAt = now,
+  }, now)
+end
+
+local function handle_draw_decline(context, dispatcher, state, message)
+  local player = seated_player(state, message.sender)
+  if not player then
+    send_error(dispatcher, message.sender, "This table is not playing")
+    return
+  end
+  if state.draw_offer == nil then
+    return
+  end
+  state.draw_offer = nil
+  broadcast(dispatcher, OP.DRAW_DECLINED, {})
+  broadcast_state(context, dispatcher, state)
+end
+
 local function handle_message(context, dispatcher, state, message, now)
   local ok, payload = pcall(nk.json_decode, message.data or "{}")
   if not ok or type(payload) ~= "table" then
@@ -641,6 +733,26 @@ local function handle_message(context, dispatcher, state, message, now)
 
   if message.op_code == OP.SHOT_REQUEST then
     handle_shot(context, dispatcher, state, message, payload, now)
+    return
+  end
+
+  if message.op_code == OP.RESIGN then
+    handle_resign(context, dispatcher, state, message, now)
+    return
+  end
+
+  if message.op_code == OP.DRAW_OFFER_REQUEST then
+    handle_draw_offer(context, dispatcher, state, message, now)
+    return
+  end
+
+  if message.op_code == OP.DRAW_ACCEPT then
+    handle_draw_accept(context, dispatcher, state, message, now)
+    return
+  end
+
+  if message.op_code == OP.DRAW_DECLINE then
+    handle_draw_decline(context, dispatcher, state, message, now)
     return
   end
 end

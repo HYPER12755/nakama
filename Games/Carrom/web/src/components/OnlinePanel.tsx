@@ -51,6 +51,7 @@ export function OnlinePanel({
   settings,
 }: OnlinePanelProps) {
   const [roomId, setRoomId] = useState("");
+  const [watchId, setWatchId] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
 
   const connected = online.connection === "connected";
@@ -101,6 +102,24 @@ export function OnlinePanel({
     }
   };
 
+  /** The server already seats spectators; this is the way in from the lobby. */
+  const watchTable = async () => {
+    const id = watchId.trim();
+    if (id.length === 0) {
+      return;
+    }
+    try {
+      await online.joinMatch(id, { spectator: true });
+      setWatchId("");
+    } catch (cause) {
+      online.setNotice(
+        cause instanceof Error
+          ? `That table could not be watched: ${cause.message}`
+          : "That table could not be watched.",
+      );
+    }
+  };
+
   return (
     <div className="online-panel">
       <section className="panel online-lobby">
@@ -111,7 +130,9 @@ export function OnlinePanel({
           </div>
           <span className={`online-status online-status--${online.connection}`}>
             {online.connection === "connected"
-              ? "Connected"
+              ? online.latencyMs === null
+                ? "Connected"
+                : `Connected · ${online.latencyMs} ms`
               : online.connection === "connecting"
                 ? "Connecting…"
                 : online.connection === "error"
@@ -207,6 +228,29 @@ export function OnlinePanel({
                 Join
               </button>
             </label>
+            <label className="online-join">
+              <span>Watch a table by id</span>
+              <input
+                type="text"
+                value={watchId}
+                placeholder="Paste a table id"
+                onChange={(event) => setWatchId(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void watchTable();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="button button--ghost"
+                disabled={watchId.trim().length === 0}
+                onClick={() => void watchTable()}
+              >
+                Watch
+              </button>
+            </label>
           </>
         ) : (
           <>
@@ -258,6 +302,45 @@ export function OnlinePanel({
                 <Icon name="users" size={16} />
                 Invite a friend
               </button>
+              {!online.spectating ? (
+                <>
+                  {online.drawOffer != null &&
+                  online.drawOffer.by !== online.myUserId ? (
+                    <button
+                      type="button"
+                      className="button button--ghost"
+                      onClick={online.acceptDraw}
+                    >
+                      Accept draw
+                    </button>
+                  ) : online.drawOffer != null ? (
+                    <button
+                      type="button"
+                      className="button button--ghost"
+                      onClick={online.declineDraw}
+                    >
+                      Cancel draw
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="button button--ghost"
+                      onClick={online.offerDraw}
+                      disabled={online.result !== null}
+                    >
+                      Offer draw
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="button button--ghost"
+                    onClick={online.resign}
+                    disabled={online.result !== null}
+                  >
+                    Resign
+                  </button>
+                </>
+              ) : null}
               <button
                 type="button"
                 className="button button--ghost"
