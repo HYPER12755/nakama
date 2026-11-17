@@ -84,6 +84,17 @@ local fake_nk = {
   leaderboard_record_read = function()
     return {}
   end,
+  leaderboard_records_list = function(_, _, _, _, _, rank_count)
+    local records = {}
+    records[1] = {
+      user_id = "user-a",
+      username = "Ivory",
+      rating = 1300,
+      rank = 1,
+      metadata = { games = 5 },
+    }
+    return records, {}, 0, nil, nil, rank_count or #records
+  end,
   logger_warn = function() end,
   logger_error = function() end,
 }
@@ -264,6 +275,140 @@ test("a finished game writes the profile, the history, and the stats", function(
   assert_equal(history.value.outcome, "win", "the outcome")
   assert_equal(history.value.opponent.username, "Onyx", "the opponent")
   assert_equal(#history.value.steps, 1, "the replay steps")
+end)
+
+test("a history step says which pieces were pocketed", function()
+  for key in pairs(storage) do
+    storage[key] = nil
+  end
+  local state = {
+    mode = "quick",
+    rated = true,
+    player_order = { "user-a", "user-b" },
+    players = {
+      ["user-a"] = { user_id = "user-a", username = "Ivory", colour = "white" },
+      ["user-b"] = { user_id = "user-b", username = "Onyx", colour = "black" },
+    },
+    shots = {
+      {
+        by = "user-a",
+        colour = "white",
+        pocketed_count = 2,
+        pocketed_colours = { "white", "black" },
+        power = 0.72,
+      },
+    },
+  }
+  progression.finalize_match(
+    { match_id = "match-steps" },
+    state,
+    { status = "finished", winnerColour = "white", endedAt = fake_time },
+    fake_time
+  )
+  local history = storage[storage_key("user-a", "carrom_history", "match-steps:user-a")]
+  assert_equal(
+    history.value.steps[1],
+    "white shot 2 white, black (power 72%)",
+    "the step"
+  )
+end)
+
+test("finishing the same match twice does not move the rating again", function()
+  for key in pairs(storage) do
+    storage[key] = nil
+  end
+  local state = {
+    mode = "quick",
+    rated = true,
+    player_order = { "user-a", "user-b" },
+    players = {
+      ["user-a"] = { user_id = "user-a", username = "Ivory", colour = "white" },
+      ["user-b"] = { user_id = "user-b", username = "Onyx", colour = "black" },
+    },
+    shots = {},
+  }
+  local result = {
+    status = "finished",
+    winnerColour = "white",
+    endedAt = fake_time,
+  }
+  progression.finalize_match({ match_id = "match-twice" }, state, result, fake_time)
+  progression.finalize_match({ match_id = "match-twice" }, state, result, fake_time)
+  local profile = storage[storage_key("user-a", "carrom_profile", "user-a")]
+  assert_equal(profile.value.games, 1, "the game is counted once")
+  assert_equal(profile.value.rating, 1216, "the rating moved once")
+end)
+
+test("a three player table rates against all the opponents", function()
+  for key in pairs(storage) do
+    storage[key] = nil
+  end
+  storage[storage_key("user-b", "carrom_profile", "user-b")] = {
+    value = progression.default_profile("Onyx", fake_time - 1),
+  }
+  storage[storage_key("user-b", "carrom_profile", "user-b")].value.rating = 1400
+  storage[storage_key("user-c", "carrom_profile", "user-c")] = {
+    value = progression.default_profile("Green", fake_time - 1),
+  }
+  storage[storage_key("user-c", "carrom_profile", "user-c")].value.rating = 1600
+  local state = {
+    mode = "quick",
+    rated = true,
+    player_order = { "user-a", "user-b", "user-c" },
+    players = {
+      ["user-a"] = { user_id = "user-a", username = "Ivory", colour = "white" },
+      ["user-b"] = { user_id = "user-b", username = "Onyx", colour = "black" },
+      ["user-c"] = { user_id = "user-c", username = "Green", colour = "green" },
+    },
+    shots = {},
+  }
+  progression.finalize_match(
+    { match_id = "match-three" },
+    state,
+    { status = "finished", winnerColour = "white", endedAt = fake_time },
+    fake_time
+  )
+  local profile = storage[storage_key("user-a", "carrom_profile", "user-a")]
+  -- The two opponents are 1400 and 1600, so the table is rated as 1500.
+  assert_equal(profile.value.rating, 1227, "the average opponent was used")
+  local history = storage[storage_key("user-a", "carrom_history", "match-three:user-a")]
+  assert_equal(history.value.opponent_rating, 1500, "the history carries that rating")
+  assert_equal(#history.value.opponents, 2, "both opponents are recorded")
+end)
+
+test("the leaderboard total counts all the ranked players", function()
+  local payload = progression.leaderboard_payload(
+    { user_id = "user-a" },
+    { limit = 1 }
+  )
+  assert_equal(payload.total, 1, "the total comes from the rank count")
+  assert_equal(#payload.entries, 1, "only one row was asked for")
+end)
+
+test("a player who leaves loses and the ones who stayed win", function()
+  assert_equal(
+    progression.outcome_for_result(
+      { status = "disconnect", loserUserId = "u1" },
+      "black",
+      "u1"
+    ),
+    "loss",
+    "the leaver"
+  )
+  assert_equal(
+    progression.outcome_for_result(
+      { status = "disconnect", loserUserId = "u1" },
+      "green",
+      "u3"
+    ),
+    "win",
+    "the player who stayed"
+  )
+  assert_equal(
+    progression.outcome_for_result({ status = "abandoned" }, "white", "u1"),
+    "abandoned",
+    "an abandoned table"
+  )
 end)
 
 if failures > 0 then

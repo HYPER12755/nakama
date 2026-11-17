@@ -719,14 +719,19 @@ export function useOnlineCarrom(
         // The matchmaker query is scoped to the properties, so only players
         // who asked for the same game, table size, and game type are paired.
         const variant = settings.variant ?? "classic";
+        // The clock is part of the table settings, so it belongs in the query
+        // as well as the properties: players with different clocks must not be
+        // paired, and the matched table has to know the chosen clock.
+        const turnSeconds = settings.turnSeconds ?? 0;
         const ticket = await socket.addMatchmaker(
-          `+properties.game:carrom +properties.seats:${seats} +properties.variant:${variant}`,
+          `+properties.game:carrom +properties.seats:${seats} +properties.variant:${variant} +properties.turnSeconds:${turnSeconds}`,
           seats,
           seats,
           {
             game: GAME_ID,
             seats: String(seats),
             variant,
+            turnSeconds: String(turnSeconds),
           },
         );
         ticketRef.current = ticket.ticket;
@@ -743,7 +748,7 @@ export function useOnlineCarrom(
               const response = await client.rpc(session, "carrom_quick_match", {
                 seats,
                 variant: settings.variant,
-                turnSeconds: settings.turnSeconds,
+                turnSeconds,
               });
               const parsed = (response.payload ?? {}) as {
                 ok?: boolean;

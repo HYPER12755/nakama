@@ -6,7 +6,10 @@ local script_path = arg[0] or "Carrom/server/test/carrom_match_test.lua"
 local script_dir = script_path:match("^(.*)[/\\]") or "."
 local server_dir = script_dir .. "/.."
 
-package.path = server_dir .. "/?.lua;" .. package.path
+package.path = server_dir .. "/?.lua;"
+  .. script_dir
+  .. "/../../../shared/server/?.lua;"
+  .. package.path
 
 local fake_time = 1700000000000
 local fake_nk
@@ -59,6 +62,18 @@ fake_nk = {
   logger_warn = function() end,
   logger_info = function() end,
   logger_error = function() end,
+  storage_read = function()
+    return {}
+  end,
+  storage_write = function()
+    return {}
+  end,
+  leaderboard_create = function()
+    return {}
+  end,
+  leaderboard_record_write = function()
+    return {}
+  end,
   match_creates = {},
   match_list_result = {},
   match_get_result = nil,
@@ -482,6 +497,136 @@ test("shares the same rules module as the client core", function()
   local state = rules.create_initial_state({ "white", "black" })
   assert_equal(state.turn, "white", "the first player shoots first")
   assert_equal(#state.discs, 19, "the piece count")
+end)
+
+test("gives the colour back when a player leaves an empty table", function()
+  local dispatcher = new_dispatcher()
+  local state = match.match_init({ match_id = "m1" }, {
+    mode = "private",
+    seats = 2,
+  })
+  state = match.match_join(
+    { match_id = "m1" },
+    dispatcher,
+    0,
+    state,
+    { presence("u1", "Ivory") }
+  )
+  assert_equal(state.players["u1"].colour, "white", "the first colour")
+
+  state = match.match_leave(
+    { match_id = "m1" },
+    dispatcher,
+    0,
+    state,
+    { presence("u1", "Ivory") }
+  )
+  assert_equal(state.taken_colours["white"], nil, "the colour was freed")
+
+  state = match.match_join(
+    { match_id = "m1" },
+    dispatcher,
+    0,
+    state,
+    { presence("u2", "Onyx") }
+  )
+  assert_equal(state.players["u2"].colour, "white", "the empty seat can be taken")
+end)
+
+test("forfeits a player who disconnects after the game began", function()
+  local dispatcher = new_dispatcher()
+  local state = match.match_init({ match_id = "m1" }, {
+    mode = "quick",
+    seats = 2,
+  })
+  state = match.match_join(
+    { match_id = "m1" },
+    dispatcher,
+    0,
+    state,
+    { presence("u1", "Ivory") }
+  )
+  state = match.match_join(
+    { match_id = "m1" },
+    dispatcher,
+    0,
+    state,
+    { presence("u2", "Onyx") }
+  )
+  state.players["u2"].connected = false
+  state.players["u2"].disconnected_at = fake_time
+
+  fake_time = fake_time + 31000
+  state = match.match_loop({ match_id = "m1" }, dispatcher, 1, state, {})
+  fake_time = fake_time - 31000
+
+  assert_equal(state.result ~= nil, true, "the table ended")
+  assert_equal(state.result.status, "disconnect", "the reason")
+  assert_equal(state.result.loserUserId, "u2", "the player who left")
+  assert_equal(state.result.winnerUserId, "u1", "the player who stayed")
+  assert_equal(last_message(dispatcher, protocol.OP.GAME_OVER) ~= nil, true, "game over was sent")
+end)
+
+test("abandons the table when everyone disconnects", function()
+  local dispatcher = new_dispatcher()
+  local state = match.match_init({ match_id = "m1" }, {
+    mode = "quick",
+    seats = 2,
+  })
+  state = match.match_join(
+    { match_id = "m1" },
+    dispatcher,
+    0,
+    state,
+    { presence("u1", "Ivory") }
+  )
+  state = match.match_join(
+    { match_id = "m1" },
+    dispatcher,
+    0,
+    state,
+    { presence("u2", "Onyx") }
+  )
+  for _, user_id in ipairs({ "u1", "u2" }) do
+    state.players[user_id].connected = false
+    state.players[user_id].disconnected_at = fake_time
+  end
+
+  fake_time = fake_time + 31000
+  state = match.match_loop({ match_id = "m1" }, dispatcher, 1, state, {})
+  fake_time = fake_time - 31000
+
+  assert_equal(state.result ~= nil, true, "the table ended")
+  assert_equal(state.result.status, "abandoned", "the reason")
+  assert_equal(state.result.winnerUserId, nil, "there is no winner")
+end)
+
+test("the matched quick table keeps the chosen shot clock", function()
+  local ok, err = pcall(dofile, server_dir .. "/carrom_rpc.lua")
+  assert_equal(ok, true, "the RPC module loads: " .. tostring(err))
+  fake_nk.match_creates = {}
+  local matched = {
+    {
+      presence = presence("u1", "Ivory"),
+      properties = { game = "carrom", seats = "2", variant = "freestyle", turnSeconds = "30" },
+    },
+    {
+      presence = presence("u2", "Onyx"),
+      properties = { game = "carrom", seats = "2", variant = "freestyle", turnSeconds = "30" },
+    },
+  }
+  local created = fake_nk.matchmaker_matched({ user_id = "u1" }, matched)
+  assert_equal(created ~= nil, true, "the match was created")
+  local props = fake_nk.match_creates[#fake_nk.match_creates].properties
+  assert_equal(props.turnSeconds, 30, "the clock was carried into the table")
+  assert_equal(props.variant, "freestyle", "the game type was carried")
+
+  matched[2].properties.turnSeconds = "0"
+  assert_equal(
+    fake_nk.matchmaker_matched({ user_id = "u1" }, matched),
+    nil,
+    "a pair that wants different clocks is not seated"
+  )
 end)
 
 if failures > 0 then

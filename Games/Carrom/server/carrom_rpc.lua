@@ -275,11 +275,20 @@ local function matchmaker_matched(context, matched)
     return nil
   end
 
+  -- The shot clock is part of the table settings. A pair that asked for
+  -- different clocks must not be put on one table.
+  local first_clock = protocol.clamp_turn_seconds(first_properties.turnSeconds)
+  local second_clock = protocol.clamp_turn_seconds(second_properties.turnSeconds)
+  if first_clock ~= second_clock then
+    return nil
+  end
+
   return nk.match_create("carrom_match", {
     mode = "quick",
     rated = true,
     seats = first_seats,
     variant = first_variant,
+    turnSeconds = first_clock,
     expected_users = {
       {
         user_id = first.presence.user_id,

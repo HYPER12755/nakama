@@ -62,6 +62,18 @@ function protocol.clamp_seats(value)
   return math.floor(seats)
 end
 
+-- The pieces that belong to a player, as opposed to the queen or the striker.
+protocol.COLOURS = { "white", "black", "green", "yellow" }
+
+function protocol.is_colour(value)
+  for _, colour in ipairs(protocol.COLOURS) do
+    if colour == value then
+      return true
+    end
+  end
+  return false
+end
+
 -- The game types a table can be played with.
 protocol.VARIANTS = { "classic", "freestyle", "practice" }
 

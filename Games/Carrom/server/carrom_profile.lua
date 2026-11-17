@@ -53,8 +53,22 @@ function progression.rating_delta(rating, opponent_rating, outcome)
   return round_away(progression.K_FACTOR * (score - expected))
 end
 
-function progression.outcome_for_result(result, colour)
-  if type(result) ~= "table" or result.winnerColour == nil then
+function progression.outcome_for_result(result, colour, user_id)
+  if type(result) ~= "table" then
+    return "draw"
+  end
+  if result.status == "abandoned" then
+    return "abandoned"
+  end
+  -- A player who leaves the table loses and everyone who stayed wins, even
+  -- when the table had three or four seats.
+  if result.loserUserId and user_id then
+    if result.loserUserId == user_id then
+      return "loss"
+    end
+    return "win"
+  end
+  if result.winnerColour == nil then
     return "draw"
   end
   if result.winnerColour == colour then
@@ -155,7 +169,9 @@ function progression.history_record(
   rating_before,
   rating_after,
   rating_delta,
-  ended_at
+  ended_at,
+  opponent_rating,
+  opponents
 )
   return {
     match_id = match_id,
@@ -169,6 +185,8 @@ function progression.history_record(
       user_id = opponent.user_id,
       username = opponent.username or "Player",
     },
+    opponent_rating = opponent_rating or progression.DEFAULT_RATING,
+    opponents = opponents or {},
     steps = steps or {},
     summary = summary or "",
     rating_before = rating_before,
@@ -200,6 +218,21 @@ local function read_profiles(players)
     objects[#objects + 1] = {
       collection = progression.PROFILE_COLLECTION,
       key = player.user_id,
+      user_id = player.user_id,
+    }
+  end
+  return read_records(objects)
+end
+
+-- The history entry of a player is the marker that a match was written. The
+-- match handler only sets a result once, but a repeated finalization must not
+-- hand out a second rating change.
+local function read_histories(players, match_id)
+  local objects = {}
+  for _, player in ipairs(players) do
+    objects[#objects + 1] = {
+      collection = progression.HISTORY_COLLECTION,
+      key = match_id .. ":" .. player.user_id,
       user_id = player.user_id,
     }
   end
@@ -306,17 +339,74 @@ function progression.finalize_match(context, state, result, now)
     return false, "no players"
   end
 
+  -- A match result is set once, but a repeated call must not write another
+  -- game and another rating change. The per-player history is the marker.
+  local existing = read_histories(players, context.match_id)
+  local written_players = 0
+  for _, player in ipairs(players) do
+    if existing[context.match_id .. ":" .. player.user_id] then
+      written_players = written_players + 1
+    end
+  end
+  if written_players > 0 then
+    if written_players < #players then
+      nk.logger_warn(
+        "Carrom match "
+          .. tostring(context.match_id)
+          .. " has partial history; skipping duplicate finalization"
+      )
+    end
+    return true
+  end
+
   local stored = read_profiles(players)
+
+  -- The opponents of every seat are gathered once, so a three or four player
+  -- table is rated against the whole table and the history names the same
+  -- opponents. The first one stays in the single opponent field for the
+  -- profile panel.
+  local opponents_by_player = {}
+  for _, player in ipairs(players) do
+    local opponents = {}
+    for _, other in ipairs(players) do
+      if other.user_id ~= player.user_id then
+        opponents[#opponents + 1] = {
+          user_id = other.user_id,
+          username = other.username,
+          colour = other.colour,
+          rating = progression.normalize_profile(
+            stored[other.user_id],
+            other.username,
+            now
+          ).rating,
+        }
+      end
+    end
+    opponents_by_player[player.user_id] = opponents
+  end
+
   local writes = {}
   local history_writes = {}
   local steps = {}
   local summary = ""
   for _, shot in ipairs(state.shots or {}) do
+    -- The match records pocketed_count. Older records used pocketed, so both
+    -- are read to keep old histories readable.
+    local count = number(shot.pocketed_count or shot.pocketed, 0)
+    local colours = shot.pocketed_colours
+    local detail
+    if type(colours) == "table" and #colours > 0 then
+      detail = #colours .. " " .. table.concat(colours, ", ")
+    elseif count > 0 then
+      detail = count .. (count == 1 and " piece" or " pieces")
+    else
+      detail = "no pocket"
+    end
     steps[#steps + 1] = string.format(
       "%s shot %s (power %d%%)",
       shot.colour or "player",
-      tostring(shot.pocketed or "no pocket"),
-      math.floor((shot.power or 0) * 100)
+      detail,
+      math.floor(number(shot.power, 0) * 100)
     )
   end
   if result.winnerColour ~= nil then
@@ -324,24 +414,26 @@ function progression.finalize_match(context, state, result, now)
   end
 
   for _, player in ipairs(players) do
-    local outcome = progression.outcome_for_result(result, player.colour)
+    local outcome = progression.outcome_for_result(
+      result,
+      player.colour,
+      player.user_id
+    )
     local profile = progression.normalize_profile(
       stored[player.user_id],
       player.username,
       now
     )
 
+    local opponents = opponents_by_player[player.user_id] or {}
+    local opponent = opponents[1]
     local opponent_rating = progression.DEFAULT_RATING
-    local opponent_profile
-    for _, other in ipairs(players) do
-      if other.user_id ~= player.user_id then
-        opponent_profile = progression.normalize_profile(
-          stored[other.user_id],
-          other.username,
-          now
-        )
-        opponent_rating = opponent_profile.rating
+    if #opponents > 0 then
+      local total = 0
+      for _, other in ipairs(opponents) do
+        total = total + other.rating
       end
+      opponent_rating = round_away(total / #opponents)
     end
 
     local rating_before = profile.rating
@@ -369,6 +461,8 @@ function progression.finalize_match(context, state, result, now)
     elseif outcome == "loss" then
       profile.losses = profile.losses + 1
       profile.best_streak = 0
+    elseif outcome == "abandoned" then
+      -- Nobody played the game out, so there is no result to add.
     else
       profile.draws = profile.draws + 1
     end
@@ -394,14 +488,6 @@ function progression.finalize_match(context, state, result, now)
       value = profile,
     }
 
-    local opponent
-    for _, other in ipairs(players) do
-      if other.user_id ~= player.user_id then
-        opponent = other
-        break
-      end
-    end
-
     history_writes[#history_writes + 1] = {
       collection = progression.HISTORY_COLLECTION,
       key = context.match_id .. ":" .. player.user_id,
@@ -419,7 +505,9 @@ function progression.finalize_match(context, state, result, now)
         rating_before,
         profile.rating,
         rating_delta,
-        now
+        now,
+        opponent_rating,
+        opponents
       ),
     }
 
@@ -481,6 +569,8 @@ local function load_history(user_id, limit)
         userId = (record.opponent or {}).user_id or "",
         username = (record.opponent or {}).username or "Player",
       },
+      opponentRating = record.opponent_rating or progression.DEFAULT_RATING,
+      opponents = record.opponents or {},
       steps = record.steps or {},
       summary = record.summary or "",
       ratingBefore = record.rating_before,
@@ -540,13 +630,15 @@ function progression.leaderboard_payload(context, payload)
     limit = math.max(1, math.min(50, number(payload.limit, 10)))
   end
 
-  local ok, records = pcall(
-    nk.leaderboard_record_read,
+  -- The list call also returns the number of ranked players. Reading only the
+  -- first page made the total equal the number of rows shown.
+  local ok, records, _, _, _, rank_count = pcall(
+    nk.leaderboard_records_list,
     progression.LEADERBOARD_ID,
-    "",
-    "",
+    nil,
     limit,
-    true
+    "",
+    0
   )
   if not ok or type(records) ~= "table" then
     return { ok = true, entries = {}, me = nil, total = 0 }
@@ -562,23 +654,32 @@ function progression.leaderboard_payload(context, payload)
   end
 
   local me
-  local ok_me, mine = pcall(
-    nk.leaderboard_record_read,
+  local ok_me, own_records, own_owner_records = pcall(
+    nk.leaderboard_records_list,
     progression.LEADERBOARD_ID,
-    user_id,
-    "",
+    { user_id },
     1,
-    true
+    "",
+    0
   )
-  if ok_me and type(mine) == "table" then
-    me = normalize_leaderboard_record(mine[1])
+  if ok_me then
+    local own_record = own_owner_records and own_owner_records[1]
+    if not own_record and type(own_records) == "table" then
+      for _, record in ipairs(own_records) do
+        if record.owner_id == user_id then
+          own_record = record
+          break
+        end
+      end
+    end
+    me = normalize_leaderboard_record(own_record)
   end
 
   return {
     ok = true,
     entries = entries,
     me = me,
-    total = #entries,
+    total = math.floor(number(rank_count, #entries)),
   }
 end
 

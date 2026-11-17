@@ -167,6 +167,19 @@ local function broadcast_state(context, dispatcher, state, presences)
 end
 
 local function remove_player(state, user_id)
+  local player = state.players[user_id]
+  if player then
+    -- A seat that is gone must give its colour back. Otherwise a new player
+    -- cannot sit there, although the table has an empty place.
+    if player.colour and state.taken_colours then
+      state.taken_colours[player.colour] = nil
+    end
+    if player.colour and state.reserved_colours then
+      if state.reserved_colours[player.colour] == user_id then
+        state.reserved_colours[player.colour] = nil
+      end
+    end
+  end
   state.players[user_id] = nil
   local order = {}
   for _, entry in ipairs(state.player_order) do
@@ -439,6 +452,19 @@ local function match_leave(context, dispatcher, tick, state, presences)
   return state
 end
 
+-- One place ends a table, whether the board was cleared or a player left.
+-- The result is written once and every client hears about it once.
+local function finish_match(context, dispatcher, state, result, now)
+  if state.result then
+    return
+  end
+  state.result = result
+  progression.finalize_match(context, state, result, now)
+  broadcast(dispatcher, OP.GAME_OVER, result)
+  refresh_label(state, dispatcher)
+  broadcast_state(context, dispatcher, state)
+end
+
 local function handle_shot(context, dispatcher, state, message, payload, now)
   local player = state.players[message.sender.user_id]
   if not player then
@@ -504,9 +530,13 @@ local function handle_shot(context, dispatcher, state, message, payload, now)
   -- history can show how the board was cleared.
   local pocketed_count = 0
   local queen_covered = false
+  local pocketed_colours = {}
   for _, event in ipairs(result.pocketed or {}) do
     if event.kind == player.colour then
       pocketed_count = pocketed_count + 1
+    end
+    if protocol.is_colour(event.kind) then
+      pocketed_colours[#pocketed_colours + 1] = event.kind
     end
     if event.kind == "queen" then
       queen_covered = true
@@ -519,6 +549,7 @@ local function handle_shot(context, dispatcher, state, message, payload, now)
     angle = angle,
     power = power,
     pocketed_count = pocketed_count,
+    pocketed_colours = pocketed_colours,
     queen_covered = queen_covered,
     turn_after = next_game.turn,
   }
@@ -538,16 +569,14 @@ local function handle_shot(context, dispatcher, state, message, payload, now)
   state.shot_serial = (state.shot_serial or 0) + 1
 
   if next_game.status == "finished" then
-    state.result = {
+    finish_match(context, dispatcher, state, {
       status = "finished",
       winnerColour = next_game.winner,
       winnerUserId = next_game.winner and user_for_colour(state, next_game.winner) or nil,
       reason = "board cleared",
       endedAt = now,
-    }
-    progression.finalize_match(context, state, state.result, now)
-    broadcast(dispatcher, OP.GAME_OVER, state.result)
-    refresh_label(state, dispatcher)
+    }, now)
+    return
   end
 
   broadcast_state(context, dispatcher, state)
@@ -617,18 +646,68 @@ local function handle_message(context, dispatcher, state, message, now)
 end
 
 local function check_disconnects(context, dispatcher, state, now)
+  if state.result then
+    return
+  end
+
+  local connected = {}
+  local expired = {}
   for _, user_id in ipairs(state.player_order) do
     local player = state.players[user_id]
-    if player and player.connected == false and player.disconnected_at then
-      if now - player.disconnected_at >= DISCONNECT_GRACE_MS then
-        remove_player(state, user_id)
-        broadcast(dispatcher, OP.PLAYER_LEFT, {
-          userId = player.user_id,
-          username = player.username,
-          colour = player.colour,
-        })
+    if player then
+      if player.connected then
+        connected[#connected + 1] = player
+      elseif
+        player.disconnected_at
+        and now - player.disconnected_at >= DISCONNECT_GRACE_MS
+      then
+        expired[#expired + 1] = player
       end
     end
+  end
+
+  if #expired == 0 then
+    return
+  end
+
+  -- Before the table starts, a player who leaves simply gives their seat
+  -- back; there is no result to record yet.
+  if not state.started_at then
+    for _, player in ipairs(expired) do
+      remove_player(state, player.user_id)
+      broadcast(dispatcher, OP.PLAYER_LEFT, {
+        userId = player.user_id,
+        username = player.username,
+        colour = player.colour,
+      })
+    end
+    refresh_label(state, dispatcher)
+    broadcast_state(context, dispatcher, state)
+    return
+  end
+
+  -- Once the game has begun, leaving is a forfeit. If nobody is left the game
+  -- is abandoned; otherwise the players who stayed win and the leaver loses.
+  if #connected == 0 then
+    finish_match(context, dispatcher, state, {
+      status = "abandoned",
+      reason = "everyone disconnected",
+      endedAt = now,
+    }, now)
+    return
+  end
+
+  local winner = connected[1]
+  for _, player in ipairs(expired) do
+    finish_match(context, dispatcher, state, {
+      status = "disconnect",
+      winnerColour = winner.colour,
+      winnerUserId = winner.user_id,
+      loserUserId = player.user_id,
+      reason = "disconnect",
+      endedAt = now,
+    }, now)
+    break
   end
 end
 
