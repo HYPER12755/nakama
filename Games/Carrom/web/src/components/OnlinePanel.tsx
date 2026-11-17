@@ -51,7 +51,7 @@ export function OnlinePanel({
   settings,
 }: OnlinePanelProps) {
   const [roomId, setRoomId] = useState("");
-  const [watchId, setWatchId] = useState("");
+  const [joinAsWatcher, setJoinAsWatcher] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
 
   const connected = online.connection === "connected";
@@ -91,31 +91,13 @@ export function OnlinePanel({
       return;
     }
     try {
-      await online.joinByRoomCode(code);
+      await online.joinByRoomCode(code, { spectator: joinAsWatcher });
       setRoomId("");
     } catch (cause) {
       online.setNotice(
         cause instanceof Error
           ? `That room could not be joined: ${cause.message}`
           : "That room could not be joined.",
-      );
-    }
-  };
-
-  /** The server already seats spectators; this is the way in from the lobby. */
-  const watchTable = async () => {
-    const id = watchId.trim();
-    if (id.length === 0) {
-      return;
-    }
-    try {
-      await online.joinMatch(id, { spectator: true });
-      setWatchId("");
-    } catch (cause) {
-      online.setNotice(
-        cause instanceof Error
-          ? `That table could not be watched: ${cause.message}`
-          : "That table could not be watched.",
       );
     }
   };
@@ -205,52 +187,39 @@ export function OnlinePanel({
                 Private room
               </button>
             </div>
-            <label className="online-join">
-              <span>Room code</span>
-              <input
-                type="text"
-                value={roomId}
-                placeholder="Paste a room code"
-                onChange={(event) => setRoomId(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    void joinRoom();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="button button--ghost"
-                disabled={roomId.trim().length === 0}
-                onClick={() => void joinRoom()}
-              >
-                Join
-              </button>
-            </label>
-            <label className="online-join">
-              <span>Watch a table by id</span>
-              <input
-                type="text"
-                value={watchId}
-                placeholder="Paste a table id"
-                onChange={(event) => setWatchId(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    void watchTable();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="button button--ghost"
-                disabled={watchId.trim().length === 0}
-                onClick={() => void watchTable()}
-              >
-                Watch
-              </button>
-            </label>
+            <div className="online-join">
+              <label className="online-join__code">
+                <span>Room code</span>
+                <input
+                  type="text"
+                  value={roomId}
+                  placeholder="Paste a room code"
+                  onChange={(event) => setRoomId(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void joinRoom();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  disabled={roomId.trim().length === 0}
+                  onClick={() => void joinRoom()}
+                >
+                  {joinAsWatcher ? "Watch" : "Join"}
+                </button>
+              </label>
+              <label className="online-watch">
+                <input
+                  type="checkbox"
+                  checked={joinAsWatcher}
+                  onChange={(event) => setJoinAsWatcher(event.target.checked)}
+                />
+                <span>Join as spectator</span>
+              </label>
+            </div>
           </>
         ) : (
           <>

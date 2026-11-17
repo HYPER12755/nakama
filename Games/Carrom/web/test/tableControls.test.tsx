@@ -77,9 +77,10 @@ function panel(online: OnlineCarromController) {
 }
 
 describe("the online lobby", () => {
-  it("offers a way to watch a table", () => {
+  it("offers a way to join a room as a spectator", () => {
     const html = renderToStaticMarkup(panel(controller()));
-    expect(html).toContain("Watch a table by id");
+    expect(html).toContain("Join as spectator");
+    expect(html).not.toContain("Watch a table by id");
   });
 
   it("shows the round trip when the server has answered a ping", () => {

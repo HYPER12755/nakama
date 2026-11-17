@@ -266,9 +266,14 @@ test("a finished game writes the profile, the history, and the stats", function(
   assert_equal(profile ~= nil, true, "the profile was written")
   assert_equal(profile.value.games, 1, "games")
   assert_equal(profile.value.wins, 1, "wins")
-  assert_equal(profile.value.rating, 1216, "rating")
+  assert_equal(profile.value.rating, 1210, "rating")
   assert_equal(profile.value.pieces_pocketed, 3, "pieces pocketed")
   assert_equal(profile.value.queens_covered, 1, "queens covered")
+  assert_equal(
+    profile.value.rating_deviation > 0 and profile.value.volatility > 0,
+    true,
+    "the uncertainty is kept"
+  )
 
   local history = storage[storage_key("user-a", "carrom_history", "match-9:user-a")]
   assert_equal(history ~= nil, true, "the history was written")
@@ -336,7 +341,7 @@ test("finishing the same match twice does not move the rating again", function()
   progression.finalize_match({ match_id = "match-twice" }, state, result, fake_time)
   local profile = storage[storage_key("user-a", "carrom_profile", "user-a")]
   assert_equal(profile.value.games, 1, "the game is counted once")
-  assert_equal(profile.value.rating, 1216, "the rating moved once")
+  assert_equal(profile.value.rating, 1210, "the rating moved once")
 end)
 
 test("a three player table rates against all the opponents", function()
@@ -370,7 +375,7 @@ test("a three player table rates against all the opponents", function()
   )
   local profile = storage[storage_key("user-a", "carrom_profile", "user-a")]
   -- The two opponents are 1400 and 1600, so the table is rated as 1500.
-  assert_equal(profile.value.rating, 1227, "the average opponent was used")
+  assert_equal(profile.value.rating, 1217, "the average opponent was used")
   local history = storage[storage_key("user-a", "carrom_history", "match-three:user-a")]
   assert_equal(history.value.opponent_rating, 1500, "the history carries that rating")
   assert_equal(#history.value.opponents, 2, "both opponents are recorded")

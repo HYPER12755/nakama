@@ -6,6 +6,7 @@
 -- panel.
 
 local nk = require("nakama")
+local glicko = require("carrom_glicko")
 
 local progression = {}
 
@@ -99,6 +100,8 @@ function progression.default_profile(username, now)
     username = username or "Player",
     rating = progression.DEFAULT_RATING,
     peak_rating = progression.DEFAULT_RATING,
+    rating_deviation = glicko.DEFAULT_DEVIATION,
+    volatility = glicko.DEFAULT_VOLATILITY,
     games = 0,
     wins = 0,
     losses = 0,
@@ -135,6 +138,14 @@ function progression.normalize_profile(value, username, now)
     profile.rating,
     number(value.peak_rating, profile.rating)
   )
+  profile.rating_deviation = math.max(
+    1,
+    number(value.rating_deviation, glicko.DEFAULT_DEVIATION)
+  )
+  profile.volatility = number(
+    value.volatility,
+    glicko.DEFAULT_VOLATILITY
+  )
   profile.games = number(value.games, 0)
   profile.wins = number(value.wins, 0)
   profile.losses = number(value.losses, 0)
@@ -157,6 +168,7 @@ function progression.public_profile(value)
   return {
     username = profile.username,
     rating = profile.rating,
+    ratingDeviation = profile.rating_deviation,
     peakRating = profile.peak_rating,
     games = profile.games,
     wins = profile.wins,
@@ -281,7 +293,7 @@ local function ensure_leaderboard()
     {
       title = "MoonGames Carrom Rating",
       game = "carrom",
-      rating = "Elo",
+      rating = "Glicko-2",
     },
     true
   )
@@ -432,6 +444,16 @@ function progression.finalize_match(context, state, result, now)
             other.username,
             now
           ).rating,
+          deviation = progression.normalize_profile(
+            stored[other.user_id],
+            other.username,
+            now
+          ).rating_deviation,
+          volatility = progression.normalize_profile(
+            stored[other.user_id],
+            other.username,
+            now
+          ).volatility,
         }
       end
     end
@@ -486,26 +508,42 @@ function progression.finalize_match(context, state, result, now)
     local opponents = opponents_by_player[player.user_id] or {}
     local opponent = opponents[1]
     local opponent_rating = progression.DEFAULT_RATING
+    local opponent_deviation = glicko.DEFAULT_DEVIATION
     if #opponents > 0 then
       local total = 0
+      local deviation_total = 0
       for _, other in ipairs(opponents) do
         total = total + other.rating
+        deviation_total = deviation_total + other.deviation
       end
       opponent_rating = round_away(total / #opponents)
+      opponent_deviation = round_away(deviation_total / #opponents)
     end
 
     local rating_before = profile.rating
     local rating_delta = 0
     if state.rated == true and outcome ~= "abandoned" then
-      rating_delta = progression.rating_delta(
-        rating_before,
-        opponent_rating,
+      -- Glicko-2 moves the rating together with how sure we are of it. A new
+      -- player moves further than one who has played many games.
+      local update = glicko.update(
+        {
+          rating = profile.rating,
+          deviation = profile.rating_deviation,
+          volatility = profile.volatility,
+        },
+        {
+          rating = opponent_rating,
+          deviation = opponent_deviation,
+          volatility = glicko.DEFAULT_VOLATILITY,
+        },
         outcome
       )
-      profile.rating = math.max(
-        progression.MIN_RATING,
-        rating_before + rating_delta
-      )
+      if update ~= nil then
+        profile.rating = math.max(glicko.MIN_RATING, update.rating)
+        profile.rating_deviation = update.deviation
+        profile.volatility = update.volatility
+      end
+      rating_delta = profile.rating - rating_before
       profile.peak_rating = math.max(profile.peak_rating, profile.rating)
       profile.rated_games = profile.rated_games + 1
     else

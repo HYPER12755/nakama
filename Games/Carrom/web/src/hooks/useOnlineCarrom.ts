@@ -295,7 +295,10 @@ export interface OnlineCarromController {
   ) => Promise<void>;
   joinMatch: (matchId: string, options?: { spectator?: boolean }) => Promise<void>;
   /** Join a table by the short code the host read out. */
-  joinByRoomCode: (code: string) => Promise<void>;
+  joinByRoomCode: (
+    code: string,
+    options?: { spectator?: boolean },
+  ) => Promise<void>;
   /** The short code of the table this player is sitting at. */
   roomCode: string | null;
   /** How many players the table behind the code is for. */
@@ -419,7 +422,7 @@ export function useOnlineCarrom(
    * table the code names, so the client never has to know a match id.
    */
   const joinByRoomCode = useCallback(
-    async (code: string): Promise<void> => {
+    async (code: string, options: { spectator?: boolean } = {}): Promise<void> => {
       const client = clientRef.current;
       const session = sessionRef.current;
       if (client === null || session === null) {
@@ -445,7 +448,7 @@ export function useOnlineCarrom(
           parsed.error?.message ?? "That room code was not found.",
         );
       }
-      await joinMatch(parsed.matchId);
+      await joinMatch(parsed.matchId, { spectator: options.spectator === true });
       setRoomCode(parsed.code ?? trimmed.toUpperCase());
       // The server knows how many players the table is for, so the guest is
       // told what they are walking into.

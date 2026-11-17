@@ -551,9 +551,12 @@ of a game, and last the feel of the table.
 - [ ] Finish two against two team mode from Phase 8: partners sit opposite,
   the turn crosses the teams, and a foul by one partner passes the shot to the
   other team. The server owns the teams so online tables agree.
-- [ ] A spectate button in the lobby. The server already seats up to twenty
+- [x] A spectate button in the lobby. The server already seats up to twenty
   four watchers and an invite link can put someone in one, but a player cannot
   choose to watch a table from the lobby.
+- [ ] The lobby's watch control is a second text box for a table id. Put a
+  "Join as spectator" check box under the room code instead, so the one place a
+  player enters a code can join the table as a player or as a watcher.
 - [ ] Resign, draw and abandon. Chess has all three; carrom has none. A player
   can end a table, the other side is told, and the result is written with the
   right rating outcome.

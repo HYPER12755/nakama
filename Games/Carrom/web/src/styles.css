@@ -2223,9 +2223,15 @@ button {
 
 .online-join {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 11px;
+}
+
+.online-join__code {
+  display: flex;
   align-items: center;
   gap: 7px;
-  margin-top: 11px;
   color: var(--muted);
   font-size: 10px;
   font-weight: 800;
@@ -2233,7 +2239,7 @@ button {
   text-transform: uppercase;
 }
 
-.online-join input {
+.online-join input[type="text"] {
   flex: 1;
   min-width: 0;
   height: 34px;
@@ -2249,6 +2255,20 @@ button {
 
 .online-join .button {
   min-height: 34px;
+}
+
+.online-watch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.online-watch input {
+  accent-color: var(--accent);
 }
 
 /* The room code. It is how the other player reaches this table, so it is
