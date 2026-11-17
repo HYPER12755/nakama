@@ -152,8 +152,7 @@
   border: 1px solid var(--border);
   background: var(--panel-raised);
   color: var(--muted);
-  font-family:
-    "SF Mono", "Cascadia Code", "Roboto Mono", monospace;
+  font-family: monospace;
   font-size: 12px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -508,8 +507,7 @@
 .leaderboard-score {
 
   color: var(--accent);
-  font-family:
-    "SF Mono", "Cascadia Code", "Roboto Mono", monospace;
+  font-family: monospace;
   font-size: 11px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -1327,8 +1325,7 @@
 .online-player-clock {
 
   color: var(--muted);
-  font-family:
-    "SF Mono", "Cascadia Code", "Roboto Mono", monospace;
+  font-family: monospace;
   font-size: 11px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
