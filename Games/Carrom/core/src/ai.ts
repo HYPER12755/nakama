@@ -426,10 +426,39 @@ export function pickWithRealism(
 }
 
 const REALISM: Record<CarromAiDifficulty, number> = {
-  easy: 0.28,
+  easy: 0.32,
   normal: 0.45,
-  hard: 0.62,
+  hard: 0.58,
 };
+
+/**
+ * The hand is not steady. Even the best line is aimed a little off, and the
+ * power is a little wrong, so a player does not lose to a machine that clears
+ * the board in a single visit. The easier the table, the wider the miss.
+ */
+const IMPERFECTION: Record<
+  CarromAiDifficulty,
+  { angle: number; power: number }
+> = {
+  easy: { angle: 0.035, power: 0.07 },
+  normal: { angle: 0.025, power: 0.05 },
+  hard: { angle: 0.015, power: 0.035 },
+};
+
+function humanizeShot(
+  shot: CarromShotInput,
+  difficulty: CarromAiDifficulty,
+  seed: number,
+): CarromShotInput {
+  const error = IMPERFECTION[difficulty];
+  const random = seededRandom(seed ^ 0x5f3759df);
+  const angle = shot.angle + (random() * 2 - 1) * error.angle;
+  const power = Math.max(
+    0.08,
+    Math.min(1, shot.power * (1 + (random() * 2 - 1) * error.power)),
+  );
+  return { ...shot, angle, power };
+}
 
 export function chooseAiShot(
   state: CarromState,
@@ -449,10 +478,15 @@ export function chooseAiShot(
   if (ranked.length === 0) {
     return plan.fallback();
   }
-  return pickWithRealism(
+  const chosen = pickWithRealism(
     ranked,
     state.shotNumber * 7919 + ranked.length,
     REALISM[difficulty],
+  );
+  return humanizeShot(
+    chosen,
+    difficulty,
+    state.shotNumber * 104729 + Math.round(chosen.angle * 1000),
   );
 }
 
@@ -483,9 +517,14 @@ export async function chooseAiShotAsync(
   if (ranked.length === 0) {
     return plan.fallback();
   }
-  return pickWithRealism(
+  const chosen = pickWithRealism(
     ranked,
     state.shotNumber * 7919 + ranked.length,
     REALISM[difficulty],
+  );
+  return humanizeShot(
+    chosen,
+    difficulty,
+    state.shotNumber * 104729 + Math.round(chosen.angle * 1000),
   );
 }

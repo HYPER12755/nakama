@@ -212,6 +212,23 @@ function drawFrame(
   }
 }
 
+// Real wood photographs, loaded once and drawn under the ICF markings.
+const textures = new Map<string, HTMLImageElement | null>();
+
+function boardTexture(path: string): HTMLImageElement | null {
+  if (textures.has(path)) {
+    return textures.get(path) ?? null;
+  }
+  if (typeof Image === "undefined") {
+    return null;
+  }
+  const image = new Image();
+  image.src = new URL(path, document.baseURI).toString();
+  textures.set(path, null);
+  image.onload = () => textures.set(path, image);
+  return null;
+}
+
 function drawSurface(
   ctx: CanvasRenderingContext2D,
   lite: boolean,
@@ -230,6 +247,24 @@ function drawSurface(
   roundedRect(ctx, PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE, 18);
   ctx.fillStyle = surface;
   ctx.fill();
+
+  if (board.texture !== undefined && !lite) {
+    const image = boardTexture(board.texture);
+    if (image !== null) {
+      ctx.save();
+      roundedRect(ctx, PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE, 18);
+      ctx.clip();
+      ctx.globalAlpha = 0.72;
+      ctx.drawImage(
+        image,
+        PLAY_INSET,
+        PLAY_INSET,
+        PLAY_SIZE,
+        PLAY_SIZE,
+      );
+      ctx.restore();
+    }
+  }
 
   ctx.save();
   roundedRect(ctx, PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE, 18);
@@ -972,6 +1007,8 @@ export function CarromBoard({
 }: CarromBoardProps) {
   const visualsRef = useRef(visuals);
   visualsRef.current = visuals;
+  // All three chosen designs, so the board repaints the moment one changes.
+  const visualKey = `${visuals.board.id}:${visuals.striker.id}:${visuals.pieces.id}`;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const draggingRef = useRef<number | null>(null);
   const dragAnchorRef = useRef<{ x: number; y: number } | null>(null);
@@ -1128,7 +1165,7 @@ export function CarromBoard({
       }
       ctx.restore();
     },
-    [dpr, lite, disabled, aimMode],
+    [dpr, lite, disabled, aimMode, visualKey],
   );
 
   /**
@@ -1199,8 +1236,7 @@ export function CarromBoard({
       return;
     }
     const pixelSize = Math.round(LOGICAL_SIZE * dpr);
-    const v = visualsRef.current;
-    const key = `${lite}:${dpr}:${state.turn}:${v.board.id}`;
+    const key = `${lite}:${dpr}:${state.turn}:${visualKey}`;
     if (boardLayerKeyRef.current === key && boardLayerRef.current !== null) {
       return;
     }
@@ -1223,7 +1259,7 @@ export function CarromBoard({
     if (scene !== null) {
       drawScene(scene.display, scene.aimState, scene.animating);
     }
-  }, [dpr, lite, state.turn, drawScene]);
+  }, [dpr, lite, state.turn, visualKey, drawScene]);
 
   /**
    * A canvas that changes size is cleared by the browser, and the table would

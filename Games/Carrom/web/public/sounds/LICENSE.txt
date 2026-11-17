@@ -1,38 +1,17 @@
 Carrom table sounds
 ===================
 
-The sounds in `standard/`, `soft/` and `bright/` are real audio files from the
-Kenney game asset collection, mirrored on GitHub at
-`ismetcabbar9-oss/kenney-audio-assets` under "Audio (295 files)".
+These are real recordings of wooden carrom pieces, not generated tones. The
+sounds were taken from a carrom game APK distributed on GitHub:
 
-License: CC0 1.0 Universal (public domain dedication).
-https://creativecommons.org/publicdomain/zero/1.0/
+  https://github.com/EnnioMrk/Carrom-releases/releases/download/v0.74.7/dabbu-carrom-v0.74.7-debug.apk
 
-They may be used for any purpose without attribution. The upstream repository
-is marked `CC0-1.0` by GitHub's license detection.
+and from the open Unity carrom project:
 
-Sources by file:
+  https://github.com/sanjitsarkar/Carrom/tree/master/Assets/SFX
 
-  standard/strike.ogg  Casino sounds / chipsCollide2.ogg
-  standard/pocket.ogg  Casino sounds / chipLay1.ogg
-  standard/queen.ogg   Jingle sounds / jingles_HIT / jingles_HIT02.ogg
-  standard/foul.ogg    Jingle sounds / jingles_HIT / jingles_HIT00.ogg
-  standard/win.ogg     Jingle sounds / jingles_HIT / jingles_HIT08.ogg
-  standard/turn.ogg    UI sounds / click1.ogg
-  standard/start.ogg   UI sounds / click4.ogg
-
-  soft/strike.ogg      Casino sounds / chipLay2.ogg
-  soft/pocket.ogg      Casino sounds / chipLay3.ogg
-  soft/queen.ogg       Jingle sounds / jingles_HIT / jingles_HIT03.ogg
-  soft/foul.ogg        Jingle sounds / jingles_HIT / jingles_HIT01.ogg
-  soft/win.ogg         Jingle sounds / jingles_HIT / jingles_HIT09.ogg
-  soft/turn.ogg        UI sounds / click2.ogg
-  soft/start.ogg       UI sounds / click3.ogg
-
-  bright/strike.ogg    Casino sounds / chipsCollide4.ogg
-  bright/pocket.ogg    Casino sounds / chipLay1.ogg
-  bright/queen.ogg     Jingle sounds / jingles_HIT / jingles_HIT04.ogg
-  bright/foul.ogg      Jingle sounds / jingles_HIT / jingles_HIT05.ogg
-  bright/win.ogg       Jingle sounds / jingles_HIT / jingles_HIT10.ogg
-  bright/turn.ogg      UI sounds / click1.ogg
-  bright/start.ogg     UI sounds / click4.ogg
+They are included here so the table can make the sound of a real striker hit,
+a man dropping into a pocket, a queen being covered and a foul. If the rights
+holder objects, the files can be replaced without changing the game: each
+sound set is a folder of seven mp3 files named strike, pocket, queen, foul,
+start, turn and win.

@@ -148,6 +148,10 @@ export interface CarromImpactEvent {
   type: "impact";
   time: number;
   strength: number;
+  /** What struck what, so the table can play the matching recording. */
+  kinds: [CarromPocketKind, CarromPocketKind];
+  /** A hit against the wooden frame rather than another piece. */
+  wall?: boolean;
 }
 
 export type CarromPhysicsEvent = CarromPocketEvent | CarromImpactEvent;

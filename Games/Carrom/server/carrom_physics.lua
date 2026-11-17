@@ -14,10 +14,10 @@ physics.STRIKER_RADIUS = 0.0279
 -- passes over it.
 physics.POCKET_RADIUS = 0.0301
 physics.POCKETS = {
-  { x = 0.036, y = 0.036 },
-  { x = 0.964, y = 0.036 },
-  { x = 0.036, y = 0.964 },
-  { x = 0.964, y = 0.964 },
+  { x = 0.018, y = 0.018 },
+  { x = 0.982, y = 0.018 },
+  { x = 0.018, y = 0.982 },
+  { x = 0.982, y = 0.982 },
 }
 physics.BASELINE_MIN = 0.25
 physics.BASELINE_MAX = 0.75
@@ -37,10 +37,10 @@ physics.PIECES_PER_PLAYER = 9
 -- The strikers a player can bring to the table. The power is a multiplier on
 -- the launch speed, and it mirrors Carrom/core/src/board.ts.
 physics.STRIKERS = {
-  { id = "classic", label = "Classic", power = 1 },
-  { id = "heavy", label = "Heavy", power = 1.14 },
-  { id = "light", label = "Light", power = 0.86 },
-  { id = "swift", label = "Swift", power = 1.05 },
+  { id = "classic", label = "Classic", power = 1, mass = 1 },
+  { id = "heavy", label = "Heavy", power = 1.28, mass = 1.5 },
+  { id = "light", label = "Light", power = 0.72, mass = 0.7 },
+  { id = "swift", label = "Swift", power = 1.12, mass = 0.85 },
 }
 
 function physics.striker_skin(id)
@@ -126,22 +126,36 @@ local function copy_discs(discs)
   return copy
 end
 
-local function resolve_wall(body)
+local function resolve_wall(body, time, events)
   local minimum = body.r
   local maximum = 1 - body.r
+  local strength = 0
   if body.x < minimum then
+    strength = math.max(strength, math.abs(body.vx))
     body.x = minimum
     body.vx = math.abs(body.vx) * physics.WALL_RESTITUTION
   elseif body.x > maximum then
+    strength = math.max(strength, math.abs(body.vx))
     body.x = maximum
     body.vx = -math.abs(body.vx) * physics.WALL_RESTITUTION
   end
   if body.y < minimum then
+    strength = math.max(strength, math.abs(body.vy))
     body.y = minimum
     body.vy = math.abs(body.vy) * physics.WALL_RESTITUTION
   elseif body.y > maximum then
+    strength = math.max(strength, math.abs(body.vy))
     body.y = maximum
     body.vy = -math.abs(body.vy) * physics.WALL_RESTITUTION
+  end
+  if strength > 0.16 and #events < 48 then
+    events[#events + 1] = {
+      type = "impact",
+      time = time,
+      strength = math.min(1, strength / 2.4),
+      kinds = { body.kind, body.kind },
+      wall = true,
+    }
   end
 end
 
@@ -199,6 +213,7 @@ local function collide(left, right, time, events)
       type = "impact",
       time = time,
       strength = math.min(1, math.abs(normal_velocity) / 2.4),
+      kinds = { left.kind, right.kind },
     }
   end
 end
@@ -252,7 +267,7 @@ function physics.simulate(state, shot)
     vx = math.cos(shot.angle) * speed,
     vy = math.sin(shot.angle) * speed,
     r = physics.STRIKER_RADIUS,
-    im = 1 / physics.STRIKER_MASS,
+    im = 1 / (physics.STRIKER_MASS * physics.striker_skin((state.strikers or {})[state.turn]).mass),
     active = true,
     pocketed = false,
   }
@@ -314,7 +329,7 @@ function physics.simulate(state, shot)
 
     for _, body in ipairs(bodies) do
       if body.active then
-        resolve_wall(body)
+        resolve_wall(body, time, events)
       end
     end
 

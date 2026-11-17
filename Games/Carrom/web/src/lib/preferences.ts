@@ -16,6 +16,7 @@ export const SOUND_SETS: SoundSet[] = [
   { id: "standard", label: "Table click" },
   { id: "soft", label: "Soft pads" },
   { id: "bright", label: "Bright carrom" },
+  { id: "carrompool", label: "Carrom Pool" },
 ];
 
 export function soundSet(id: string): SoundSet {

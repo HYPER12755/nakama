@@ -86,7 +86,7 @@ describe("carrom setup", () => {
   });
 
   it("detects pocket centres", () => {
-    expect(findPocketAt(0.036, 0.036)).toEqual({ x: 0.036, y: 0.036 });
+    expect(findPocketAt(0.018, 0.018)).toEqual({ x: 0.018, y: 0.018 });
     expect(findPocketAt(0.5, 0.5)).toBeNull();
   });
 

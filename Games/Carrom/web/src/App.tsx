@@ -78,7 +78,7 @@ import {
   useGamePreferences,
   type GameHistoryEntry,
 } from "@moongames/game-ui";
-import { configureSound, playSound } from "./lib/audio";
+import { configureSound, playEvent, playSound } from "./lib/audio";
 import { setPlaybackSpeed } from "./lib/playback";
 import {
   CARROM_FEATURES,
@@ -592,7 +592,25 @@ export default function App({ bridge }: AppProps) {
       if (!soundOn) {
         return;
       }
-      playSound("strike");
+      playEvent("strike");
+      // Every collision gets its own recording: a man against the frame is
+      // not the same sound as a striker against a man.
+      for (const impact of result.events) {
+        if (impact.type !== "impact" || impact.strength < 0.12) {
+          continue;
+        }
+        const [left, right] = impact.kinds;
+        const event = impact.wall
+          ? "hitEdge"
+          : left === "striker" || right === "striker"
+            ? "hitPuck"
+            : "puckHit";
+        const timer = window.setTimeout(
+          () => playEvent(event),
+          playbackTime(impact.time, result.duration) * 1000,
+        );
+        soundTimers.current.push(timer);
+      }
       for (const event of result.pocketed) {
         const timer = window.setTimeout(
           () => playSound(event.kind === "queen" ? "queen" : "pocket"),

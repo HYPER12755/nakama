@@ -60,6 +60,7 @@ const soundChoices: SoundChoice[] = SOUND_SETS.map((set) => ({
 export function CarromPreferences({ gameId, theme }: CarromPreferencesProps) {
   const { preferences, setPreference } = useGamePreferences(gameId);
   const [strikerOpen, setStrikerOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const visuals = tableVisuals(
     preferences.boardTheme,
@@ -71,9 +72,17 @@ export function CarromPreferences({ gameId, theme }: CarromPreferencesProps) {
     <>
       <section className="panel pref-panel">
         <header className="pref-panel__head">
-          <h3>Table preview</h3>
+          <h3>Look and sound</h3>
+          <button
+            type="button"
+            className="mini-button"
+            onClick={() => setPreviewOpen((value) => !value)}
+            aria-expanded={previewOpen}
+          >
+            {previewOpen ? "Hide table" : "Show table"}
+          </button>
         </header>
-        <DesignPreview visuals={visuals} theme={theme} />
+        {previewOpen ? <DesignPreview visuals={visuals} theme={theme} /> : null}
         <button
           type="button"
           className="pref-row"
@@ -120,7 +129,13 @@ export function CarromPreferences({ gameId, theme }: CarromPreferencesProps) {
         themes={themeChoices}
         soundSets={soundChoices}
         features={CARROM_FEATURES}
-        onPreviewSound={() => playSound("strike")}
+        onPreviewSound={() => {
+          // A short run of the sounds a player actually hears, so a set can
+          // be judged by ear before it is chosen.
+          playSound("strike");
+          window.setTimeout(() => playSound("pocket"), 260);
+          window.setTimeout(() => playSound("queen"), 620);
+        }}
       />
     </>
   );

@@ -14,6 +14,7 @@ import type {
   CarromPhysicsResult,
   CarromPocketEvent,
   CarromPoint,
+  CarromPocketKind,
   CarromShotInput,
   CarromSimulationOptions,
   CarromState,
@@ -139,22 +140,36 @@ function maxSpeed(bodies: Body[]): number {
   return maximum;
 }
 
-function resolveWall(body: Body): void {
+function resolveWall(body: Body, time: number, events: CarromPhysicsEvent[]): void {
   const minimum = body.radius;
   const maximum = 1 - body.radius;
+  let strength = 0;
   if (body.x < minimum) {
+    strength = Math.max(strength, Math.abs(body.vx));
     body.x = minimum;
     body.vx = Math.abs(body.vx) * CARROM_BOARD.wallRestitution;
   } else if (body.x > maximum) {
+    strength = Math.max(strength, Math.abs(body.vx));
     body.x = maximum;
     body.vx = -Math.abs(body.vx) * CARROM_BOARD.wallRestitution;
   }
   if (body.y < minimum) {
+    strength = Math.max(strength, Math.abs(body.vy));
     body.y = minimum;
     body.vy = Math.abs(body.vy) * CARROM_BOARD.wallRestitution;
   } else if (body.y > maximum) {
+    strength = Math.max(strength, Math.abs(body.vy));
     body.y = maximum;
     body.vy = -Math.abs(body.vy) * CARROM_BOARD.wallRestitution;
+  }
+  if (strength > 0.16 && events.length < 48) {
+    events.push({
+      type: "impact",
+      time,
+      strength: Math.min(1, strength / 2.4),
+      kinds: [body.kind as CarromPocketKind, body.kind as CarromPocketKind],
+      wall: true,
+    });
   }
 }
 
@@ -219,6 +234,7 @@ function collide(
       type: "impact",
       time,
       strength: Math.min(1, Math.abs(normalVelocity) / 2.4),
+      kinds: [left.kind as CarromPocketKind, right.kind as CarromPocketKind],
     };
     events.push(impact);
   }
@@ -248,7 +264,7 @@ export function simulatePhysics(
     vx: 0,
     vy: 0,
     radius: CARROM_BOARD.strikerRadius,
-    inverseMass: 1 / CARROM_BOARD.strikerMass,
+    inverseMass: 1 / (CARROM_BOARD.strikerMass * strikerSkin(state.strikers?.[state.turn]).mass),
     active: true,
     pocketed: false,
   };
@@ -325,7 +341,7 @@ export function simulatePhysics(
 
     for (const body of bodies) {
       if (body.active) {
-        resolveWall(body);
+        resolveWall(body, time, events);
       }
     }
 

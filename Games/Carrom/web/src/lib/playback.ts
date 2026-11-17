@@ -8,10 +8,10 @@
  */
 
 /** The slowest a shot is played, in seconds. */
-export const SHOT_MIN_SECONDS = 1.9;
+export const SHOT_MIN_SECONDS = 3.2;
 
-/** Shots are played a little slower than they happen. */
-export const SHOT_TIME_SCALE = 0.85;
+/** Shots are played slower than they happen, so the eye can follow them. */
+export const SHOT_TIME_SCALE = 1.35;
 
 let speedScale = 1;
 

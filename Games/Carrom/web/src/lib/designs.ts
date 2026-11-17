@@ -27,6 +27,8 @@ export interface BoardDesign {
   frame: [string, string, string, string];
   /** The colour of the wood grain over the surface. */
   grain: string;
+  /** A real wood photograph used as the surface, when there is one. */
+  texture?: string;
 }
 
 export const BOARD_DESIGNS: BoardDesign[] = [
@@ -36,6 +38,7 @@ export const BOARD_DESIGNS: BoardDesign[] = [
     surface: ["#e8c286", "#dcae6d", "#cb9553", "#b87f42"],
     frame: ["#6b4429", "#4a2d1b", "#331d12", "#1d110a"],
     grain: "#8c6238",
+    texture: "art/wood-classic.png",
   },
   {
     id: "rosewood",
@@ -43,6 +46,7 @@ export const BOARD_DESIGNS: BoardDesign[] = [
     surface: ["#c98e6a", "#b87655", "#a05f43", "#7d452e"],
     frame: ["#7a4228", "#56281a", "#3a1a10", "#220e08"],
     grain: "#6e3d2a",
+    texture: "art/wood-rosewood.jpg",
   },
   {
     id: "maple",
@@ -50,6 +54,7 @@ export const BOARD_DESIGNS: BoardDesign[] = [
     surface: ["#f3dda9", "#e8c986", "#d8b26b", "#bf924f"],
     frame: ["#a8794d", "#835a35", "#5f3d22", "#3d2614"],
     grain: "#b89158",
+    texture: "art/wood-maple.jpg",
   },
   {
     id: "walnut",

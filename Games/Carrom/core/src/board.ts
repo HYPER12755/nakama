@@ -35,10 +35,10 @@ export const CARROM_BOARD = {
    */
   captureRadius: 0.0301,
   pocketCenters: [
-    { x: 0.036, y: 0.036 },
-    { x: 0.964, y: 0.036 },
-    { x: 0.036, y: 0.964 },
-    { x: 0.964, y: 0.964 },
+    { x: 0.018, y: 0.018 },
+    { x: 0.982, y: 0.018 },
+    { x: 0.018, y: 0.982 },
+    { x: 0.982, y: 0.982 },
   ] as const,
   /** Half of the 3.8 cm distance between the two baseline lines. */
   baselineHalfWidth: 0.0257,
@@ -329,6 +329,8 @@ export interface CarromStrikerSkin {
   label: string;
   /** Multiplier on the striker's launch speed. */
   power: number;
+  /** Multiplier on the striker's mass, so a heavy one hits through a rattle. */
+  mass: number;
   /** One line the picker shows under the name. */
   note: string;
 }
@@ -338,25 +340,29 @@ export const CARROM_STRIKERS: readonly CarromStrikerSkin[] = [
     id: "classic",
     label: "Classic",
     power: 1,
+    mass: 1,
     note: "The standard 15 g striker.",
   },
   {
     id: "heavy",
     label: "Heavy",
-    power: 1.14,
-    note: "Hits harder and travels further.",
+    power: 1.28,
+    mass: 1.5,
+    note: "Much heavier: hits through a rattle and carries the men further.",
   },
   {
     id: "light",
     label: "Light",
-    power: 0.86,
-    note: "A softer touch, easier to control.",
+    power: 0.72,
+    mass: 0.7,
+    note: "Much lighter: a soft touch for short, careful shots.",
   },
   {
     id: "swift",
     label: "Swift",
-    power: 1.05,
-    note: "Quick off the line, less weight behind it.",
+    power: 1.12,
+    mass: 0.85,
+    note: "Quick off the line but little weight behind it: skids past men.",
   },
 ];
 
