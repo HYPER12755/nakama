@@ -223,6 +223,8 @@ export interface OnlineChessController {
   tournamentLeave: (id: string) => Promise<{ ok: boolean; message: string | null }>;
   /** Begin a tournament. */
   tournamentStart: (id: string) => Promise<{ ok: boolean; message: string | null }>;
+  /** Stop a tournament. Only its host may do so. */
+  tournamentCancel: (id: string) => Promise<{ ok: boolean; message: string | null }>;
   connect: () => Promise<void>;
   disconnect: () => void;
   quickMatch: () => Promise<void>;
@@ -1986,6 +1988,47 @@ export function useOnlineChess(
     [],
   );
 
+  /** Stop a tournament. Only its host may do so. */
+  const tournamentCancel = useCallback(
+    async (id: string): Promise<{ ok: boolean; message: string | null }> => {
+      const client = clientRef.current;
+      const currentSession = sessionRef.current;
+      if (client === null || currentSession === null) {
+        return {
+          ok: false,
+          message: "Connect to the game server to stop the tournament.",
+        };
+      }
+
+      try {
+        const response = await client.rpc(currentSession, "chess_tournament_cancel", {
+          id,
+        });
+        const payload = (response.payload ?? {}) as {
+          ok?: boolean;
+          error?: { message?: string };
+        };
+        if (payload.ok !== true) {
+          return {
+            ok: false,
+            message:
+              payload.error?.message ?? "The tournament could not be stopped.",
+          };
+        }
+        return { ok: true, message: null };
+      } catch (cause) {
+        return {
+          ok: false,
+          message:
+            cause instanceof Error
+              ? cause.message
+              : "The tournament could not be stopped.",
+        };
+      }
+    },
+    [],
+  );
+
   const requireSocket = useCallback(async (): Promise<Socket> => {
     if (socketRef.current === null) {
       await connect();
@@ -3098,6 +3141,7 @@ export function useOnlineChess(
     tournamentJoin,
     tournamentLeave,
     tournamentStart,
+    tournamentCancel,
     connect,
     disconnect,
     quickMatch,

@@ -107,8 +107,21 @@ local function ok(condition, message)
   end
 end
 
+-- Give a player a rating on the server, so the tournament reads it.
+local function rate(user_id, rating)
+  storage[table.concat({ user_id, "chess_profile", "profile" }, "|")] = {
+    collection = "chess_profile",
+    key = "profile",
+    user_id = user_id,
+    version = "1",
+    value = { rating = rating, username = user_id },
+  }
+end
+
 -- A tournament is made, and the host has a seat in it.
 reset()
+rate("host", 1600)
+rate("second", 1400)
 local created = tournament.create(context("host", "The host"), {
   name = "The Cup",
   rounds = 2,
@@ -119,7 +132,15 @@ ok(created.tournament.name == "The Cup", "the tournament has its name")
 ok(created.tournament.rounds == 2, "the tournament has its rounds")
 ok(#created.tournament.players == 1, "the host has a seat")
 ok(created.tournament.status == "open", "the tournament is open")
+-- The rating is read from the server, not from the client.
+ok(created.tournament.players[1].rating == 1600, "the host's rating is the one on the server")
 local id = created.tournament.id
+
+local rated_join = tournament.join(context("second", "Second"), {
+  id = id,
+  rating = 9999,
+})
+ok(rated_join.tournament.players[2].rating == 1400, "a join cannot choose its own rating")
 
 -- Another player takes a seat.
 local joined = tournament.join(context("second", "Second"), { id = id })
@@ -129,6 +150,11 @@ ok(#joined.tournament.players == 2, "there are two players")
 -- A third player takes a seat.
 joined = tournament.join(context("third", "Third"), { id = id })
 ok(#joined.tournament.players == 3, "there are three players")
+
+-- The colours alternate over the rounds.
+for _, player in ipairs(joined.tournament.players) do
+  ok(player.whites == 0 and player.blacks == 0, "nobody has played a game yet")
+end
 
 -- The tournament cannot be begun by another player.
 local refused = tournament.start(context("second"), { id = id })
@@ -177,12 +203,25 @@ end
 ok(points[winner] == 1, "the winner has a point")
 ok(points[loser] == 0, "the loser has none")
 local win_kept = false
+local still_playing = 0
 for _, player in ipairs(after.tournament.players) do
-  if player.userId == winner and player.results[1] == "w" then
+  if player.userId == winner and player.results[#player.results] == "w" then
     win_kept = true
+  end
+  if player.matchId ~= nil then
+    still_playing = still_playing + 1
   end
 end
 ok(win_kept, "the win is kept")
+-- The finished game is cleared from the players: the next round may have
+-- given them a new game, but it is not the same one.
+local old_game_cleared = true
+for _, player in ipairs(after.tournament.players) do
+  if player.matchId == first_match then
+    old_game_cleared = false
+  end
+end
+ok(old_game_cleared, "the finished game is cleared from the players")
 
 -- The round had one game, so it is done, and the next round is made.
 local round_two = tournament.get(context("host"), { id = id })
@@ -211,5 +250,74 @@ ok(#listed.tournaments == 1, "there is one tournament")
 local unknown = tournament.get(context("host"), { id = "t-nothing" })
 ok(unknown.ok == false, "a tournament that is not there is refused")
 ok(unknown.error.code == "unknown_tournament", "with the right reason")
+
+-- A player can leave a tournament before it begins.
+reset()
+local for_leaving = tournament.create(context("host", "Host"), {
+  name = "Leaving",
+  rounds = 2,
+  timeControl = { initialMs = 300000, incrementMs = 0 },
+})
+local leave_id = for_leaving.tournament.id
+tournament.join(context("leaver", "Leaver"), { id = leave_id })
+local left = tournament.withdraw(context("leaver"), { id = leave_id })
+ok(left.ok, "a player can leave before the tournament begins")
+local remaining = 0
+for _ in pairs(left.tournament.players) do
+  remaining = remaining + 1
+end
+ok(remaining == 1, "the player's seat is removed")
+
+-- A player can withdraw while it is running, and their opponent gets the
+-- point for the game they were due to play.
+reset()
+local for_withdraw = tournament.create(context("host", "Host"), {
+  name = "Withdrawing",
+  rounds = 2,
+  timeControl = { initialMs = 300000, incrementMs = 0 },
+})
+local withdraw_id = for_withdraw.tournament.id
+tournament.join(context("quitter", "Quitter"), { id = withdraw_id })
+local started_withdraw = tournament.start(context("host"), { id = withdraw_id })
+local quitter = nil
+local stayer = nil
+for _, player in ipairs(started_withdraw.tournament.players) do
+  if player.userId == "quitter" then
+    quitter = player
+  else
+    stayer = player
+  end
+end
+ok(quitter ~= nil and stayer ~= nil, "both players have a seat")
+ok(quitter.matchId == stayer.matchId, "they are due to play each other")
+local withdrawn = tournament.withdraw(context("quitter"), { id = withdraw_id })
+ok(withdrawn.ok, "a player can withdraw while the tournament runs")
+for _, player in ipairs(withdrawn.tournament.players) do
+  if player.userId == "quitter" then
+    ok(player.withdrawn, "the player is marked as withdrawn")
+    ok(player.matchId == nil, "the withdrawn player has no game")
+  else
+    -- One point for the game they did not play, and one for the bye in
+    -- the round that follows, now that only one player is left.
+    ok(player.points == 2, "the opponent gets the point for the game and a bye")
+    ok(player.matchId == nil, "the opponent has no game")
+  end
+end
+
+-- Only the host can stop a tournament.
+reset()
+local for_cancel = tournament.create(context("host", "Host"), {
+  name = "Cancelling",
+  rounds = 2,
+  timeControl = { initialMs = 300000, incrementMs = 0 },
+})
+local cancel_id = for_cancel.tournament.id
+tournament.join(context("other", "Other"), { id = cancel_id })
+local refused_cancel = tournament.cancel(context("other"), { id = cancel_id })
+ok(refused_cancel.ok == false, "another player stopped the tournament")
+local cancelled = tournament.cancel(context("host"), { id = cancel_id })
+ok(cancelled.ok, "the host stops the tournament")
+local cancelled_view = tournament.get(context("host"), { id = cancel_id })
+ok(cancelled_view.tournament.status == "cancelled", "the tournament is cancelled")
 
 print("chess tournament ok")

@@ -11,6 +11,7 @@
 
 local nk = require("nakama")
 local protocol = require("chess_protocol")
+local progression = require("chess_profile")
 
 local tournament = {}
 
@@ -19,6 +20,49 @@ tournament.MAX_PLAYERS = 32
 tournament.MAX_ROUNDS = 9
 tournament.MIN_ROUNDS = 2
 tournament.MAX_NAME = 40
+-- The rating of a player who has never played a rated game.
+tournament.DEFAULT_RATING = 1200
+
+local function number(value, fallback)
+  local parsed = tonumber(value)
+  if parsed == nil then
+    return fallback
+  end
+  return parsed
+end
+
+--- The rating of a player, read from the server, not from the client.
+local function rating_of(user_id)
+  if type(user_id) ~= "string" or user_id == "" then
+    return tournament.DEFAULT_RATING
+  end
+
+  local objects = nk.storage_read({
+    {
+      collection = progression.PROFILE_COLLECTION,
+      key = "profile",
+      user_id = user_id,
+    },
+  })
+
+  local record = objects and objects[1] and objects[1].value
+  if type(record) ~= "table" then
+    return tournament.DEFAULT_RATING
+  end
+  return math.floor(number(record.rating, tournament.DEFAULT_RATING))
+end
+
+--- The name of a player at the time they join.
+local function username_of(context)
+  if context and type(context.username) == "string" and context.username ~= "" then
+    return context.username
+  end
+  return "Player"
+end
+
+-- The helpers that score a game and make the next round are defined below,
+-- but withdrawal needs them too.
+local score_game, find_game, advance
 
 local function error_payload(code, message)
   return {
@@ -28,14 +72,6 @@ local function error_payload(code, message)
       message = message,
     },
   }
-end
-
-local function number(value, fallback)
-  local parsed = tonumber(value)
-  if parsed == nil then
-    return fallback
-  end
-  return parsed
 end
 
 local function trim(text)
@@ -114,19 +150,41 @@ local function all()
   return tournaments
 end
 
+--- The Buchholz of a player: the sum of the points of their opponents.
+---
+--- This is the tie break lichess uses for a swiss. A player who faced
+--- stronger opponents comes first when the points are the same.
+local function buchholz(state, player)
+  local total = 0
+  for _, opponent_id in ipairs(player.opponents or {}) do
+    local opponent = state.players[opponent_id]
+    if opponent ~= nil then
+      total = total + number(opponent.points, 0)
+    end
+  end
+  return total
+end
+
 --- The players of a tournament, best first.
 local function standing(state)
   local players = {}
   for _, player in pairs(state.players or {}) do
-    players[#players + 1] = player
+    if not player.withdrawn then
+      players[#players + 1] = player
+    end
   end
 
   table.sort(players, function(left, right)
     if left.points == right.points then
-      if left.rating == right.rating then
-        return tostring(left.userId) < tostring(right.userId)
+      local left_buchholz = buchholz(state, left)
+      local right_buchholz = buchholz(state, right)
+      if left_buchholz == right_buchholz then
+        if left.rating == right.rating then
+          return tostring(left.userId) < tostring(right.userId)
+        end
+        return left.rating > right.rating
       end
-      return left.rating > right.rating
+      return left_buchholz > right_buchholz
     end
     return left.points > right.points
   end)
@@ -153,6 +211,10 @@ function tournament.view(state)
       matchId = player.matchId or nil,
       color = player.color or nil,
       byes = player.byes or 0,
+      whites = player.whites or 0,
+      blacks = player.blacks or 0,
+      buchholz = buchholz(state, player),
+      withdrawn = player.withdrawn == true,
     }
   end
 
@@ -266,18 +328,26 @@ local function play_round(state)
   for _, pairing in ipairs(pairings) do
     local first = pairing[1]
     local second = pairing[2]
+
+    -- The colours alternate: the player who has played fewer games as
+    -- White takes White this time.
+    local white, black = first, second
+    if number(first.whites, 0) > number(second.whites, 0) then
+      white, black = second, first
+    end
+
     local match_id = nk.match_create("chess_match", {
       mode = "tournament",
       rated = true,
       expected_users = {
         {
-          user_id = first.userId,
-          username = first.username,
+          user_id = white.userId,
+          username = white.username,
           color = "w",
         },
         {
-          user_id = second.userId,
-          username = second.username,
+          user_id = black.userId,
+          username = black.username,
           color = "b",
         },
       },
@@ -287,19 +357,21 @@ local function play_round(state)
       },
     })
 
-    first.matchId = match_id
-    first.color = "w"
-    second.matchId = match_id
-    second.color = "b"
-    first.opponents = first.opponents or {}
-    second.opponents = second.opponents or {}
-    first.opponents[#first.opponents + 1] = second.userId
-    second.opponents[#second.opponents + 1] = first.userId
+    white.matchId = match_id
+    white.color = "w"
+    black.matchId = match_id
+    black.color = "b"
+    white.whites = number(white.whites, 0) + 1
+    black.blacks = number(black.blacks, 0) + 1
+    white.opponents = white.opponents or {}
+    black.opponents = black.opponents or {}
+    white.opponents[#white.opponents + 1] = black.userId
+    black.opponents[#black.opponents + 1] = white.userId
 
     games[#games + 1] = {
       matchId = match_id,
-      white = first.userId,
-      black = second.userId,
+      white = white.userId,
+      black = black.userId,
       result = nil,
     }
   end
@@ -348,7 +420,7 @@ function tournament.create(context, params)
     id = tournament_id(),
     name = name,
     host = context.user_id,
-    hostName = context.username or "Player",
+    hostName = username_of(context),
     status = "open",
     round = 0,
     rounds = rounds,
@@ -363,12 +435,14 @@ function tournament.create(context, params)
 
   state.players[context.user_id] = {
     userId = context.user_id,
-    username = context.username or "Player",
-    rating = number(params.rating, 1200),
+    username = username_of(context),
+    rating = rating_of(context.user_id),
     points = 0,
     opponents = {},
     results = {},
     byes = 0,
+    whites = 0,
+    blacks = 0,
   }
 
   if not save(state) then
@@ -405,40 +479,17 @@ function tournament.join(context, params)
     end
     state.players[context.user_id] = {
       userId = context.user_id,
-      username = context.username or "Player",
-      rating = number(params.rating, 1200),
+      username = username_of(context),
+      rating = rating_of(context.user_id),
       points = 0,
       opponents = {},
       results = {},
       byes = 0,
+      whites = 0,
+      blacks = 0,
     }
   end
 
-  if not save(state) then
-    return error_payload("storage_unavailable", "the tournament could not be kept")
-  end
-
-  return {
-    ok = true,
-    tournament = tournament.view(state),
-  }
-end
-
---- Leave a tournament.
-function tournament.leave(context, params)
-  if not context or not context.user_id or context.user_id == "" then
-    return error_payload("unauthenticated", "A user session is required")
-  end
-
-  local state = load(params.id)
-  if state == nil then
-    return error_payload("unknown_tournament", "there is no such tournament")
-  end
-  if state.status ~= "open" then
-    return error_payload("tournament_started", "the tournament has begun")
-  end
-
-  state.players[context.user_id] = nil
   if not save(state) then
     return error_payload("storage_unavailable", "the tournament could not be kept")
   end
@@ -475,6 +526,88 @@ function tournament.start(context, params)
   end
 
   play_round(state)
+  if not save(state) then
+    return error_payload("storage_unavailable", "the tournament could not be kept")
+  end
+
+  return {
+    ok = true,
+    tournament = tournament.view(state),
+  }
+end
+
+--- Leave a tournament, even one that has begun.
+--
+-- When the tournament is still open, the player's seat is removed. When
+-- it has begun, the player is marked as withdrawn: they play no more
+-- rounds, and the game they were due to play is given to their opponent.
+function tournament.withdraw(context, params)
+  if not context or not context.user_id or context.user_id == "" then
+    return error_payload("unauthenticated", "A user session is required")
+  end
+
+  local state = load(params.id)
+  if state == nil then
+    return error_payload("unknown_tournament", "there is no such tournament")
+  end
+
+  local player = state.players[context.user_id]
+  if player == nil then
+    return error_payload("not_in_tournament", "you are not in this tournament")
+  end
+
+  if state.status == "open" then
+    state.players[context.user_id] = nil
+  else
+    player.withdrawn = true
+
+    -- The game of the current round is given to the opponent.
+    if player.matchId ~= nil then
+      local game = find_game(state, player.matchId)
+      if game ~= nil and game.result == nil then
+        local opponent_id = game.white == context.user_id and game.black or game.white
+        game.result = opponent_id
+        score_game(state, game, opponent_id, "withdraw")
+        advance(state)
+      end
+    end
+    player.matchId = nil
+    player.color = nil
+  end
+
+  if not save(state) then
+    return error_payload("storage_unavailable", "the tournament could not be kept")
+  end
+
+  return {
+    ok = true,
+    tournament = tournament.view(state),
+  }
+end
+
+--- Stop a tournament. Only its host may do so.
+function tournament.cancel(context, params)
+  if not context or not context.user_id or context.user_id == "" then
+    return error_payload("unauthenticated", "A user session is required")
+  end
+
+  local state = load(params.id)
+  if state == nil then
+    return error_payload("unknown_tournament", "there is no such tournament")
+  end
+  if state.host ~= context.user_id then
+    return error_payload("not_the_host", "only the host can stop the tournament")
+  end
+  if state.status == "finished" then
+    return error_payload("tournament_finished", "the tournament is already over")
+  end
+
+  state.status = "cancelled"
+  for _, player in pairs(state.players) do
+    player.matchId = nil
+    player.color = nil
+  end
+
   if not save(state) then
     return error_payload("storage_unavailable", "the tournament could not be kept")
   end
@@ -523,64 +656,108 @@ end
 --
 -- The standings are kept, and when the last game of the round is done the
 -- next round is made, until the rounds run out.
-function tournament.finish_match(match_id, winner_user_id, status)
-  for _, state in ipairs(all()) do
-    local found = false
-    for _, round in ipairs(state.rounds_done or {}) do
-      for _, game in ipairs(round.games or {}) do
-        if game.matchId == match_id and game.result == nil then
-          game.result = winner_user_id or "draw"
-          found = true
-        end
+--- Give the points of one game, and clear the game from the players so
+--- the Play button goes away when the game is done.
+score_game = function(state, game, winner_user_id, status)
+  local white = state.players[game.white]
+  local black = state.players[game.black]
+
+  if winner_user_id == game.white then
+    if white ~= nil then
+      white.points = white.points + 1
+      white.results[#white.results + 1] = "w"
+    end
+    if black ~= nil then
+      black.results[#black.results + 1] = "l"
+    end
+  elseif winner_user_id == game.black then
+    if black ~= nil then
+      black.points = black.points + 1
+      black.results[#black.results + 1] = "w"
+    end
+    if white ~= nil then
+      white.results[#white.results + 1] = "l"
+    end
+  elseif status == "abandoned" then
+    -- Nobody was there. Neither player gets a point.
+    if white ~= nil then
+      white.results[#white.results + 1] = "l"
+    end
+    if black ~= nil then
+      black.results[#black.results + 1] = "l"
+    end
+  else
+    -- A draw.
+    if white ~= nil then
+      white.points = white.points + 0.5
+      white.results[#white.results + 1] = "d"
+    end
+    if black ~= nil then
+      black.points = black.points + 0.5
+      black.results[#black.results + 1] = "d"
+    end
+  end
+
+  if white ~= nil then
+    white.matchId = nil
+    white.color = nil
+  end
+  if black ~= nil then
+    black.matchId = nil
+    black.color = nil
+  end
+end
+
+--- The game of a round that has just finished.
+find_game = function(state, match_id)
+  for _, round in ipairs(state.rounds_done or {}) do
+    for _, game in ipairs(round.games or {}) do
+      if game.matchId == match_id then
+        return game, round
       end
     end
+  end
+  return nil, nil
+end
 
-    if found then
-      -- The points of the round are given.
-      for _, round in ipairs(state.rounds_done or {}) do
-        for _, game in ipairs(round.games or {}) do
-          if game.matchId == match_id then
-            local white = state.players[game.white]
-            local black = state.players[game.black]
-            if white ~= nil and black ~= nil then
-              if winner_user_id == game.white then
-                white.points = white.points + 1
-                white.results[#white.results + 1] = "w"
-                black.results[#black.results + 1] = "l"
-              elseif winner_user_id == game.black then
-                black.points = black.points + 1
-                black.results[#black.results + 1] = "w"
-                white.results[#white.results + 1] = "l"
-              else
-                white.points = white.points + 0.5
-                black.points = black.points + 0.5
-                white.results[#white.results + 1] = "d"
-                black.results[#black.results + 1] = "d"
-              end
-            end
-          end
-        end
+--- Make the next round when the last game of the round is done.
+advance = function(state)
+  local waiting = 0
+  local last_round = state.rounds_done[#state.rounds_done]
+  for _, game in ipairs(last_round.games or {}) do
+    if game.result == nil then
+      waiting = waiting + 1
+    end
+  end
+
+  if waiting == 0 then
+    if (state.round or 0) < (state.rounds or 0) then
+      play_round(state)
+    else
+      state.status = "finished"
+    end
+  end
+end
+
+--- The result of a game of a tournament.
+--
+-- The standings are kept, and when the last game of the round is done the
+-- next round is made, until the rounds run out.
+function tournament.finish_match(match_id, winner_user_id, status)
+  if type(match_id) ~= "string" or match_id == "" then
+    return false
+  end
+
+  for _, state in ipairs(all()) do
+    if state.status == "running" then
+      local game = find_game(state, match_id)
+      if game ~= nil and game.result == nil then
+        game.result = winner_user_id or status or "draw"
+        score_game(state, game, winner_user_id, status)
+        advance(state)
+        save(state)
+        return true
       end
-
-      -- When every game of the round is done, the next round is made.
-      local waiting = 0
-      local last_round = state.rounds_done[#state.rounds_done]
-      for _, game in ipairs(last_round.games or {}) do
-        if game.result == nil then
-          waiting = waiting + 1
-        end
-      end
-
-      if waiting == 0 then
-        if (state.round or 0) < (state.rounds or 0) then
-          play_round(state)
-        else
-          state.status = "finished"
-        end
-      end
-
-      save(state)
-      return true
     end
   end
 

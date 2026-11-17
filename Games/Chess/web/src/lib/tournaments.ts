@@ -25,6 +25,13 @@ export interface TournamentPlayer {
   color: "w" | "b" | null;
   /** The rounds the player had no game in. */
   byes: number;
+  /** The number of games played as White and as Black. */
+  whites: number;
+  blacks: number;
+  /** The sum of the opponents' points, the tie break of a swiss. */
+  buchholz: number;
+  /** True when the player left a tournament that had begun. */
+  withdrawn: boolean;
 }
 
 /** A game of a round. */
@@ -48,7 +55,7 @@ export interface Tournament {
   name: string;
   host: string;
   hostName: string;
-  status: "open" | "running" | "finished";
+  status: "open" | "running" | "finished" | "cancelled";
   /** The round being played. */
   round: number;
   /** How many rounds there are. */
@@ -85,6 +92,10 @@ function readPlayer(value: unknown): TournamentPlayer | null {
     matchId: typeof player.matchId === "string" ? player.matchId : null,
     color: player.color === "w" || player.color === "b" ? player.color : null,
     byes: Number(player.byes) || 0,
+    whites: Number(player.whites) || 0,
+    blacks: Number(player.blacks) || 0,
+    buchholz: Number(player.buchholz) || 0,
+    withdrawn: player.withdrawn === true,
   };
 }
 
@@ -152,7 +163,9 @@ export function readTournament(value: unknown): Tournament | null {
     host: typeof raw.host === "string" ? raw.host : "",
     hostName: typeof raw.hostName === "string" ? raw.hostName : "Player",
     status:
-      raw.status === "running" || raw.status === "finished"
+      raw.status === "running" ||
+      raw.status === "finished" ||
+      raw.status === "cancelled"
         ? raw.status
         : "open",
     round: Number(raw.round) || 0,

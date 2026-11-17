@@ -510,14 +510,14 @@ local function tournament_join(context, payload)
 end
 nk.register_rpc(tournament_join, "chess_tournament_join")
 
---- Leave a tournament.
+--- Leave a tournament. The old name is kept for older clients.
 local function tournament_leave(context, payload)
   local params, decode_error = decode_payload(payload)
   if not params then
     return response_error("invalid_payload", decode_error)
   end
 
-  local ok, result = pcall(tournament.leave, context, params)
+  local ok, result = pcall(tournament.withdraw, context, params)
   if not ok then
     return response_error("tournament_failed", tostring(result))
   end
@@ -541,3 +541,35 @@ local function tournament_start(context, payload)
   return nk.json_encode(result)
 end
 nk.register_rpc(tournament_start, "chess_tournament_start")
+
+--- Leave a tournament, even one that has begun.
+local function tournament_withdraw(context, payload)
+  local params, decode_error = decode_payload(payload)
+  if not params then
+    return response_error("invalid_payload", decode_error)
+  end
+
+  local ok, result = pcall(tournament.withdraw, context, params)
+  if not ok then
+    return response_error("tournament_failed", tostring(result))
+  end
+
+  return nk.json_encode(result)
+end
+nk.register_rpc(tournament_withdraw, "chess_tournament_withdraw")
+
+--- Stop a tournament. Only its host may do so.
+local function tournament_cancel(context, payload)
+  local params, decode_error = decode_payload(payload)
+  if not params then
+    return response_error("invalid_payload", decode_error)
+  end
+
+  local ok, result = pcall(tournament.cancel, context, params)
+  if not ok then
+    return response_error("tournament_failed", tostring(result))
+  end
+
+  return nk.json_encode(result)
+end
+nk.register_rpc(tournament_cancel, "chess_tournament_cancel")

@@ -1784,6 +1784,7 @@ export default function App({ bridge }: AppProps) {
           onJoin={(id) => online.tournamentJoin(id)}
           onLeave={(id) => online.tournamentLeave(id)}
           onStart={(id) => online.tournamentStart(id)}
+          onCancel={(id) => online.tournamentCancel(id)}
           onPlay={(matchId) => {
             setTournamentOpen(false);
             setMode("online");

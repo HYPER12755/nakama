@@ -31,6 +31,10 @@ const TOURNAMENT = {
       matchId: "match-1",
       color: "w",
       byes: 0,
+      whites: 1,
+      blacks: 0,
+      buchholz: 0,
+      withdrawn: false,
     },
     {
       userId: "two",
@@ -43,6 +47,10 @@ const TOURNAMENT = {
       matchId: "match-1",
       color: "b",
       byes: 0,
+      whites: 0,
+      blacks: 1,
+      buchholz: 1,
+      withdrawn: false,
     },
   ],
   roundsDone: [
@@ -68,7 +76,17 @@ describe("a tournament", () => {
     expect(tournament?.players[0].username).toBe("One");
     expect(tournament?.players[0].matchId).toBe("match-1");
     expect(tournament?.players[1].color).toBe("b");
+    expect(tournament?.players[0].whites).toBe(1);
+    expect(tournament?.players[1].blacks).toBe(1);
+    expect(tournament?.players[1].buchholz).toBe(1);
+    expect(tournament?.players[1].withdrawn).toBe(false);
     expect(tournament?.roundsDone[0].games[0].result).toBe("one");
+  });
+
+  it("reads the cancelled status", () => {
+    expect(readTournament({ ...TOURNAMENT, status: "cancelled" })?.status).toBe(
+      "cancelled",
+    );
   });
 
   it("does not trust an answer that is not written properly", () => {

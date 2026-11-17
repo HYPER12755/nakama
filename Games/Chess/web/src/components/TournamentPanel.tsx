@@ -17,10 +17,12 @@ export interface TournamentPanelProps {
   }) => Promise<{ ok: boolean; tournament: Tournament | null; message: string | null }>;
   /** Take a seat in a tournament. */
   onJoin: (id: string) => Promise<{ ok: boolean; message: string | null }>;
-  /** Leave a tournament. */
+  /** Leave a tournament, even one that has begun. */
   onLeave: (id: string) => Promise<{ ok: boolean; message: string | null }>;
   /** Begin a tournament. */
   onStart: (id: string) => Promise<{ ok: boolean; message: string | null }>;
+  /** Stop a tournament. Only its host may do so. */
+  onCancel: (id: string) => Promise<{ ok: boolean; message: string | null }>;
   /** Open the game of a round. */
   onPlay: (matchId: string) => void;
   /** The account of the player, so their own row is known. */
@@ -48,6 +50,7 @@ export function TournamentPanel({
   onJoin,
   onLeave,
   onStart,
+  onCancel,
   onPlay,
   userId,
   onClose,
@@ -75,6 +78,19 @@ export function TournamentPanel({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // While the tournament is running, keep the standings and the next game
+  // up to date without the player having to ask for them.
+  const running = selected?.status === "running";
+  useEffect(() => {
+    if (!running) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [refresh, running]);
 
   const create = async () => {
     setBusy(true);
@@ -129,8 +145,19 @@ export function TournamentPanel({
     await refresh();
   };
 
+  const cancel = async (id: string) => {
+    const result = await onCancel(id);
+    if (!result.ok) {
+      setNotice(result.message ?? "The tournament could not be stopped.");
+      return;
+    }
+    setNotice("The tournament has been stopped.");
+    await refresh();
+  };
+
   const mine = (player: TournamentPlayer) =>
     userId !== null && player.userId === userId;
+  const me = selected?.players.find((player) => mine(player)) ?? null;
 
   return (
     <section className="panel tournament-panel">
@@ -236,8 +263,23 @@ export function TournamentPanel({
               ? "waiting for the host"
               : selected.status === "running"
                 ? `round ${selected.round} of ${selected.rounds}`
-                : "finished"}
+                : selected.status === "cancelled"
+                  ? "stopped by the host"
+                  : "finished"}
           </p>
+
+          {selected.status === "running" && me !== null && me.matchId !== null && (
+            <p className="tournament-next-game">
+              Your game is ready.{" "}
+              <button
+                type="button"
+                className="mini-button"
+                onClick={() => onPlay(me.matchId as string)}
+              >
+                Play it
+              </button>
+            </p>
+          )}
 
           <ol className="tournament-standing">
             {selected.players.map((player) => (
@@ -257,14 +299,11 @@ export function TournamentPanel({
                 <span className="tournament-standing__points">
                   {pointsText(player.points)}
                 </span>
-                {player.matchId !== null && mine(player) && (
-                  <button
-                    type="button"
-                    className="mini-button"
-                    onClick={() => onPlay(player.matchId as string)}
-                  >
-                    Play
-                  </button>
+                <span className="tournament-standing__tie" title="The points of the opponents, the tie break">
+                  {pointsText(player.buchholz)}
+                </span>
+                {player.withdrawn && (
+                  <span className="tournament-standing__out">out</span>
                 )}
               </li>
             ))}
@@ -329,13 +368,33 @@ export function TournamentPanel({
                 </button>
               ))}
             {selected.status === "running" && (
-              <button
-                type="button"
-                className="action-button"
-                onClick={() => void refresh()}
-              >
-                Look again
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="action-button"
+                  onClick={() => void refresh()}
+                >
+                  Look again
+                </button>
+                {me !== null && !me.withdrawn && (
+                  <button
+                    type="button"
+                    className="action-button action-button--danger"
+                    onClick={() => void leave(selected.id)}
+                  >
+                    Withdraw
+                  </button>
+                )}
+                {userId !== null && selected.host === userId && (
+                  <button
+                    type="button"
+                    className="action-button action-button--danger"
+                    onClick={() => void cancel(selected.id)}
+                  >
+                    Stop it
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>

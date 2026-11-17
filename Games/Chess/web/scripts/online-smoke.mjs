@@ -569,6 +569,40 @@ async function main() {
     );
     console.log("[ok] the tournaments are listed");
 
+    // A player can withdraw while the tournament is running, and only the
+    // host can stop it.
+    const withdrawn = await bob.client.rpc(
+      bob.session,
+      "chess_tournament_withdraw",
+      { id: tournament.id },
+    );
+    assert(
+      withdrawn.payload?.ok === true,
+      "the player could not withdraw: " + JSON.stringify(withdrawn.payload),
+    );
+    console.log("[ok] a player can withdraw while the tournament runs");
+
+    const refusedCancel = await bob.client.rpc(
+      bob.session,
+      "chess_tournament_cancel",
+      { id: tournament.id },
+    );
+    assert(
+      refusedCancel.payload?.ok === false,
+      "a player who is not the host stopped the tournament",
+    );
+    const cancelled = await alice.client.rpc(
+      alice.session,
+      "chess_tournament_cancel",
+      { id: tournament.id },
+    );
+    assert(
+      cancelled.payload?.ok === true,
+      "the host could not stop the tournament: " +
+        JSON.stringify(cancelled.payload),
+    );
+    console.log("[ok] the host can stop the tournament");
+
     const privateRpc = await alice.client.rpc(
       alice.session,
       "chess_create_private_match",
