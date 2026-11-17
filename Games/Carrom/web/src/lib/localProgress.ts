@@ -14,6 +14,8 @@ export interface LocalGameRecord {
   winner: CarromPlayer | null;
   winnerTeam?: "A" | "B" | null;
   shots: number;
+  /** The structured shots of the table, for its replay. */
+  replay?: import("./replay").ReplayData;
   ratings: Partial<Record<CarromPlayer, LocalRatingChange>>;
 }
 
@@ -103,6 +105,7 @@ export function recordLocalGame(
     winner: CarromPlayer | null;
     winnerTeam?: "A" | "B" | null;
     shots: number;
+    replay?: import("./replay").ReplayData;
     at?: number;
   },
   storage: ProgressStorage | null = browserStorage(),
@@ -147,6 +150,7 @@ export function recordLocalGame(
     winner: input.winner,
     winnerTeam: input.winnerTeam ?? null,
     shots: input.shots,
+    replay: input.replay,
     ratings: changes,
   };
   const history = [record, ...progress.history].slice(0, HISTORY_LIMIT);

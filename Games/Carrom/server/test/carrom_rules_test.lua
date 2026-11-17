@@ -356,6 +356,37 @@ test("a doubles table needs both partners to clear their men", function()
   assert_equal(state.winnerTeam, "A", "the winning side")
 end)
 
+test("plays a whole match the same way the TypeScript core does", function()
+  local fixture = dofile(server_dir .. "/test/fixtures/whole-match.lua")
+  local state = rules.create_initial_state({ "white", "black", "green", "yellow" })
+  for index, shot in ipairs(fixture.shots) do
+    local result = physics.simulate(state, shot, { frames = false })
+    state = rules.resolve(state, result, shot)
+    local expected = fixture.steps[index]
+    assert_equal(state.turn, expected.turn, "turn after shot " .. index)
+    assert_equal(state.shotNumber, expected.shotNumber, "shot count " .. index)
+    for _, colour in ipairs(rules.ALL_PLAYERS) do
+      assert_equal(
+        state.scores[colour] or 0,
+        expected.scores[colour] or 0,
+        "score " .. colour .. " after shot " .. index
+      )
+    end
+    assert_equal(#state.discs, #expected.discs, "disc count " .. index)
+    local by_id = {}
+    for _, disc in ipairs(state.discs) do
+      by_id[disc.id] = disc
+    end
+    for _, disc in ipairs(expected.discs) do
+      local actual = by_id[disc.id]
+      assert_equal(actual ~= nil, true, "disc " .. disc.id .. " after shot " .. index)
+      assert_near(actual.x, disc.x, 1e-5, "disc " .. disc.id .. " x")
+      assert_near(actual.y, disc.y, 1e-5, "disc " .. disc.id .. " y")
+      assert_equal(actual.pocketed, disc.pocketed, "disc " .. disc.id .. " pocketed")
+    end
+  end
+end)
+
 if failures > 0 then
   print(failures .. " carrom rule test(s) failed")
   os.exit(1)

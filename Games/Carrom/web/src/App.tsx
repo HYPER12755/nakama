@@ -46,6 +46,7 @@ import { CarromBoard } from "./components/CarromBoard";
 import { ChallengePanel } from "./components/ChallengePanel";
 import { GameOverDialog } from "./components/GameOverDialog";
 import { LocalHistory } from "./components/LocalHistory";
+import { ReplayDialog } from "./components/ReplayDialog";
 import { Icon } from "./components/Icon";
 import { OnlinePanel } from "./components/OnlinePanel";
 import { PocketBox } from "./components/PocketBox";
@@ -62,6 +63,7 @@ import {
   recordLocalGame,
   type LocalProgress,
 } from "./lib/localProgress";
+import { readReplay, type ReplayData } from "./lib/replay";
 import { boardPlayers } from "./lib/tableSetup";
 import {
   AccountPanel,
@@ -250,6 +252,7 @@ export default function App({ bridge }: AppProps) {
     readLocalProgress(),
   );
   const recordedLocalGame = useRef<string | null>(null);
+  const localShotsRef = useRef<import("./lib/replay").ReplayShot[]>([]);
   const [variant, setVariant] = useState<GameVariant>(storedVariant);
   const [turnSeconds, setTurnSeconds] = useState(0);
   const [striker, setStriker] = useState<string>(CARROM_STRIKERS[0]!.id);
@@ -281,6 +284,10 @@ export default function App({ bridge }: AppProps) {
   const [clockDeadline, setClockDeadline] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [replay, setReplay] = useState<{
+    title: string;
+    data: ReplayData;
+  } | null>(null);
 
   const appRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<CarromShotResult | null>(null);
@@ -602,6 +609,15 @@ export default function App({ bridge }: AppProps) {
         return;
       }
       const result = simulateShot(game, shot);
+      localShotsRef.current.push({
+        by: game.turn,
+        colour: game.turn,
+        position: shot.position,
+        angle: shot.angle,
+        power: shot.power,
+        striker: game.strikers[game.turn],
+        pocketed_count: result.outcome.ownPocketed,
+      });
       animationRef.current = result;
       setAnimation(result);
       setPositions((current) => ({
@@ -653,6 +669,7 @@ export default function App({ bridge }: AppProps) {
       clearSoundTimers();
       animationRef.current = null;
       recordedLocalGame.current = null;
+      localShotsRef.current = [];
       setAnimation(null);
       const solo = options.solo === true;
       // The size and the mode are passed in, because React has not applied
@@ -946,6 +963,12 @@ export default function App({ bridge }: AppProps) {
         winner: game.winner,
         winnerTeam: game.winnerTeam,
         shots: game.shotNumber,
+        replay: {
+          variant,
+          teams: game.teams,
+          seats: game.players,
+          shots: localShotsRef.current,
+        },
       }),
     );
   }, [challengeId, game.players, game.shotNumber, game.status, game.winner, onlineMode, variant]);
@@ -1398,6 +1421,11 @@ export default function App({ bridge }: AppProps) {
                 setLocalRecord(readLocalProgress());
                 setToast("The local table record was cleared.");
               }}
+              onReplay={(record) => {
+                if (record.replay !== undefined) {
+                  setReplay({ title: "Replay of a local table", data: record.replay });
+                }
+              }}
             />
           ) : null}
 
@@ -1496,6 +1524,17 @@ export default function App({ bridge }: AppProps) {
                       : "Unknown date"
                   }`
                 }
+                onReplay={(entry) => {
+                  const data = readReplay(entry.metadata);
+                  if (data !== null) {
+                    setReplay({
+                      title: `Replay vs ${entry.opponent.username}`,
+                      data,
+                    });
+                  } else {
+                    setToast("This game has no replay to show.");
+                  }
+                }}
               />
             </>
           ) : null}
@@ -1595,6 +1634,15 @@ export default function App({ bridge }: AppProps) {
             onSend={(text) => online.sendChat(text)}
           />
         </div>
+      ) : null}
+
+      {replay !== null ? (
+        <ReplayDialog
+          title={replay.title}
+          data={replay.data}
+          theme={theme}
+          onClose={() => setReplay(null)}
+        />
       ) : null}
 
       <RulesDialog

@@ -569,6 +569,7 @@ local function handle_shot(context, dispatcher, state, message, payload, now)
     pocketed_count = pocketed_count,
     pocketed_colours = pocketed_colours,
     queen_covered = queen_covered,
+    striker = striker,
     turn_after = next_game.turn,
   }
 

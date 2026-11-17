@@ -463,6 +463,47 @@ test("a team win writes the result for both partners", function()
   assert_equal(loser.value.losses, 1, "the rival lost")
 end)
 
+test("a finished game keeps its shots for the replay", function()
+  for key in pairs(storage) do
+    storage[key] = nil
+  end
+  local state = {
+    mode = "quick",
+    rated = false,
+    variant = "freestyle",
+    player_order = { "user-a", "user-b" },
+    players = {
+      ["user-a"] = { user_id = "user-a", username = "Ivory", colour = "white" },
+      ["user-b"] = { user_id = "user-b", username = "Onyx", colour = "black" },
+    },
+    game = { players = { "white", "black" } },
+    shots = {
+      {
+        by = "user-a",
+        colour = "white",
+        position = 0.5,
+        angle = -1.57,
+        power = 0.8,
+        pocketed_count = 1,
+        striker = "heavy",
+      },
+    },
+  }
+  progression.finalize_match(
+    { match_id = "match-replay" },
+    state,
+    { status = "finished", winnerColour = "white", endedAt = fake_time },
+    fake_time
+  )
+  local history = storage[storage_key("user-a", "carrom_history", "match-replay:user-a")]
+  local replay = history.value.replay
+  assert_equal(replay.variant, "freestyle", "the game type")
+  assert_equal(#replay.shots, 1, "one shot was kept")
+  assert_equal(replay.shots[1].position, 0.5, "the striker position")
+  assert_equal(replay.shots[1].striker, "heavy", "the striker skin")
+  assert_equal(replay.seats[1], "white", "the first seat")
+end)
+
 if failures > 0 then
   print(failures .. " carrom profile test(s) failed")
   os.exit(1)

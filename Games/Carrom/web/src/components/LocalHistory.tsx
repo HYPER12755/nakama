@@ -10,10 +10,16 @@ export interface LocalHistoryProps {
   progress: LocalProgress;
   seats: CarromPlayer[];
   onClear: () => void;
+  onReplay?: (record: LocalProgress["history"][number]) => void;
 }
 
 /** The record a table played on this device keeps for itself. */
-export function LocalHistory({ progress, seats, onClear }: LocalHistoryProps) {
+export function LocalHistory({
+  progress,
+  seats,
+  onClear,
+  onReplay,
+}: LocalHistoryProps) {
   const rated = seats.filter((seat) => progress.ratings[seat] !== undefined);
   return (
     <section className="panel table-settings local-history">
@@ -61,6 +67,15 @@ export function LocalHistory({ progress, seats, onClear }: LocalHistoryProps) {
               <span className="local-history__detail">
                 {game.seats.length} players · {CARROM_VARIANTS[game.variant]?.label ?? game.variant} · {game.shots} shots
               </span>
+              {onReplay !== undefined && game.replay !== undefined ? (
+                <button
+                  type="button"
+                  className="mini-button"
+                  onClick={() => onReplay(game)}
+                >
+                  Replay
+                </button>
+              ) : null}
               <span className="local-history__change">
                 {game.seats
                   .filter((seat) => game.ratings[seat] !== undefined)

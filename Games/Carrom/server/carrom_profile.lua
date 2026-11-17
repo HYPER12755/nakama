@@ -188,7 +188,8 @@ function progression.history_record(
   rating_delta,
   ended_at,
   opponent_rating,
-  opponents
+  opponents,
+  replay
 )
   return {
     match_id = match_id,
@@ -204,6 +205,7 @@ function progression.history_record(
     },
     opponent_rating = opponent_rating or progression.DEFAULT_RATING,
     opponents = opponents or {},
+    replay = replay or {},
     steps = steps or {},
     summary = summary or "",
     rating_before = rating_before,
@@ -328,6 +330,40 @@ local function write_leaderboard(player, value, state, outcome)
   end
 
   return true
+end
+
+-- The shots of a finished game, kept so the board can be replayed on the
+-- device. The server already simulates these, so the replay is the same game.
+local function replay_shots(state)
+  local shots = {}
+  for _, shot in ipairs(state.shots or {}) do
+    shots[#shots + 1] = {
+      by = shot.by,
+      colour = shot.colour,
+      position = shot.position,
+      angle = shot.angle,
+      power = shot.power,
+      striker = shot.striker,
+      pocketed_count = shot.pocketed_count or 0,
+    }
+  end
+  return shots
+end
+
+local function players_seats(state)
+  local seats = {}
+  for _, colour in ipairs(state.game and state.game.players or {}) do
+    seats[#seats + 1] = colour
+  end
+  if #seats == 0 then
+    for _, player in ipairs(state.player_order or {}) do
+      local seated = state.players[player]
+      if seated then
+        seats[#seats + 1] = seated.colour
+      end
+    end
+  end
+  return seats
 end
 
 -- Record the finished game: the rating, the counters, the stats, the history,
@@ -529,7 +565,13 @@ function progression.finalize_match(context, state, result, now)
         rating_delta,
         now,
         opponent_rating,
-        opponents
+        opponents,
+        {
+          variant = state.variant or "classic",
+          teams = state.teams == true,
+          seats = players_seats(state),
+          shots = replay_shots(state),
+        }
       ),
     }
 
@@ -595,6 +637,7 @@ local function load_history(user_id, limit)
       opponents = record.opponents or {},
       steps = record.steps or {},
       summary = record.summary or "",
+      metadata = { replay = record.replay or {} },
       ratingBefore = record.rating_before,
       ratingAfter = record.rating_after,
       ratingDelta = record.rating_delta or 0,
