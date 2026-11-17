@@ -484,3 +484,130 @@ until the last round is done.
   played, all in one place.
 - [ ] The reports, the appeals, and the moderation of a community.
 - [ ] The voice chat of a table (we have the written one).
+
+## Phase 10 — Carrom
+
+Carrom has the table, the rules, an AI that shoots like a player, and online
+rooms, but it never had the pass that chess had. This is the work to bring it
+to the same standard: the faults first, then the ways to play, then the record
+of a game, and last the feel of the table.
+
+### The faults to fix first
+
+- [ ] The lines in a player's history always say "no pocket".
+  `carrom_profile.lua` writes `shot.pocketed` into the step, but the match
+  records the count under `pocketed_count`. Write the real count and the
+  colour pocketed, so the history says what happened in the shot.
+- [ ] A colour is not freed when a seat is removed. `remove_player()` in
+  `carrom_match.lua` drops the player and their place in the turn order but
+  leaves `taken_colours[colour]` set, so after the disconnect grace a new
+  player cannot take the empty seat. Clear the colour with the seat.
+- [ ] A player who leaves is not given a result. Chess forfeits a disconnect;
+  carrom just removes the seat and carries on, so the leaver keeps their
+  rating and the game stays on their record as nothing. Record the loss and
+  finish the table for the rest, the way chess does.
+- [ ] Signing in leaves the live socket on the guest account. `signIn` and
+  `signUp` in `useOnlineCarrom.ts` replace the session but not the connected
+  socket, so the RPC calls use the new account while match play still uses the
+  old guest until the page is reloaded. Reconnect the socket with the new
+  session after signing in.
+- [ ] An email session is written under the host but read under the host and
+  port. `connect()` reads the stored session with `address.label`, while
+  sign-in stores it with `serverLabelRef.current`, which is the host alone.
+  Use one key on both sides so a signed-in player stays signed in after a
+  reload.
+- [ ] A quick match made by the matchmaker ignores the chosen shot clock. The
+  quick RPC passes `turnSeconds`, but the matched handler in `carrom_rpc.lua`
+  creates the match without it. Carry the clock into the matched table.
+- [ ] Switching modes can leave ghost players. `handleModeChange()` in
+  `App.tsx` sets the mode and then calls `resetBoard()`, which still reads the
+  old mode, so changing a four seat local table to AI builds a four seat board
+  with only black played by the computer. Build the board from the new mode.
+- [ ] A three or four player rating counts only one opponent. The loop in
+  `carrom_profile.lua` overwrites `opponent_rating` on every other player,
+  while the history names the first one. Rate against every opponent (or the
+  table's average) and write the same opponent in both places.
+- [ ] Finishing a match twice counts it twice. `finalize_match()` has no
+  marker for a match already written, unlike chess, so a repeated call adds
+  another game and another rating change. Mark the match as done and refuse a
+  second write.
+- [ ] The leaderboard says its total is the length of the top list.
+  `carrom_profile.lua` sets `total = #entries`, which is only the players
+  shown. Count all the rated players instead.
+- [ ] The grain of a piece flickers while it travels. `CarromBoard.tsx` picks
+  the sprite from the piece's current x and y, so the grain changes during a
+  shot although the comment says it stays with the piece. Key the grain to the
+  piece itself.
+- [ ] The rules and the game over dialog describe only classic two player
+  play. They name Ivory and Onyx and always require the queen to be covered,
+  even in Freestyle, Practice and tables of three or four. Say what the table
+  actually played.
+
+### The ways to play
+
+- [ ] Finish the offline four player table from Phase 8 with a record of its
+  own: a local table keeps its history and its rating changes on the device,
+  and any seat, not just black, can be handed to the computer.
+- [ ] Finish two against two team mode from Phase 8: partners sit opposite,
+  the turn crosses the teams, and a foul by one partner passes the shot to the
+  other team. The server owns the teams so online tables agree.
+- [ ] A spectate button in the lobby. The server already seats up to twenty
+  four watchers and an invite link can put someone in one, but a player cannot
+  choose to watch a table from the lobby.
+- [ ] Resign, draw and abandon. Chess has all three; carrom has none. A player
+  can end a table, the other side is told, and the result is written with the
+  right rating outcome.
+- [ ] Rejoin a table after the connection drops. The server already lets the
+  same player come back inside the grace period, but the client only paints
+  "offline" and never rejoins. Rejoin the match and ask for the state.
+- [ ] Use the state and ping messages the server already answers. `REQUEST_STATE`
+  and `PONG` are handled but the client never sends them, so a fresh state on
+  reconnect and a way to tell a dead connection from a slow one are missing.
+
+### The record of a game
+
+- [ ] Replay a finished match from the history. The shared profile panel has a
+  replay button that carrom never wires up. Save the shots of a match as steps
+  the client can play back, pass the replay handler, and walk the board
+  through them with the shared replay chrome.
+- [ ] Declare the replay capability in the Carrom manifest once the game can
+  replay, so the catalog and the launcher describe it honestly.
+- [ ] A parity suite for whole matches. Today only one opening shot is played
+  on both the TypeScript and the Lua side. Play complete matches from recorded
+  shots and check that every frame, pocket and score agrees.
+- [ ] Tests for the parts that have none: the online hook (connect, auth,
+  session restore, signing in, the matchmaker fallback, invites, chat), the
+  App's mode, challenge and clock flows, and the RPC and protocol modules.
+  Chess has 147 web tests and 78 Lua tests; carrom has 17 and 29.
+
+### Ratings like chess
+
+- [ ] Move carrom to Glicko-2, sharing the chess module if it can be shared.
+  Keep the rating, the deviation and the volatility, show how uncertain a
+  rating is and draw the line of the games played, and carry the old Elo
+  values across.
+- [ ] Get the two, three and four player rating right before adding the new
+  system, so the fault above is not carried into it.
+
+### The feel of the table
+
+- [ ] Sound sets with real samples instead of the four tones made by the
+  browser, with a volume and a quiet table, laid out and licensed the way the
+  chess sound packs are.
+- [ ] Skins for the board and the striker: several woods and cloths and
+  several strikers, chosen in a preferences panel and kept on the device per
+  game the way chess keeps its choices.
+- [ ] Package a font with carrom the way chess packages Noto Sans and its chess
+  font, so the table looks the same on every device.
+- [ ] A choice of how fast a shot is played, and a way to turn the playback
+  off. It is fixed at 1.9 seconds and 0.85 of the shot time today.
+- [ ] Aim the striker and place it with the keyboard, for players who cannot
+  drag a pointer.
+- [ ] A list of the shots beside the table with what each one pocketed and a
+  way to jump to a shot.
+- [ ] Use the shared preferences panel in carrom with only the choices that
+  apply to a carrom table, instead of the switches scattered about now.
+- [ ] Keep the version and the docs honest: the Carrom manifest still says
+  0.5.0 while chess says 0.8.5, and the README lists five core, two server and
+  two web test files with 60 Hz frames while the code has nine, three and five
+  with 30 Hz. Update these as the work lands.
