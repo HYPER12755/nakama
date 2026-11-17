@@ -187,6 +187,8 @@ export function animationDuration(speed: AnimationSpeed): number {
 export interface GamePreferences {
   /** The set of pieces on the board. A title with no pieces ignores this. */
   pieceSet: string;
+  /** The design of the striker, for games that have one. */
+  strikerDesign: string;
   /** The colours of the board. */
   boardTheme: string;
   /** Where the coordinates are drawn. */
@@ -221,6 +223,7 @@ export interface GamePreferences {
 
 export const DEFAULT_PREFERENCES: GamePreferences = {
   pieceSet: "moongames",
+  strikerDesign: "brass",
   boardTheme: "moongames",
   coordinates: Coordinates.Outside,
   animationSpeed: AnimationSpeed.Normal,

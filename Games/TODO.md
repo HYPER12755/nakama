@@ -594,9 +594,21 @@ of a game, and last the feel of the table.
 
 ### The feel of the table
 
-- [ ] Sound sets with real samples instead of the four tones made by the
+- [x] Sound sets with real samples instead of the four tones made by the
   browser, with a volume and a quiet table, laid out and licensed the way the
   chess sound packs are.
+- [ ] Ten board designs, ten striker designs and ten piece-colour sets, chosen
+  from the shared preferences panel rather than written into the board.
+- [ ] The sound sets can be previewed from the panel before they are chosen.
+- [ ] A small preview board at the top of the panel, so a player can see the
+  board, the striker and the pieces they have chosen without starting a game.
+- [ ] When the turn passes, the striker must sit in the middle of the new
+  player's baseline, not at a corner or wherever the last shot left it.
+- [ ] The aiming and striker controls sometimes jump or do strange things.
+  Make the drag, the guide and the striker slider smooth and predictable on
+  every turn, and fix whatever causes the odd behaviour.
+- [ ] The coloured lines of the top points bar start over the player names
+  and cover them. Start each line after the end of its name.
 - [ ] Skins for the board and the striker: several woods and cloths and
   several strikers, chosen in a preferences panel and kept on the device per
   game the way chess keeps its choices.

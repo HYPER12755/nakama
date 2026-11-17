@@ -1,4 +1,25 @@
+/**
+ * The carrom table speaks with real sound files, one folder per set. The
+ * sounds are fetched once and played at the moment the event happens. A
+ * missing sound never stops the game.
+ */
+
+export type CarromSound =
+  | "strike"
+  | "pocket"
+  | "queen"
+  | "foul"
+  | "win"
+  | "turn"
+  | "start";
+
 let audioContext: AudioContext | null = null;
+const buffers = new Map<CarromSound, AudioBuffer>();
+const loading = new Map<CarromSound, Promise<AudioBuffer | null>>();
+
+let currentSet = "standard";
+let currentVolume = 0.8;
+let currentEnabled = true;
 
 type AudioContextConstructor = typeof AudioContext;
 
@@ -24,61 +45,100 @@ function context(): AudioContext | null {
   return audioContext;
 }
 
-function resume(ctx: AudioContext): void {
-  if (ctx.state === "suspended") {
-    void ctx.resume().catch(() => undefined);
+export interface SoundSettings {
+  set?: string;
+  volume?: number;
+  enabled?: boolean;
+}
+
+export function configureSound(settings: SoundSettings): void {
+  if (settings.set !== undefined && settings.set !== currentSet) {
+    currentSet = settings.set;
+    buffers.clear();
+    loading.clear();
+  }
+  if (settings.volume !== undefined) {
+    currentVolume = Math.max(0, Math.min(1, settings.volume));
+  }
+  if (settings.enabled !== undefined) {
+    currentEnabled = settings.enabled;
   }
 }
 
-function tone(
-  frequency: number,
-  endFrequency: number,
-  duration: number,
-  type: OscillatorType,
-  volume: number,
-  delay = 0,
-): void {
+export function soundSet(): string {
+  return currentSet;
+}
+
+function soundUrl(file: string): string {
+  const base = document.baseURI;
+  return new URL(`sounds/${currentSet}/${file}.ogg`, base).toString();
+}
+
+function load(sound: CarromSound): Promise<AudioBuffer | null> {
+  const existing = buffers.get(sound);
+  if (existing !== undefined) {
+    return Promise.resolve(existing);
+  }
+  const pending = loading.get(sound);
+  if (pending !== undefined) {
+    return pending;
+  }
+  const ctx = context();
+  if (ctx === null) {
+    return Promise.resolve(null);
+  }
+  const promise = fetch(soundUrl(sound))
+    .then((response) => (response.ok ? response.arrayBuffer() : null))
+    .then((data) => (data === null ? null : ctx.decodeAudioData(data)))
+    .then((buffer) => {
+      loading.delete(sound);
+      if (buffer !== null) {
+        buffers.set(sound, buffer);
+      }
+      return buffer;
+    })
+    .catch(() => {
+      loading.delete(sound);
+      return null;
+    });
+  loading.set(sound, promise);
+  return promise;
+}
+
+/** Fetch a sound ahead of time so it is ready when the event happens. */
+export function preloadSound(sound: CarromSound): void {
+  if (!currentEnabled) {
+    return;
+  }
+  void load(sound);
+}
+
+/** Play a sound. A missing or blocked file is ignored. */
+export function playSound(sound: CarromSound): void {
+  if (!currentEnabled || currentVolume <= 0) {
+    return;
+  }
   const ctx = context();
   if (ctx === null) {
     return;
   }
-  resume(ctx);
-  const start = ctx.currentTime + delay;
-  const oscillator = ctx.createOscillator();
-  const gain = ctx.createGain();
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, start);
-  oscillator.frequency.exponentialRampToValueAtTime(
-    Math.max(20, endFrequency),
-    start + duration,
-  );
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(volume, start + 0.008);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  oscillator.connect(gain);
-  gain.connect(ctx.destination);
-  oscillator.start(start);
-  oscillator.stop(start + duration + 0.02);
-}
-
-export function playStrike(): void {
-  tone(185, 72, 0.12, "triangle", 0.09);
-  tone(420, 160, 0.045, "square", 0.025);
-}
-
-export function playPocket(queen = false): void {
-  tone(queen ? 260 : 150, 58, queen ? 0.22 : 0.16, "sine", 0.11);
-  if (queen) {
-    tone(520, 390, 0.16, "triangle", 0.045, 0.04);
+  if (ctx.state === "suspended") {
+    void ctx.resume().catch(() => undefined);
   }
-}
-
-export function playFoul(): void {
-  tone(170, 82, 0.28, "sawtooth", 0.055);
-}
-
-export function playWin(): void {
-  tone(392, 392, 0.16, "triangle", 0.06);
-  tone(523.25, 523.25, 0.16, "triangle", 0.055, 0.12);
-  tone(659.25, 659.25, 0.3, "triangle", 0.06, 0.24);
+  void load(sound).then((buffer) => {
+    if (buffer === null || ctx.state === "closed") {
+      return;
+    }
+    try {
+      const source = ctx.createBufferSource();
+      const gain = ctx.createGain();
+      source.buffer = buffer;
+      gain.gain.value = currentVolume;
+      source.connect(gain);
+      gain.connect(ctx.destination);
+      source.start();
+    } catch {
+      // The table plays on without the sound.
+    }
+  });
 }

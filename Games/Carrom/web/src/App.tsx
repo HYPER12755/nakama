@@ -43,6 +43,8 @@ import {
   type GameVariant,
 } from "@moongames/carrom-core";
 import { CarromBoard } from "./components/CarromBoard";
+import { CarromPreferences } from "./components/CarromPreferences";
+import { EventToasts } from "./components/EventToasts";
 import { ChallengePanel } from "./components/ChallengePanel";
 import { GameOverDialog } from "./components/GameOverDialog";
 import { LocalHistory } from "./components/LocalHistory";
@@ -67,19 +69,26 @@ import { readReplay, type ReplayData } from "./lib/replay";
 import { boardPlayers } from "./lib/tableSetup";
 import {
   AccountPanel,
+  GamePreferencesPanel,
   MatchChat,
   ModeSwitch,
   OpponentLeftDialog,
   ProfilePanel,
   parseMatchInvite,
+  useGamePreferences,
   type GameHistoryEntry,
 } from "@moongames/game-ui";
+import { configureSound, playSound } from "./lib/audio";
+import { setPlaybackSpeed } from "./lib/playback";
 import {
-  playFoul,
-  playPocket,
-  playStrike,
-  playWin,
-} from "./lib/audio";
+  CARROM_FEATURES,
+  SOUND_SETS,
+  audibleVolume,
+  playbackSpeed,
+} from "./lib/preferences";
+import { tableVisuals } from "./lib/designs";
+import { positionFor } from "./lib/striker";
+import { shotEvents, type TableEvent } from "./lib/events";
 import {
   persistTheme,
   resolveGameTheme,
@@ -88,6 +97,8 @@ import {
 } from "./lib/theme";
 import { gameStorageKey } from "./lib/storage";
 import { playbackTime } from "./lib/playback";
+
+const GAME_ID = __MOONGAMES_GAME_ID__;
 
 type Mode = "local" | "ai" | "online";
 
@@ -275,6 +286,7 @@ export default function App({ bridge }: AppProps) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [events, setEvents] = useState<TableEvent[]>([]);
   const [aiThinking, setAiThinking] = useState(false);
   const [aiDifficulty, setAiDifficulty] =
     useState<CarromAiDifficulty>("normal");
@@ -288,6 +300,7 @@ export default function App({ bridge }: AppProps) {
     title: string;
     data: ReplayData;
   } | null>(null);
+  const { preferences } = useGamePreferences(GAME_ID);
 
   const appRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<CarromShotResult | null>(null);
@@ -363,7 +376,7 @@ export default function App({ bridge }: AppProps) {
   // player's own turn and they have moved it.
   const strikerPosition = useMemo(() => {
     if (!onlineMode) {
-      return positions[dockPlayer] ?? 0.5;
+      return positionFor(positions, dockPlayer);
     }
     if (online.myColour === dockPlayer) {
       const local = positions[dockPlayer];
@@ -449,6 +462,18 @@ export default function App({ bridge }: AppProps) {
   }, [soundOn]);
 
   useEffect(() => {
+    configureSound({
+      set: preferences.soundSet,
+      volume: soundOn ? audibleVolume(preferences, 1) : 0,
+      enabled: soundOn,
+    });
+  }, [preferences.soundSet, preferences.soundEnabled, preferences.soundVolume, soundOn]);
+
+  useEffect(() => {
+    setPlaybackSpeed(playbackSpeed(preferences.animationSpeed));
+  }, [preferences.animationSpeed]);
+
+  useEffect(() => {
     try {
       window.localStorage.setItem(AIM_KEY, aimMode);
     } catch {
@@ -522,6 +547,24 @@ export default function App({ bridge }: AppProps) {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    if (events.length === 0) {
+      return;
+    }
+    const timer = window.setTimeout(
+      () => setEvents((current) => current.slice(1)),
+      TOAST_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [events]);
+
+  const pushEvents = useCallback((incoming: TableEvent[]) => {
+    if (incoming.length === 0) {
+      return;
+    }
+    setEvents((current) => [...current, ...incoming].slice(-4));
+  }, []);
+
   // The server tells the table what happened, for example when a shot clock
   // runs out. Those messages belong on the table, not only in the sidebar.
   useEffect(() => {
@@ -549,10 +592,10 @@ export default function App({ bridge }: AppProps) {
       if (!soundOn) {
         return;
       }
-      playStrike();
+      playSound("strike");
       for (const event of result.pocketed) {
         const timer = window.setTimeout(
-          () => playPocket(event.kind === "queen"),
+          () => playSound(event.kind === "queen" ? "queen" : "pocket"),
           // The sound is heard when the piece reaches the pocket, which is
           // when the shot is played back to that moment.
           playbackTime(event.time, result.duration) * 1000,
@@ -561,14 +604,14 @@ export default function App({ bridge }: AppProps) {
       }
       if (result.outcome.foul) {
         const timer = window.setTimeout(
-          playFoul,
+          () => playSound("foul"),
           Math.max(80, playbackTime(result.duration, result.duration) * 1000),
         );
         soundTimers.current.push(timer);
       }
       if (result.outcome.winner !== null) {
         const timer = window.setTimeout(
-          playWin,
+          () => playSound("win"),
           Math.max(
             120,
             playbackTime(result.duration, result.duration) * 1000 + 140,
@@ -646,10 +689,11 @@ export default function App({ bridge }: AppProps) {
       }
     }
     // The table speaks in every mode: a shot is heard, a pocket is heard,
-    // and the phone answers with a buzz.
+    // the events are shown, and the phone answers with a buzz.
     if (result === null) {
       return;
     }
+    pushEvents(shotEvents(result, Date.now()));
     if (result.outcome.winner !== null) {
       bridge.haptic("success");
     } else if (result.outcome.foul) {
@@ -659,7 +703,7 @@ export default function App({ bridge }: AppProps) {
     } else {
       bridge.haptic("light");
     }
-  }, [bridge, onlineMode]);
+  }, [bridge, onlineMode, pushEvents]);
 
   const resetBoard = useCallback(
     (
@@ -762,6 +806,18 @@ export default function App({ bridge }: AppProps) {
     },
     [activeGame, game],
   );
+
+  // A new player always takes the table with the striker in the middle of
+  // their own baseline. Without this the slider keeps the last position of
+  // whoever played before, so the striker jumps to a corner on a turn change.
+  const currentTurn = activeGame?.turn ?? game.turn;
+  const lastTurnRef = useRef(currentTurn);
+  useEffect(() => {
+    if (lastTurnRef.current !== currentTurn) {
+      lastTurnRef.current = currentTurn;
+      setPositions({ ...DEFAULT_POSITIONS });
+    }
+  }, [currentTurn]);
 
   const nudgeStriker = useCallback(
     (direction: -1 | 1, player: CarromPlayer) => {
@@ -1240,6 +1296,11 @@ export default function App({ bridge }: AppProps) {
                 view={viewPlayer}
                 onShoot={handleShoot}
                 onAnimationComplete={handleAnimationComplete}
+                visuals={tableVisuals(
+                  preferences.boardTheme,
+                  preferences.strikerDesign,
+                  preferences.pieceSet,
+                )}
               />
             </div>
             <StrikerDock
@@ -1411,6 +1472,8 @@ export default function App({ bridge }: AppProps) {
               );
             }}
           />
+
+          <CarromPreferences gameId={GAME_ID} theme={theme} />
 
           {!onlineMode && challengeId === null ? (
             <LocalHistory
@@ -1689,6 +1752,12 @@ export default function App({ bridge }: AppProps) {
           onClose={() => setResultOpen(false)}
         />
       ) : null}
+      <EventToasts
+        events={events}
+        onDismiss={(id) =>
+          setEvents((current) => current.filter((event) => event.id !== id))
+        }
+      />
       {toast !== null ? (
         <div className="toast" role="status">
           <Icon name="sparkles" size={16} />

@@ -1,0 +1,38 @@
+Carrom table sounds
+===================
+
+The sounds in `standard/`, `soft/` and `bright/` are real audio files from the
+Kenney game asset collection, mirrored on GitHub at
+`ismetcabbar9-oss/kenney-audio-assets` under "Audio (295 files)".
+
+License: CC0 1.0 Universal (public domain dedication).
+https://creativecommons.org/publicdomain/zero/1.0/
+
+They may be used for any purpose without attribution. The upstream repository
+is marked `CC0-1.0` by GitHub's license detection.
+
+Sources by file:
+
+  standard/strike.ogg  Casino sounds / chipsCollide2.ogg
+  standard/pocket.ogg  Casino sounds / chipLay1.ogg
+  standard/queen.ogg   Jingle sounds / jingles_HIT / jingles_HIT02.ogg
+  standard/foul.ogg    Jingle sounds / jingles_HIT / jingles_HIT00.ogg
+  standard/win.ogg     Jingle sounds / jingles_HIT / jingles_HIT08.ogg
+  standard/turn.ogg    UI sounds / click1.ogg
+  standard/start.ogg   UI sounds / click4.ogg
+
+  soft/strike.ogg      Casino sounds / chipLay2.ogg
+  soft/pocket.ogg      Casino sounds / chipLay3.ogg
+  soft/queen.ogg       Jingle sounds / jingles_HIT / jingles_HIT03.ogg
+  soft/foul.ogg        Jingle sounds / jingles_HIT / jingles_HIT01.ogg
+  soft/win.ogg         Jingle sounds / jingles_HIT / jingles_HIT09.ogg
+  soft/turn.ogg        UI sounds / click2.ogg
+  soft/start.ogg       UI sounds / click3.ogg
+
+  bright/strike.ogg    Casino sounds / chipsCollide4.ogg
+  bright/pocket.ogg    Casino sounds / chipLay1.ogg
+  bright/queen.ogg     Jingle sounds / jingles_HIT / jingles_HIT04.ogg
+  bright/foul.ogg      Jingle sounds / jingles_HIT / jingles_HIT05.ogg
+  bright/win.ogg       Jingle sounds / jingles_HIT / jingles_HIT10.ogg
+  bright/turn.ogg      UI sounds / click1.ogg
+  bright/start.ogg     UI sounds / click4.ogg

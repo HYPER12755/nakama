@@ -33,6 +33,14 @@ import {
 } from "../lib/view";
 import { shotPlaybackSeconds } from "../lib/playback";
 import type { Theme } from "../lib/theme";
+import {
+  tableVisuals,
+  type BoardDesign,
+  type Palette,
+  type PieceSet,
+  type StrikerDesign,
+  type TableVisuals,
+} from "../lib/designs";
 
 const ACCENT = "#48c9b0";
 const QUEEN_RED = "#b3202b";
@@ -67,6 +75,8 @@ export interface CarromBoardProps {
   view: CarromPlayer;
   onShoot: (shot: CarromShotInput) => void;
   onAnimationComplete: () => void;
+  /** The board, striker and piece designs chosen in the preferences. */
+  visuals?: TableVisuals;
 }
 
 function roundedRect(
@@ -108,12 +118,16 @@ function random(seed: number): () => number {
   };
 }
 
-function drawFrame(ctx: CanvasRenderingContext2D, lite: boolean): void {
+function drawFrame(
+  ctx: CanvasRenderingContext2D,
+  lite: boolean,
+  board: BoardDesign,
+): void {
   const frame = ctx.createLinearGradient(0, 0, LOGICAL_SIZE, LOGICAL_SIZE);
-  frame.addColorStop(0, "#6b4429");
-  frame.addColorStop(0.35, "#4a2d1b");
-  frame.addColorStop(0.72, "#331d12");
-  frame.addColorStop(1, "#1d110a");
+  frame.addColorStop(0, board.frame[0]);
+  frame.addColorStop(0.35, board.frame[1]);
+  frame.addColorStop(0.72, board.frame[2]);
+  frame.addColorStop(1, board.frame[3]);
   roundedRect(ctx, 8, 8, LOGICAL_SIZE - 16, LOGICAL_SIZE - 16, 46);
   ctx.fillStyle = frame;
   ctx.fill();
@@ -198,17 +212,21 @@ function drawFrame(ctx: CanvasRenderingContext2D, lite: boolean): void {
   }
 }
 
-function drawSurface(ctx: CanvasRenderingContext2D, lite: boolean): void {
+function drawSurface(
+  ctx: CanvasRenderingContext2D,
+  lite: boolean,
+  board: BoardDesign,
+): void {
   const surface = ctx.createLinearGradient(
     PLAY_INSET,
     PLAY_INSET,
     PLAY_INSET + PLAY_SIZE,
     PLAY_INSET + PLAY_SIZE,
   );
-  surface.addColorStop(0, "#e8c286");
-  surface.addColorStop(0.35, "#dcae6d");
-  surface.addColorStop(0.72, "#cb9553");
-  surface.addColorStop(1, "#b87f42");
+  surface.addColorStop(0, board.surface[0]);
+  surface.addColorStop(0.35, board.surface[1]);
+  surface.addColorStop(0.72, board.surface[2]);
+  surface.addColorStop(1, board.surface[3]);
   roundedRect(ctx, PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE, 18);
   ctx.fillStyle = surface;
   ctx.fill();
@@ -253,10 +271,12 @@ function drawSurface(ctx: CanvasRenderingContext2D, lite: boolean): void {
     }
     const dark = rng() > 0.45;
     ctx.strokeStyle = dark
-      ? `rgba(122, 74, 32, ${0.05 + rng() * 0.09})`
+      ? board.grain
       : `rgba(255, 233, 195, ${0.05 + rng() * 0.08})`;
+    ctx.globalAlpha = dark ? 0.05 + rng() * 0.09 : 1;
     ctx.lineWidth = width;
     ctx.stroke();
+    ctx.globalAlpha = 1;
   }
 
   // A couple of knots.
@@ -549,8 +569,12 @@ function pieceSprite(
   lite: boolean,
   variant: number,
   dpr: number,
+  visuals: TableVisuals,
 ): HTMLCanvasElement {
-  const key = `${kind}:${radius}:${lite ? 1 : 0}:${variant}:${dpr}`;
+  const key = [
+    kind, radius, lite ? 1 : 0, variant, dpr,
+    visuals.board.id, visuals.striker.id, visuals.pieces.id,
+  ].join(":");
   const existing = pieceSprites.get(key);
   if (existing !== undefined) {
     return existing;
@@ -568,7 +592,7 @@ function pieceSprite(
   }
   ctx.translate(size / 2, size / 2);
   ctx.scale(dpr, dpr);
-  paintPiece(ctx, kind, radius, lite, variant);
+  paintPiece(ctx, kind, radius, lite, variant, visuals);
   pieceSprites.set(key, sprite);
   return sprite;
 }
@@ -593,6 +617,7 @@ function drawPiece(
   animating: boolean,
   lite: boolean,
   dpr: number,
+  visuals: TableVisuals,
 ): void {
   if (pocketed && !animating) {
     return;
@@ -601,7 +626,7 @@ function drawPiece(
   const alpha = pocketed ? 0.4 : 1;
   // The grain is fixed to a piece, so the same piece always looks the same
   // while it travels across the board.
-  const sprite = pieceSprite(kind, radius, lite, pieceGrain(id), dpr);
+  const sprite = pieceSprite(kind, radius, lite, pieceGrain(id), dpr, visuals);
   const size = sprite.width;
   if (size === 0) {
     return;
@@ -620,55 +645,19 @@ function paintPiece(
   radius: number,
   lite: boolean,
   variant: number,
+  visuals: TableVisuals,
 ): void {
-  const palette =
+  const fallback = visuals.pieces.pieces;
+  const index =
+    kind === "white" ? 0
+    : kind === "black" ? 1
+    : kind === "green" ? 2
+    : kind === "yellow" ? 3
+    : 4;
+  const palette: Palette =
     kind === "striker"
-      ? {
-          top: "#f6e7c8",
-          mid: "#cbae7c",
-          low: "#8d6f44",
-          rim: "#4b3820",
-          ring: "rgba(110, 84, 48, 0.5)",
-        }
-      : kind === "white"
-        ? {
-            top: "#fffdf4",
-            mid: "#efe3c9",
-            low: "#c3ab84",
-            rim: "#8a7452",
-            ring: "rgba(120, 96, 60, 0.4)",
-          }
-        : kind === "black"
-          ? {
-              top: "#4b4d50",
-              mid: "#22252a",
-              low: "#0d0f11",
-              rim: "#050607",
-              ring: "rgba(226, 214, 186, 0.34)",
-            }
-          : kind === "green"
-            ? {
-                top: "#7fd6ab",
-                mid: "#2f7d55",
-                low: "#14442c",
-                rim: "#0b2a1c",
-                ring: "rgba(214, 246, 226, 0.4)",
-              }
-            : kind === "yellow"
-              ? {
-                  top: "#f6d68c",
-                  mid: "#c9932c",
-                  low: "#8a5f12",
-                  rim: "#5d3d08",
-                  ring: "rgba(255, 244, 214, 0.45)",
-                }
-              : {
-                  top: "#e4605a",
-                  mid: QUEEN_RED,
-                  low: "#74131c",
-                  rim: "#4a0c12",
-                  ring: "rgba(246, 206, 148, 0.6)",
-                };
+      ? visuals.striker.palette
+      : (fallback[index] ?? fallback[0]!);
 
   ctx.save();
 
@@ -938,9 +927,10 @@ function paintTable(
   ctx: CanvasRenderingContext2D,
   turn: CarromPlayer,
   lite: boolean,
+  visuals: TableVisuals,
 ): void {
-  drawFrame(ctx, lite);
-  drawSurface(ctx, lite);
+  drawFrame(ctx, lite, visuals.board);
+  drawSurface(ctx, lite, visuals.board);
   drawMarkings(ctx, turn);
 }
 
@@ -954,6 +944,7 @@ function renderBoardLayer(
   turn: CarromPlayer,
   lite: boolean,
   dpr: number,
+  visuals: TableVisuals,
 ): void {
   const ctx = layer.getContext("2d");
   if (ctx === null) {
@@ -964,7 +955,7 @@ function renderBoardLayer(
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, layer.width, layer.height);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  paintTable(ctx, turn, lite);
+  paintTable(ctx, turn, lite, visuals);
 }
 
 export function CarromBoard({
@@ -977,7 +968,10 @@ export function CarromBoard({
   view,
   onShoot,
   onAnimationComplete,
+  visuals = tableVisuals("tournament", "brass", "standard"),
 }: CarromBoardProps) {
+  const visualsRef = useRef(visuals);
+  visualsRef.current = visuals;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const draggingRef = useRef<number | null>(null);
   const dragAnchorRef = useRef<{ x: number; y: number } | null>(null);
@@ -1074,7 +1068,7 @@ export function CarromBoard({
       if (layer !== null && layer.width === pixelSize) {
         ctx.drawImage(layer, 0, 0, LOGICAL_SIZE, LOGICAL_SIZE);
       } else {
-        paintTable(ctx, display.turn, lite);
+        paintTable(ctx, display.turn, lite, visualsRef.current);
       }
 
       const radius = scaleOf(CARROM_BOARD.discRadius);
@@ -1093,6 +1087,7 @@ export function CarromBoard({
           animating,
           lite,
           dpr,
+          visualsRef.current,
         );
       }
       const queen = display.discs.find((disc) => disc.kind === "queen");
@@ -1108,6 +1103,7 @@ export function CarromBoard({
           animating,
           lite,
           dpr,
+          visualsRef.current,
         );
       }
 
@@ -1122,6 +1118,7 @@ export function CarromBoard({
         animating,
         lite,
         dpr,
+        visualsRef.current,
       );
 
       if (aimState !== null && !animating && !disabled) {
@@ -1202,7 +1199,8 @@ export function CarromBoard({
       return;
     }
     const pixelSize = Math.round(LOGICAL_SIZE * dpr);
-    const key = `${lite}:${dpr}:${state.turn}`;
+    const v = visualsRef.current;
+    const key = `${lite}:${dpr}:${state.turn}:${v.board.id}`;
     if (boardLayerKeyRef.current === key && boardLayerRef.current !== null) {
       return;
     }
@@ -1218,7 +1216,7 @@ export function CarromBoard({
       return;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    renderBoardLayer(layer, state.turn, lite, dpr);
+    renderBoardLayer(layer, state.turn, lite, dpr, visualsRef.current);
     boardLayerKeyRef.current = key;
     // The table on the screen is now one layer behind.
     const scene = sceneRef.current;
