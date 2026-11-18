@@ -13,22 +13,25 @@ import {
 } from "@moongames/ludo-core";
 import {
   GameToolbar,
-  Icon,
   MatchChat,
   ModeSwitch,
   ProfilePanel,
   gameMotif,
+  useGamePreferences,
 } from "@moongames/game-ui";
+import { Icon } from "./components/Icon";
 import { LudoBoard } from "./components/LudoBoard";
+import { LudoPreferences } from "./components/LudoPreferences";
 import { useLocalLudo } from "./hooks/useLocalLudo";
 import { useOnlineLudo } from "./hooks/useOnlineLudo";
 import { readLocalProgress } from "./lib/localProgress";
-import { isMuted, playEvent, preloadEvent, setMuted } from "./lib/sound";
+import { audibleVolume, BOARD_THEMES, SOUND_SETS, TOKEN_SETS } from "./lib/preferences";
+import { configureSound, isMuted, playEvent, preloadEvent, setMuted } from "./lib/sound";
 
 type Mode = "local" | "ai" | "online";
 
 const MODES = [
-  { id: "local", label: "Local", icon: <Icon name="user" size={15} /> },
+  { id: "local", label: "Local", icon: <Icon name="users" size={15} /> },
   { id: "ai", label: "vs AI", icon: <Icon name="sparkles" size={15} /> },
   { id: "online", label: "Online", icon: <Icon name="shield-check" size={15} /> },
 ];
@@ -78,6 +81,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [version] = useState(__MOONGAMES_GAME_VERSION__);
   const [progress, setProgress] = useState(() => readLocalProgress());
+  const { preferences, setPreference } = useGamePreferences(__MOONGAMES_GAME_ID__);
   const appRef = useRef<HTMLDivElement>(null);
 
   const autoplay = useMemo(
@@ -88,6 +92,22 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    // The shared defaults name Chess/Carrom art. Point a new Ludo player at
+    // this title's own sets so the picker and the board agree on first load.
+    if (!TOKEN_SETS.some((set) => set.id === preferences.pieceSet)) setPreference("pieceSet", "marble");
+    if (!BOARD_THEMES.some((theme) => theme.id === preferences.boardTheme)) setPreference("boardTheme", "classic");
+    if (!SOUND_SETS.some((set) => set.id === preferences.soundSet)) setPreference("soundSet", "ludo");
+  }, [preferences.pieceSet, preferences.boardTheme, preferences.soundSet, setPreference]);
+
+  useEffect(() => {
+    configureSound({
+      set: preferences.soundSet,
+      volume: audibleVolume(preferences, 1),
+      enabled: soundOn,
+    });
+  }, [preferences.soundSet, preferences.soundEnabled, preferences.soundVolume, soundOn]);
 
   useEffect(() => {
     const update = () => setIsFullscreen(document.fullscreenElement === appRef.current);
@@ -190,16 +210,16 @@ export default function App({ bridge }: { bridge: GameBridge }) {
         <div className="header-actions">
           <ModeSwitch modes={MODES} mode={mode} onChange={changeMode} ariaLabel="Game mode" />
           <button type="button" className="icon-button" onClick={() => setRulesOpen(true)} title="Rules" aria-label="Open rules">
-            <Icon name="sparkle" size={18} />
+            <Icon name="book" size={18} />
           </button>
           <button type="button" className="icon-button" onClick={toggleSound} aria-pressed={soundOn} title={soundOn ? "Mute" : "Unmute"}>
-            <Icon name="volume" size={18} />
+            <Icon name={soundOn ? "volume" : "volume-off"} size={18} />
           </button>
           <button type="button" className="icon-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Theme">
             <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
           </button>
           <button type="button" className="icon-button" onClick={toggleFullscreen} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
-            <Icon name="refresh" size={18} />
+            <Icon name={isFullscreen ? "minimize" : "maximize"} size={18} />
           </button>
           {onlineMode ? null : (
             <button type="button" className="button button--ghost header-new" onClick={newGame}>
@@ -211,6 +231,11 @@ export default function App({ bridge }: { bridge: GameBridge }) {
 
       <main className="game-layout">
         <section className="board-panel">
+          {isFullscreen ? (
+            <button type="button" className="fullscreen-exit" onClick={toggleFullscreen} title="Exit fullscreen" aria-label="Exit fullscreen">
+              <Icon name="minimize" size={18} />
+            </button>
+          ) : null}
           <div className="turn-strip">
             <span className="race-disc" style={{ background: current ? PLAYER_COLOR_HEX[current.color] : undefined }} />
             <div className="turn-strip__copy">
@@ -233,7 +258,11 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 legalTokens={legalTokens}
                 lastMove={!onlineMode ? controller.lastMove : null}
                 onTokenClick={doMove}
-                disabled={!canMove}
+                disabled={onlineMode || !!current?.ai || controller.isReplaying || game.phase === "over"}
+                tokenSet={TOKEN_SETS.some((set) => set.id === preferences.pieceSet) ? preferences.pieceSet : "marble"}
+                boardTheme={BOARD_THEMES.some((theme) => theme.id === preferences.boardTheme) ? preferences.boardTheme : "classic"}
+                showLegalMoves={preferences.showLegalMoves}
+                highlightLastMove={preferences.highlightLastMove}
               />
             </div>
           </div>
@@ -244,7 +273,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               {
                 id: "roll",
                 label: awaiting ? "Roll dice" : game.phase === "move" ? "Choose a token" : "Waiting…",
-                icon: <Icon name="sparkle" size={15} />,
+                icon: <Icon name="sparkles" size={15} />,
                 onClick: doRoll,
                 disabled: !awaiting,
               },
@@ -254,6 +283,14 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 icon: <Icon name="refresh" size={15} />,
                 onClick: newGame,
                 disabled: onlineMode,
+              },
+              {
+                id: "pass",
+                label: "Pass turn",
+                icon: <Icon name="check" size={15} />,
+                onClick: () => doMove(-1),
+                disabled: onlineMode || game.phase !== "move" || legalTokens.length > 0 || !!current?.ai,
+                title: "Use this when the roll cannot move a token",
               },
               {
                 id: "replay",
@@ -412,6 +449,8 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               </div>
             </section>
           ) : null}
+
+          <LudoPreferences gameId={__MOONGAMES_GAME_ID__} />
 
           {!onlineMode ? (
             <section className="panel">

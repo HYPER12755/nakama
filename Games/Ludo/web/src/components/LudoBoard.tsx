@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { assetUrl } from "@moongames/game-sdk";
 import {
-  PLAYER_COLOR_HEX,
   START_INDEX,
   TRACK_LENGTH,
   type LudoColor,
   type LudoMove,
-  type LudoToken,
   type LudoState,
+  type LudoToken,
 } from "@moongames/ludo-core";
 import { GRID_SIZE, HOME_COLUMN, TRACK, tokenPoint } from "../lib/boardGeometry";
 
@@ -21,33 +20,51 @@ export interface LudoBoardProps {
   lastMove?: LudoMove | null;
   onTokenClick?: (token: number) => void;
   disabled?: boolean;
+  tokenSet?: string;
+  boardTheme?: string;
+  showLegalMoves?: boolean;
+  highlightLastMove?: boolean;
 }
 
 /** The shared SDK resolves bundle assets on web and through the host on file://. */
-let boardImage: HTMLImageElement | null = null;
-/** A once-scaled copy of the 1920px artwork; repainting the full-resolution
- * image on every token move is wasteful on a phone. */
-let boardBitmap: HTMLCanvasElement | null = null;
 let boardPending: Promise<void> | null = null;
+const bitmaps = new Map<string, HTMLCanvasElement>();
+const tokenImages = new Map<string, HTMLImageElement | null>();
 const listeners = new Set<() => void>();
 
-function loadBoardImage(): Promise<void> {
-  if (boardImage !== null) return Promise.resolve();
+function notify(): void {
+  for (const listener of listeners) listener();
+}
+
+function boardBitmap(theme: string): HTMLCanvasElement | null {
+  return bitmaps.get(theme) ?? null;
+}
+
+function loadBoardImage(theme: string): Promise<void> {
+  if (bitmaps.has(theme)) return Promise.resolve();
   if (boardPending !== null) return boardPending;
   boardPending = assetUrl(BOARD_IMAGE)
     .then((url) => new Promise<void>((resolve) => {
       const image = new Image();
       image.onload = () => {
-        const scaled = document.createElement("canvas");
-        scaled.width = SIZE;
-        scaled.height = SIZE;
-        const ctx = scaled.getContext("2d");
-        if (ctx) {
+        const paint = (key: string, tint: string | null) => {
+          const canvas = document.createElement("canvas");
+          canvas.width = SIZE;
+          canvas.height = SIZE;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return;
           ctx.drawImage(image, 0, 0, SIZE, SIZE);
-          boardBitmap = scaled;
-        }
-        boardImage = image;
-        for (const listener of listeners) listener();
+          if (tint !== null) {
+            ctx.fillStyle = tint;
+            ctx.fillRect(0, 0, SIZE, SIZE);
+          }
+          bitmaps.set(key, canvas);
+        };
+        paint("classic", null);
+        paint("midnight", "rgba(18, 20, 42, 0.32)");
+        paint("warm", "rgba(96, 52, 12, 0.16)");
+        boardPending = null;
+        notify();
         resolve();
       };
       image.onerror = () => {
@@ -62,20 +79,37 @@ function loadBoardImage(): Promise<void> {
   return boardPending;
 }
 
-function onBoardLoaded(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+function tokenImage(
+  set: string,
+  color: LudoColor,
+  onLoad?: () => void,
+): HTMLImageElement | null {
+  const key = `${set}:${color}`;
+  if (tokenImages.has(key)) return tokenImages.get(key) ?? null;
+  if (typeof Image === "undefined") return null;
+  const image = new Image();
+  tokenImages.set(key, null);
+  image.onload = () => {
+    tokenImages.set(key, image);
+    onLoad?.();
+  };
+  image.onerror = () => tokenImages.delete(key);
+  void assetUrl(`tokens/${set}-${color}.svg`)
+    .then((url) => { image.src = url; })
+    .catch(() => tokenImages.delete(key));
+  return null;
 }
 
 function centre(point: readonly [number, number]): [number, number] {
   return [point[0] * CELL + CELL / 2, point[1] * CELL + CELL / 2];
 }
 
-function drawToken(
+function paintToken(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
   color: LudoColor,
+  image: HTMLImageElement | null,
   legal: boolean,
 ): void {
   ctx.save();
@@ -88,25 +122,17 @@ function drawToken(
     ctx.fill();
     ctx.shadowBlur = 0;
   }
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + 3, 12, 8, 0, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(20, 18, 16, 0.32)";
-  ctx.fill();
-  const gradient = ctx.createRadialGradient(cx - 5, cy - 6, 2, cx, cy, 13);
-  gradient.addColorStop(0, "#ffffff");
-  gradient.addColorStop(0.34, PLAYER_COLOR_HEX[color]);
-  gradient.addColorStop(1, color === "yellow" ? "#a8800b" : "#8a2020");
-  ctx.beginPath();
-  ctx.arc(cx, cy, 12.5, 0, Math.PI * 2);
-  ctx.fillStyle = gradient;
-  ctx.fill();
-  ctx.strokeStyle = "rgba(24, 20, 18, 0.62)";
-  ctx.lineWidth = 1.8;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(cx - 4, cy - 5, 3.4, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.72)";
-  ctx.fill();
+  if (image) {
+    ctx.drawImage(image, cx - 15, cy - 15, 30, 30);
+  } else {
+    ctx.beginPath();
+    ctx.arc(cx, cy, 13, 0, Math.PI * 2);
+    ctx.fillStyle = "#d9dde6";
+    ctx.strokeStyle = "#666c7a";
+    ctx.lineWidth = 2;
+    ctx.fill();
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -116,19 +142,29 @@ export function LudoBoard({
   lastMove,
   onTokenClick,
   disabled = false,
+  tokenSet = "marble",
+  boardTheme = "classic",
+  showLegalMoves = true,
+  highlightLastMove = true,
 }: LudoBoardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dpr, setDpr] = useState(1);
-  const [imageTick, repaint] = useState(0);
+  const [tick, setTick] = useState(0);
 
-  useEffect(() => onBoardLoaded(() => repaint((value) => value + 1)), []);
+  useEffect(() => onBoardLoadedListener(() => setTick((value) => value + 1)), []);
   useEffect(() => {
-    void loadBoardImage();
+    void loadBoardImage(boardTheme);
     const update = () => setDpr(Math.min(window.devicePixelRatio || 1, 2));
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
-  }, []);
+  }, [boardTheme]);
+
+  useEffect(() => {
+    for (const player of state.players) {
+      tokenImage(tokenSet, player.color, () => setTick((value) => value + 1));
+    }
+  }, [state.players, tokenSet]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -143,12 +179,10 @@ export function LudoBoard({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, SIZE, SIZE);
 
-    // The provided board artwork is the table. Tokens and move hints are the
-    // only things we draw on top of it, so the picture stays exactly as given.
-    if (boardBitmap) ctx.drawImage(boardBitmap, 0, 0, SIZE, SIZE);
-    else if (boardImage) ctx.drawImage(boardImage, 0, 0, SIZE, SIZE);
+    const bitmap = boardBitmap(boardTheme) ?? boardBitmap("classic");
+    if (bitmap) ctx.drawImage(bitmap, 0, 0, SIZE, SIZE);
 
-    if (lastMove && state.players[lastMove.player]) {
+    if (highlightLastMove && lastMove && state.players[lastMove.player]) {
       const color = state.players[lastMove.player]!.color;
       const point = lastMove.to <= 50
         ? TRACK[(START_INDEX[color] + lastMove.to) % TRACK_LENGTH]!
@@ -166,16 +200,20 @@ export function LudoBoard({
     for (const player of state.players) {
       for (const token of player.tokens) {
         const [cx, cy] = centre(tokenPoint(player.color, token.progress, token.id));
-        const legal = !disabled
+        const legal = showLegalMoves && !disabled
           && player.seat === state.current
           && legalTokens.includes(token.id);
-        drawToken(ctx, cx, cy, player.color, legal);
+        paintToken(
+          ctx, cx, cy, player.color,
+          tokenImage(tokenSet, player.color, () => setTick((value) => value + 1)),
+          legal,
+        );
       }
     }
-  }, [state, legalTokens, lastMove, disabled, dpr, imageTick]);
+  }, [state, legalTokens, lastMove, disabled, dpr, tick, tokenSet, boardTheme, showLegalMoves, highlightLastMove]);
 
   function handleClick(event: React.MouseEvent<HTMLCanvasElement>): void {
-    if (disabled || legalTokens.length === 0 || !onTokenClick) return;
+    if (disabled || !onTokenClick) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const width = rect.width || SIZE;
     const height = rect.height || SIZE;
@@ -183,6 +221,19 @@ export function LudoBoard({
     const y = ((event.clientY - rect.top) / height) * SIZE;
     const player = state.players[state.current];
     if (!player) return;
+
+    if (legalTokens.length === 0) {
+      // Tapping any of your own tokens on a dead roll passes the turn.
+      for (const token of player.tokens) {
+        const [cx, cy] = centre(tokenPoint(player.color, token.progress, token.id));
+        if ((x - cx) ** 2 + (y - cy) ** 2 < 26 * 26) {
+          onTokenClick(-1);
+          return;
+        }
+      }
+      return;
+    }
+
     let best: LudoToken | null = null;
     let bestDistance = 26 * 26;
     for (const token of player.tokens) {
@@ -205,8 +256,17 @@ export function LudoBoard({
         role="img"
         aria-label="Ludo board with four colours, shared track and home columns"
         onClick={handleClick}
+        onPointerDown={(event) => event.preventDefault()}
+        onContextMenu={(event) => event.preventDefault()}
+        onDragStart={(event) => event.preventDefault()}
+        draggable={false}
         style={{ width: "100%", height: "auto", aspectRatio: "1 / 1" }}
       />
     </div>
   );
+}
+
+function onBoardLoadedListener(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }

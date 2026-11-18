@@ -157,10 +157,22 @@ export async function assetUrl(path: string): Promise<string> {
     return existing;
   }
   const data = await loadAsset(path);
+  // Firefox refuses to decode an SVG served from a blob without a MIME type,
+  // so derive one from the path instead of relying on content sniffing.
+  const extension = path.split(".").pop()?.toLowerCase() ?? "";
+  const mime: Record<string, string> = {
+    svg: "image/svg+xml",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    mp3: "audio/mpeg",
+    ogg: "audio/ogg",
+  };
   const blob =
     typeof data === "string"
       ? new Blob([data], { type: "text/plain" })
-      : new Blob([data]);
+      : new Blob([data], { type: mime[extension] ?? "application/octet-stream" });
   const url = URL.createObjectURL(blob);
   objectUrls.set(path, url);
   return url;

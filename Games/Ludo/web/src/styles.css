@@ -830,3 +830,39 @@ html[data-moonperf="lite"] .die--rolling {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* The board is a game surface, not an image to select or save. */
+.ludo-canvas {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+.ludo-canvas:focus,
+.ludo-canvas:focus-visible {
+  outline: none;
+}
+
+.fullscreen-exit {
+  position: absolute;
+  top: max(18px, env(safe-area-inset-top));
+  right: 18px;
+  z-index: 20;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel-solid);
+  color: var(--muted);
+  cursor: pointer;
+}
+.fullscreen-exit:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.app--board-only .board-stage {
+  margin-top: 44px;
+}

@@ -12,6 +12,7 @@ const loading = new Map<string, Promise<AudioBuffer | null>>();
 const nextIndex = new Map<LudoSound, number>();
 let enabled = true;
 let volume = 0.8;
+let set = "ludo";
 
 function audio(): AudioContext | null {
   if (!enabled) return null;
@@ -29,9 +30,10 @@ function audio(): AudioContext | null {
   }
 }
 
-export function configureSound(options: { enabled?: boolean; volume?: number } = {}): void {
+export function configureSound(options: { enabled?: boolean; volume?: number; set?: string } = {}): void {
   if (options.enabled !== undefined) enabled = options.enabled;
   if (options.volume !== undefined) volume = Math.max(0, Math.min(1, options.volume));
+  if (options.set !== undefined) set = options.set;
 }
 
 export function setMuted(value: boolean): void {
@@ -84,7 +86,7 @@ export function playEvent(event: LudoSound): void {
     const source = ctx.createBufferSource();
     const gain = ctx.createGain();
     source.buffer = buffer;
-    gain.gain.value = volume * EVENT_GAIN[event];
+    gain.gain.value = volume * EVENT_GAIN[event] * (set === "soft" ? 0.45 : 1);
     source.connect(gain).connect(ctx.destination);
     source.start();
   });

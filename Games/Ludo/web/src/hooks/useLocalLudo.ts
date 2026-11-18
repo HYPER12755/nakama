@@ -89,6 +89,13 @@ export function useLocalLudo(options: LocalGameOptions) {
     clearTimer();
     const previous = gameRef.current;
     if (previous.phase !== "move") return;
+    if (token < 0) {
+      const passed = cloneState(previous);
+      passTurn(passed);
+      gameRef.current = passed;
+      setGame(passed);
+      return;
+    }
     const chosen = legalMoves(previous).find((entry) => entry.token === token);
     if (!chosen) return;
     const next = cloneState(previous);
