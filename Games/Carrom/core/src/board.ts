@@ -133,10 +133,10 @@ export const CARROM_BASELINES: Record<CarromPlayer, CarromBaseline> = {
 };
 
 export const PLAYER_LABEL: Record<CarromPlayer, string> = {
-  white: "Ivory",
-  black: "Onyx",
-  green: "Jade",
-  yellow: "Amber",
+  white: "PLAYER",
+  black: "PLAYER",
+  green: "PLAYER",
+  yellow: "PLAYER",
 };
 
 /**
@@ -150,8 +150,8 @@ export const CARROM_TEAM_PLAYERS: Record<CarromTeamId, CarromPlayer[]> = {
 };
 
 export const CARROM_TEAM_LABEL: Record<CarromTeamId, string> = {
-  A: "Ivory & Onyx",
-  B: "Amber & Jade",
+  A: "TEAM 1",
+  B: "TEAM 2",
 };
 
 const PLAYER_TEAM: Record<CarromPlayer, CarromTeamId> = {

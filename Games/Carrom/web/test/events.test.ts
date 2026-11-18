@@ -43,7 +43,7 @@ describe("the events a shot reports", () => {
     const state = createInitialState();
     const events = shotEvents(result(state, fake(state, [{ id: "w1", kind: "white" }])), 1);
     expect(events.some((e) => e.kind === "pocket" && e.sound === "pocket")).toBe(true);
-    expect(events.some((e) => e.message.includes("Ivory") && e.message.includes("white"))).toBe(true);
+    expect(events.some((e) => e.message.includes("PLAYER") && e.message.includes("white"))).toBe(true);
   });
 
   it("reports the queen with its own sound", () => {

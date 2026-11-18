@@ -426,9 +426,10 @@ export function pickWithRealism(
 }
 
 const REALISM: Record<CarromAiDifficulty, number> = {
-  easy: 0.32,
-  normal: 0.45,
-  hard: 0.58,
+  // A low decay lets weaker lines be chosen, so the player gets a chance.
+  easy: 0.22,
+  normal: 0.4,
+  hard: 0.62,
 };
 
 /**
@@ -440,8 +441,8 @@ const IMPERFECTION: Record<
   CarromAiDifficulty,
   { angle: number; power: number }
 > = {
-  easy: { angle: 0.035, power: 0.07 },
-  normal: { angle: 0.025, power: 0.05 },
+  easy: { angle: 0.045, power: 0.09 },
+  normal: { angle: 0.03, power: 0.06 },
   hard: { angle: 0.015, power: 0.035 },
 };
 

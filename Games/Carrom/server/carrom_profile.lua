@@ -485,7 +485,7 @@ function progression.finalize_match(context, state, result, now)
     )
   end
   if result.winnerTeam ~= nil then
-    local labels = { A = "Ivory & Onyx", B = "Amber & Jade" }
+    local labels = { A = "TEAM 1", B = "TEAM 2" }
     summary = (labels[result.winnerTeam] or result.winnerTeam)
       .. " won the board together"
   elseif result.winnerColour ~= nil then

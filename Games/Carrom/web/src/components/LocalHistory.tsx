@@ -59,7 +59,7 @@ export function LocalHistory({
             <li key={game.id}>
               <span className="local-history__result">
                 {game.winnerTeam
-                  ? `${game.winnerTeam === "A" ? "Ivory & Onyx" : "Amber & Jade"} won`
+                  ? `${game.winnerTeam === "A" ? "TEAM 1" : "TEAM 2"} won`
                   : game.winner === null
                     ? "Draw"
                     : `${PLAYER_LABEL[game.winner]} won`}

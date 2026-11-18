@@ -44,7 +44,7 @@ export function ScoreCard({
       <div className="seat-row__identity">
         <strong>{name}</strong>
         <span>
-          {ai ? "Computer" : PLAYER_LABEL[player]}
+          {ai ? "COMPUTER" : PLAYER_LABEL[player]}
           {ai ? "" : ` · Seat ${seat}`}
         </span>
       </div>

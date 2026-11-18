@@ -20,8 +20,8 @@ rules.TEAM_PLAYERS = {
   B = { "yellow", "green" },
 }
 rules.TEAM_LABEL = {
-  A = "Ivory & Onyx",
-  B = "Amber & Jade",
+  A = "TEAM 1",
+  B = "TEAM 2",
 }
 local PLAYER_TEAM = {
   white = "A",

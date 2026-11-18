@@ -426,14 +426,12 @@ export default function App({ bridge }: AppProps) {
         return seat?.username ?? PLAYER_LABEL[player];
       }
       if (isAiPlayer(mode, player, computerPlayers)) {
-        return "Computer";
+        return "COMPUTER";
       }
       if (mode === "ai") {
-        // The player has the table to themselves against the computer.
-        return accountName ?? "You";
+        return accountName ?? "PLAYER";
       }
-      const index = game.players.indexOf(player);
-      return `Player ${index + 1}`;
+      return "PLAYER";
     },
     [accountName, computerPlayers, game.players, mode, online.seats, onlineMode],
   );

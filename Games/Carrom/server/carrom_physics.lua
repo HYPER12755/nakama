@@ -87,10 +87,10 @@ physics.BASELINES = {
 }
 
 physics.PLAYER_LABEL = {
-  white = "Ivory",
-  black = "Onyx",
-  green = "Jade",
-  yellow = "Amber",
+  white = "PLAYER",
+  black = "PLAYER",
+  green = "PLAYER",
+  yellow = "PLAYER",
 }
 
 function physics.striker_point(player, position)

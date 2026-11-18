@@ -78,11 +78,11 @@ describe("the copy at the end of a table", () => {
         variant="classic"
         seats={4}
         winnerTeam="A"
-        winnerTeamLabel="Ivory & Onyx"
+        winnerTeamLabel="TEAM 1"
       />,
     );
     expect(html).toContain("Doubles");
-    expect(html).toContain("Ivory &amp; Onyx wins");
+    expect(html).toContain("TEAM 1 wins");
     expect(html).toContain("cleared both partners&#x27; pieces");
   });
 });
@@ -97,9 +97,8 @@ describe("the rules guide", () => {
         colours={["white", "yellow", "black", "green"]}
       />,
     );
-    expect(html).toContain("Ivory pockets ivory");
-    expect(html).toContain("Jade pockets jade");
-    expect(html).toContain("Amber pockets amber");
+    expect(html).toContain("PLAYER pockets player");
+    expect(html).toContain("PLAYER pockets player");
   });
 
   it("explains the queen by the game type", () => {

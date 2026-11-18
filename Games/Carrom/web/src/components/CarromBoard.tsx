@@ -1614,10 +1614,33 @@ export function CarromBoard({
     };
   };
 
+  const cancelAim = useCallback(() => {
+    draggingRef.current = null;
+    dragAnchorRef.current = null;
+    setAim(null);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && aim !== null) {
+        cancelAim();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [aim, cancelAim]);
+
   const handlePointerDown = (
     event: ReactPointerEvent<HTMLCanvasElement>,
   ) => {
     if (disabled || animation !== null) {
+      return;
+    }
+    // A second pointer button cancels the aim, so a player can step back
+    // before releasing a shot.
+    if (event.button === 2) {
+      event.preventDefault();
+      cancelAim();
       return;
     }
     const point = pointFromEvent(event);
@@ -1671,15 +1694,31 @@ export function CarromBoard({
   };
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="carrom-canvas"
-      role="img"
-      aria-label="Carrom board. Drag to pull the striker back and release to shoot."
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={(event) => finishPointer(event, true)}
-      onPointerCancel={(event) => finishPointer(event, false)}
-    />
+    <div className="carrom-board-wrap">
+      <canvas
+        ref={canvasRef}
+        className="carrom-canvas"
+        role="img"
+        aria-label="Carrom board. Drag to pull the striker back and release to shoot."
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={(event) => finishPointer(event, true)}
+        onPointerCancel={(event) => finishPointer(event, false)}
+        onContextMenu={(event) => event.preventDefault()}
+      />
+      {aim !== null && !disabled ? (
+        <button
+          type="button"
+          className="aim-cancel"
+          onPointerDown={(event) => {
+            event.preventDefault();
+            cancelAim();
+          }}
+          aria-label="Cancel the aim"
+        >
+          Cancel aim
+        </button>
+      ) : null}
+    </div>
   );
 }
