@@ -2,6 +2,7 @@ packages:
   - "shared/*"
   - "Chess/*"
   - "Carrom/*"
+  - "Ludo/*"
   - "launcher"
   - "hosts/*"
 
