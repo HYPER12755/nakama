@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GameBridge } from "@moongames/game-sdk";
 import { configureAssets, readLauncherHandoff } from "@moongames/game-sdk";
 import {
@@ -11,34 +11,49 @@ import {
   type LudoDifficulty,
   type LudoState,
 } from "@moongames/ludo-core";
-import { ModeSwitch } from "@moongames/game-ui";
+import {
+  GameToolbar,
+  Icon,
+  MatchChat,
+  ModeSwitch,
+  gameMotif,
+} from "@moongames/game-ui";
 import { LudoBoard } from "./components/LudoBoard";
 import { useLocalLudo } from "./hooks/useLocalLudo";
 import { useOnlineLudo } from "./hooks/useOnlineLudo";
 import { readLocalProgress } from "./lib/localProgress";
-import { isMuted, setMuted } from "./lib/sound";
+import { isMuted, playEvent, preloadEvent, setMuted } from "./lib/sound";
 
 type Mode = "local" | "ai" | "online";
 
 const MODES = [
-  { id: "local", label: "Local" },
-  { id: "ai", label: "Vs AI" },
-  { id: "online", label: "Online" },
+  { id: "local", label: "Local", icon: <Icon name="user" size={15} /> },
+  { id: "ai", label: "vs AI", icon: <Icon name="sparkles" size={15} /> },
+  { id: "online", label: "Online", icon: <Icon name="shield-check" size={15} /> },
 ];
 
-const DIFFICULTIES: { id: LudoDifficulty; label: string; hint: string }[] = [
-  { id: "easy", label: "Easy", hint: "Relaxed, lucky moves" },
-  { id: "normal", label: "Normal", hint: "Takes captures and safe squares" },
-  { id: "hard", label: "Hard", hint: "Watches for threats and builds walls" },
+const DIFFICULTIES: { id: LudoDifficulty; label: string }[] = [
+  { id: "easy", label: "Easy" },
+  { id: "normal", label: "Normal" },
+  { id: "hard", label: "Hard" },
+];
+
+const DIE_DOTS: Record<number, number[]> = {
+  1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8],
+  5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8],
+};
+
+const RULES = [
+  "A six lets a token leave its yard. Three sixes in a row forfeit the turn.",
+  "Two of your tokens on one square make a wall opponents cannot enter.",
+  "A capture sends the rival token home and earns another roll.",
+  "A token must land exactly on the centre to finish. First player home wins.",
 ];
 
 function Die({ value }: { value: number | null }) {
-  const dots: Record<number, number[]> = {
-    1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8],
-  };
   return (
-    <div className="ludo-die" aria-label={value ? `Die shows ${value}` : "Die not rolled"}>
-      {(dots[value ?? 0] ?? []).map((cell) => <span key={cell} />)}
+    <div className={`die ${value === null ? "" : "die--rolling"}`} aria-label={value ? `Die shows ${value}` : "Die not rolled"}>
+      {(DIE_DOTS[value ?? 0] ?? []).map((cell) => <span key={cell} />)}
     </div>
   );
 }
@@ -47,22 +62,42 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   useEffect(() => {
     configureAssets(bridge);
     readLauncherHandoff(__MOONGAMES_GAME_ID__);
+    for (const event of ["roll", "move", "capture", "home", "foul", "turn", "start", "win"] as const) {
+      preloadEvent(event);
+    }
   }, [bridge]);
 
   const [mode, setMode] = useState<Mode>("ai");
   const [seats, setSeats] = useState(4);
   const [difficulty, setDifficulty] = useState<LudoDifficulty>("normal");
-  const [dark, setDark] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [soundOn, setSoundOn] = useState(!isMuted());
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [roomInput, setRoomInput] = useState("");
-  const [chatInput, setChatInput] = useState("");
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [version] = useState(__MOONGAMES_GAME_VERSION__);
   const [progress, setProgress] = useState(() => readLocalProgress());
+  const appRef = useRef<HTMLDivElement>(null);
+
   const autoplay = useMemo(
     () => new URLSearchParams(window.location.search).has("autoplay"),
     [],
   );
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  useEffect(() => {
+    const update = () => setIsFullscreen(document.fullscreenElement === appRef.current);
+    document.addEventListener("fullscreenchange", update);
+    return () => document.removeEventListener("fullscreenchange", update);
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void appRef.current?.requestFullscreen();
+  }, []);
 
   const humanSeats = mode === "local" ? seats : autoplay ? 0 : 1;
   const controller = useLocalLudo({
@@ -93,13 +128,13 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     () => [...game.events].reverse().find((event) => event.type === "roll"),
     [game.events],
   );
-  const isOnline = mode === "online";
-  const inOnlineMatch = isOnline && online.state !== null;
-  const awaiting = isOnline
-    ? inOnlineMatch && game.phase === "roll" && !online.spectating
+  const onlineMode = mode === "online";
+  const inMatch = onlineMode && online.state !== null;
+  const awaiting = onlineMode
+    ? inMatch && game.phase === "roll" && !online.spectating
     : game.phase === "roll" && !current?.ai && !controller.isReplaying;
-  const canMove = isOnline
-    ? inOnlineMatch && game.phase === "move" && legalTokens.length > 0 && !online.spectating
+  const canMove = onlineMode
+    ? inMatch && game.phase === "move" && legalTokens.length > 0 && !online.spectating
     : game.phase === "move" && legalTokens.length > 0 && !current?.ai && !controller.isReplaying;
 
   function changeMode(next: string) {
@@ -110,9 +145,23 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     }
   }
 
-  function startNewGame(nextSeats = seats) {
-    setSeats(nextSeats);
-    controller.newGame({ seats: nextSeats, humanSeats: mode === "local" ? nextSeats : 1 });
+  function newGame() {
+    controller.newGame({ seats, humanSeats: mode === "local" ? seats : 1 });
+    setProgress(readLocalProgress());
+    playEvent("start");
+  }
+
+  function doRoll() {
+    if (onlineMode) online.roll();
+    else {
+      controller.roll();
+      if (!soundOn) return;
+    }
+  }
+
+  function doMove(token: number) {
+    if (onlineMode) online.move(token);
+    else controller.move(token);
   }
 
   function toggleSound() {
@@ -121,263 +170,267 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     setMuted(!next);
   }
 
-  function handleRoll() {
-    if (isOnline) online.roll();
-    else controller.roll();
-  }
-
-  function handleMove(token: number) {
-    if (isOnline) online.move(token);
-    else controller.move(token);
-  }
+  const Motif = gameMotif("ludo");
+  const modeLabel = mode === "local" ? "Pass and play" : mode === "ai" ? "Computer table" : "Online table";
 
   return (
-    <div className={`ludo-app ${dark ? "ludo-app--dark" : ""}`}>
-      <header className="ludo-header">
-        <div className="ludo-brand">
-          <span className="ludo-brand__mark">◆</span>
+    <div className={`app${isFullscreen ? " app--board-only" : ""}`} ref={appRef}>
+      <header className="app-header">
+        <div className="brand">
+          <span className="brand-mark">
+            {Motif ? <Motif size={27} strokeWidth={1.55} /> : null}
+          </span>
           <div>
-            <p className="ludo-brand__kicker">MoonGames</p>
+            <p className="brand-kicker">MoonGames</p>
             <h1>Ludo</h1>
           </div>
-          <span className="ludo-version">v{version}</span>
+          <span className="brand-version">v{version}</span>
         </div>
-        <div className="ludo-header__actions">
-          <ModeSwitch modes={MODES} mode={mode} onChange={changeMode} />
-          <button type="button" className="ludo-icon-button" onClick={toggleSound} aria-label={soundOn ? "Mute" : "Unmute"}>
-            {soundOn ? "♪" : "×"}
+        <div className="header-actions">
+          <ModeSwitch modes={MODES} mode={mode} onChange={changeMode} ariaLabel="Game mode" />
+          <button type="button" className="icon-button" onClick={() => setRulesOpen(true)} title="Rules" aria-label="Open rules">
+            <Icon name="sparkle" size={18} />
           </button>
-          <button type="button" className="ludo-icon-button" onClick={() => setDark(!dark)} aria-label="Toggle theme">
-            {dark ? "☀" : "☾"}
+          <button type="button" className="icon-button" onClick={toggleSound} aria-pressed={soundOn} title={soundOn ? "Mute" : "Unmute"}>
+            <Icon name="volume" size={18} />
           </button>
-          <button type="button" className="ludo-button ludo-button--ghost" onClick={() => setSettingsOpen(!settingsOpen)}>
-            Settings
+          <button type="button" className="icon-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Theme">
+            <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
           </button>
-          {!isOnline && (
-            <button type="button" className="ludo-button" onClick={() => { startNewGame(); setProgress(readLocalProgress()); }}>
-              New game
+          <button type="button" className="icon-button" onClick={toggleFullscreen} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+            <Icon name="refresh" size={18} />
+          </button>
+          {onlineMode ? null : (
+            <button type="button" className="button button--ghost header-new" onClick={newGame}>
+              <Icon name="refresh" size={16} /> New game
             </button>
           )}
         </div>
       </header>
 
-      <main className="ludo-layout">
-        <section className="ludo-stage">
-          {controller.isReplaying && !isOnline && (
-            <div className="ludo-replay-bar">
-              <span>Replay</span>
-              <input
-                type="range" min={0} max={Math.max(0, controller.replayCount - 1)}
-                value={controller.replayIndex}
-                onChange={(event) => controller.setReplayIndex(Number(event.target.value))}
-                aria-label="Replay position"
-              />
-              <span>{controller.replayIndex + 1} / {controller.replayCount}</span>
-              <button type="button" className="ludo-button ludo-button--ghost" onClick={controller.stopReplay}>Close</button>
+      <main className="game-layout">
+        <section className="board-panel">
+          <div className="turn-strip">
+            <span className="race-disc" style={{ background: current ? PLAYER_COLOR_HEX[current.color] : undefined }} />
+            <div className="turn-strip__copy">
+              <span className="eyebrow">Current turn</span>
+              <strong>{autoplay && !onlineMode ? "Computer table" : current ? PLAYER_LABEL[current.seat] : "—"}</strong>
             </div>
-          )}
-          <div className="ludo-board-shell">
-            <LudoBoard
-              state={game}
-              legalTokens={legalTokens}
-              lastMove={!isOnline ? controller.lastMove : null}
-              onTokenClick={handleMove}
-              dark={dark}
-            />
+            <Die value={lastRoll?.value ?? null} />
+            {onlineMode ? (
+              <span className={`turn-connection turn-connection--${online.connection}`}>
+                {online.connection}
+              </span>
+            ) : null}
+            <span className="turn-strip__meta">{modeLabel}</span>
           </div>
-          <p className="ludo-hint">
-            {autoplay && !isOnline ? "Watching a computer-only match."
-              : online.notice && isOnline ? online.notice
-              : isOnline && !inOnlineMatch ? "Open a quick table or a private room to start."
-              : controller.isReplaying ? "Watching a replay — close it to return to the live table."
+
+          <div className="board-frame">
+            <div className="board-stage">
+              <LudoBoard
+                state={game}
+                legalTokens={legalTokens}
+                lastMove={!onlineMode ? controller.lastMove : null}
+                onTokenClick={doMove}
+                disabled={!canMove}
+              />
+            </div>
+          </div>
+
+          <GameToolbar
+            title="Table actions"
+            actions={[
+              {
+                id: "roll",
+                label: awaiting ? "Roll dice" : game.phase === "move" ? "Choose a token" : "Waiting…",
+                icon: <Icon name="sparkle" size={15} />,
+                onClick: doRoll,
+                disabled: !awaiting,
+              },
+              {
+                id: "new",
+                label: "New game",
+                icon: <Icon name="refresh" size={15} />,
+                onClick: newGame,
+                disabled: onlineMode,
+              },
+              {
+                id: "replay",
+                label: "Replay",
+                icon: <Icon name="skip-back" size={15} />,
+                onClick: controller.startReplay,
+                disabled: onlineMode || controller.replayCount === 0,
+              },
+            ]}
+          />
+          <p className="roll-hint">
+            {controller.isReplaying && !onlineMode ? "Watching the recorded race."
               : canMove ? "Tap a glowing token to move it."
               : awaiting ? "Roll the dice to start your turn."
               : current?.ai ? `${PLAYER_LABEL[current.seat] ?? "COMPUTER"} is thinking…`
               : "Waiting for the next player."}
           </p>
+
+          {controller.isReplaying && !onlineMode ? (
+            <section className="panel">
+              <div className="panel-heading"><h2>Replay</h2><span className="panel-heading__meta">{controller.replayIndex + 1} / {controller.replayCount}</span></div>
+              <input
+                type="range"
+                min={0}
+                max={Math.max(0, controller.replayCount - 1)}
+                value={controller.replayIndex}
+                onChange={(event) => controller.setReplayIndex(Number(event.target.value))}
+                aria-label="Replay position"
+              />
+              <button type="button" className="button button--ghost" onClick={controller.stopReplay}>Close replay</button>
+            </section>
+          ) : null}
         </section>
 
-        <aside className="ludo-sidebar">
-          <section className="ludo-panel ludo-turn">
-            <div className="ludo-turn__head">
-              <div>
-                <p className="ludo-eyebrow">Current turn</p>
-                <h2 style={{ color: current ? PLAYER_COLOR_HEX[current.color] : undefined }}>
-                  {current ? PLAYER_LABEL[current.seat] : "—"}
-                </h2>
+        <aside className="sidebar">
+          {onlineMode ? (
+            <section className="panel online-panel">
+              <div className="panel-heading">
+                <div><p className="eyebrow">Online table</p><h2>{inMatch ? "At the table" : "Find a game"}</h2></div>
+                <span className="panel-heading__meta">{online.accountName ?? "Guest"}</span>
               </div>
-              <Die value={lastRoll?.value ?? null} />
-            </div>
-            <button type="button" className="ludo-button ludo-button--primary ludo-roll" onClick={handleRoll} disabled={!awaiting}>
-              {awaiting ? "Roll dice" : game.phase === "move" ? "Choose a token" : "Waiting…"}
-            </button>
-            {game.phase === "move" && legalTokens.length === 0 && (
-              <p className="ludo-note">No legal move — the turn passes automatically.</p>
-            )}
-          </section>
-
-          {isOnline && (
-            <section className="ludo-panel">
-              <p className="ludo-eyebrow">Online table</p>
-              <p className="ludo-note">
-                {online.connection === "connected"
-                  ? `Connected as ${online.accountName ?? "Guest"}.`
-                  : `Connection: ${online.connection}.`}
-              </p>
-              {online.error && <p className="ludo-note ludo-error">{online.error}</p>}
-              {!inOnlineMatch ? (
+              {online.error ? <p className="profile-error">{online.error}</p> : null}
+              {!inMatch ? (
                 <>
-                  <div className="ludo-row">
+                  <div className="toolbar-grid">
                     {[2, 3, 4].map((count) => (
-                      <button key={count} type="button" onClick={() => void online.quickMatch(count)}>
+                      <button key={count} type="button" className="action-button" onClick={() => void online.quickMatch(count)}>
                         Quick {count}
                       </button>
                     ))}
+                    <button type="button" className="action-button action-button--accent" onClick={() => void online.createPrivate(seats)}>
+                      Private
+                    </button>
                   </div>
-                  <div className="ludo-row">
-                    <button type="button" onClick={() => void online.createPrivate(seats)}>Private room</button>
+                  <div className="invite-actions">
+                    <input className="room-input" value={roomInput} onChange={(event) => setRoomInput(event.target.value)} placeholder="Room code" aria-label="Room code" />
+                    <button type="button" className="mini-button" onClick={() => void online.joinByCode(roomInput)}>Join</button>
+                    <button type="button" className="mini-button" onClick={() => void online.joinByCode(roomInput, true)}>Watch</button>
                   </div>
-                  <div className="ludo-row">
-                    <input
-                      className="ludo-input"
-                      value={roomInput}
-                      onChange={(event) => setRoomInput(event.target.value)}
-                      placeholder="Room code"
-                      aria-label="Room code"
-                    />
-                    <button type="button" onClick={() => void online.joinByCode(roomInput)}>Join</button>
-                    <button type="button" onClick={() => void online.joinByCode(roomInput, true)}>Watch</button>
-                  </div>
-                  {online.searching && <p className="ludo-note">Looking for players…</p>}
+                  {online.searching ? <p className="ludo-note">Looking for players…</p> : null}
                 </>
               ) : (
                 <>
-                  {online.roomCode && <p className="ludo-note">Room code: <strong>{online.roomCode}</strong></p>}
-                  {online.spectating && <p className="ludo-note">You are watching this table.</p>}
-                  <div className="ludo-row">
-                    <button type="button" onClick={() => void online.leave()}>Leave table</button>
-                    <button type="button" onClick={online.resign}>Resign</button>
-                  </div>
-                  <div className="ludo-row">
-                    <input
-                      className="ludo-input"
-                      value={chatInput}
-                      onChange={(event) => setChatInput(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && chatInput.trim()) {
-                          online.chat(chatInput.trim());
-                          setChatInput("");
-                        }
-                      }}
-                      placeholder="Say something"
-                      aria-label="Table chat"
-                    />
-                    <button type="button" onClick={() => { if (chatInput.trim()) { online.chat(chatInput.trim()); setChatInput(""); } }}>
-                      Send
-                    </button>
-                  </div>
-                  <div className="ludo-chat">
-                    {online.state?.chat.slice(-6).map((entry) => (
-                      <p key={entry.id}><strong>{entry.username}</strong> {entry.text}</p>
-                    ))}
+                  {online.roomCode ? <p className="room-code">Room code <strong>{online.roomCode}</strong></p> : null}
+                  {online.spectating ? <p className="ludo-note">You are watching this table.</p> : null}
+                  <div className="toolbar-grid">
+                    <button type="button" className="action-button" onClick={() => void online.leave()}>Leave</button>
+                    <button type="button" className="action-button action-button--danger" onClick={online.resign}>Resign</button>
                   </div>
                 </>
               )}
             </section>
-          )}
+          ) : null}
 
-          <section className="ludo-panel">
-            <div className="ludo-panel__title">
-              <p className="ludo-eyebrow">Race</p>
-              <span>{game.playerCount} players</span>
+          <section className="panel table-panel">
+            <div className="panel-heading">
+              <div><p className="eyebrow">Scoreboard</p><h2>Table</h2></div>
+              <span className="panel-heading__meta">{game.playerCount} players</span>
             </div>
-            <div className="ludo-players">
+            <div className="race-list">
               {game.players.map((player) => (
-                <div key={player.seat} className={`ludo-player ${player.seat === game.current ? "ludo-player--active" : ""}`}>
-                  <span className="ludo-player__dot" style={{ background: PLAYER_COLOR_HEX[player.color] }} />
-                  <div className="ludo-player__copy">
-                    <strong>{PLAYER_LABEL[player.seat]}</strong>
-                    <small>{isOnline ? player.color.toUpperCase() : player.ai ? "COMPUTER" : "PLAYER"}</small>
+                <div key={player.seat} className={`race-row ${player.seat === game.current ? "race-row--active" : ""}`}>
+                  <span className="race-disc" style={{ background: PLAYER_COLOR_HEX[player.color] }} />
+                  <div className="race-name">
+                    {PLAYER_LABEL[player.seat]}
+                    <span className="race-sub">{onlineMode ? player.color.toUpperCase() : player.ai ? "COMPUTER" : "PLAYER"}</span>
                   </div>
-                  <div className="ludo-player__pieces">
+                  <div className="race-pieces">
                     {player.tokens.map((token) => (
                       <span
                         key={token.id}
-                        className={token.progress >= FINISH_PROGRESS ? "is-home" : token.progress < 0 ? "is-yard" : ""}
-                        style={{ borderColor: PLAYER_COLOR_HEX[player.color] }}
+                        className={token.progress >= FINISH_PROGRESS ? "is-home" : token.progress >= 0 ? "is-out" : ""}
+                        style={{ borderColor: PLAYER_COLOR_HEX[player.color], color: PLAYER_COLOR_HEX[player.color] }}
                         title={`Token ${token.id + 1}: ${token.location}`}
                       />
                     ))}
                   </div>
-                  <b>{player.finished}/{TOKENS_PER_PLAYER}</b>
+                  <b className="race-count">{player.finished}/{TOKENS_PER_PLAYER}</b>
                 </div>
               ))}
             </div>
-            {isOnline && online.state && online.state.spectators.length > 0 && (
-              <p className="ludo-note">Watching: {online.state.spectators.map((entry) => entry.username).join(", ")}</p>
-            )}
           </section>
 
-          {mode === "ai" && (
-            <section className="ludo-panel">
-              <p className="ludo-eyebrow">Computer level</p>
-              <div className="ludo-difficulty">
+          {mode === "ai" ? (
+            <section className="panel ai-panel">
+              <div className="panel-heading"><div><p className="eyebrow">Computer</p><h2>Level</h2></div></div>
+              <div className="ai-panel__options" role="radiogroup" aria-label="Computer level">
                 {DIFFICULTIES.map((level) => (
                   <button
                     key={level.id}
                     type="button"
-                    className={difficulty === level.id ? "is-active" : ""}
-                    onClick={() => { setDifficulty(level.id); controller.newGame({ difficulty: level.id }); }}
+                    role="radio"
+                    aria-checked={difficulty === level.id}
+                    className={`mini-button ${difficulty === level.id ? "mini-button--active" : ""}`}
+                    onClick={() => {
+                      setDifficulty(level.id);
+                      controller.newGame({ difficulty: level.id });
+                    }}
                   >
-                    <strong>{level.label}</strong>
-                    <small>{level.hint}</small>
+                    {level.label}
                   </button>
                 ))}
               </div>
             </section>
-          )}
+          ) : null}
 
-          {!isOnline && game.winner !== null && !controller.isReplaying && (
-            <section className="ludo-panel ludo-winner">
-              <p className="ludo-eyebrow">Race complete</p>
-              <h2>{PLAYER_LABEL[game.winner]} wins</h2>
-              <p>{game.players[game.winner]?.color} reached home first.</p>
-              <div className="ludo-row">
-                <button type="button" className="ludo-button" onClick={controller.startReplay}>Watch replay</button>
-                <button type="button" className="ludo-button ludo-button--ghost" onClick={() => startNewGame()}>Play again</button>
+          {!onlineMode && game.winner !== null && !controller.isReplaying ? (
+            <section className="panel status-panel" aria-live="polite">
+              <span className="status-panel__icon"><Icon name="trophy" size={22} /></span>
+              <div>
+                <p className="eyebrow">Race complete</p>
+                <h2>{PLAYER_LABEL[game.winner]} wins</h2>
+                <p>{game.players[game.winner]?.color} reached home first.</p>
               </div>
             </section>
-          )}
+          ) : null}
 
-          {!isOnline && (
-            <section className="ludo-panel">
-              <p className="ludo-eyebrow">Local record</p>
-              <div className="ludo-stats">
+          {!onlineMode ? (
+            <section className="panel">
+              <div className="panel-heading"><div><p className="eyebrow">Local record</p><h2>History</h2></div></div>
+              <div className="ludo-record">
                 <div><strong>{progress.games}</strong><small>Games</small></div>
                 <div><strong>{progress.wins}</strong><small>Wins</small></div>
                 <div><strong>{progress.history.length}</strong><small>Saved</small></div>
               </div>
             </section>
-          )}
+          ) : null}
+
+          <section className="panel tips-panel">
+            <div className="panel-heading"><div><p className="eyebrow">Rules</p><h2>Table notes</h2></div></div>
+            <ul className="tip-list">
+              {RULES.map((rule) => <li key={rule}><span className="tip-mark" />{rule}</li>)}
+            </ul>
+          </section>
+          <p className="sidebar-note">Every table uses the same seeded dice and rules as the server.</p>
         </aside>
       </main>
 
-      {settingsOpen && (
-        <div className="ludo-overlay" role="dialog" aria-label="Game settings">
-          <div className="ludo-dialog">
-            <h2>Table settings</h2>
-            <p>Choose how many colours race. In local mode every seat is played on this device; in computer mode you take the first seat.</p>
-            <div className="ludo-row">
-              {[2, 3, 4].map((count) => (
-                <button key={count} type="button" className={seats === count ? "is-active" : ""} onClick={() => startNewGame(count)}>
-                  {count} players
-                </button>
-              ))}
-            </div>
-            <button type="button" className="ludo-button" onClick={() => setSettingsOpen(false)}>Done</button>
+      {onlineMode ? (
+        <div className="chat-dock">
+          <MatchChat
+            matchId={online.matchId}
+            messages={online.state?.chat ?? []}
+            selfUserId={online.myUserId}
+            onSend={online.chat}
+          />
+        </div>
+      ) : null}
+
+      {rulesOpen ? (
+        <div className="dialog-backdrop" role="presentation" onClick={() => setRulesOpen(false)}>
+          <div className="dialog" role="dialog" aria-label="Rules" onClick={(event) => event.stopPropagation()}>
+            <div className="panel-heading"><div><p className="eyebrow">Ludo</p><h2>How to play</h2></div></div>
+            <ul className="tip-list">{RULES.map((rule) => <li key={rule}><span className="tip-mark" />{rule}</li>)}</ul>
+            <button type="button" className="button button--primary" onClick={() => setRulesOpen(false)}>Close</button>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -1,0 +1,20 @@
+Ludo sound credits
+==================
+
+dice-roll.mp3 / dice-roll.ogg
+  "Shake and Roll Dice" by Mike Koenig, Attribution 3.0 (CC BY 3.0).
+  Edited down from soundbible.com/182-Shake, distributed with tremby/dice:
+  https://github.com/tremby/dice/blob/main/public/roll.mp3
+
+move.ogg, capture.ogg
+  wooden_01.ogg and wooden_02.ogg from lavenderdotpet/CC0-Public-Domain-Sounds,
+  released under CC0 1.0 (public domain dedication).
+  https://github.com/lavenderdotpet/CC0-Public-Domain-Sounds
+
+home.ogg, turn.ogg, start.ogg, win.ogg, foul.ogg
+  Beep3, Beep7, Click1, Beep1 and Beep5 from the MMRetro Arcade Sounds Pack in
+  lavenderdotpet/CC0-Public-Domain-Sounds, released under CC0 1.0.
+  https://github.com/lavenderdotpet/CC0-Public-Domain-Sounds
+
+The files are bundled with MoonGames Ludo. The attributions above must travel
+with the game bundle.

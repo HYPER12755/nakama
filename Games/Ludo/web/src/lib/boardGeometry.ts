@@ -34,14 +34,16 @@ export const HOME_COLUMN: Readonly<Record<LudoColor, readonly GridPoint[]>> = {
 /** Top-left cell of each private yard. */
 export const YARD_ORIGIN: Readonly<Record<LudoColor, GridPoint>> = {
   red: [1, 1],
-  green: [9, 1],
-  blue: [1, 9],
-  yellow: [9, 9],
+  green: [10, 1],
+  blue: [1, 10],
+  yellow: [10, 10],
 };
 
 /** The four token spots inside a yard, in grid units. */
+/** Measured from the supplied board art: printed centres are at 2.125 and
+ * 3.844 grid units, so the spot origin is half a cell behind each. */
 export const YARD_SPOTS: readonly GridPoint[] = [
-  [1.35, 1.35], [2.65, 1.35], [1.35, 2.65], [2.65, 2.65],
+  [1.625, 1.625], [3.344, 1.625], [1.625, 3.344], [3.344, 3.344],
 ];
 
 export const GRID_SIZE = 15;

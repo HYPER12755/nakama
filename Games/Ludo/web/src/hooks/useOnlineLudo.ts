@@ -128,6 +128,8 @@ export interface OnlineLudoController {
   spectating: boolean;
   roomCode: string | null;
   accountName: string | null;
+  myUserId: string | null;
+  matchId: string | null;
   connect: () => Promise<void>;
   quickMatch: (seats: number, turnSeconds?: number) => Promise<void>;
   createPrivate: (seats: number, turnSeconds?: number) => Promise<void>;
@@ -149,6 +151,8 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
   const [spectating, setSpectating] = useState(false);
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [accountName, setAccountName] = useState<string | null>(null);
+  const [myUserId, setMyUserId] = useState<string | null>(null);
+  const [matchId, setMatchId] = useState<string | null>(null);
 
   const clientRef = useRef<Client | null>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -233,6 +237,7 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
         fallbackRef.current = null;
         void socket.joinMatch(matched.match_id, matched.token).then(() => {
           matchRef.current = matched.match_id;
+          setMatchId(matched.match_id);
         }).catch((cause: unknown) => {
           setError(cause instanceof Error ? cause.message : "Could not join the table.");
         });
@@ -251,6 +256,7 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
         | { user?: { username?: string } }
         | null;
       setAccountName(account?.user?.username ?? session.username ?? "Guest");
+      setMyUserId(session.user_id ?? null);
     } catch (cause) {
       setConnection("error");
       setError(cause instanceof Error ? cause.message : "The realtime connection failed.");
@@ -278,6 +284,7 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
     }
     await socket.joinMatch(matchId, undefined, spectator ? { spectate: "1" } : undefined);
     matchRef.current = matchId;
+    setMatchId(matchId);
     setSpectating(spectator);
     setError(null);
   }, []);
@@ -351,6 +358,7 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
     const matchId = matchRef.current;
     if (socket && matchId) await socket.leaveMatch(matchId).catch(() => undefined);
     matchRef.current = null;
+    setMatchId(null);
     setState(null);
     setRoomCode(null);
     setSpectating(false);
@@ -374,6 +382,8 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
     spectating,
     roomCode,
     accountName,
+    myUserId,
+    matchId,
     connect,
     quickMatch,
     createPrivate,

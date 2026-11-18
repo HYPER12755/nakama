@@ -1,18 +1,20 @@
-/** Small procedural sound set for Ludo events. No external audio files. */
+/**
+ * Plays the real Ludo sounds through the shared SDK asset loader, using the
+ * same decode/cache pattern as Carrom's audio module.
+ */
 
-export type LudoSound =
-  | "roll"
-  | "move"
-  | "capture"
-  | "home"
-  | "win"
-  | "foul";
+import { loadAsset } from "@moongames/game-sdk";
+import { EVENT_GAIN, soundsFor, type LudoSound } from "./soundCatalog";
 
 let context: AudioContext | null = null;
-let muted = false;
+const buffers = new Map<string, AudioBuffer | null>();
+const loading = new Map<string, Promise<AudioBuffer | null>>();
+const nextIndex = new Map<LudoSound, number>();
+let enabled = true;
+let volume = 0.8;
 
 function audio(): AudioContext | null {
-  if (muted) return null;
+  if (!enabled) return null;
   try {
     if (!context) {
       const Ctor = window.AudioContext
@@ -27,79 +29,68 @@ function audio(): AudioContext | null {
   }
 }
 
+export function configureSound(options: { enabled?: boolean; volume?: number } = {}): void {
+  if (options.enabled !== undefined) enabled = options.enabled;
+  if (options.volume !== undefined) volume = Math.max(0, Math.min(1, options.volume));
+}
+
 export function setMuted(value: boolean): void {
-  muted = value;
+  configureSound({ enabled: !value });
 }
 
 export function isMuted(): boolean {
-  return muted;
+  return !enabled;
 }
 
-function tone(
-  frequency: number,
-  duration: number,
-  type: OscillatorType = "sine",
-  volume = 0.12,
-  delay = 0,
-): void {
+function load(file: string): Promise<AudioBuffer | null> {
+  const key = `sounds/ludo/${file}`;
+  const cached = buffers.get(key);
+  if (cached !== undefined) return Promise.resolve(cached);
+  const pending = loading.get(key);
+  if (pending) return pending;
   const ctx = audio();
-  if (!ctx) return;
-  const start = ctx.currentTime + delay;
-  const oscillator = ctx.createOscillator();
-  const gain = ctx.createGain();
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, start);
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(volume, start + 0.012);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  oscillator.connect(gain).connect(ctx.destination);
-  oscillator.start(start);
-  oscillator.stop(start + duration + 0.02);
+  if (!ctx) return Promise.resolve(null);
+  const promise = loadAsset(key)
+    .then((data) => ctx.decodeAudioData(data as ArrayBuffer))
+    .then((buffer) => {
+      buffers.set(key, buffer);
+      loading.delete(key);
+      return buffer;
+    })
+    .catch(() => {
+      buffers.set(key, null);
+      loading.delete(key);
+      return null;
+    });
+  loading.set(key, promise);
+  return promise;
 }
 
-function noise(duration: number, volume = 0.09): void {
-  const ctx = audio();
-  if (!ctx) return;
-  const frames = Math.floor(ctx.sampleRate * duration);
-  const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < frames; i += 1) {
-    data[i] = (Math.random() * 2 - 1) * (1 - i / frames);
-  }
-  const source = ctx.createBufferSource();
-  const gain = ctx.createGain();
-  const filter = ctx.createBiquadFilter();
-  filter.type = "lowpass";
-  filter.frequency.value = 1700;
-  gain.gain.value = volume;
-  source.buffer = buffer;
-  source.connect(filter).connect(gain).connect(ctx.destination);
-  source.start();
+/** Warm an event so the first roll does not wait for the network. */
+export function preloadEvent(event: LudoSound): void {
+  for (const file of soundsFor(event)) void load(file);
 }
 
-/** Play one event. The sounds are deliberately short so a fast AI is calm. */
+export function playEvent(event: LudoSound): void {
+  if (!enabled) return;
+  const files = soundsFor(event);
+  if (files.length === 0) return;
+  const index = nextIndex.get(event) ?? 0;
+  nextIndex.set(event, (index + 1) % files.length);
+  const file = files[index % files.length]!;
+  void load(file).then((buffer) => {
+    const ctx = audio();
+    if (!buffer || !ctx) return;
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    source.buffer = buffer;
+    gain.gain.value = volume * EVENT_GAIN[event];
+    source.connect(gain).connect(ctx.destination);
+    source.start();
+  });
+}
+
+/** Kept for callers that still speak in terms of "roll" and "move". */
 export function playLudoSound(event: LudoSound): void {
-  switch (event) {
-    case "roll":
-      noise(0.13, 0.08);
-      tone(210, 0.07, "triangle", 0.05);
-      break;
-    case "move":
-      tone(430, 0.07, "sine", 0.08);
-      tone(560, 0.05, "sine", 0.05, 0.05);
-      break;
-    case "capture":
-      tone(190, 0.16, "sawtooth", 0.1);
-      tone(120, 0.2, "triangle", 0.08, 0.04);
-      break;
-    case "home":
-      [523, 659, 784].forEach((frequency, index) => tone(frequency, 0.16, "sine", 0.09, index * 0.07));
-      break;
-    case "win":
-      [523, 659, 784, 1046].forEach((frequency, index) => tone(frequency, 0.28, "sine", 0.1, index * 0.11));
-      break;
-    case "foul":
-      tone(150, 0.22, "square", 0.06);
-      break;
-  }
+  playEvent(event);
 }
