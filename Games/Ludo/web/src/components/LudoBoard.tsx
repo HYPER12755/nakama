@@ -8,7 +8,7 @@ import {
   type LudoState,
   type LudoToken,
 } from "@moongames/ludo-core";
-import { GRID_SIZE, HOME_COLUMN, TRACK, tokenPoint } from "../lib/boardGeometry";
+import { GRID_SIZE, HOME_COLUMN, TRACK, movePath, tokenPoint } from "../lib/boardGeometry";
 
 const CELL = 40;
 const SIZE = GRID_SIZE * CELL;
@@ -24,6 +24,10 @@ export interface LudoBoardProps {
   boardTheme?: string;
   showLegalMoves?: boolean;
   highlightLastMove?: boolean;
+  /** Changes on every move so the token can walk the squares one by one. */
+  moveKey?: number;
+  onStep?: () => void;
+  stepMs?: number;
 }
 
 /** The shared SDK resolves bundle assets on web and through the host on file://. */
@@ -146,10 +150,20 @@ export function LudoBoard({
   boardTheme = "classic",
   showLegalMoves = true,
   highlightLastMove = true,
+  moveKey,
+  onStep,
+  stepMs = 135,
 }: LudoBoardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dpr, setDpr] = useState(1);
   const [tick, setTick] = useState(0);
+  const [frame, setFrame] = useState(0);
+  const anim = useRef<{
+    key: number;
+    path: ReturnType<typeof movePath>;
+    start: number;
+    lastStep: number;
+  } | null>(null);
 
   useEffect(() => onBoardLoadedListener(() => setTick((value) => value + 1)), []);
   useEffect(() => {
@@ -165,6 +179,35 @@ export function LudoBoard({
       tokenImage(tokenSet, player.color, () => setTick((value) => value + 1));
     }
   }, [state.players, tokenSet]);
+
+  useEffect(() => {
+    if (moveKey === undefined || !lastMove || lastMove.token === undefined) return;
+    if (anim.current?.key === moveKey) return;
+    const color = state.players[lastMove.player]?.color;
+    if (!color) return;
+    const path = movePath(color, lastMove.from ?? -1, lastMove.to, lastMove.token);
+    if (path.length === 0) return;
+    anim.current = { key: moveKey, path, start: performance.now(), lastStep: -1 };
+    let raf = 0;
+    const loop = (now: number) => {
+      const current = anim.current;
+      if (!current || current.key !== moveKey) return;
+      const elapsed = now - current.start;
+      const index = Math.min(path.length - 1, Math.floor(elapsed / stepMs));
+      if (index !== current.lastStep) {
+        current.lastStep = index;
+        onStep?.();
+      }
+      setFrame(now);
+      if (elapsed < path.length * stepMs) raf = requestAnimationFrame(loop);
+      else {
+        anim.current = null;
+        setFrame(0);
+      }
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [moveKey, lastMove, state.players, onStep, stepMs]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -199,7 +242,24 @@ export function LudoBoard({
 
     for (const player of state.players) {
       for (const token of player.tokens) {
-        const [cx, cy] = centre(tokenPoint(player.color, token.progress, token.id));
+        let [cx, cy] = centre(tokenPoint(player.color, token.progress, token.id));
+        const moving = anim.current
+          && lastMove
+          && lastMove.token === token.id
+          && lastMove.player === player.seat;
+        if (moving && anim.current && lastMove?.token !== undefined) {
+          const current = anim.current;
+          const elapsed = frame - current.start;
+          const index = Math.min(current.path.length - 1, Math.max(0, Math.floor(elapsed / stepMs)));
+          const target = centre(current.path[index]!);
+          const previous = index === 0
+            ? centre(tokenPoint(player.color, lastMove.from ?? -1, token.id))
+            : centre(current.path[index - 1]!);
+          const t = Math.max(0, Math.min(1, (elapsed - index * stepMs) / stepMs));
+          const lift = Math.sin(t * Math.PI) * 7;
+          cx = previous[0] + (target[0] - previous[0]) * t;
+          cy = previous[1] + (target[1] - previous[1]) * t - lift;
+        }
         const legal = showLegalMoves && !disabled
           && player.seat === state.current
           && legalTokens.includes(token.id);
@@ -210,7 +270,7 @@ export function LudoBoard({
         );
       }
     }
-  }, [state, legalTokens, lastMove, disabled, dpr, tick, tokenSet, boardTheme, showLegalMoves, highlightLastMove]);
+  }, [state, legalTokens, lastMove, disabled, dpr, tick, frame, tokenSet, boardTheme, showLegalMoves, highlightLastMove, stepMs]);
 
   function handleClick(event: React.MouseEvent<HTMLCanvasElement>): void {
     if (disabled || !onTokenClick) return;

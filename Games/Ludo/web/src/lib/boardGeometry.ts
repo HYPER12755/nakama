@@ -53,6 +53,21 @@ export function trackPoint(index: number): GridPoint {
   return TRACK[wrapped]!;
 }
 
+/** Every square a token crosses on its way from `from` to `to`, in order. */
+export function movePath(
+  color: LudoColor,
+  from: number,
+  to: number,
+  token: number,
+): GridPoint[] {
+  if (from < 0) return [trackPoint(START_INDEX[color])];
+  const squares: GridPoint[] = [];
+  for (let progress = from + 1; progress <= to; progress += 1) {
+    squares.push(tokenPoint(color, progress, token));
+  }
+  return squares;
+}
+
 export function yardSpot(color: LudoColor, token: number): GridPoint {
   const origin = YARD_ORIGIN[color];
   const spot = YARD_SPOTS[token]!;

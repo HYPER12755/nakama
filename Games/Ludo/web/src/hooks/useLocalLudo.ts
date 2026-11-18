@@ -11,6 +11,7 @@ import {
   rollDice,
   type LudoDifficulty,
   type LudoMove,
+  type LudoRules,
   type LudoState,
 } from "@moongames/ludo-core";
 import { recordLocalGame, type LocalGameRecord } from "../lib/localProgress";
@@ -24,6 +25,8 @@ export interface LocalGameOptions {
   sound?: boolean;
   enabled?: boolean;
   aiDelay?: number;
+  rules?: Partial<LudoRules>;
+  animationMs?: number;
 }
 
 const DEFAULT_AI_DELAY_MS = 520;
@@ -33,12 +36,15 @@ export function useLocalLudo(options: LocalGameOptions) {
     playerCount: options.seats,
     seed: options.seed,
     ai: Array.from({ length: options.seats }, (_, seat) => seat >= options.humanSeats),
+    rules: options.rules,
   }));
   const [lastMove, setLastMove] = useState<LudoMove | null>(null);
   const [steps, setSteps] = useState<LocalGameRecord["steps"]>([]);
   const [replayFrames, setReplayFrames] = useState<LudoState[] | null>(null);
   const [replayIndex, setReplayIndex] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The token animation owns the board until its last hop has landed. */
+  const busyUntil = useRef(0);
   const gameRef = useRef(game);
   const optionsRef = useRef(options);
   gameRef.current = game;
@@ -51,12 +57,14 @@ export function useLocalLudo(options: LocalGameOptions) {
 
   const newGame = useCallback((overrides: Partial<LocalGameOptions> = {}) => {
     clearTimer();
+    busyUntil.current = 0;
     const next = { ...optionsRef.current, ...overrides };
     optionsRef.current = next;
     const fresh = createGame({
       playerCount: next.seats,
       seed: next.seed,
       ai: Array.from({ length: next.seats }, (_, seat) => seat >= next.humanSeats),
+      rules: next.rules,
     });
     gameRef.current = fresh;
     setGame(fresh);
@@ -103,6 +111,8 @@ export function useLocalLudo(options: LocalGameOptions) {
     gameRef.current = next;
     setGame(next);
     setLastMove(chosen);
+    const stepCount = chosen.leavesHome ? 1 : Math.max(1, chosen.to - Math.max(0, chosen.from));
+    busyUntil.current = Date.now() + stepCount * (optionsRef.current.animationMs ?? 135) + 80;
     const record = { color: previous.players[previous.current]!.color, token, to: chosen.to };
     setSteps((current) => [...current, record]);
     if (optionsRef.current.sound !== false) {
@@ -132,7 +142,10 @@ export function useLocalLudo(options: LocalGameOptions) {
           });
         } else move(token);
       }
-    }, optionsRef.current.aiDelay ?? DEFAULT_AI_DELAY_MS);
+    }, Math.max(
+      optionsRef.current.aiDelay ?? DEFAULT_AI_DELAY_MS,
+      busyUntil.current - Date.now(),
+    ));
     return clearTimer;
   }, [game, clearTimer, move, roll, options.enabled]);
 

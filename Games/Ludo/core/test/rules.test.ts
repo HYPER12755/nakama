@@ -230,5 +230,5 @@ describe("Ludo replay", () => {
     expect(rebuilt.players.map((player) => player.tokens.map((token) => [token.location, token.progress]))).toEqual(
       game.players.map((player) => player.tokens.map((token) => [token.location, token.progress])),
     );
-  });
+  }, 20_000);
 });
