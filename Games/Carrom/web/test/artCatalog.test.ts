@@ -5,7 +5,7 @@ import { ART_GROUPS, ART_TOTAL, artFiles } from "../src/lib/artCatalog.generated
 describe("the real game artwork", () => {
   it("catalogs every asset family", () => {
     expect(ART_GROUPS.map((group) => group.id)).toEqual([
-      "boards", "strikers", "pucks", "trails", "pockets", "shine", "frames", "buff",
+      "boards", "sliders", "strikers", "pucks", "trails", "pockets", "shine", "frames", "buff",
     ]);
     expect(ART_TOTAL).toBeGreaterThan(1000);
   });

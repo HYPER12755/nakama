@@ -48,6 +48,11 @@ export const COSMETIC_GROUPS: CosmeticGroup[] = [
     ],
   },
   {
+    id: "sliders",
+    label: "Sliders",
+    options: ripped("sliders"),
+  },
+  {
     id: "strikers",
     label: "Strikers",
     options: [
@@ -100,6 +105,7 @@ export const COSMETIC_GROUPS: CosmeticGroup[] = [
 
 const DEFAULTS: Record<ArtGroupId, string> = {
   boards: `builtin:${BOARD_DESIGNS[0]!.id}`,
+  sliders: "",
   strikers: `builtin:${STRIKER_DESIGNS[0]!.id}`,
   pucks: `builtin:${PIECE_SETS[0]!.id}`,
   trails: "",

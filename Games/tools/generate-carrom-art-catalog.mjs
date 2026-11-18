@@ -8,7 +8,8 @@ const root = new URL("../Carrom/web/public/art/game/", import.meta.url);
 const files = readdirSync(root).filter((name) => name.endsWith(".png") || name.endsWith(".webp"));
 
 const families = [
-  ["boards", /^(Table_|Slider_|IngameBG_Table_|Wornboard_BG|shadow_board|CE_CarromTrials_Table)/],
+  ["boards", /^(Table_|IngameBG_Table_|Wornboard_BG|shadow_board|CE_CarromTrials_Table)/],
+  ["sliders", /^Slider_/],
   ["strikers", /^Striker_(?!Buff_)/],
   ["pucks", /^Puck_/],
   ["trails", /^(Particle_Trails_|Texture_Trails_)/],

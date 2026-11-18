@@ -293,6 +293,8 @@ export default function App({ bridge }: AppProps) {
   const [theme, setTheme] = useState<Theme>(storedTheme);
   const [soundOn, setSoundOn] = useState(storedSound);
   const [aimMode, setAimMode] = useState<AimMode>(storedAimMode);
+  const [aiming, setAiming] = useState(false);
+  const cancelAimRef = useRef<(() => void) | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -1436,6 +1438,10 @@ export default function App({ bridge }: AppProps) {
                 view={viewPlayer}
                 onShoot={handleShoot}
                 onAnimationComplete={handleAnimationComplete}
+                onAimChange={setAiming}
+                cancelRef={(cancel) => {
+                  cancelAimRef.current = cancel;
+                }}
                 visuals={tableVisuals(
                   preferences.boardTheme,
                   preferences.strikerDesign,
@@ -1482,6 +1488,15 @@ export default function App({ bridge }: AppProps) {
                 </button>
               </div>
             </div>
+            {aiming ? (
+              <button
+                type="button"
+                className="button button--ghost aim-cancel-control"
+                onClick={() => cancelAimRef.current?.()}
+              >
+                Cancel aim
+              </button>
+            ) : null}
             <p className="aim-hint">
               <Icon name="target" size={16} />
               {aimMode === "pull"

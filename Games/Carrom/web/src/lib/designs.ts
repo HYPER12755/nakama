@@ -264,6 +264,7 @@ export const PIECE_SETS: PieceSet[] = [
 /** Every art group a player can choose, in one place. */
 export type ArtGroupId =
   | "boards"
+  | "sliders"
   | "strikers"
   | "pucks"
   | "trails"
@@ -329,7 +330,9 @@ export function tableVisuals(
   if (!isBuiltin(pieceChoice, pieceId)) {
     paths.pucks = pathOf(pieceChoice);
   }
-  for (const group of ["trails", "pockets", "shine", "frames", "buff"] as const) {
+  for (const group of [
+    "sliders", "trails", "pockets", "shine", "frames", "buff",
+  ] as const) {
     const path = pathOf(art[group]);
     if (path !== undefined) {
       paths[group] = path;

@@ -76,6 +76,10 @@ export interface CarromBoardProps {
   view: CarromPlayer;
   onShoot: (shot: CarromShotInput) => void;
   onAnimationComplete: () => void;
+  /** Called when an aim starts or is cancelled, so the controls can show it. */
+  onAimChange?: (aiming: boolean) => void;
+  /** Receives a function the controls can call to cancel the current aim. */
+  cancelRef?: (cancel: () => void) => void;
   /** The board, striker and piece designs chosen in the preferences. */
   visuals?: TableVisuals;
 }
@@ -1121,20 +1125,61 @@ function paintTable(
 ): void {
   drawFrame(ctx, lite, visuals.board);
 
-  // A real frame texture from the game, laid over the wooden frame.
-  if (visuals.paths.frames !== undefined) {
-    const frameArt = pieceArtImage(visuals.paths.frames);
-    if (frameArt !== null) {
+  // A slider backdrop from the game, laid over the wooden frame.
+  if (visuals.paths.sliders !== undefined) {
+    const slider = pieceArtImage(visuals.paths.sliders);
+    if (slider !== null) {
       ctx.save();
       roundedRect(ctx, 8, 8, LOGICAL_SIZE - 16, LOGICAL_SIZE - 16, 46);
       ctx.clip();
-      ctx.globalAlpha = 0.75;
-      ctx.drawImage(frameArt, 8, 8, LOGICAL_SIZE - 16, LOGICAL_SIZE - 16);
+      ctx.globalAlpha = 0.85;
+      ctx.drawImage(slider, 8, 8, LOGICAL_SIZE - 16, LOGICAL_SIZE - 16);
+      ctx.restore();
+    }
+  }
+
+  // A real frame texture from the game, laid over the wooden frame. The
+  // game's frames are narrow strips, so they are tiled along all four edges
+  // instead of being stretched across the whole table.
+  if (visuals.paths.frames !== undefined) {
+    const frameArt = pieceArtImage(visuals.paths.frames);
+    if (frameArt !== null) {
+      const band = 34;
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      const pattern = ctx.createPattern(frameArt, "repeat");
+      if (pattern !== null) {
+        ctx.fillStyle = pattern;
+        ctx.fillRect(8, 8, LOGICAL_SIZE - 16, band);
+        ctx.fillRect(8, LOGICAL_SIZE - 8 - band, LOGICAL_SIZE - 16, band);
+        ctx.fillRect(8, 8 + band, band, LOGICAL_SIZE - 16 - band * 2);
+        ctx.fillRect(
+          LOGICAL_SIZE - 8 - band,
+          8 + band,
+          band,
+          LOGICAL_SIZE - 16 - band * 2,
+        );
+      }
       ctx.restore();
     }
   }
 
   drawSurface(ctx, lite, visuals.board);
+
+  // A trail texture from the game, shown as a band across the surface so the
+  // choice is visible even before a shot is aimed.
+  if (visuals.paths.trails !== undefined) {
+    const trail = pieceArtImage(visuals.paths.trails);
+    if (trail !== null) {
+      ctx.save();
+      roundedRect(ctx, PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE, 18);
+      ctx.clip();
+      ctx.globalAlpha = 0.35;
+      ctx.drawImage(trail, PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE);
+      ctx.restore();
+    }
+  }
+
   drawMarkings(ctx, turn, visuals);
 
   // A badge chosen from the game's badge art, shown in a corner of the table.
@@ -1201,6 +1246,8 @@ export function CarromBoard({
   view,
   onShoot,
   onAnimationComplete,
+  onAimChange,
+  cancelRef,
   visuals = tableVisuals("tournament", "brass", "standard"),
 }: CarromBoardProps) {
   const visualsRef = useRef(visuals);
@@ -1371,18 +1418,34 @@ export function CarromBoard({
     [dpr, lite, disabled, aimMode, visualKey],
   );
 
-  // A chosen image arrives after the first paint. Redraw the cached table and
-  // the pieces as soon as it does, so the player sees their pick at once.
+  // A chosen image arrives after the first paint. Repaint the cached table
+  // from scratch, then draw it: clearing the key alone was not enough, because
+  // drawScene copies the old cached layer when one already exists.
   useEffect(
     () =>
       onArtLoaded(() => {
-        boardLayerKeyRef.current = "";
+        const canvas = canvasRef.current;
+        const layer = boardLayerRef.current;
+        if (canvas !== null && layer !== null) {
+          const ctx = layer.getContext("2d");
+          if (ctx !== null) {
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, layer.width, layer.height);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            renderBoardLayer(layer, state.turn, lite, dpr, visualsRef.current);
+            boardLayerKeyRef.current = `${lite}:${dpr}:${state.turn}:${visualKey}`;
+          }
+        } else {
+          boardLayerKeyRef.current = "";
+        }
+        // Piece sprites may have been cached before the art arrived.
+        pieceSprites.clear();
         const scene = sceneRef.current;
         if (scene !== null) {
           drawScene(scene.display, scene.aimState, scene.animating);
         }
       }),
-    [drawScene],
+    [drawScene, dpr, lite, state.turn, visualKey],
   );
 
   /**
@@ -1618,7 +1681,12 @@ export function CarromBoard({
     draggingRef.current = null;
     dragAnchorRef.current = null;
     setAim(null);
-  }, []);
+    onAimChange?.(false);
+  }, [onAimChange]);
+
+  useEffect(() => {
+    cancelRef?.(cancelAim);
+  }, [cancelRef, cancelAim]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -1653,6 +1721,7 @@ export function CarromBoard({
     // then re-aiming both feel right.
     dragAnchorRef.current = point;
     setAim(aimAt(point));
+    onAimChange?.(true);
   };
 
   const handlePointerMove = (
@@ -1706,19 +1775,6 @@ export function CarromBoard({
         onPointerCancel={(event) => finishPointer(event, false)}
         onContextMenu={(event) => event.preventDefault()}
       />
-      {aim !== null && !disabled ? (
-        <button
-          type="button"
-          className="aim-cancel"
-          onPointerDown={(event) => {
-            event.preventDefault();
-            cancelAim();
-          }}
-          aria-label="Cancel the aim"
-        >
-          Cancel aim
-        </button>
-      ) : null}
     </div>
   );
 }

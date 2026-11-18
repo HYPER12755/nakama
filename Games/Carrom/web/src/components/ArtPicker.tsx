@@ -94,9 +94,8 @@ export function ArtPicker({
         <span className="setting__note">{total} designs</span>
       </header>
 
-      <DesignPreview visuals={visuals} theme={theme} />
       <p className="art-hint">
-        Pick a design. The board above changes as you choose.
+        Pick a design. The board under the open category changes as you choose.
       </p>
 
       <div className="pref-rows">
@@ -127,6 +126,7 @@ export function ArtPicker({
 
               {expanded ? (
                 <div className="art-grid-wrap">
+                  <DesignPreview visuals={visuals} theme={theme} />
                   <label className="art-search">
                     <span>Filter</span>
                     <input

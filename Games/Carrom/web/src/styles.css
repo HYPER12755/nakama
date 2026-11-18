@@ -689,6 +689,10 @@ button {
   width: 100%;
 }
 
+.aim-cancel-control {
+  flex: 0 0 auto;
+}
+
 .aim-cancel {
   position: absolute;
   top: 8px;
