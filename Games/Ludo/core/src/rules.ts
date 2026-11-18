@@ -15,6 +15,7 @@ import { normalizeSeed, rollFromSeed } from "./rng";
 import {
   DEFAULT_RULES,
   LUDO_COLORS,
+  type LudoColor,
   type LudoEvent,
   type LudoMove,
   type LudoRules,
@@ -34,6 +35,12 @@ export interface CreateGameOptions {
   seed?: number;
   ai?: boolean[];
   rules?: Partial<LudoRules>;
+  /** Colour assigned to each seat, in seat order. */
+  colors?: LudoColor[];
+  /** Display name for each seat. */
+  names?: string[];
+  /** Shorten the race to 1-4 tokens per player. */
+  tokensPerPlayer?: number;
 }
 
 export function createGame(options: CreateGameOptions = {}): LudoState {
@@ -41,10 +48,23 @@ export function createGame(options: CreateGameOptions = {}): LudoState {
   if (!Number.isInteger(playerCount) || playerCount < 2 || playerCount > 4) {
     throw new LudoMoveError("A Ludo game needs two to four players");
   }
-  const players = LUDO_COLORS.slice(0, playerCount).map((color, seat) => ({
+  const tokensPerPlayer = options.tokensPerPlayer ?? TOKENS_PER_PLAYER;
+  if (!Number.isInteger(tokensPerPlayer) || tokensPerPlayer < 1 || tokensPerPlayer > TOKENS_PER_PLAYER) {
+    throw new LudoMoveError("A race uses one to four tokens per player");
+  }
+  const chosen = options.colors ?? LUDO_COLORS.slice(0, playerCount);
+  if (
+    chosen.length < playerCount ||
+    chosen.slice(0, playerCount).some((color) => !LUDO_COLORS.includes(color)) ||
+    new Set(chosen.slice(0, playerCount)).size !== playerCount
+  ) {
+    throw new LudoMoveError("Seats must have four different Ludo colours");
+  }
+  const players = chosen.slice(0, playerCount).map((color, seat) => ({
     seat,
     color,
-    tokens: Array.from({ length: TOKENS_PER_PLAYER }, (_, id) => ({
+    name: options.names?.[seat]?.trim() || undefined,
+    tokens: Array.from({ length: tokensPerPlayer }, (_, id) => ({
       id,
       location: "home" as const,
       progress: -1,
@@ -56,6 +76,7 @@ export function createGame(options: CreateGameOptions = {}): LudoState {
   return {
     players,
     playerCount,
+    tokensPerPlayer,
     current: 0,
     phase: "roll",
     dice: null,
@@ -89,7 +110,7 @@ export function advanceTurn(state: LudoState): void {
   let next = state.current;
   for (let step = 0; step < state.playerCount; step += 1) {
     next = (next + 1) % state.playerCount;
-    if (playerAt(state, next).finished < TOKENS_PER_PLAYER) {
+    if (playerAt(state, next).finished < state.tokensPerPlayer) {
       state.current = next;
       return;
     }
@@ -137,7 +158,7 @@ export function legalMoves(state: LudoState): LudoMove[] {
     if (token.location === "finished") continue;
 
     if (token.location === "home") {
-      if (die !== 6) continue;
+      if (state.rules.sixToStart && die !== 6) continue;
       moves.push({
         player: player.seat,
         token: token.id,
@@ -241,7 +262,7 @@ export function applyMove(state: LudoState, tokenId: number): MoveResult {
     (wasSix && state.rules.sixExtra) ||
     (move.captures.length > 0 && state.rules.captureExtra);
 
-  if (player.finished === TOKENS_PER_PLAYER) {
+  if (player.finished === state.tokensPerPlayer) {
     state.winner = player.seat;
     if (!state.ranking.includes(player.seat)) state.ranking.push(player.seat);
     state.phase = "over";
@@ -337,7 +358,7 @@ export function describeState(state: LudoState): string {
 
 /** Number of tokens a player still has on the board or at home. */
 export function tokensLeft(state: LudoState, seat: number): number {
-  return TOKENS_PER_PLAYER - playerAt(state, seat).finished;
+  return state.tokensPerPlayer - playerAt(state, seat).finished;
 }
 
 /** True when a token occupies the given square, used by the UI for highlights. */

@@ -27,6 +27,7 @@ rules.DEFAULT_RULES = {
   captureExtra = true,
   sixExtra = true,
   exactFinish = true,
+  sixToStart = true,
 }
 
 local function number(value, fallback)
@@ -110,15 +111,36 @@ function rules.create_game(options)
   if player_count < 2 or player_count > 4 then
     error("a Ludo game needs two to four players")
   end
+  local tokens_per_player = number(options.tokensPerPlayer, rules.TOKENS_PER_PLAYER)
+  if tokens_per_player < 1 or tokens_per_player > rules.TOKENS_PER_PLAYER then
+    error("a race uses one to four tokens per player")
+  end
+  local chosen = (type(options.colors) == "table" and #options.colors >= player_count)
+      and options.colors or rules.COLOURS
+  local seen = {}
+  for index = 1, player_count do
+    local colour = chosen[index]
+    local known = false
+    for _, valid in ipairs(rules.COLOURS) do
+      if valid == colour then known = true end
+    end
+    if not known or seen[colour] then
+      error("seats must have four different Ludo colours")
+    end
+    seen[colour] = true
+  end
   local players = {}
   for seat = 0, player_count - 1 do
     local tokens = {}
-    for id = 0, rules.TOKENS_PER_PLAYER - 1 do
+    for id = 0, tokens_per_player - 1 do
       tokens[id + 1] = { id = id, location = "home", progress = -1 }
     end
+    local label = type(options.names) == "table" and options.names[seat + 1] or nil
+    if type(label) == "string" then label = label:gsub("^%s+", ""):gsub("%s+$", "") end
     players[seat + 1] = {
       seat = seat,
-      color = rules.COLOURS[seat + 1],
+      color = chosen[seat + 1],
+      name = (type(label) == "string" and label ~= "") and label or nil,
       tokens = tokens,
       finished = 0,
       ai = options.ai and options.ai[seat + 1] == true or false,
@@ -138,6 +160,7 @@ function rules.create_game(options)
   return {
     players = players,
     playerCount = player_count,
+    tokensPerPlayer = tokens_per_player,
     current = 0,
     phase = "roll",
     dice = nil,
@@ -163,7 +186,7 @@ function rules.advance_turn(state)
   local next_seat = state.current
   for _ = 1, state.playerCount do
     next_seat = (next_seat + 1) % state.playerCount
-    if player_at(state, next_seat).finished < rules.TOKENS_PER_PLAYER then
+    if player_at(state, next_seat).finished < state.tokensPerPlayer then
       state.current = next_seat
       return
     end
@@ -230,7 +253,7 @@ function rules.legal_moves(state)
   for _, token in ipairs(player.tokens) do
     if token.location ~= "finished" then
       if token.location == "home" then
-        if die == 6 then
+        if not (state.rules.sixToStart and die ~= 6) then
           moves[#moves + 1] = {
             player = player.seat,
             token = token.id,
@@ -345,7 +368,7 @@ function rules.apply_move(state, token_id)
   local extra = (was_six and state.rules.sixExtra)
     or (#chosen.captures > 0 and state.rules.captureExtra)
 
-  if player.finished == rules.TOKENS_PER_PLAYER then
+  if player.finished == state.tokensPerPlayer then
     state.winner = player.seat
     state.ranking[#state.ranking + 1] = player.seat
     state.phase = "over"

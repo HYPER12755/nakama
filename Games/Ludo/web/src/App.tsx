@@ -9,6 +9,7 @@ import {
   DEFAULT_RULES,
   createGame,
   legalMoves,
+  type LudoColor,
   type LudoDifficulty,
   type LudoRules,
   type LudoState,
@@ -30,11 +31,14 @@ import { useOnlineLudo } from "./hooks/useOnlineLudo";
 import { readLocalProgress } from "./lib/localProgress";
 import {
   audibleVolume, BOARD_THEMES, GAME_MODES, MODE_RULES, SOUND_SETS,
-  TOKEN_SETS, TURN_CLOCKS, type GameModeId,
+  TABLE_SPEEDS, TOKEN_SETS, TURN_CLOCKS,
+  type GameModeId, type TableSpeedId,
 } from "./lib/preferences";
 import { configureSound, isMuted, playEvent, preloadEvent, setMuted } from "./lib/sound";
 
 type Mode = "local" | "ai" | "online";
+
+const COLOR_OPTIONS: readonly LudoColor[] = ["red", "green", "yellow", "blue"];
 
 const MODES = [
   { id: "local", label: "Local", icon: <Icon name="users" size={15} /> },
@@ -96,6 +100,10 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const [seats, setSeats] = useState(4);
   const [difficulty, setDifficulty] = useState<LudoDifficulty>("normal");
   const [humanSeats, setHumanSeats] = useState(1);
+  const [seatColors, setSeatColors] = useState<LudoColor[]>(["red", "green", "yellow", "blue"]);
+  const [seatNames, setSeatNames] = useState<string[]>(["", "", "", ""]);
+  const [tokensPerPlayer, setTokensPerPlayer] = useState(4);
+  const [tableSpeed, setTableSpeed] = useState<TableSpeedId>("normal");
   const [rules, setRules] = useState<Partial<LudoRules>>(MODE_RULES.classic);
   const [variant, setVariant] = useState<GameModeId>("classic");
   const [turnSeconds, setTurnSeconds] = useState(0);
@@ -124,7 +132,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   useEffect(() => {
     // The shared defaults name Chess/Carrom art. Point a new Ludo player at
     // this title's own sets so the picker and the board agree on first load.
-    if (!TOKEN_SETS.some((set) => set.id === preferences.pieceSet)) setPreference("pieceSet", "marble");
+    if (!TOKEN_SETS.some((set) => set.id === preferences.pieceSet)) setPreference("pieceSet", "regalia");
     if (!BOARD_THEMES.some((theme) => theme.id === preferences.boardTheme)) setPreference("boardTheme", "classic");
     if (!SOUND_SETS.some((set) => set.id === preferences.soundSet)) setPreference("soundSet", "ludo");
   }, [preferences.pieceSet, preferences.boardTheme, preferences.soundSet, setPreference]);
@@ -156,8 +164,11 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     difficulty,
     sound: soundOn && !autoplay,
     enabled: mode !== "online",
-    aiDelay: slowWatch ? 1200 : autoplay ? 220 : undefined,
-    animationMs: autoplay && !slowWatch ? 60 : 135,
+    aiDelay: slowWatch ? 1200 : autoplay ? 220 : TABLE_SPEEDS.find((entry) => entry.id === tableSpeed)!.aiDelay,
+    animationMs: slowWatch ? 180 : autoplay ? 60 : TABLE_SPEEDS.find((entry) => entry.id === tableSpeed)!.stepMs,
+    colors: seatColors,
+    names: seatNames,
+    tokensPerPlayer,
   });
   const online = useOnlineLudo(mode === "online");
 
@@ -165,7 +176,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     if (controller.realGame.winner !== null) setProgress(readLocalProgress());
   }, [controller.realGame.winner]);
 
-  const emptyGame = useMemo(() => createGame({ playerCount: seats }), [seats]);
+  const emptyGame = useMemo(() => createGame({
+    playerCount: seats, colors: seatColors, names: seatNames, tokensPerPlayer,
+  }), [seats, seatColors, seatNames, tokensPerPlayer]);
   const game: LudoState = mode === "online" ? (online.state?.game ?? emptyGame) : controller.game;
   const legalTokens = useMemo(() => {
     if (mode === "online") {
@@ -213,6 +226,13 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     () => [...game.events].reverse().find((event) => event.type === "roll"),
     [game.events],
   );
+  const rollBySeat = useMemo(() => {
+    const values: Record<number, number | null> = {};
+    for (const event of game.events) {
+      if (event.type === "roll") values[event.player] = event.value ?? null;
+    }
+    return values;
+  }, [game.events]);
   const lastMoveEvent = useMemo(
     () => [...game.events].reverse().find((event) =>
       event.type === "move" || event.type === "leave-home" || event.type === "finish"),
@@ -254,9 +274,28 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   }
 
   function newGame() {
-    controller.newGame({ seats, humanSeats: mode === "local" ? seats : 1 });
+    controller.newGame();
     setProgress(readLocalProgress());
     playEvent("start");
+  }
+
+  function playerName(seat: number): string {
+    return seatNames[seat]?.trim() || PLAYER_LABEL[seat] || `PLAYER ${seat + 1}`;
+  }
+
+  function applySeatColor(seat: number, color: LudoColor) {
+    const next = [...seatColors];
+    const other = next.indexOf(color);
+    if (other >= 0 && other !== seat) next[other] = next[seat]!;
+    next[seat] = color;
+    if (new Set(next).size !== 4) return;
+    setSeatColors(next);
+    controller.newGame({ colors: next });
+  }
+
+  function applyTokenCount(count: number) {
+    setTokensPerPlayer(count);
+    controller.newGame({ tokensPerPlayer: count });
   }
 
   function doRoll() {
@@ -367,9 +406,8 @@ export default function App({ bridge }: { bridge: GameBridge }) {
             <span className="race-disc" style={{ background: current ? PLAYER_COLOR_HEX[current.color] : undefined }} />
             <div className="turn-strip__copy">
               <span className="eyebrow">Current turn</span>
-              <strong>{autoplay && !onlineMode ? "Computer table" : current ? PLAYER_LABEL[current.seat] : "—"}</strong>
+              <strong>{autoplay && !onlineMode ? "Computer table" : current ? playerName(current.seat) : "—"}</strong>
             </div>
-            <Die value={lastRoll?.value ?? null} rolling={diceRolling} />
             {turnSeconds > 0 && !onlineMode && game.phase !== "over" ? (
               <span className={`turn-clock${remaining <= 5 ? " turn-clock--urgent" : ""}`} title="Turn clock">
                 <Icon name="clock" size={14} strokeWidth={2} />{remaining}s
@@ -397,8 +435,28 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 highlightLastMove={preferences.highlightLastMove}
                 moveKey={!onlineMode ? lastMoveEvent?.action : undefined}
                 onStep={!onlineMode && soundOn ? () => playEvent("move") : undefined}
-                stepMs={autoplay && !slowWatch ? 60 : 135}
+                stepMs={slowWatch ? 180 : autoplay ? 60 : TABLE_SPEEDS.find((entry) => entry.id === tableSpeed)!.stepMs}
               />
+              <div className="side-dice" aria-label="Player dice">
+                {game.players.slice(0, game.playerCount).map((player) => {
+                  const usable = !onlineMode && awaiting && current?.seat === player.seat && game.phase === "roll";
+                  return (
+                    <button
+                      key={player.seat}
+                      type="button"
+                      className={`side-die side-die--${player.color}${usable ? " is-usable" : ""}`}
+                      disabled={!usable}
+                      onClick={doRoll}
+                      title={`${playerName(player.seat)} die${usable ? " — tap to roll" : ""}`}
+                    >
+                      <Die
+                        value={rollBySeat[player.seat] ?? null}
+                        rolling={diceRolling && current?.seat === player.seat}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -448,7 +506,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
             {controller.isReplaying && !onlineMode ? "Watching the recorded race."
               : canMove ? "Tap a glowing token to move it."
               : awaiting ? "Roll the dice to start your turn."
-              : current?.ai ? `${PLAYER_LABEL[current.seat] ?? "COMPUTER"} is thinking…`
+              : current?.ai ? `${playerName(current.seat)} is thinking…`
               : "Waiting for the next player."}
           </p>
 
@@ -526,7 +584,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 <div key={player.seat} className={`race-row ${player.seat === game.current ? "race-row--active" : ""}`}>
                   <span className="race-disc" style={{ background: PLAYER_COLOR_HEX[player.color] }} />
                   <div className="race-name">
-                    {PLAYER_LABEL[player.seat]}
+                    {playerName(player.seat)}
                     <span className="race-sub">{onlineMode ? player.color.toUpperCase() : player.ai ? "COMPUTER" : "PLAYER"}</span>
                   </div>
                   <div className="race-pieces">
@@ -539,7 +597,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                       />
                     ))}
                   </div>
-                  <b className="race-count">{player.finished}/{TOKENS_PER_PLAYER}</b>
+                  <b className="race-count">{player.finished}/{game.tokensPerPlayer ?? TOKENS_PER_PLAYER}</b>
                 </div>
               ))}
             </div>
@@ -603,6 +661,69 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 </div>
               </>
             ) : null}
+            <p className="ludo-note">Table speed</p>
+            <div className="pref-choices" role="radiogroup" aria-label="Table speed">
+              {TABLE_SPEEDS.map((speed) => (
+                <button
+                  key={speed.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={tableSpeed === speed.id}
+                  className={`pref-choice${tableSpeed === speed.id ? " is-chosen" : ""}`}
+                  onClick={() => setTableSpeed(speed.id)}
+                >
+                  {speed.label}
+                </button>
+              ))}
+            </div>
+
+            <p className="ludo-note">Tokens to finish</p>
+            <div className="pref-choices" role="radiogroup" aria-label="Tokens to finish">
+              {[1, 2, 3, 4].map((count) => (
+                <button
+                  key={count}
+                  type="button"
+                  role="radio"
+                  aria-checked={tokensPerPlayer === count}
+                  className={`pref-choice${tokensPerPlayer === count ? " is-chosen" : ""}`}
+                  onClick={() => applyTokenCount(count)}
+                >
+                  {count}
+                </button>
+              ))}
+            </div>
+
+            <p className="ludo-note">Seats · colour and name</p>
+            <div className="seat-setup">
+              {Array.from({ length: seats }, (_, seat) => (
+                <div className="seat-setup__row" key={seat}>
+                  <span className="race-disc" style={{ background: PLAYER_COLOR_HEX[seatColors[seat]!] }} />
+                  <input
+                    className="seat-setup__name"
+                    aria-label={`Player ${seat + 1} name`}
+                    placeholder={PLAYER_LABEL[seat]}
+                    maxLength={14}
+                    value={seatNames[seat] ?? ""}
+                    onChange={(event) => {
+                      const next = [...seatNames];
+                      next[seat] = event.target.value;
+                      setSeatNames(next);
+                    }}
+                  />
+                  <select
+                    className="seat-setup__colour"
+                    aria-label={`Player ${seat + 1} colour`}
+                    value={seatColors[seat]}
+                    onChange={(event) => applySeatColor(seat, event.target.value as LudoColor)}
+                  >
+                    {COLOR_OPTIONS.map((color) => (
+                      <option key={color} value={color}>{color}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+
             <p className="ludo-note">Turn clock</p>
             <div className="pref-choices" role="radiogroup" aria-label="Turn clock">
               {TURN_CLOCKS.map((seconds) => (
@@ -627,6 +748,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 ["sixExtra", "Extra roll on six"],
                 ["captureExtra", "Extra roll on capture"],
                 ["exactFinish", "Exact roll to finish"],
+                ["sixToStart", "Six to leave home"],
                 ["threeSixesFoul", "Three sixes forfeit"],
               ] as const).map(([key, label]) => (
                 <label key={key} className="rule-switch">
@@ -669,7 +791,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               <span className="status-panel__icon"><Icon name="trophy" size={22} /></span>
               <div>
                 <p className="eyebrow">Race complete</p>
-                <h2>{PLAYER_LABEL[game.winner]} wins</h2>
+                <h2>{playerName(game.winner)} wins</h2>
                 <p>{game.players[game.winner]?.color} reached home first.</p>
               </div>
             </section>

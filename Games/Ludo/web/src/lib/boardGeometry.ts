@@ -31,20 +31,31 @@ export const HOME_COLUMN: Readonly<Record<LudoColor, readonly GridPoint[]>> = {
   blue: [[7, 13], [7, 12], [7, 11], [7, 10], [7, 9], [7, 7]],
 };
 
-/** Top-left cell of each private yard. */
-export const YARD_ORIGIN: Readonly<Record<LudoColor, GridPoint>> = {
-  red: [1, 1],
-  green: [10, 1],
-  blue: [1, 10],
-  yellow: [10, 10],
+/**
+ * Exact printed token-circle centres, measured from the supplied 1920x1920
+ * board image (128 px per grid square) and converted into the canvas's
+ * cell-space, where `centre()` adds half a cell. Order is top-left, top-right,
+ * bottom-left, bottom-right. Green/yellow are printed a few pixels differently
+ * from red/blue, so each colour keeps its own measured values.
+ */
+export const YARD_CENTRES: Readonly<Record<LudoColor, readonly GridPoint[]>> = {
+  red: [
+    [1.6172, 1.6172], [3.3438, 1.6172],
+    [1.6172, 3.3438], [3.3438, 3.3438],
+  ],
+  green: [
+    [10.6484, 1.6172], [12.375, 1.6172],
+    [10.6484, 3.3438], [12.375, 3.3438],
+  ],
+  blue: [
+    [1.6172, 10.6484], [3.3438, 10.6484],
+    [1.6172, 12.375], [3.3438, 12.375],
+  ],
+  yellow: [
+    [10.6562, 10.6562], [12.375, 10.6562],
+    [10.6562, 12.375], [12.375, 12.375],
+  ],
 };
-
-/** The four token spots inside a yard, in grid units. */
-/** Measured from the supplied board art: printed centres are at 2.125 and
- * 3.844 grid units, so the spot origin is half a cell behind each. */
-export const YARD_SPOTS: readonly GridPoint[] = [
-  [1.625, 1.625], [3.344, 1.625], [1.625, 3.344], [3.344, 3.344],
-];
 
 export const GRID_SIZE = 15;
 
@@ -69,9 +80,7 @@ export function movePath(
 }
 
 export function yardSpot(color: LudoColor, token: number): GridPoint {
-  const origin = YARD_ORIGIN[color];
-  const spot = YARD_SPOTS[token]!;
-  return [origin[0] + (spot[0] - 1), origin[1] + (spot[1] - 1)];
+  return YARD_CENTRES[color][token % 4]!;
 }
 
 /** Where a token belongs on the board for a given progress value. */

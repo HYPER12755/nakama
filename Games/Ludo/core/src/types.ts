@@ -23,6 +23,8 @@ export interface LudoPlayer {
   /** Seat index, 0..3. */
   seat: number;
   color: LudoColor;
+  /** Optional seat label chosen at the table. */
+  name?: string;
   tokens: LudoToken[];
   /** Number of tokens that have reached the centre. */
   finished: number;
@@ -70,6 +72,8 @@ export interface LudoRules {
   sixExtra: boolean;
   /** A token must land exactly on the centre to finish. */
   exactFinish: boolean;
+  /** A token may only leave home on a six (standard Ludo). */
+  sixToStart: boolean;
 }
 
 export const DEFAULT_RULES: LudoRules = {
@@ -79,12 +83,15 @@ export const DEFAULT_RULES: LudoRules = {
   captureExtra: true,
   sixExtra: true,
   exactFinish: true,
+  sixToStart: true,
 };
 
 export interface LudoState {
   /** Four seats always exist; `playerCount` says how many are in the game. */
   players: LudoPlayer[];
   playerCount: number;
+  /** Tokens each player must bring home; 1-4. */
+  tokensPerPlayer: number;
   current: number;
   phase: LudoPhase;
   dice: number | null;

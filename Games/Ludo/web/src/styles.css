@@ -995,3 +995,92 @@ html[data-moonperf="lite"] .die--rolling {
   border-color: var(--danger);
   color: var(--danger);
 }
+
+/* -------------------------------------------------- match setup and dice */
+
+.seat-setup {
+  display: grid;
+  gap: 7px;
+  margin: 6px 0 12px;
+}
+
+.seat-setup__row {
+  display: grid;
+  grid-template-columns: 14px 1fr 96px;
+  align-items: center;
+  gap: 9px;
+}
+
+.seat-setup__name,
+.seat-setup__colour {
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.seat-setup__name::placeholder {
+  color: var(--muted);
+}
+
+.side-dice {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.side-die {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 13px;
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+  opacity: 0.82;
+  transform: scale(0.82);
+  pointer-events: auto;
+  transition: opacity 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}
+
+.side-die .dice-wrap {
+  width: 42px;
+  height: 42px;
+  transform: scale(0.84);
+}
+
+.side-die.is-usable {
+  border-color: var(--accent);
+  opacity: 1;
+  transform: scale(0.96);
+  cursor: pointer;
+}
+
+.side-die:disabled {
+  cursor: default;
+}
+
+.side-die--red { top: 2%; left: 2%; }
+.side-die--green { top: 2%; right: 2%; }
+.side-die--blue { bottom: 2%; left: 2%; }
+.side-die--yellow { bottom: 2%; right: 2%; }
+
+@media (max-width: 620px) {
+  .side-die {
+    width: 46px;
+    height: 46px;
+  }
+
+  .side-die .dice-wrap {
+    transform: scale(0.7);
+  }
+}

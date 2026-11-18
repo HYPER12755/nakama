@@ -13,6 +13,7 @@ import { GRID_SIZE, HOME_COLUMN, TRACK, movePath, tokenPoint } from "../lib/boar
 const CELL = 40;
 const SIZE = GRID_SIZE * CELL;
 const BOARD_IMAGE = "boards/ludo-classic.jpg";
+const ORNAMENT_IMAGE = "boards/ludo-ornaments.svg";
 
 export interface LudoBoardProps {
   state: LudoState;
@@ -44,39 +45,35 @@ function boardBitmap(theme: string): HTMLCanvasElement | null {
   return bitmaps.get(theme) ?? null;
 }
 
+function loadImage(url: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = url;
+  });
+}
+
 function loadBoardImage(theme: string): Promise<void> {
   if (bitmaps.has(theme)) return Promise.resolve();
   if (boardPending !== null) return boardPending;
-  boardPending = assetUrl(BOARD_IMAGE)
-    .then((url) => new Promise<void>((resolve) => {
-      const image = new Image();
-      image.onload = () => {
-        const paint = (key: string, tint: string | null) => {
-          const canvas = document.createElement("canvas");
-          canvas.width = SIZE;
-          canvas.height = SIZE;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return;
-          ctx.drawImage(image, 0, 0, SIZE, SIZE);
-          if (tint !== null) {
-            ctx.fillStyle = tint;
-            ctx.fillRect(0, 0, SIZE, SIZE);
-          }
-          bitmaps.set(key, canvas);
-        };
-        paint("classic", null);
-        paint("midnight", "rgba(18, 20, 42, 0.32)");
-        paint("warm", "rgba(96, 52, 12, 0.16)");
-        boardPending = null;
-        notify();
-        resolve();
-      };
-      image.onerror = () => {
-        boardPending = null;
-        resolve();
-      };
-      image.src = url;
-    }))
+  boardPending = Promise.all([assetUrl(BOARD_IMAGE), assetUrl(ORNAMENT_IMAGE)])
+    .then(([boardUrl, ornamentUrl]) => Promise.all([loadImage(boardUrl), loadImage(ornamentUrl)]))
+    .then(([image, ornament]) => {
+      if (!image) return;
+      const canvas = document.createElement("canvas");
+      canvas.width = SIZE;
+      canvas.height = SIZE;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(image, 0, 0, SIZE, SIZE);
+      if (ornament) ctx.drawImage(ornament, 0, 0, SIZE, SIZE);
+      // The supplied art is the only board. Older saved themes simply reuse it.
+      bitmaps.set("classic", canvas);
+      bitmaps.set(theme, canvas);
+      boardPending = null;
+      notify();
+    })
     .catch(() => {
       boardPending = null;
     });
@@ -157,13 +154,15 @@ export function LudoBoard({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dpr, setDpr] = useState(1);
   const [tick, setTick] = useState(0);
-  const [frame, setFrame] = useState(0);
+  const [stepIndex, setStepIndex] = useState<number | null>(null);
   const anim = useRef<{
     key: number;
     path: ReturnType<typeof movePath>;
-    start: number;
-    lastStep: number;
   } | null>(null);
+  const stepSound = useRef(onStep);
+  stepSound.current = onStep;
+  const playersRef = useRef(state.players);
+  playersRef.current = state.players;
 
   useEffect(() => onBoardLoadedListener(() => setTick((value) => value + 1)), []);
   useEffect(() => {
@@ -181,33 +180,36 @@ export function LudoBoard({
   }, [state.players, tokenSet]);
 
   useEffect(() => {
-    if (moveKey === undefined || !lastMove || lastMove.token === undefined) return;
+    if (moveKey === undefined || !lastMove) return;
     if (anim.current?.key === moveKey) return;
-    const color = state.players[lastMove.player]?.color;
+    const color = playersRef.current[lastMove.player]?.color;
     if (!color) return;
     const path = movePath(color, lastMove.from ?? -1, lastMove.to, lastMove.token);
     if (path.length === 0) return;
-    anim.current = { key: moveKey, path, start: performance.now(), lastStep: -1 };
-    let raf = 0;
-    const loop = (now: number) => {
-      const current = anim.current;
-      if (!current || current.key !== moveKey) return;
-      const elapsed = now - current.start;
-      const index = Math.min(path.length - 1, Math.floor(elapsed / stepMs));
-      if (index !== current.lastStep) {
-        current.lastStep = index;
-        onStep?.();
-      }
-      setFrame(now);
-      if (elapsed < path.length * stepMs) raf = requestAnimationFrame(loop);
-      else {
+    anim.current = { key: moveKey, path };
+    setStepIndex(0);
+    stepSound.current?.();
+    let index = 0;
+    const timer = window.setInterval(() => {
+      index += 1;
+      if (index >= path.length) {
+        window.clearInterval(timer);
         anim.current = null;
-        setFrame(0);
+        setStepIndex(null);
+        return;
+      }
+      anim.current = { key: moveKey, path };
+      setStepIndex(index);
+      stepSound.current?.();
+    }, stepMs);
+    return () => {
+      window.clearInterval(timer);
+      if (anim.current?.key === moveKey) {
+        anim.current = null;
+        setStepIndex(null);
       }
     };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [moveKey, lastMove, state.players, onStep, stepMs]);
+  }, [moveKey, lastMove?.player, lastMove?.token, lastMove?.from, lastMove?.to, stepMs]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -244,21 +246,12 @@ export function LudoBoard({
       for (const token of player.tokens) {
         let [cx, cy] = centre(tokenPoint(player.color, token.progress, token.id));
         const moving = anim.current
+          && stepIndex !== null
           && lastMove
           && lastMove.token === token.id
           && lastMove.player === player.seat;
-        if (moving && anim.current && lastMove?.token !== undefined) {
-          const current = anim.current;
-          const elapsed = frame - current.start;
-          const index = Math.min(current.path.length - 1, Math.max(0, Math.floor(elapsed / stepMs)));
-          const target = centre(current.path[index]!);
-          const previous = index === 0
-            ? centre(tokenPoint(player.color, lastMove.from ?? -1, token.id))
-            : centre(current.path[index - 1]!);
-          const t = Math.max(0, Math.min(1, (elapsed - index * stepMs) / stepMs));
-          const lift = Math.sin(t * Math.PI) * 7;
-          cx = previous[0] + (target[0] - previous[0]) * t;
-          cy = previous[1] + (target[1] - previous[1]) * t - lift;
+        if (moving && anim.current) {
+          [cx, cy] = centre(anim.current.path[Math.min(stepIndex!, anim.current.path.length - 1)]!);
         }
         const legal = showLegalMoves && !disabled
           && player.seat === state.current
@@ -270,9 +263,10 @@ export function LudoBoard({
         );
       }
     }
-  }, [state, legalTokens, lastMove, disabled, dpr, tick, frame, tokenSet, boardTheme, showLegalMoves, highlightLastMove, stepMs]);
+  }, [state, legalTokens, lastMove, disabled, dpr, tick, stepIndex, tokenSet, boardTheme, showLegalMoves, highlightLastMove]);
 
-  function handleClick(event: React.MouseEvent<HTMLCanvasElement>): void {
+  function handlePointer(event: React.PointerEvent<HTMLCanvasElement>): void {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
     if (disabled || !onTokenClick) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const width = rect.width || SIZE;
@@ -315,8 +309,7 @@ export function LudoBoard({
         className="ludo-canvas"
         role="img"
         aria-label="Ludo board with four colours, shared track and home columns"
-        onClick={handleClick}
-        onPointerDown={(event) => event.preventDefault()}
+        onPointerUp={handlePointer}
         onContextMenu={(event) => event.preventDefault()}
         onDragStart={(event) => event.preventDefault()}
         draggable={false}

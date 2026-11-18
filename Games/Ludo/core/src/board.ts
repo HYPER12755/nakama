@@ -71,7 +71,7 @@ export function isBlockedBy(state: LudoState, color: LudoColor, index: number): 
 
 export function activePlayers(state: LudoState): number[] {
   return state.players
-    .filter((player) => player.seat < state.playerCount && player.finished < TOKENS_PER_PLAYER)
+    .filter((player) => player.seat < state.playerCount && player.finished < state.tokensPerPlayer)
     .map((player) => player.seat);
 }
 

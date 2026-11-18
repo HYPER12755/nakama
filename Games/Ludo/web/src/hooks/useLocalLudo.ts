@@ -9,6 +9,7 @@ import {
   recordReplay,
   replaySteps,
   rollDice,
+  type LudoColor,
   type LudoDifficulty,
   type LudoMove,
   type LudoRules,
@@ -27,6 +28,9 @@ export interface LocalGameOptions {
   aiDelay?: number;
   rules?: Partial<LudoRules>;
   animationMs?: number;
+  colors?: LudoColor[];
+  names?: string[];
+  tokensPerPlayer?: number;
 }
 
 /** A computer player should feel like someone thinking at the table, not a
@@ -39,6 +43,9 @@ export function useLocalLudo(options: LocalGameOptions) {
     seed: options.seed,
     ai: Array.from({ length: options.seats }, (_, seat) => seat >= options.humanSeats),
     rules: options.rules,
+    colors: options.colors,
+    names: options.names,
+    tokensPerPlayer: options.tokensPerPlayer,
   }));
   const [lastMove, setLastMove] = useState<LudoMove | null>(null);
   const [steps, setSteps] = useState<LocalGameRecord["steps"]>([]);
@@ -72,6 +79,9 @@ export function useLocalLudo(options: LocalGameOptions) {
       seed: next.seed,
       ai: Array.from({ length: next.seats }, (_, seat) => seat >= next.humanSeats),
       rules: next.rules,
+      colors: next.colors,
+      names: next.names,
+      tokensPerPlayer: next.tokensPerPlayer,
     });
     gameRef.current = fresh;
     setGame(fresh);

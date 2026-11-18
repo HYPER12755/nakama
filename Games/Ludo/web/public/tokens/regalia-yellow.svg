@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="g" cx="35%" cy="28%" r="75%">
+      <stop offset="0" stop-color="#fff6c8"/><stop offset=".45" stop-color="#e8b13b"/><stop offset="1" stop-color="#8b5d10"/>
+    </radialGradient>
+    <pattern id="mill" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <circle cx="1.5" cy="1.5" r=".7" fill="#fff" fill-opacity=".2"/>
+    </pattern>
+  </defs>
+  <ellipse cx="32" cy="37" rx="25" ry="21" fill="#000" opacity=".22"/>
+  <circle cx="32" cy="31" r="25" fill="url(#g)" stroke="#7d5210" stroke-width="2"/>
+  <circle cx="32" cy="31" r="25" fill="url(#mill)"/>
+  <circle cx="32" cy="31" r="20" fill="none" stroke="#fff2bf" stroke-opacity=".65" stroke-width="1.5"/>
+  <circle cx="32" cy="31" r="15" fill="none" stroke="#6f4a0d" stroke-opacity=".35" stroke-width="1.5"/>
+  <path d="M32 17v28M18 31h28M22 21l20 20M42 21 22 41" stroke="#fff6d0" stroke-opacity=".65" stroke-width="1.6"/>
+  <circle cx="32" cy="31" r="5.5" fill="#fff4c2" stroke="#8b5d10" stroke-width="1.5"/>
+</svg>

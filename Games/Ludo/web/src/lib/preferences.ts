@@ -8,17 +8,25 @@ export interface TokenSet {
   color: string;
 }
 
+/** Each set has four genuinely different token designs, one per seating colour. */
 export const TOKEN_SETS: TokenSet[] = [
-  { id: "marble", label: "Polished marble", color: "#ef5b5b" },
-  { id: "brass", label: "Engraved brass", color: "#d98a66" },
-  { id: "onyx", label: "Onyx glow", color: "#5b9cff" },
+  { id: "regalia", label: "Regalia", color: "#c8434a" },
+  { id: "celestial", label: "Celestial", color: "#5b9cff" },
 ];
 
+/** The supplied board art is the only board; ornaments are an SVG edge layer. */
 export const BOARD_THEMES = [
   { id: "classic", label: "Classic table" },
-  { id: "midnight", label: "Midnight table" },
-  { id: "warm", label: "Warm table" },
 ];
+
+/** Pace of computer turns and token hops. */
+export const TABLE_SPEEDS = [
+  { id: "relaxed", label: "Relaxed", aiDelay: 1150, stepMs: 180 },
+  { id: "normal", label: "Normal", aiDelay: 850, stepMs: 135 },
+  { id: "quick", label: "Quick", aiDelay: 560, stepMs: 90 },
+] as const;
+
+export type TableSpeedId = (typeof TABLE_SPEEDS)[number]["id"];
 
 export const SOUND_SETS = [
   { id: "ludo", label: "Recorded table" },
@@ -43,14 +51,17 @@ export const MODE_RULES: Record<Exclude<GameModeId, "custom">, Partial<import("@
   classic: {
     safeSquares: true, blocks: true, sixExtra: true,
     captureExtra: true, exactFinish: true, threeSixesFoul: true,
+    sixToStart: true,
   },
   safe: {
     safeSquares: true, blocks: false, sixExtra: true,
     captureExtra: false, exactFinish: true, threeSixesFoul: true,
+    sixToStart: true,
   },
   swift: {
     safeSquares: true, blocks: false, sixExtra: true,
     captureExtra: true, exactFinish: false, threeSixesFoul: false,
+    sixToStart: false,
   },
 };
 

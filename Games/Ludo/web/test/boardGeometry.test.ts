@@ -70,4 +70,17 @@ describe("the hand-drawn Ludo board", () => {
     const spots = [0, 1, 2, 3].map((token) => tokenPoint("red", -1, token).join(","));
     expect(new Set(spots).size).toBe(4);
   });
+
+  it("lands idle tokens on the measured printed circle centres", () => {
+    // 1920 px board, 128 px cells, centre() adds half a cell before drawing.
+    const pixel = (point: readonly [number, number]) => [
+      Math.round((point[0] + 0.5) * 128),
+      Math.round((point[1] + 0.5) * 128),
+    ];
+    expect(pixel(tokenPoint("red", -1, 0))).toEqual([271, 271]);
+    expect(pixel(tokenPoint("red", -1, 3))).toEqual([492, 492]);
+    expect(pixel(tokenPoint("green", -1, 0))).toEqual([1427, 271]);
+    expect(pixel(tokenPoint("blue", -1, 3))).toEqual([492, 1648]);
+    expect(pixel(tokenPoint("yellow", -1, 3))).toEqual([1648, 1648]);
+  });
 });

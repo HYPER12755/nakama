@@ -7,6 +7,7 @@ const root = new URL("../public/", import.meta.url);
 describe("Ludo's own art and sound", () => {
   it("ships the supplied board and every token set in all four colours", () => {
     expect(existsSync(new URL("boards/ludo-classic.jpg", root))).toBe(true);
+    expect(existsSync(new URL("boards/ludo-ornaments.svg", root))).toBe(true);
     for (const set of TOKEN_SETS) {
       for (const color of ["red", "green", "yellow", "blue"]) {
         expect(existsSync(new URL(`tokens/${set.id}-${color}.svg`, root)), `${set.id}-${color}`).toBe(true);
@@ -26,6 +27,9 @@ describe("Ludo's own art and sound", () => {
   });
 
   it("has board themes the preferences panel can offer", () => {
-    expect(BOARD_THEMES.map((theme) => theme.id)).toEqual(["classic", "midnight", "warm"]);
+    expect(BOARD_THEMES.map((theme) => theme.id)).toEqual(["classic"]);
+    for (const set of TOKEN_SETS) {
+      expect(TOKEN_SETS.filter((entry) => entry.id === set.id)).toHaveLength(1);
+    }
   });
 });

@@ -38,13 +38,13 @@ describe("the Ludo board component", () => {
     state.dice = 6;
     let clicked = -1;
     const canvas = mount(state, [0, 1, 2, 3], (token) => { clicked = token; });
-    // Yard spot of red token 0 is cell 1.35,1.35 of a 15x15/600px board.
+    // Measured red yard centre: 271/1920 of the 15x15 board.
     const rect = canvas.getBoundingClientRect();
     act(() => {
-      canvas.dispatchEvent(new MouseEvent("click", {
+      canvas.dispatchEvent(new MouseEvent("pointerup", {
         bubbles: true,
-        clientX: rect.left + ((1.35 + 0.5) / 15) * (rect.width || 600),
-        clientY: rect.top + ((1.35 + 0.5) / 15) * (rect.height || 600),
+        clientX: rect.left + (271 / 1920) * (rect.width || 600),
+        clientY: rect.top + (271 / 1920) * (rect.height || 600),
       }));
     });
     expect(clicked).toBe(0);
@@ -57,7 +57,7 @@ describe("the Ludo board component", () => {
     let clicked = -1;
     const canvas = mount(state, [], (token) => { clicked = token; });
     act(() => {
-      canvas.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 10, clientY: 10 }));
+      canvas.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, clientX: 10, clientY: 10 }));
     });
     expect(clicked).toBe(-1);
   });
