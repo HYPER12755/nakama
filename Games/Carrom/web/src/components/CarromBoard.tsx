@@ -420,7 +420,12 @@ function drawSurface(
   ctx.restore();
 }
 
-function drawMarkings(ctx: CanvasRenderingContext2D, turn: CarromPlayer): void {
+function drawMarkings(
+  ctx: CanvasRenderingContext2D,
+  turn: CarromPlayer,
+  visuals?: TableVisuals,
+): void {
+  void visuals;
   const centre = LOGICAL_SIZE / 2;
 
   // Large outer circle around the opening medallion.
@@ -656,6 +661,8 @@ function pieceSprite(
   const key = [
     kind, radius, lite ? 1 : 0, variant, dpr,
     visuals.board.id, visuals.striker.id, visuals.pieces.id,
+    visuals.paths.pucks ?? "", visuals.paths.strikers ?? "",
+    visuals.paths.shine ?? "",
   ].join(":");
   const existing = pieceSprites.get(key);
   if (existing !== undefined) {
@@ -786,6 +793,19 @@ function paintPiece(
     }
   }
 
+  // Real puck artwork from the game, clipped to the face of every man.
+  if (kind !== "striker" && visuals.paths.pucks !== undefined) {
+    const image = pieceArtImage(visuals.paths.pucks);
+    if (image !== null) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(image, -radius, -radius, radius * 2, radius * 2);
+      ctx.restore();
+    }
+  }
+
   // The grain of the wood under the paint. The pieces are turned on a lathe,
   // so the grain runs in rings around the middle.
   ctx.save();
@@ -897,6 +917,20 @@ function paintPiece(
   ctx.fillStyle = bevel;
   ctx.fill();
 
+  // A shine overlay from the real game, drawn over the striker face.
+  if (kind === "striker" && visuals.paths.shine !== undefined) {
+    const shine = pieceArtImage(visuals.paths.shine);
+    if (shine !== null) {
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(shine, -radius, -radius, radius * 2, radius * 2);
+      ctx.restore();
+    }
+  }
+
   // Bevelled rim.
   ctx.lineWidth = Math.max(1, radius * 0.1);
   ctx.strokeStyle = palette.rim;
@@ -961,6 +995,7 @@ function drawAim(
   aim: AimState,
   hit: AimHit,
   lite: boolean,
+  visuals: TableVisuals,
 ): void {
   const originX = toCanvasX(display.striker.x);
   const originY = toCanvasY(display.striker.y);
@@ -985,6 +1020,21 @@ function drawAim(
   const startY = originY;
   const endX = hitX;
   const endY = hitY;
+
+  // A real trail texture from the game, laid along the aim line.
+  if (visuals.paths.trails !== undefined) {
+    const trail = pieceArtImage(visuals.paths.trails);
+    if (trail !== null) {
+      const length = Math.hypot(endX - startX, endY - startY);
+      const angle = Math.atan2(endY - startY, endX - startX);
+      ctx.save();
+      ctx.globalAlpha = 0.6;
+      ctx.translate(startX, startY);
+      ctx.rotate(angle);
+      ctx.drawImage(trail, 0, -9, length, 18);
+      ctx.restore();
+    }
+  }
 
   // The soft wash under the line.
   ctx.beginPath();
@@ -1070,8 +1120,51 @@ function paintTable(
   visuals: TableVisuals,
 ): void {
   drawFrame(ctx, lite, visuals.board);
+
+  // A real frame texture from the game, laid over the wooden frame.
+  if (visuals.paths.frames !== undefined) {
+    const frameArt = pieceArtImage(visuals.paths.frames);
+    if (frameArt !== null) {
+      ctx.save();
+      roundedRect(ctx, 8, 8, LOGICAL_SIZE - 16, LOGICAL_SIZE - 16, 46);
+      ctx.clip();
+      ctx.globalAlpha = 0.75;
+      ctx.drawImage(frameArt, 8, 8, LOGICAL_SIZE - 16, LOGICAL_SIZE - 16);
+      ctx.restore();
+    }
+  }
+
   drawSurface(ctx, lite, visuals.board);
-  drawMarkings(ctx, turn);
+  drawMarkings(ctx, turn, visuals);
+
+  // A badge chosen from the game's badge art, shown in a corner of the table.
+  if (visuals.paths.buff !== undefined) {
+    const badge = pieceArtImage(visuals.paths.buff);
+    if (badge !== null) {
+      const size = scaleOf(0.06);
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      ctx.drawImage(badge, PLAY_INSET + 8, PLAY_INSET + 8, size, size);
+      ctx.restore();
+    }
+  }
+
+  // Pocket effects from the game, at each of the four wells.
+  if (visuals.paths.pockets !== undefined) {
+    const effect = pieceArtImage(visuals.paths.pockets);
+    if (effect !== null) {
+      const radius = scaleOf(CARROM_BOARD.pocketRadius) * 1.5;
+      ctx.save();
+      roundedRect(ctx, PLAY_INSET, PLAY_INSET, PLAY_SIZE, PLAY_SIZE, 18);
+      ctx.clip();
+      for (const pocket of CARROM_BOARD.pocketCenters) {
+        const x = toCanvasX(pocket.x);
+        const y = toCanvasY(pocket.y);
+        ctx.drawImage(effect, x - radius, y - radius, radius * 2, radius * 2);
+      }
+      ctx.restore();
+    }
+  }
 }
 
 /**
@@ -1115,10 +1208,9 @@ export function CarromBoard({
   // All three chosen designs, so the board repaints the moment one changes.
   const visualKey = [
     visuals.board.id,
-    visuals.board.texture ?? "",
     visuals.striker.id,
-    visuals.striker.image ?? "",
     visuals.pieces.id,
+    ...Object.values(visuals.paths),
   ].join(":");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const draggingRef = useRef<number | null>(null);
@@ -1272,7 +1364,7 @@ export function CarromBoard({
       if (aimState !== null && !animating && !disabled) {
         const origin = { x: display.striker.x, y: display.striker.y };
         const hit = raycastBoard(origin, aimState.angle, display.discs);
-        drawAim(ctx, display, aimState, hit, lite);
+        drawAim(ctx, display, aimState, hit, lite, visualsRef.current);
       }
       ctx.restore();
     },

@@ -7,10 +7,10 @@
  */
 
 export type BoardEvent =
+  /** The striker leaving the baseline. */
   | "strike"
-  | "hitPuck"
-  | "puckHit"
-  | "hitEdge"
+  /** Any disc-to-disc or disc-to-frame contact, merged into one family. */
+  | "puck"
   | "pot"
   | "break"
   | "queenCover"
@@ -43,9 +43,13 @@ export const CARROM_POOL_SOUNDS: Record<BoardEvent, string[]> = {
     "sfx_striker_shoot_1", "sfx_striker_shoot_2", "sfx_striker_shoot_3",
     "sfx_striker_shoot_4", "sfx_striker_shoot_5",
   ],
-  hitPuck: [],
-  puckHit: [],
-  hitEdge: [],
+  // One puck family: every real striker-hit, puck-hit and edge-hit recording
+  // in the game, in the order it was recorded. No duplicate categories.
+  puck: [
+    ...Array.from({ length: 17 }, (_, i) => `sfx_striker_hits_puck_${i + 1}`),
+    ...Array.from({ length: 35 }, (_, i) => `sfx_puck_hits_puck_${i + 1}`),
+    ...Array.from({ length: 20 }, (_, i) => `sfx_puck_hits_edge_${i + 1}`),
+  ],
   pot: [],
   break: [],
   queenCover: ["sfx_queen_cover_success"],
@@ -70,15 +74,6 @@ export const CARROM_POOL_SOUNDS: Record<BoardEvent, string[]> = {
 
 // Fill the numbered families in order. Nothing is skipped or left out.
 for (let index = 1; index <= 17; index += 1) {
-  CARROM_POOL_SOUNDS.hitPuck.push(`sfx_striker_hits_puck_${index}`);
-}
-for (let index = 1; index <= 35; index += 1) {
-  CARROM_POOL_SOUNDS.puckHit.push(`sfx_puck_hits_puck_${index}`);
-}
-for (let index = 1; index <= 20; index += 1) {
-  CARROM_POOL_SOUNDS.hitEdge.push(`sfx_puck_hits_edge_${index}`);
-}
-for (let index = 1; index <= 17; index += 1) {
   CARROM_POOL_SOUNDS.pot.push(`sfx_puck_pot_${index}`);
 }
 for (let index = 1; index <= 15; index += 1) {
@@ -86,22 +81,21 @@ for (let index = 1; index <= 15; index += 1) {
 }
 
 /** Build a catalog from a folder of numbered real recordings. */
-function numberedSet(max: Partial<Record<BoardEvent, number>>): Record<BoardEvent, string[]> {
-  const counts: Record<BoardEvent, number> = {
+function numberedSet(max: Partial<Record<BoardEvent, number>> = {}): Record<BoardEvent, string[]> {
+  const counts: Partial<Record<BoardEvent, number>> = {
     // Use every recording shipped in each set, not a hand-picked subset.
-    strike: 17, hitPuck: 3, puckHit: 2, hitEdge: 2, pot: 10,
+    strike: 17, puck: 17, pot: 10,
     break: 3, queenCover: 3, queenFail: 1, queenScore: 1, puckScore: 1,
     puckBack: 1, foul: 3, turn: 5, start: 3, win: 3, lose: 1, rematch: 1,
     clock: 0, move: 0, aim: 0, place: 0,
     ...max,
   };
-  const files = (prefix: string, count: number) =>
+  const files = (prefix: string, count = 0) =>
     Array.from({ length: count }, (_, index) => `${prefix}${index + 1}`);
   return {
     strike: files("strike", counts.strike),
-    hitPuck: files("strike", counts.hitPuck),
-    puckHit: files("strike", counts.puckHit),
-    hitEdge: files("strike", counts.hitEdge),
+    // One puck family in the small sets too, not three copies of "strike".
+    puck: files("strike", counts.puck),
     pot: files("pocket", counts.pot),
     break: files("start", counts.break),
     queenCover: files("queen", counts.queenCover),
@@ -123,8 +117,8 @@ function numberedSet(max: Partial<Record<BoardEvent, number>>): Record<BoardEven
 }
 
 /** Three genuinely different sets, each from its own real recordings. */
-export const STANDARD_SOUNDS = numberedSet({});
-const SMALL = { strike: 5, pot: 5 };
+export const STANDARD_SOUNDS = numberedSet();
+const SMALL = { strike: 5, puck: 5, pot: 5 };
 export const SOFT_SOUNDS = numberedSet(SMALL);
 export const BRIGHT_SOUNDS = numberedSet(SMALL);
 
@@ -147,9 +141,7 @@ export function soundsFor(
 /** How loud each event is, relative to the player's chosen volume. */
 export const EVENT_GAIN: Record<BoardEvent, number> = {
   strike: 0.85,
-  hitPuck: 1,
-  puckHit: 0.7,
-  hitEdge: 0.55,
+  puck: 0.8,
   pot: 1,
   break: 0.95,
   queenCover: 1,

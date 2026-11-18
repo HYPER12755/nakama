@@ -720,6 +720,14 @@ button {
   text-transform: none;
 }
 
+.art-grid__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 .art-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));

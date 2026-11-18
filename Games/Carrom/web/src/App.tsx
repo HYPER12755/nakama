@@ -96,7 +96,7 @@ import {
   audibleVolume,
   playbackSpeed,
 } from "./lib/preferences";
-import { tableVisuals } from "./lib/designs";
+import { tableVisuals, type ArtGroupId } from "./lib/designs";
 import { positionFor } from "./lib/striker";
 import { useArtChoices } from "./hooks/useArtChoices";
 import { shotEvents, type TableEvent } from "./lib/events";
@@ -639,21 +639,19 @@ export default function App({ bridge }: AppProps) {
       if (!soundOn) {
         return;
       }
-      playEvent("strike");
-      // Every collision gets its own recording: a man against the frame is
-      // not the same sound as a striker against a man.
+      // The first shot of a game is the break; every other shot starts with
+      // the striker leaving the baseline.
+      playEvent(result.outcome.player === "white" && game.shotNumber === 0 ? "break" : "strike");
+      // All disc contacts share one family, so no sound is played twice for
+      // the same hit. A softer contact is played more quietly.
+      let contacts = 0;
       for (const impact of result.events) {
-        if (impact.type !== "impact" || impact.strength < 0.12) {
+        if (impact.type !== "impact" || impact.strength < 0.12 || contacts >= 4) {
           continue;
         }
-        const [left, right] = impact.kinds;
-        const event = impact.wall
-          ? "hitEdge"
-          : left === "striker" || right === "striker"
-            ? "hitPuck"
-            : "puckHit";
+        contacts += 1;
         const timer = window.setTimeout(
-          () => playEvent(event),
+          () => playEvent("puck"),
           playbackTime(impact.time, result.duration) * 1000,
         );
         soundTimers.current.push(timer);
@@ -694,7 +692,7 @@ export default function App({ bridge }: AppProps) {
         soundTimers.current.push(timer);
       }
     },
-    [clearSoundTimers, soundOn],
+    [clearSoundTimers, soundOn, game.shotNumber],
   );
 
   /**
@@ -1444,11 +1442,7 @@ export default function App({ bridge }: AppProps) {
                   preferences.boardTheme,
                   preferences.strikerDesign,
                   preferences.pieceSet,
-                  {
-                    boards: artChoices.boards,
-                    strikers: artChoices.strikers,
-                    pucks: artChoices.pucks,
-                  },
+                  artChoices as Partial<Record<ArtGroupId, string>>,
                 )}
               />
             </div>

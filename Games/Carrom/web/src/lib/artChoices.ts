@@ -64,6 +64,19 @@ export function setArtChoice(group: string, file: string): void {
   notify();
 }
 
+export function resetArtChoice(group: string): void {
+  ensureLoaded();
+  const next = { ...current };
+  delete next[group];
+  current = next;
+  try {
+    window.localStorage.setItem(KEY, JSON.stringify(current));
+  } catch {
+    // The reset still applies for this visit.
+  }
+  notify();
+}
+
 export function onArtChange(listener: (choices: ArtChoiceMap) => void): () => void {
   ensureLoaded();
   listeners.add(listener);

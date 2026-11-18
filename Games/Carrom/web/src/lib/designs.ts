@@ -261,50 +261,85 @@ export const PIECE_SETS: PieceSet[] = [
   },
 ];
 
-/** The three designs a table is wearing at once. */
+/** Every art group a player can choose, in one place. */
+export type ArtGroupId =
+  | "boards"
+  | "strikers"
+  | "pucks"
+  | "trails"
+  | "pockets"
+  | "shine"
+  | "frames"
+  | "buff";
+
+/** The designs and art paths a table is wearing at once. */
 export interface TableVisuals {
   board: BoardDesign;
   striker: StrikerDesign;
   pieces: PieceSet;
-  /** Optional real art paths picked from the game assets. */
-  boardArt?: string;
-  strikerArt?: string;
-  puckArt?: Partial<Record<CarromPlayer, string>>;
+  /** A choice is either `builtin:<id>` or a path into `public/art/game/`. */
+  art: Partial<Record<ArtGroupId, string>>;
+  /** The resolved image path of each group, ready for the renderer. */
+  paths: Partial<Record<ArtGroupId, string>>;
 }
 
-function boardArt(design: BoardDesign, path?: string): BoardDesign {
-  return path === undefined ? design : { ...design, texture: path };
+function isBuiltin(choice: string | undefined, id: string): boolean {
+  return choice === undefined || choice === "" || choice === `builtin:${id}`;
 }
 
-function strikerArt(design: StrikerDesign, path?: string): StrikerDesign {
-  return path === undefined ? design : { ...design, image: path };
+function pathOf(choice: string | undefined): string | undefined {
+  return choice !== undefined && choice !== "" && !choice.startsWith("builtin:")
+    ? choice
+    : undefined;
 }
 
+/**
+ * Resolve one choice map into the board, striker, pieces and effect images.
+ * The built-in designs and the ripped artwork use the same choices, so a
+ * player never has to look in two different panels.
+ */
 export function tableVisuals(
   boardId: string,
   strikerId: string,
   pieceId: string,
-  art: {
-    boards?: string;
-    strikers?: string;
-    pucks?: string;
-  } = {},
+  art: Partial<Record<ArtGroupId, string>> = {},
 ): TableVisuals {
-  const board = boardDesign(boardId);
+  const boardChoice = art.boards ?? `builtin:${boardId}`;
+  const strikerChoice = art.strikers ?? `builtin:${strikerId}`;
+  const pieceChoice = art.pucks ?? `builtin:${pieceId}`;
+
+  const board = boardDesign(isBuiltin(boardChoice, boardId) ? boardId : "");
+  const striker = strikerDesign(
+    isBuiltin(strikerChoice, strikerId) ? strikerId : "",
+  );
+  const pieces = pieceSet(isBuiltin(pieceChoice, pieceId) ? pieceId : "");
+
+  const paths: TableVisuals["paths"] = {};
+  if (!isBuiltin(boardChoice, boardId)) {
+    paths.boards = pathOf(boardChoice);
+  }
+  if (!isBuiltin(strikerChoice, strikerId)) {
+    paths.strikers = pathOf(strikerChoice);
+  }
+  if (!isBuiltin(pieceChoice, pieceId)) {
+    paths.pucks = pathOf(pieceChoice);
+  }
+  for (const group of ["trails", "pockets", "shine", "frames", "buff"] as const) {
+    const path = pathOf(art[group]);
+    if (path !== undefined) {
+      paths[group] = path;
+    }
+  }
+
   return {
-    board: boardArt(board, art.boards),
-    striker: strikerArt(strikerDesign(strikerId), art.strikers),
-    pieces: pieceSet(pieceId),
-    boardArt: art.boards,
-    strikerArt: art.strikers,
-    puckArt: art.pucks
-      ? {
-          white: art.pucks,
-          black: art.pucks,
-          green: art.pucks,
-          yellow: art.pucks,
-        }
-      : undefined,
+    board: paths.boards !== undefined ? { ...board, texture: paths.boards } : board,
+    striker:
+      paths.strikers !== undefined
+        ? { ...striker, image: paths.strikers }
+        : striker,
+    pieces,
+    art,
+    paths,
   };
 }
 

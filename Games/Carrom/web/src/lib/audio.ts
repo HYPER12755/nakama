@@ -128,9 +128,7 @@ function playSynth(event: BoardEvent): void {
   }
   const notes: Record<BoardEvent, { from: number; to: number; type: OscillatorType; length: number }> = {
     strike: { from: 185, to: 72, type: "triangle", length: 0.12 },
-    hitPuck: { from: 420, to: 160, type: "square", length: 0.05 },
-    puckHit: { from: 320, to: 120, type: "triangle", length: 0.06 },
-    hitEdge: { from: 140, to: 60, type: "sine", length: 0.08 },
+    puck: { from: 320, to: 120, type: "triangle", length: 0.06 },
     pot: { from: 150, to: 58, type: "sine", length: 0.16 },
     break: { from: 220, to: 80, type: "triangle", length: 0.18 },
     queenCover: { from: 520, to: 390, type: "triangle", length: 0.16 },
