@@ -32,6 +32,7 @@ import {
   screenToBoard,
 } from "../lib/view";
 import { shotPlaybackSeconds } from "../lib/playback";
+import { assetUrl } from "@moongames/game-sdk";
 import type { Theme } from "../lib/theme";
 import {
   tableVisuals,
@@ -239,13 +240,17 @@ function pieceArtImage(path: string): HTMLImageElement | null {
     return null;
   }
   const image = new Image();
-  image.src = new URL(path, document.baseURI).toString();
   artImages.set(path, null);
   image.onload = () => {
     artImages.set(path, image);
     imageLoaded();
   };
   image.onerror = () => artImages.delete(path);
+  void assetUrl(path)
+    .then((url) => {
+      image.src = url;
+    })
+    .catch(() => artImages.delete(path));
   return null;
 }
 
@@ -257,13 +262,17 @@ function boardTexture(path: string): HTMLImageElement | null {
     return null;
   }
   const image = new Image();
-  image.src = new URL(path, document.baseURI).toString();
   textures.set(path, null);
   image.onload = () => {
     textures.set(path, image);
     imageLoaded();
   };
   image.onerror = () => textures.delete(path);
+  void assetUrl(path)
+    .then((url) => {
+      image.src = url;
+    })
+    .catch(() => textures.delete(path));
   return null;
 }
 

@@ -97,7 +97,7 @@ async function main() {
       "base-url": { type: "string" },
       key: { type: "string" },
       "key-id": { type: "string", default: "dev-1" },
-      "min-host-protocol": { type: "string", default: "1" },
+      "min-host-protocol": { type: "string", default: "2" },
       help: { type: "boolean", short: "h", default: false },
     },
     allowPositionals: false,

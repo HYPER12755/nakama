@@ -183,6 +183,7 @@ async function main() {
       host: { type: "string", default: "0.0.0.0" },
       server: { type: "string", default: "127.0.0.1:7350" },
       engine: { type: "string", default: "127.0.0.1:7352" },
+      watchdog: { type: "string", default: "" },
       help: { type: "boolean", short: "h", default: false },
     },
     allowPositionals: false,
@@ -247,6 +248,42 @@ async function main() {
         `${method} ${pathname} ${response.statusCode} ${Date.now() - started}ms`,
       );
     });
+
+    // The launcher can ask the local watchdog to bring the stack back after
+    // the device slept. This is never proxied for a remote client.
+    if (pathname === "/api/stack/heal" || pathname === "/api/stack/health") {
+      const address = request.socket.remoteAddress ?? "";
+      const local =
+        address === "127.0.0.1" ||
+        address === "::1" ||
+        address === "::ffff:127.0.0.1";
+      if (!local || values.watchdog === "") {
+        response.writeHead(404).end("not found");
+        return;
+      }
+      const [watchHost, watchPort] = values.watchdog.split(":");
+      const upstream = httpRequest(
+        {
+          host: watchHost && watchHost.length > 0 ? watchHost : "127.0.0.1",
+          port: Number(watchPort) > 0 ? Number(watchPort) : 4180,
+          path: pathname === "/api/stack/heal" ? "/heal" : "/health",
+          method: pathname === "/api/stack/heal" ? "POST" : "GET",
+          headers: { host: "127.0.0.1" },
+        },
+        (upstreamResponse) => {
+          response.writeHead(upstreamResponse.statusCode ?? 502, {
+            "content-type": "application/json",
+          });
+          upstreamResponse.pipe(response);
+        },
+      );
+      upstream.on("error", () => {
+        response.writeHead(502, { "content-type": "application/json" });
+        response.end('{"ok":false}');
+      });
+      upstream.end();
+      return;
+    }
 
     // The calls and the socket go straight to the game server, so the menu
     // and the games are reached through the same address the player came

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   GAME_PROTOCOL_VERSION,
+  configureAssets,
   readLauncherHandoff,
   type GameBridge,
   type GameHostConfig,
@@ -187,6 +188,8 @@ function FullscreenIcon({ active }: { active: boolean }) {
 }
 
 export default function App({ bridge }: AppProps) {
+  // The host can serve files beside the entry when the page is file://.
+  configureAssets(bridge);
   const [idleState] = useState<ChessState>(() => new ChessEngine().getState());
   const [invite, setInvite] = useState(() =>
     parseMatchInvite(window.location.search),

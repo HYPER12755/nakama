@@ -8,6 +8,7 @@ import {
 import type { GameBridge } from "@moongames/game-sdk";
 import {
   GAME_PROTOCOL_VERSION,
+  configureAssets,
   readLauncherHandoff,
   type GameHostConfig,
 } from "@moongames/game-sdk";
@@ -248,6 +249,7 @@ export interface AppProps {
 }
 
 export default function App({ bridge }: AppProps) {
+  configureAssets(bridge);
   // A game opened with a room in the address opens that room, so it starts
   // at the online table and not at a local board.
   const [invite, setInvite] = useState(() =>

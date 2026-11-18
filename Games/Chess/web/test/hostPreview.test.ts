@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { HostToGameMessage } from "@moongames/game-sdk";
+import { GAME_PROTOCOL_VERSION, type HostToGameMessage } from "@moongames/game-sdk";
 import {
   BrowserPreviewHost,
   hostPreviewEnabled,
@@ -21,9 +21,9 @@ describe("browser host preview", () => {
     expect(messages).toHaveLength(1);
     expect(messages[0]).toEqual({
       type: "init",
-      protocol: 1,
+      protocol: GAME_PROTOCOL_VERSION,
       config: {
-        protocol: 1,
+        protocol: GAME_PROTOCOL_VERSION,
         gameId: "chess",
         locale: "en-GB",
         theme: { mode: "dark" },

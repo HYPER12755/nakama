@@ -6,6 +6,7 @@
   "packageManager": "pnpm@12.19.0",
   "scripts": {
     "stack": "node tools/stack.mjs",
+    "stack:watchdog": "node tools/stack-watchdog.mjs",
     "dev:chess": "pnpm --filter @moongames/chess-web dev",
     "build:chess": "pnpm --filter @moongames/chess-web build",
     "preview:chess": "pnpm --filter @moongames/chess-web preview",

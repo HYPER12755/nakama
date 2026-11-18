@@ -6,6 +6,7 @@
  * Carrom Pool set share this one player.
  */
 
+import { loadAsset } from "@moongames/game-sdk";
 import { EVENT_GAIN, soundsFor, type BoardEvent } from "./soundCatalog";
 
 export type CarromSound =
@@ -97,11 +98,7 @@ export function playEvent(event: BoardEvent): void {
   const index = nextIndex.get(slot) ?? 0;
   nextIndex.set(slot, (index + 1) % files.length);
   const file = files[index]!;
-  const url = new URL(
-    `sounds/${currentSet}/${file}.mp3`,
-    document.baseURI,
-  ).toString();
-  void load(url).then((buffer) => {
+  void load(`sounds/${currentSet}/${file}.mp3`).then((buffer) => {
     const ctx = context();
     if (buffer === null || ctx === null || ctx.state === "closed") {
       return;
@@ -178,8 +175,7 @@ export function playMusic(file: string): void {
     return;
   }
   stopMusic();
-  const url = new URL(`sounds/${currentSet}/${file}.mp3`, document.baseURI).toString();
-  void load(url).then((buffer) => {
+  void load(`sounds/${currentSet}/${file}.mp3`).then((buffer) => {
     if (buffer === null || ctx.state === "closed") {
       return;
     }
@@ -223,9 +219,8 @@ function load(url: string): Promise<AudioBuffer | null> {
   if (ctx === null) {
     return Promise.resolve(null);
   }
-  const promise = fetch(url)
-    .then((response) => (response.ok ? response.arrayBuffer() : null))
-    .then((data) => (data === null ? null : ctx.decodeAudioData(data)))
+  const promise = loadAsset(url)
+    .then((data) => ctx.decodeAudioData(data as ArrayBuffer))
     .then((buffer) => {
       loading.delete(url);
       if (buffer !== null) {
@@ -247,11 +242,7 @@ export function preloadSound(sound: CarromSound): void {
   }
   const files = soundsFor(currentSet, EVENT[sound]);
   for (const file of files) {
-    const url = new URL(
-      `sounds/${currentSet}/${file}.mp3`,
-      document.baseURI,
-    ).toString();
-    void load(url);
+    void load(`sounds/${currentSet}/${file}.mp3`);
   }
 }
 

@@ -1,6 +1,6 @@
 import type { GameHostConfig, GameSession, GameTheme } from "./manifest";
 
-export const GAME_PROTOCOL_VERSION = 1;
+export const GAME_PROTOCOL_VERSION = 2;
 
 export type HostToGameMessage =
   | { type: "init"; protocol: number; config: GameHostConfig }
@@ -8,7 +8,14 @@ export type HostToGameMessage =
   | { type: "resume" }
   | { type: "destroy" }
   | { type: "theme"; theme: GameTheme }
-  | { type: "session"; session: GameSession };
+  | { type: "session"; session: GameSession }
+  | {
+      type: "assetResponse";
+      requestId: string;
+      ok: boolean;
+      base64?: string;
+      error?: string;
+    };
 
 export type HapticPattern =
   | "light"
@@ -32,7 +39,8 @@ export type GameToHostMessage =
   | { type: "openUrl"; url: string }
   | ({ type: "share" } & GameSharePayload)
   | { type: "analytics"; event: string; properties?: Record<string, unknown> }
-  | { type: "requestSessionRefresh" };
+  | { type: "requestSessionRefresh" }
+  | { type: "assetRequest"; requestId: string; path: string };
 
 const HOST_MESSAGE_TYPES = new Set<string>([
   "init",
@@ -41,6 +49,7 @@ const HOST_MESSAGE_TYPES = new Set<string>([
   "destroy",
   "theme",
   "session",
+  "assetResponse",
 ]);
 
 export function isHostToGameMessage(value: unknown): value is HostToGameMessage {

@@ -489,7 +489,7 @@ export function createBundleDescriptor({
   url,
   keyId,
   publishedAt = new Date().toISOString(),
-  minHostProtocol = 1,
+  minHostProtocol = 2,
 }) {
   return {
     format: BUNDLE_FORMAT,

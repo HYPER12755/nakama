@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
+import RNFS from "react-native-fs";
 import {
   GAME_PROTOCOL_VERSION,
   createGameLaunchContext,
@@ -93,7 +94,7 @@ function isGameMessage(value: unknown): value is GameToHostMessage {
 export function MoonGamesWebView({
   gameId,
   manifestUrl,
-  hostProtocol = 1,
+  hostProtocol = GAME_PROTOCOL_VERSION,
   trustedKeys,
   bundledFallback,
   locale = "en",
@@ -263,6 +264,44 @@ export function MoonGamesWebView({
         case "requestSessionRefresh":
           onRequestSessionRefresh?.();
           break;
+        case "assetRequest": {
+          // The game asks for a file beside its entry. Read it from the
+          // verified bundle directory, never from a path the page invents.
+          const requestId = parsed.requestId;
+          const reply = (ok: boolean, base64?: string, error?: string) => {
+            postToGame({
+              type: "assetResponse",
+              requestId,
+              ok,
+              base64,
+              error,
+            } satisfies HostToGameMessage);
+          };
+          void (async () => {
+            if (bundle === null || typeof parsed.path !== "string") {
+              reply(false, undefined, "no bundle");
+              return;
+            }
+            const parts = parsed.path.split("/");
+            if (
+              parts.some((part) => part === ".." || part === "." || part === "")
+            ) {
+              reply(false, undefined, "unsafe path");
+              return;
+            }
+            const filePath = `${bundle.directory}/${parts.join("/")}`;
+            if (!(await RNFS.exists(filePath))) {
+              reply(false, undefined, "not found");
+              return;
+            }
+            try {
+              reply(true, await RNFS.readFile(filePath, "base64"));
+            } catch (cause) {
+              reply(false, undefined, String(cause));
+            }
+          })();
+          break;
+        }
       }
     },
     [

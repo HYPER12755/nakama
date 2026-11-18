@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,7 +12,7 @@ import 'bundle_manager.dart';
 import 'host_models.dart';
 import 'launch_context.dart';
 
-const int _gameProtocolVersion = 1;
+const int _gameProtocolVersion = 2;
 
 class MoonGamesHost extends StatefulWidget {
   const MoonGamesHost({
@@ -21,7 +22,7 @@ class MoonGamesHost extends StatefulWidget {
     this.manifestUrl,
     this.bundledDescriptorAsset,
     this.bundledZipAsset,
-    this.hostProtocol = 1,
+    this.hostProtocol = _gameProtocolVersion,
     this.locale = 'en',
     this.launchQuery,
     this.theme = const MoonGamesTheme(),
@@ -294,8 +295,46 @@ class _MoonGamesHostState extends State<MoonGamesHost>
       case 'requestSessionRefresh':
         widget.onRequestSessionRefresh?.call();
         break;
+      case 'assetRequest':
+        unawaited(_serveAsset(message));
+        break;
     }
     return null;
+  }
+
+  /// Serve a file from the verified bundle directory to the game.
+  Future<void> _serveAsset(Map<String, dynamic> message) async {
+    final requestId = message['requestId'] as String? ?? '';
+    final path = message['path'] as String?;
+    void reply(bool ok, [String? data]) {
+      unawaited(_post(<String, dynamic>{
+        'type': 'assetResponse',
+        'requestId': requestId,
+        'ok': ok,
+        if (data != null) 'base64': data,
+      }));
+    }
+
+    final launch = _launch;
+    if (launch == null || path == null) {
+      reply(false);
+      return;
+    }
+    final parts = path.split('/');
+    if (parts.any((part) => part == '..' || part == '.' || part.isEmpty)) {
+      reply(false);
+      return;
+    }
+    try {
+      final file = File('${launch.directory.path}/${parts.join('/')}');
+      if (!await file.exists()) {
+        reply(false);
+        return;
+      }
+      reply(true, base64.encode(await file.readAsBytes()));
+    } catch (_) {
+      reply(false);
+    }
   }
 
   Future<void> _openUrl(String url) async {

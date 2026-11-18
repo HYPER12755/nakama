@@ -186,6 +186,13 @@
 - [ ] Verify launcher friend chat and match chat emoji rendering on desktop and mobile widths. Model insertion tests pass; visual device verification is still required.
 - [x] Verify temporary match chat is never persisted while invite/DM records are.
 - [x] Document remaining Flutter/RN device and SMTP blockers.
+- [ ] The ripped game assets are shown in a picker but only the striker art
+  reaches the board; boards, pucks, trails, pockets and frames do nothing.
+  Merge the ten hand-made strikers and the ripped assets into one panel and
+  make every chosen asset change the table.
+- [ ] Some recorded sounds play at the wrong events. Check each family against
+  how a real carrom game uses it and play each at the right moment and volume.
+  Verify by loading every asset in a real browser, not only by unit tests.
 
 ## Phase 8 prerequisite — multi-file game loading
 

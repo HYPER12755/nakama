@@ -20,6 +20,7 @@ import type {
   LauncherSocialController,
 } from "../hooks/useLauncherSocial";
 import { copyText } from "../lib/clipboard";
+import { requestStackHeal } from "../lib/stackWatchdog";
 import {
   acceptedFriends,
   chatPreview,
@@ -304,7 +305,9 @@ function AccountTab({ social }: { social: LauncherSocialController }) {
             className="button button--ghost button--compact"
             type="button"
             onClick={() => {
-              void social.connect().catch(() => undefined);
+              void requestStackHeal().finally(() => {
+                void social.connect().catch(() => undefined);
+              });
             }}
           >
             <Icon name="refresh" size={15} />

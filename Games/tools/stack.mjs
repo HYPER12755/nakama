@@ -364,7 +364,19 @@ async function loadSettings() {
 }
 
 function stateTemplate() {
-  return { version: 1, services: {} };
+  // `desired` records what the player wants running, so a watchdog never
+  // restarts a service that was stopped on purpose.
+  return {
+    version: 1,
+    desired: {
+      postgres: true,
+      nakama: true,
+      web: true,
+      releases: true,
+      engine: true,
+    },
+    services: {},
+  };
 }
 
 async function loadState(settings) {
@@ -379,6 +391,10 @@ async function loadState(settings) {
       `warning: ignoring invalid stack state at ${settings.stateFile}`,
     );
     return stateTemplate();
+  }
+  // Older state files have no intent map; every existing service was wanted.
+  if (typeof state.desired !== "object" || state.desired === null) {
+    state.desired = stateTemplate().desired;
   }
   return state;
 }
@@ -1054,6 +1070,9 @@ async function startWeb(settings, state, options) {
       // The engine is asked through the same address as everything else.
       "--engine",
       `${urlHost(settings.engine.host)}:${settings.engine.port}`,
+      // The launcher can ask the watchdog to heal the stack after sleep.
+      "--watchdog",
+      `127.0.0.1:${process.env.MOONGAMES_WATCHDOG_PORT ?? "4180"}`,
     ],
     logPath: settings.web.logPath,
     displayCommand: "serve-web",
@@ -1301,6 +1320,10 @@ async function stopSelected(settings, state, names, options) {
 }
 
 async function commandStart(settings, state, names, options) {
+  for (const service of resolveServices(names)) {
+    state.desired[service] = true;
+  }
+  await saveState(settings, state);
   await startSelected(settings, state, names, options);
   await printStatus(settings, state, false);
   console.log("");
@@ -1310,6 +1333,10 @@ async function commandStart(settings, state, names, options) {
 }
 
 async function commandStop(settings, state, names, options) {
+  for (const service of resolveServices(names)) {
+    state.desired[service] = false;
+  }
+  await saveState(settings, state);
   await stopSelected(settings, state, names, options);
   await printStatus(settings, state, false);
 }
@@ -1610,6 +1637,7 @@ Commands:
   stop [services...]      Stop managed services
   restart [services...]   Restart services
   status [--json]         Show service health, PIDs, and URLs
+  watchdog               Run the stack watchdog (checks and heals services)
   urls                    Show local and LAN URLs
   credentials             Show Nakama console credentials
   logs [service]          Show recent logs; add --follow to stream
@@ -1718,6 +1746,16 @@ async function main() {
     case "status":
       await commandStatus(settings, state, options.json);
       break;
+    case "watchdog": {
+      const watchdog = path.join(GAMES_ROOT, "tools", "stack-watchdog.mjs");
+      const child = spawn(process.execPath, [watchdog], {
+        cwd: GAMES_ROOT,
+        env: process.env,
+        stdio: "inherit",
+      });
+      child.unref();
+      break;
+    }
     case "urls":
       printUrls(settings);
       break;

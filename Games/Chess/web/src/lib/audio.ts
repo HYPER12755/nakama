@@ -11,6 +11,8 @@
  * one, the volume and whether the table speaks at all.
  */
 
+import { loadAsset } from "@moongames/game-sdk";
+
 export type ChessSound =
   | "move"
   | "capture"
@@ -123,15 +125,7 @@ function context(): AudioContext | null {
   return audioContext;
 }
 
-function soundUrl(file: string): string {
-  // The sounds sit beside the game, one folder for each set.
-  const base = document.baseURI;
-  return new URL(`sounds/${currentSet}/${file}`, base).toString();
-}
-
-function load(
-  sound: ChessSound,
-): Promise<AudioBuffer | null> {
+function load(sound: ChessSound): Promise<AudioBuffer | null> {
   const existing = buffers.get(sound);
   if (existing !== undefined) {
     return Promise.resolve(existing);
@@ -144,14 +138,13 @@ function load(
   if (ctx === null) {
     return Promise.resolve(null);
   }
-  const promise = fetch(soundUrl(SOUND_FILES[sound]))
-    .then((response) => (response.ok ? response.arrayBuffer() : null))
-    .then((data) => (data === null ? null : ctx.decodeAudioData(data)))
+  // The shared loader uses fetch on the web and the host bridge on file://.
+  const path = `sounds/${currentSet}/${SOUND_FILES[sound]}`;
+  const promise = loadAsset(path)
+    .then((data) => ctx.decodeAudioData(data as ArrayBuffer))
     .then((buffer) => {
       loading.delete(sound);
-      if (buffer !== null) {
-        buffers.set(sound, buffer);
-      }
+      buffers.set(sound, buffer);
       return buffer;
     })
     .catch(() => {
