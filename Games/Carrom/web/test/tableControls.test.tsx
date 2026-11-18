@@ -83,6 +83,12 @@ describe("the online lobby", () => {
     expect(html).not.toContain("Watch a table by id");
   });
 
+  it("shows a counting clock while a quick match is searching", () => {
+    const html = renderToStaticMarkup(panel(controller({ searching: true })));
+    expect(html).toContain("online-search-clock");
+    expect(html).toMatch(/00:0\d/);
+  });
+
   it("shows the round trip when the server has answered a ping", () => {
     const html = renderToStaticMarkup(panel(controller()));
     expect(html).toContain("42 ms");

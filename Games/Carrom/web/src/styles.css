@@ -673,6 +673,14 @@ button {
   color: var(--accent);
 }
 
+.online-search-clock {
+  margin-left: 6px;
+  color: var(--accent);
+  font-family: monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
 /* The full artwork picker, grouped by the family of each real asset. */
 .art-picker .pref-row__preview--board img {
   width: 100%;

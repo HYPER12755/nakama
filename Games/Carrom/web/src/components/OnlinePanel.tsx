@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   PLAYER_LABEL,
   TABLE_SIZES as CORE_TABLE_SIZES,
@@ -41,6 +41,34 @@ function SeatRow({
         {PLAYER_LABEL[seat.colour as CarromPlayer]}
       </span>
     </li>
+  );
+}
+
+/** A counting clock, so a player can see the search is alive. */
+function SearchClock({ active }: { active: boolean }) {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!active) {
+      setSeconds(0);
+      return;
+    }
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      setSeconds(Math.floor((Date.now() - started) / 1000));
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [active]);
+
+  if (!active) {
+    return null;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return (
+    <span className="online-search-clock" aria-live="off">
+      {String(minutes).padStart(2, "0")}:{String(remainder).padStart(2, "0")}
+    </span>
   );
 }
 
@@ -177,7 +205,13 @@ export function OnlinePanel({
                 disabled={online.searching}
                 onClick={() => void online.quickMatch(seats, settings)}
               >
-                {online.searching ? "Searching…" : "Quick match"}
+                {online.searching ? (
+                  <>
+                    Searching <SearchClock active={online.searching} />
+                  </>
+                ) : (
+                  "Quick match"
+                )}
               </button>
               <button
                 type="button"
