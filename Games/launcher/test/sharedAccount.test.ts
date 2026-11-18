@@ -76,14 +76,14 @@ describe("the account the menu hands to a game", () => {
 
     const descriptor = manifest.bundles.find(
       (bundle) =>
-        bundle.gameId === game.id && bundle.version === game.release?.version,
+        bundle.gameId === game!.id && bundle.version === game!.release?.version,
     );
     expect(descriptor, "chess is not in the signed manifest").toBeDefined();
 
     // The config the menu builds.
     const config: GameHostConfig = {
       protocol: GAME_PROTOCOL_VERSION,
-      gameId: game.id,
+      gameId: game!.id,
       locale: "en",
       theme: { mode: "dark", accent: "#e5b85c" },
       session: {
@@ -102,26 +102,26 @@ describe("the account the menu hands to a game", () => {
       accountMode: "shared",
       official: true,
       release: {
-        version: descriptor.version,
-        sha256: descriptor.sha256,
-        keyId: descriptor.keyId,
+        version: descriptor!.version,
+        sha256: descriptor!.sha256,
+        keyId: descriptor!.keyId,
       },
     };
 
     const handoff: LauncherHandoff = {
       format: LAUNCHER_HANDOFF_FORMAT,
-      gameId: game.id,
+      gameId: game!.id,
       accountMode: "shared",
       issuedAt: Date.now(),
       config,
       proof: {
-        gameId: descriptor.gameId,
-        version: descriptor.version,
-        sha256: descriptor.sha256,
-        size: descriptor.size,
-        keyId: descriptor.keyId,
-        publicKey: descriptor.publicKey,
-        signature: descriptor.signature,
+        gameId: descriptor!.gameId,
+        version: descriptor!.version,
+        sha256: descriptor!.sha256,
+        size: descriptor!.size,
+        keyId: descriptor!.keyId,
+        publicKey: descriptor!.publicKey,
+        signature: descriptor!.signature,
       },
     };
 
@@ -135,7 +135,7 @@ describe("the account the menu hands to a game", () => {
     expect(read, "the game did not read the account of the menu").not.toBeNull();
     expect(read?.accountMode).toBe("shared");
     expect(read?.official).toBe(true);
-    expect(read?.session.token).toBe("launcher-token");
-    expect(read?.nakama.serverKey).toBe("defaultkey");
+    expect(read!.session!.token).toBe("launcher-token");
+    expect(read!.nakama!.serverKey).toBe("defaultkey");
   });
 });

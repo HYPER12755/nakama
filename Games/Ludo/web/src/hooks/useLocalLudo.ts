@@ -23,9 +23,10 @@ export interface LocalGameOptions {
   seed?: number;
   sound?: boolean;
   enabled?: boolean;
+  aiDelay?: number;
 }
 
-const AI_DELAY_MS = 520;
+const DEFAULT_AI_DELAY_MS = 520;
 
 export function useLocalLudo(options: LocalGameOptions) {
   const [game, setGame] = useState<LudoState>(() => createGame({
@@ -124,7 +125,7 @@ export function useLocalLudo(options: LocalGameOptions) {
           });
         } else move(token);
       }
-    }, AI_DELAY_MS);
+    }, optionsRef.current.aiDelay ?? DEFAULT_AI_DELAY_MS);
     return clearTimer;
   }, [game, clearTimer, move, roll, options.enabled]);
 

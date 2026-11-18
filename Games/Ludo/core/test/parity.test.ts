@@ -57,7 +57,8 @@ describe("Ludo TS/Lua parity vectors", () => {
       if (game.phase !== "roll") break;
       const before = game.current;
       const value = rollDice(game);
-      if (game.phase !== "move") continue;
+      const phase: string = game.phase;
+      if (phase !== "move") continue;
       const expected = vectors.game.decisions[index];
       if (expected) {
         expect(before).toBe(expected[0]);

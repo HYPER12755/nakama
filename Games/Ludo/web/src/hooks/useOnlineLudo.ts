@@ -94,6 +94,25 @@ function sessionFromConfig(token?: string, refresh?: string): Session | null {
   }
 }
 
+/** An empty Lua table is encoded as `{}`; the client must still see arrays. */
+export function normalizeState(message: Record<string, unknown>): OnlineState {
+  const state = message as unknown as OnlineState;
+  const game = state.game;
+  return {
+    ...state,
+    game: game == null ? null : {
+      ...game,
+      events: Array.isArray(game.events) ? game.events : [],
+      ranking: Array.isArray(game.ranking) ? game.ranking : [],
+      players: Array.isArray(game.players) ? game.players : [],
+    },
+    seats: Array.isArray(state.seats) ? state.seats : [],
+    spectators: Array.isArray(state.spectators) ? state.spectators : [],
+    chat: Array.isArray(state.chat) ? state.chat : [],
+    moves: Array.isArray(state.moves) ? state.moves : [],
+  };
+}
+
 function decode(data: Uint8Array | string): Record<string, unknown> {
   const text = typeof data === "string" ? data : new TextDecoder().decode(data);
   const parsed = JSON.parse(text);
@@ -176,7 +195,7 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
           return;
         }
         if (data.op_code === LUDO_OP.STATE) {
-          setState(message as unknown as OnlineState);
+          setState(normalizeState(message));
           return;
         }
         if (data.op_code === LUDO_OP.CHAT) {

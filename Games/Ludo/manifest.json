@@ -18,7 +18,7 @@
   "orientation": "any",
   "description": "The classic four-colour race, drawn by hand for MoonGames. Roll to leave home, capture rivals, build walls and be the first to bring all four tokens to the centre. Play locally against friends or the computer, or take a table online with spectators and chat.",
   "tagline": "Race, block, and roll your way home.",
-  "status": "coming-soon",
+  "status": "available",
   "tags": ["board", "family", "race", "classic", "local", "ai"],
   "accent": "#9b8cff",
   "icon": "ludo",

@@ -65,6 +65,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/carrom/, "/"),
         },
+        "/ludo": {
+          target: "http://127.0.0.1:5176",
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/ludo/, "/"),
+        },
         "/release-manifest.json": {
           target: "http://127.0.0.1:8099",
           changeOrigin: true,

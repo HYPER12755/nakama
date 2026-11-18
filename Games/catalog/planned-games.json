@@ -15,22 +15,6 @@
       "icon": "cards",
       "featured": false,
       "sortOrder": 20
-    },
-    {
-      "id": "ludo",
-      "name": "Ludo",
-      "tagline": "Race, block, and roll your way home.",
-      "description": "The classic four-player race with a MoonGames table, private rooms, and relaxed online play. In development.",
-      "status": "coming-soon",
-      "minPlayers": 2,
-      "maxPlayers": 4,
-      "capabilities": [],
-      "orientation": "any",
-      "tags": ["board", "family", "race"],
-      "accent": "#9b8cff",
-      "icon": "ludo",
-      "featured": false,
-      "sortOrder": 30
     }
   ]
 }

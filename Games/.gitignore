@@ -6,6 +6,7 @@ releases/
 Chess/dist/
 Chess/releases/
 Carrom/dist/
+Ludo/dist/
 launcher/dist/
 launcher/public/games.json
 .dart_tool/

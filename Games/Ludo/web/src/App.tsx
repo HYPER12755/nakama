@@ -59,10 +59,25 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const [chatInput, setChatInput] = useState("");
   const [version] = useState(__MOONGAMES_GAME_VERSION__);
   const [progress, setProgress] = useState(() => readLocalProgress());
+  const autoplay = useMemo(
+    () => new URLSearchParams(window.location.search).has("autoplay"),
+    [],
+  );
 
-  const humanSeats = mode === "local" ? seats : 1;
-  const controller = useLocalLudo({ seats, humanSeats, difficulty, sound: soundOn, enabled: mode !== "online" });
+  const humanSeats = mode === "local" ? seats : autoplay ? 0 : 1;
+  const controller = useLocalLudo({
+    seats,
+    humanSeats,
+    difficulty,
+    sound: soundOn && !autoplay,
+    enabled: mode !== "online",
+    aiDelay: autoplay ? 30 : undefined,
+  });
   const online = useOnlineLudo(mode === "online");
+
+  useEffect(() => {
+    if (controller.realGame.winner !== null) setProgress(readLocalProgress());
+  }, [controller.realGame.winner]);
 
   const emptyGame = useMemo(() => createGame({ playerCount: seats }), [seats]);
   const game: LudoState = mode === "online" ? (online.state?.game ?? emptyGame) : controller.game;
@@ -171,7 +186,8 @@ export default function App({ bridge }: { bridge: GameBridge }) {
             />
           </div>
           <p className="ludo-hint">
-            {online.notice && isOnline ? online.notice
+            {autoplay && !isOnline ? "Watching a computer-only match."
+              : online.notice && isOnline ? online.notice
               : isOnline && !inOnlineMatch ? "Open a quick table or a private room to start."
               : controller.isReplaying ? "Watching a replay — close it to return to the live table."
               : canMove ? "Tap a glowing token to move it."

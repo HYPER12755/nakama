@@ -29,6 +29,7 @@ parts that belong to the game server straight through to it:
 | `/`           | the menu                         |
 | `/chess/`     | the chess game                   |
 | `/carrom/`    | the carrom game                  |
+| `/ludo/`      | the ludo game                    |
 | `/v2/...`     | the game server (calls)          |
 | `/ws`         | the game server (socket)         |
 | `/healthcheck`| the game server (health)         |
