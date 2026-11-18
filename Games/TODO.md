@@ -211,7 +211,11 @@ hosts are file-backed and should load only the single-entry subset.
 ## Phase 8 — Other games
 
 - [ ] Uno-style original card game (core, UI, Lua server).
-- [ ] Ludo (core, UI, Lua server).
+- [x] Ludo (core, UI, Lua server): deterministic 52-square rules with seeded
+  dice, captures, walls and exact finishes; authoritative Nakama match and
+  RPCs with TS↔Lua parity vectors; hand-drawn canvas board; local, computer
+  (three levels) and online play with private rooms, spectators, chat and
+  replay; released as `ludo` 0.1.0 and verified live in the browser.
 - [x] Carrom deterministic physics core (240 Hz fixed step, 60 Hz capture
   frames, elastic disc collisions, pocket capture, deterministic replay).
 - [x] Carrom rules layer (turn continuation, opponent pockets, striker foul
