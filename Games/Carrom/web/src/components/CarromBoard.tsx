@@ -231,6 +231,10 @@ function onArtLoaded(listener: () => void): () => void {
 }
 
 function imageLoaded(): void {
+  // An image may have been cached into a sprite before it loaded. One global
+  // clear here serves every board; doing it in each board's listener let the
+  // last board's art win.
+  pieceSprites.clear();
   for (const listener of artListeners) {
     listener();
   }
@@ -1297,27 +1301,32 @@ export function CarromBoard({
     return () => window.removeEventListener("resize", update);
   }, [lite]);
 
+  // Every path that clears an aim goes through this one callback, so the
+  // controls outside the board always know when the aim is gone.
+  const clearAim = useCallback(() => {
+    setAim(null);
+    draggingRef.current = null;
+    dragAnchorRef.current = null;
+    onAimChange?.(false);
+  }, [onAimChange]);
+
   useEffect(() => {
     if (animation !== null) {
-      setAim(null);
-      draggingRef.current = null;
+      clearAim();
     }
-  }, [animation]);
+  }, [animation, clearAim]);
 
   // A new turn means a new striker, so an aim that is still being dragged is
   // dropped rather than carried over.
   useEffect(() => {
-    setAim(null);
-    draggingRef.current = null;
-    dragAnchorRef.current = null;
-  }, [state.turn]);
+    clearAim();
+  }, [state.turn, clearAim]);
 
   useEffect(() => {
     if (disabled) {
-      setAim(null);
-      draggingRef.current = null;
+      clearAim();
     }
-  }, [disabled]);
+  }, [disabled, clearAim]);
 
   const drawScene = useCallback(
     (
@@ -1438,8 +1447,6 @@ export function CarromBoard({
         } else {
           boardLayerKeyRef.current = "";
         }
-        // Piece sprites may have been cached before the art arrived.
-        pieceSprites.clear();
         const scene = sceneRef.current;
         if (scene !== null) {
           drawScene(scene.display, scene.aimState, scene.animating);
@@ -1678,11 +1685,8 @@ export function CarromBoard({
   };
 
   const cancelAim = useCallback(() => {
-    draggingRef.current = null;
-    dragAnchorRef.current = null;
-    setAim(null);
-    onAimChange?.(false);
-  }, [onAimChange]);
+    clearAim();
+  }, [clearAim]);
 
   useEffect(() => {
     cancelRef?.(cancelAim);
@@ -1758,8 +1762,7 @@ export function CarromBoard({
         }
       }
     }
-    dragAnchorRef.current = null;
-    setAim(null);
+    clearAim();
   };
 
   return (

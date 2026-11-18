@@ -210,16 +210,19 @@ function load(url: string): Promise<AudioBuffer | null> {
   return promise;
 }
 
-export function preloadSound(sound: CarromSound): void {
-  if (!currentEnabled) {
+export function preloadEvent(event: BoardEvent): void {
+  if (!currentEnabled || currentSet === "synth") {
     return;
   }
-  const files = soundsFor(currentSet, EVENT[sound]);
-  for (const file of files) {
+  for (const file of soundsFor(currentSet, event)) {
     void load(`sounds/${currentSet}/${file}.mp3`);
   }
 }
 
 export function playSound(sound: CarromSound): void {
   playEvent(EVENT[sound]);
+}
+
+export function preloadSound(sound: CarromSound): void {
+  preloadEvent(EVENT[sound]);
 }

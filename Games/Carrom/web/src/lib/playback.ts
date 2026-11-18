@@ -32,6 +32,11 @@ export function shotPlaybackSeconds(duration: number): number {
 
 /** The moment in the playback, in seconds, when the shot happened at `time`. */
 export function playbackTime(time: number, duration: number): number {
+  if (speedScale === 0) {
+    // No animation: events still need their own timing so the sounds do not
+    // all land at once. Use the real physics timing, not the scaled one.
+    return Number.isFinite(duration) && duration > 0 ? time : 0;
+  }
   const total = shotPlaybackSeconds(duration);
   if (!Number.isFinite(duration) || duration <= 0) {
     return time;

@@ -84,8 +84,8 @@ import {
 import {
   configureSound,
   playEvent,
-  playSound,
   playMusic,
+  preloadEvent,
   stopMusic,
 } from "./lib/audio";
 import { MUSIC_FILES } from "./lib/soundCatalog";
@@ -295,6 +295,15 @@ export default function App({ bridge }: AppProps) {
   const [aimMode, setAimMode] = useState<AimMode>(storedAimMode);
   const [aiming, setAiming] = useState(false);
   const cancelAimRef = useRef<(() => void) | null>(null);
+  const handleAimChange = useCallback((active: boolean) => {
+    setAiming(active);
+    if (active) {
+      playEvent("aim");
+    }
+  }, []);
+  const registerCancelAim = useCallback((cancel: () => void) => {
+    cancelAimRef.current = cancel;
+  }, []);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -497,6 +506,13 @@ export default function App({ bridge }: AppProps) {
     persistSound(soundOn);
   }, [soundOn]);
 
+  // Fetch the first sounds a shot needs so a cold WebView does not miss them.
+  useEffect(() => {
+    for (const event of ["strike", "puck", "pot", "queenScore", "foul"] as const) {
+      preloadEvent(event);
+    }
+  }, []);
+
   useEffect(() => {
     configureSound({
       set: preferences.soundSet,
@@ -639,9 +655,14 @@ export default function App({ bridge }: AppProps) {
       if (!soundOn) {
         return;
       }
-      // The first shot of a game is the break; every other shot starts with
-      // the striker leaving the baseline.
-      playEvent(result.outcome.player === "white" && game.shotNumber === 0 ? "break" : "strike");
+      // The first shot of a game is the break. The result carries the
+      // authoritative shot number, so online games do not replay the break on
+      // every white shot.
+      playEvent(result.state.shotNumber === 1 ? "break" : "strike");
+      // The rolling of the men across the board, once per shot.
+      soundTimers.current.push(
+        window.setTimeout(() => playEvent("move"), 180),
+      );
       // All disc contacts share one family, so no sound is played twice for
       // the same hit. A softer contact is played more quietly.
       let contacts = 0;
@@ -657,42 +678,59 @@ export default function App({ bridge }: AppProps) {
         soundTimers.current.push(timer);
       }
       for (const event of result.pocketed) {
+        const at = playbackTime(event.time, result.duration) * 1000;
+        const sound =
+          event.kind === "striker"
+            ? "foul"
+            : event.kind === "queen"
+              ? "queenScore"
+              : "pot";
         const timer = window.setTimeout(
-          () => playSound(event.kind === "queen" ? "queen" : "pocket"),
-          // The sound is heard when the piece reaches the pocket, which is
-          // when the shot is played back to that moment.
-          playbackTime(event.time, result.duration) * 1000,
+          () => playEvent(sound),
+          at,
         );
         soundTimers.current.push(timer);
+        if (event.kind !== "striker" && event.kind !== "queen") {
+          soundTimers.current.push(
+            window.setTimeout(() => playEvent("puckScore"), at + 120),
+          );
+        }
       }
+      // The cover, return and returned piece happen at the end of the shot,
+      // not when the first piece drops.
+      const endAt = Math.max(80, playbackTime(result.duration, result.duration) * 1000);
       if (result.outcome.queenCovered) {
-        playEvent("queenCover");
+        soundTimers.current.push(
+          window.setTimeout(() => playEvent("queenCover"), endAt + 60),
+        );
       }
       if (result.outcome.queenReturned) {
-        playEvent("queenFail");
+        soundTimers.current.push(
+          window.setTimeout(() => playEvent("queenFail"), endAt + 60),
+        );
       }
       if (result.outcome.returnedDisc !== null) {
-        playEvent("puckBack");
+        soundTimers.current.push(
+          window.setTimeout(() => playEvent("puckBack"), endAt + 120),
+        );
       }
       if (result.outcome.foul) {
-        const timer = window.setTimeout(
-          () => playSound("foul"),
-          Math.max(80, playbackTime(result.duration, result.duration) * 1000),
+        soundTimers.current.push(
+          window.setTimeout(() => playEvent("foul"), endAt),
         );
-        soundTimers.current.push(timer);
       }
       if (result.outcome.winner !== null) {
-        const timer = window.setTimeout(
-          () => playSound("win"),
-          Math.max(
-            120,
-            playbackTime(result.duration, result.duration) * 1000 + 140,
-          ),
+        soundTimers.current.push(
+          window.setTimeout(() => playEvent("win"), endAt + 240),
         );
-        soundTimers.current.push(timer);
+      } else if (!result.outcome.turnContinued) {
+        // The turn passes to the next player at the end of the shot.
+        soundTimers.current.push(
+          window.setTimeout(() => playEvent("turn"), endAt + 180),
+        );
       }
     },
-    [clearSoundTimers, soundOn, game.shotNumber],
+    [clearSoundTimers, soundOn],
   );
 
   /**
@@ -783,6 +821,7 @@ export default function App({ bridge }: AppProps) {
       options: { solo?: boolean; tableSize?: number; mode?: Mode } = {},
     ) => {
       clearSoundTimers();
+      playEvent("start");
       animationRef.current = null;
       recordedLocalGame.current = null;
       localShotsRef.current = [];
@@ -990,7 +1029,7 @@ export default function App({ bridge }: AppProps) {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [computerPlayers, mode, game, animation, paused, handleShoot]);
+  }, [computerPlayers, mode, game, animation, paused, handleShoot, aiDifficulty]);
 
   const toggleFullscreen = useCallback(async () => {
     try {
@@ -1136,8 +1175,15 @@ export default function App({ bridge }: AppProps) {
       return;
     }
     seenResultRef.current = resultKey;
+    // In an online table a loss has its own sound; a local board already
+    // played the win fanfare for the player who cleared it.
+    if (onlineMode && online.myColour !== null) {
+      playEvent(
+        onlineResult?.winnerColour === online.myColour ? "win" : "lose",
+      );
+    }
     setResultOpen(true);
-  }, [resultKey]);
+  }, [resultKey, onlineMode, online.myColour, onlineResult?.winnerColour]);
 
   // A table played on this device keeps its own record. The key makes sure a
   // finished game is written once, however many times the board is repainted.
@@ -1438,10 +1484,8 @@ export default function App({ bridge }: AppProps) {
                 view={viewPlayer}
                 onShoot={handleShoot}
                 onAnimationComplete={handleAnimationComplete}
-                onAimChange={setAiming}
-                cancelRef={(cancel) => {
-                  cancelAimRef.current = cancel;
-                }}
+                onAimChange={handleAimChange}
+                cancelRef={registerCancelAim}
                 visuals={tableVisuals(
                   preferences.boardTheme,
                   preferences.strikerDesign,
@@ -1896,6 +1940,7 @@ export default function App({ bridge }: AppProps) {
           onRematch={
             onlineMode
               ? () => {
+                  playEvent("rematch");
                   setResultOpen(false);
                   void online.leaveMatch().then(() =>
                     online.createPrivateRoom(onlineSeats, {

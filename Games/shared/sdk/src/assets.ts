@@ -21,6 +21,7 @@ export interface AssetOptions {
 const bytes = new Map<string, Promise<ArrayBuffer | string>>();
 const objectUrls = new Map<string, string>();
 let bridge: GameBridge | null = null;
+let unsubscribe: (() => void) | null = null;
 let defaultTimeout = 8000;
 const pending = new Map<
   string,
@@ -35,11 +36,15 @@ export function configureAssets(
   host: GameBridge,
   options: { timeoutMs?: number } = {},
 ): void {
+  if (bridge === host) {
+    return;
+  }
+  unsubscribe?.();
   bridge = host;
   if (options.timeoutMs !== undefined) {
     defaultTimeout = options.timeoutMs;
   }
-  host.onMessage((message) => {
+  unsubscribe = host.onMessage((message) => {
     if (
       !isHostToGameMessage(message) ||
       message.type !== "assetResponse"

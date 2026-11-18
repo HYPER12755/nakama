@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   COSMETIC_GROUPS,
   cosmeticLabel,
@@ -71,21 +71,53 @@ export function ArtPicker({
         );
   }, [group, filter]);
 
+  // A category can hold almost a thousand images. Rendering them all at once
+  // stalls the browser, so only a page is shown at a time with a "Show more"
+  // button. Every asset stays reachable and none is dropped.
+  const [visible, setVisible] = useState(60);
+  useEffect(() => setVisible(60), [open, filter]);
+
   const total = COSMETIC_GROUPS.reduce((sum, g) => sum + g.options.length, 0);
 
-  const lockScroll = (event: React.WheelEvent<HTMLDivElement>) => {
+  // The board resolves built-ins from preferences when no art choice exists;
+  // the picker has to show the same effective design, not a hardcoded default.
+  const effective = (id: ArtGroupId): string => {
+    const picked = choices[id];
+    if (picked !== undefined) {
+      return picked;
+    }
+    if (id === "boards") {
+      return `builtin:${visuals.board.id}`;
+    }
+    if (id === "strikers") {
+      return `builtin:${visuals.striker.id}`;
+    }
+    if (id === "pucks") {
+      return `builtin:${visuals.pieces.id}`;
+    }
+    return defaultChoice(id);
+  };
+
+  // React attaches wheel passively, so preventDefault there is ignored. A
+  // native non-passive listener actually keeps the page from moving once the
+  // open category's grid reaches either end.
+  useEffect(() => {
     const grid = gridRef.current;
     if (grid === null) {
       return;
     }
-    const atTop = grid.scrollTop <= 0;
-    const atBottom =
-      grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 1;
-    if ((atTop && event.deltaY < 0) || (atBottom && event.deltaY > 0)) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-  };
+    const onWheel = (event: WheelEvent) => {
+      const atTop = grid.scrollTop <= 0;
+      const atBottom =
+        grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 1;
+      if ((atTop && event.deltaY < 0) || (atBottom && event.deltaY > 0)) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    grid.addEventListener("wheel", onWheel, { passive: false });
+    return () => grid.removeEventListener("wheel", onWheel);
+  }, [open]);
 
   return (
     <section className="panel pref-panel art-picker">
@@ -100,7 +132,7 @@ export function ArtPicker({
 
       <div className="pref-rows">
         {COSMETIC_GROUPS.map((entry) => {
-          const choice = choices[entry.id] ?? defaultChoice(entry.id);
+          const choice = effective(entry.id);
           const expanded = open === entry.id;
           const chosen = entry.options.find((option) => option.id === choice);
           return (
@@ -136,12 +168,8 @@ export function ArtPicker({
                       onChange={(event) => setFilter(event.target.value)}
                     />
                   </label>
-                  <div
-                    className="art-grid"
-                    ref={gridRef}
-                    onWheel={lockScroll}
-                  >
-                    {options.map((option) => {
+                  <div className="art-grid" ref={gridRef}>
+                    {options.slice(0, visible).map((option) => {
                       const active = choice === option.id;
                       return (
                         <button
@@ -162,8 +190,17 @@ export function ArtPicker({
                   </div>
                   <div className="art-grid__foot">
                     <p className="setting__note">
-                      Showing {options.length} of {entry.options.length}
+                      Showing {Math.min(visible, options.length)} of {options.length}
                     </p>
+                    {visible < options.length ? (
+                      <button
+                        type="button"
+                        className="mini-button"
+                        onClick={() => setVisible((value) => value + 60)}
+                      >
+                        Show more
+                      </button>
+                    ) : null}
                     {choices[entry.id] !== undefined ? (
                       <button
                         type="button"
