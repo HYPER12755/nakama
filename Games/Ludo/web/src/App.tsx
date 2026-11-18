@@ -156,8 +156,8 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     difficulty,
     sound: soundOn && !autoplay,
     enabled: mode !== "online",
-    aiDelay: slowWatch ? 700 : autoplay ? 30 : undefined,
-    animationMs: autoplay && !slowWatch ? 25 : 135,
+    aiDelay: slowWatch ? 1200 : autoplay ? 220 : undefined,
+    animationMs: autoplay && !slowWatch ? 60 : 135,
   });
   const online = useOnlineLudo(mode === "online");
 
@@ -397,7 +397,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 highlightLastMove={preferences.highlightLastMove}
                 moveKey={!onlineMode ? lastMoveEvent?.action : undefined}
                 onStep={!onlineMode && soundOn ? () => playEvent("move") : undefined}
-                stepMs={autoplay && !slowWatch ? 25 : 135}
+                stepMs={autoplay && !slowWatch ? 60 : 135}
               />
             </div>
           </div>

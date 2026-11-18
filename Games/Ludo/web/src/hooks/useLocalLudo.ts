@@ -29,7 +29,9 @@ export interface LocalGameOptions {
   animationMs?: number;
 }
 
-const DEFAULT_AI_DELAY_MS = 520;
+/** A computer player should feel like someone thinking at the table, not a
+ * script burning through turns. Each action gets a deliberate pause. */
+const DEFAULT_AI_DELAY_MS = 850;
 
 export function useLocalLudo(options: LocalGameOptions) {
   const [game, setGame] = useState<LudoState>(() => createGame({
@@ -47,6 +49,7 @@ export function useLocalLudo(options: LocalGameOptions) {
   /** The token animation owns the board until its last hop has landed. */
   const busyUntil = useRef(0);
   const history = useRef<LudoState[]>([]);
+  const stepsRef = useRef<LocalGameRecord["steps"]>([]);
   const gameRef = useRef(game);
   const optionsRef = useRef(options);
   gameRef.current = game;
@@ -74,6 +77,7 @@ export function useLocalLudo(options: LocalGameOptions) {
     setGame(fresh);
     setLastMove(null);
     setSteps([]);
+    stepsRef.current = [];
     setReplayFrames(null);
     setReplayIndex(0);
   }, [clearTimer]);
@@ -124,15 +128,16 @@ export function useLocalLudo(options: LocalGameOptions) {
     const stepCount = chosen.leavesHome ? 1 : Math.max(1, chosen.to - Math.max(0, chosen.from));
     busyUntil.current = Date.now() + stepCount * (optionsRef.current.animationMs ?? 135) + 80;
     const record = { color: previous.players[previous.current]!.color, token, to: chosen.to };
-    setSteps((current) => [...current, record]);
+    stepsRef.current = [...stepsRef.current, record];
+    setSteps(stepsRef.current);
     if (optionsRef.current.sound !== false) {
       if (chosen.captures.length > 0) playLudoSound("capture");
       else if (chosen.finishes) playLudoSound("home");
       else playLudoSound("move");
       if (result.won) playLudoSound("win");
     }
-    if (result.won) recordLocalGame(next, [...steps, record]);
-  }, [clearTimer, steps]);
+    if (result.won) recordLocalGame(next, stepsRef.current);
+  }, [clearTimer]);
 
   useEffect(() => {
     clearTimer();
@@ -172,7 +177,8 @@ export function useLocalLudo(options: LocalGameOptions) {
     setGame(previous);
     setCanUndo(history.current.length > 0);
     setLastMove(null);
-    setSteps((current) => current.slice(0, -1));
+    stepsRef.current = stepsRef.current.slice(0, -1);
+    setSteps(stepsRef.current);
     busyUntil.current = 0;
   }, [clearTimer]);
 
