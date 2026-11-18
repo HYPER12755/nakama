@@ -215,6 +215,21 @@ function drawFrame(
 // Real wood photographs and piece art, loaded once and kept for the table.
 const textures = new Map<string, HTMLImageElement | null>();
 const artImages = new Map<string, HTMLImageElement | null>();
+const artListeners = new Set<() => void>();
+
+/** Ask every board on the page to repaint when a chosen image arrives. */
+function onArtLoaded(listener: () => void): () => void {
+  artListeners.add(listener);
+  return () => {
+    artListeners.delete(listener);
+  };
+}
+
+function imageLoaded(): void {
+  for (const listener of artListeners) {
+    listener();
+  }
+}
 
 function pieceArtImage(path: string): HTMLImageElement | null {
   if (artImages.has(path)) {
@@ -226,7 +241,11 @@ function pieceArtImage(path: string): HTMLImageElement | null {
   const image = new Image();
   image.src = new URL(path, document.baseURI).toString();
   artImages.set(path, null);
-  image.onload = () => artImages.set(path, image);
+  image.onload = () => {
+    artImages.set(path, image);
+    imageLoaded();
+  };
+  image.onerror = () => artImages.delete(path);
   return null;
 }
 
@@ -240,7 +259,11 @@ function boardTexture(path: string): HTMLImageElement | null {
   const image = new Image();
   image.src = new URL(path, document.baseURI).toString();
   textures.set(path, null);
-  image.onload = () => textures.set(path, image);
+  image.onload = () => {
+    textures.set(path, image);
+    imageLoaded();
+  };
+  image.onerror = () => textures.delete(path);
   return null;
 }
 
@@ -1081,7 +1104,13 @@ export function CarromBoard({
   const visualsRef = useRef(visuals);
   visualsRef.current = visuals;
   // All three chosen designs, so the board repaints the moment one changes.
-  const visualKey = `${visuals.board.id}:${visuals.striker.id}:${visuals.pieces.id}`;
+  const visualKey = [
+    visuals.board.id,
+    visuals.board.texture ?? "",
+    visuals.striker.id,
+    visuals.striker.image ?? "",
+    visuals.pieces.id,
+  ].join(":");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const draggingRef = useRef<number | null>(null);
   const dragAnchorRef = useRef<{ x: number; y: number } | null>(null);
@@ -1239,6 +1268,20 @@ export function CarromBoard({
       ctx.restore();
     },
     [dpr, lite, disabled, aimMode, visualKey],
+  );
+
+  // A chosen image arrives after the first paint. Redraw the cached table and
+  // the pieces as soon as it does, so the player sees their pick at once.
+  useEffect(
+    () =>
+      onArtLoaded(() => {
+        boardLayerKeyRef.current = "";
+        const scene = sceneRef.current;
+        if (scene !== null) {
+          drawScene(scene.display, scene.aimState, scene.animating);
+        }
+      }),
+    [drawScene],
   );
 
   /**

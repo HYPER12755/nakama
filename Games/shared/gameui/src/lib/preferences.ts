@@ -458,6 +458,8 @@ function parseValue(key: PreferenceKey, raw: string): unknown {
       case "replay":
         return isOneOf(Replay, parsed) ? parsed : undefined;
       case "soundEnabled":
+      case "musicEnabled":
+      case "keyboardMoves":
       case "showLegalMoves":
       case "highlightLastMove":
         return typeof parsed === "boolean" ? parsed : undefined;

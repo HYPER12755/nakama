@@ -370,6 +370,7 @@ export function useOnlineCarrom(
   } | null>(null);
   const connectErrorRef = useRef<string | null>(null);
   const pingRef = useRef<number | null>(null);
+  const reconnectRef = useRef<number | null>(null);
   const matchIdRef = useRef<string | null>(null);
   const serialRef = useRef(0);
   const gameRef = useRef<CarromState | null>(null);
@@ -391,7 +392,10 @@ export function useOnlineCarrom(
   }, []);
 
   const joinMatch = useCallback(
-    async (rawMatchId: string, joinOptions: { spectator?: boolean } = {}) => {
+    async (
+      rawMatchId: string,
+      joinOptions: { spectator?: boolean; keepRoomCode?: boolean } = {},
+    ) => {
       const socket = await requireSocket();
       const nextMatchId = rawMatchId.trim();
       if (nextMatchId.length === 0) {
@@ -412,6 +416,12 @@ export function useOnlineCarrom(
       matchIdRef.current = nextMatchId;
       setMatchId(nextMatchId);
       setSpectating(joinOptions.spectator === true);
+      // A code belongs to the table it was read from. Joining any other way
+      // must not leave an old code on the new table.
+      if (joinOptions.keepRoomCode !== true) {
+        setRoomCode(null);
+        setRoomSeats(null);
+      }
       setError(null);
     },
     [requireSocket],
@@ -448,7 +458,10 @@ export function useOnlineCarrom(
           parsed.error?.message ?? "That room code was not found.",
         );
       }
-      await joinMatch(parsed.matchId, { spectator: options.spectator === true });
+      await joinMatch(parsed.matchId, {
+        spectator: options.spectator === true,
+        keepRoomCode: true,
+      });
       setRoomCode(parsed.code ?? trimmed.toUpperCase());
       // The server knows how many players the table is for, so the guest is
       // told what they are walking into.
@@ -765,7 +778,8 @@ export function useOnlineCarrom(
         // The server holds the seat for a grace period. Try to come back to
         // the table before it is given to somebody else.
         if (current !== null) {
-          window.setTimeout(() => {
+          reconnectRef.current = window.setTimeout(() => {
+            reconnectRef.current = null;
             if (socketRef.current !== null || matchIdRef.current === null) {
               return;
             }
@@ -774,6 +788,10 @@ export function useOnlineCarrom(
               const joined = matchIdRef.current;
               const live = socketRef.current;
               if (joined === null || live === null) {
+                setNotice("The table could not be rejoined. Open a new one.");
+                matchIdRef.current = null;
+                setMatchId(null);
+                setState(null);
                 return;
               }
               void live.joinMatch(joined).catch(() => {
@@ -898,6 +916,8 @@ export function useOnlineCarrom(
                 return;
               }
               await joinMatch(parsed.matchId);
+              // The fallback found a table: stop the lobby spinner.
+              setSearching(false);
             } catch {
               // The matchmaker may still pair the two players.
             }
@@ -1077,6 +1097,14 @@ export function useOnlineCarrom(
       if (pingRef.current !== null) {
         window.clearInterval(pingRef.current);
         pingRef.current = null;
+      }
+      if (fallbackRef.current !== null) {
+        window.clearTimeout(fallbackRef.current);
+        fallbackRef.current = null;
+      }
+      if (reconnectRef.current !== null) {
+        window.clearTimeout(reconnectRef.current);
+        reconnectRef.current = null;
       }
       const socket = socketRef.current;
       if (socket !== null) {

@@ -504,7 +504,15 @@ local function handle_shot(context, dispatcher, state, message, payload, now)
   local position = tonumber(payload.position)
   local angle = tonumber(payload.angle)
   local power = tonumber(payload.power)
-  if not position or not angle or not power then
+  -- A crafted JSON can send 1e999 (infinity) or NaN. The core rejects those
+  -- before a shot is simulated; the server must do the same.
+  local function finite(value)
+    return value == value and value ~= math.huge and value ~= -math.huge
+  end
+  if
+    not position or not angle or not power
+    or not finite(position) or not finite(angle) or not finite(power)
+  then
     send_error(dispatcher, message.sender, "Invalid shot")
     return
   end

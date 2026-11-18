@@ -21,7 +21,8 @@ describe("carrom matches", () => {
       expect(state.winner).not.toBeNull();
       expect(shots).toBeLessThan(140);
     },
-    // The AI search simulates a full match, which is slower than a unit test.
-    60_000,
+    // The AI search simulates a full match, which is slower than a unit test,
+    // especially when the whole workspace is being tested in parallel.
+    120_000,
   );
 });

@@ -95,7 +95,7 @@ import {
 } from "./lib/preferences";
 import { tableVisuals } from "./lib/designs";
 import { positionFor } from "./lib/striker";
-import { readArtChoices } from "./lib/storage";
+import { useArtChoices } from "./hooks/useArtChoices";
 import { shotEvents, type TableEvent } from "./lib/events";
 import {
   persistTheme,
@@ -309,7 +309,7 @@ export default function App({ bridge }: AppProps) {
     data: ReplayData;
   } | null>(null);
   const { preferences } = useGamePreferences(GAME_ID);
-  const [artChoices] = useState(readArtChoices);
+  const { choices: artChoices } = useArtChoices();
 
   const appRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<CarromShotResult | null>(null);
@@ -1782,8 +1782,10 @@ export default function App({ bridge }: AppProps) {
       <RulesDialog
         open={rulesOpen}
         onClose={() => setRulesOpen(false)}
-        variant={variant}
-        colours={tablePlayers(onlineMode ? onlineSeats : localTable)}
+        variant={(activeGame?.rules?.id as GameVariant | undefined) ?? variant}
+        colours={(activeGame?.players ?? seatedPlayers).length > 0
+          ? (activeGame?.players ?? seatedPlayers)
+          : tablePlayers(onlineMode ? onlineSeats : localTable)}
       />
       {online.opponentLeft !== null ? (
         <OpponentLeftDialog
@@ -1799,8 +1801,8 @@ export default function App({ bridge }: AppProps) {
         <GameOverDialog
           winner={winner}
           winnerName={nameOf(winner)}
-          variant={variant}
-          seats={activeGame?.players.length ?? tablePlayers(onlineMode ? onlineSeats : localTable).length}
+          variant={(activeGame?.rules?.id as GameVariant | undefined) ?? variant}
+          seats={(activeGame?.players ?? seatedPlayers).length}
           winnerTeam={winningTeam}
           winnerTeamLabel={
             winningTeam ? CARROM_TEAM_LABEL[winningTeam] : undefined

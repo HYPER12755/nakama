@@ -34,6 +34,18 @@ let nextId = 0;
 export function shotEvents(result: CarromShotResult, at: number): TableEvent[] {
   const events: TableEvent[] = [];
   const who = PLAYER_LABEL[result.outcome.player];
+  // In doubles a partner's men are ours; pocketing them is not a foul.
+  const shooterTeam =
+    result.state.teams === true
+      ? result.outcome.player === "white" || result.outcome.player === "black"
+        ? "A"
+        : "B"
+      : null;
+  const isOwn = (kind: string): boolean =>
+    kind === result.outcome.player ||
+    (shooterTeam !== null &&
+      ((shooterTeam === "A" && (kind === "white" || kind === "black")) ||
+        (shooterTeam === "B" && (kind === "yellow" || kind === "green"))));
 
   for (const pocket of result.pocketed) {
     if (pocket.kind === "queen") {
@@ -44,7 +56,7 @@ export function shotEvents(result: CarromShotResult, at: number): TableEvent[] {
         sound: "queen",
         at,
       });
-    } else if (pocket.kind === result.outcome.player) {
+    } else if (isOwn(pocket.kind)) {
       events.push({
         id: nextId++,
         kind: "pocket",
@@ -63,7 +75,7 @@ export function shotEvents(result: CarromShotResult, at: number): TableEvent[] {
     }
   }
 
-  if (result.outcome.foul && result.pocketed.every((p) => p.kind !== result.outcome.player)) {
+  if (result.outcome.foul && result.pocketed.every((p) => isOwn(p.kind))) {
     events.push({
       id: nextId++,
       kind: "foul",

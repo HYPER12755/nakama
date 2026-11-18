@@ -17,8 +17,7 @@ import { CARROM_FEATURES, SOUND_SETS } from "../lib/preferences";
 import type { Theme } from "../lib/theme";
 import { DesignPreview } from "./DesignPreview";
 import { ArtPicker } from "./ArtPicker";
-import { readArtChoices, writeArtChoices } from "../lib/storage";
-import { useState as useReactState } from "react";
+import { useArtChoices } from "../hooks/useArtChoices";
 import { Icon } from "./Icon";
 
 export interface CarromPreferencesProps {
@@ -68,12 +67,17 @@ export function CarromPreferences({ gameId, theme }: CarromPreferencesProps) {
   const { preferences, setPreference } = useGamePreferences(gameId);
   const [strikerOpen, setStrikerOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [artChoices, setArtChoices] = useReactState(readArtChoices);
+  const { choices: artChoices, choose: chooseArt } = useArtChoices();
 
   const visuals = tableVisuals(
     preferences.boardTheme,
     preferences.strikerDesign ?? "brass",
     preferences.pieceSet,
+    {
+      boards: artChoices.boards,
+      strikers: artChoices.strikers,
+      pucks: artChoices.pucks,
+    },
   );
 
   return (
@@ -131,14 +135,7 @@ export function CarromPreferences({ gameId, theme }: CarromPreferencesProps) {
         ) : null}
       </section>
 
-      <ArtPicker
-        choices={artChoices}
-        onChoose={(group, file) => {
-          const next = { ...artChoices, [group]: file };
-          setArtChoices(next);
-          writeArtChoices(next);
-        }}
-      />
+      <ArtPicker choices={artChoices} onChoose={chooseArt} />
 
       <GamePreferencesPanel
         gameId={gameId}

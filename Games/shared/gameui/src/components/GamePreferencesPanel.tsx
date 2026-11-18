@@ -252,6 +252,16 @@ export function GamePreferencesPanel({
             }
           />
         </div>
+
+        <label className="pref-row pref-row--toggle">
+          <span className="pref-row__label">Music</span>
+          <input
+            type="checkbox"
+            checked={preferences.musicEnabled}
+            onChange={(event) => choose("musicEnabled", event.target.checked)}
+            aria-label="Play the table music"
+          />
+        </label>
       </div>
 
       <button
