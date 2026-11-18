@@ -308,11 +308,16 @@ export function tableVisuals(
   const strikerChoice = art.strikers ?? `builtin:${strikerId}`;
   const pieceChoice = art.pucks ?? `builtin:${pieceId}`;
 
-  const board = boardDesign(isBuiltin(boardChoice, boardId) ? boardId : "");
-  const striker = strikerDesign(
-    isBuiltin(strikerChoice, strikerId) ? strikerId : "",
-  );
-  const pieces = pieceSet(isBuiltin(pieceChoice, pieceId) ? pieceId : "");
+  // A built-in picked in the new panel carries its own id, so it wins over
+  // the old preference value. This is why a choice used to appear to do
+  // nothing: the preference still held the previous design.
+  const builtinId = (choice: string, fallback: string): string => {
+    const value = choice.startsWith("builtin:") ? choice.slice(8) : fallback;
+    return value.length > 0 ? value : fallback;
+  };
+  const board = boardDesign(builtinId(boardChoice, boardId));
+  const striker = strikerDesign(builtinId(strikerChoice, strikerId));
+  const pieces = pieceSet(builtinId(pieceChoice, pieceId));
 
   const paths: TableVisuals["paths"] = {};
   if (!isBuiltin(boardChoice, boardId)) {

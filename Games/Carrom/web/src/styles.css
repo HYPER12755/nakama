@@ -673,6 +673,17 @@ button {
   color: var(--accent);
 }
 
+.art-hint {
+  margin: 6px 0 2px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.art-group + .art-group {
+  border-top: 1px solid var(--border);
+}
+
 .carrom-board-wrap {
   position: relative;
   width: 100%;
@@ -759,6 +770,8 @@ button {
   gap: 6px;
   max-height: 320px;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   margin-top: 8px;
   padding: 2px;
 }
