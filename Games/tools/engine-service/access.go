@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -15,23 +16,26 @@ import (
 // yourself, but against a person it would be cheating. So the engine is
 // hidden in an online game, and only the accounts named here may have it.
 //
-// The list lives here, on the server, and the address of an account is
-// checked against it with the account itself, so nobody can claim to be
-// someone else.
-//
-// The addresses are kept here for now. When the games are open to everyone,
-// this list goes away and the rule becomes that the engine is only for the
-// games against yourself.
-var engineAccounts = []string{
-	"hyper14917374@gmail.com",
-}
+// The list lives on the server and the address of an account is checked
+// against it with the account itself, so nobody can claim to be someone else.
+// It is set by MOONGAMES_ENGINE_ACCOUNTS (comma separated), so no personal
+// address is built into the program. The default is empty: nobody is approved
+// until the operator names them.
+var engineAccounts = []string{}
 
 // The emails that may use the engine against a person.
 var engineApproved = map[string]bool{}
 
 func init() {
-	for _, address := range engineAccounts {
-		engineApproved[strings.ToLower(strings.TrimSpace(address))] = true
+	list := os.Getenv("MOONGAMES_ENGINE_ACCOUNTS")
+	if list != "" {
+		for _, address := range strings.Split(list, ",") {
+			address = strings.ToLower(strings.TrimSpace(address))
+			if address != "" {
+				engineAccounts = append(engineAccounts, address)
+				engineApproved[address] = true
+			}
+		}
 	}
 }
 

@@ -1185,6 +1185,7 @@ async function startEngine(settings, state) {
       MOONGAMES_ENGINE_ADDRESS: `${settings.engine.host}:${settings.engine.port}`,
       MOONGAMES_ENGINE_PATH: settings.engine.program,
       MOONGAMES_ENGINE_SECRET: process.env.MOONGAMES_ENGINE_SECRET ?? "",
+      MOONGAMES_ENGINE_ACCOUNTS: process.env.MOONGAMES_ENGINE_ACCOUNTS ?? "",
       // The engine asks the server of the games who is asking, so a player
       // may only have the engine in a game against a person if the server
       // says so.

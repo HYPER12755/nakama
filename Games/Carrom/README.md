@@ -16,46 +16,27 @@ Carrom/
 │   │   ├── protocol.ts # the wire op codes the client and server share
 │   │   ├── challenges.ts # the challenge table targets
 │   │   └── ai.ts      # simulation-backed opponent search
-│   └── test/
-│       ├── carrom.test.ts
-│       ├── match.test.ts
-│       ├── layout.test.ts
-│       ├── parity.test.ts
-│       └── variants.test.ts
+│   └── test/             # 11 files: rules, physics, parity, teams, AI, ...
 ├── server/         # authoritative Nakama runtime logic (Lua)
 │   ├── carrom_physics.lua
 │   ├── carrom_rules.lua
 │   ├── carrom_protocol.lua
 │   ├── carrom_match.lua
 │   ├── carrom_rpc.lua
-│   └── test/
-│       ├── carrom_rules_test.lua
-│       └── carrom_match_test.lua
+│   ├── carrom_glicko.lua  # Glicko-2 ratings
+│   ├── carrom_profile.lua # profile, history, replay shots, leaderboard
+│   └── test/             # 4 files + shared whole-match fixtures
 └── web/            # portable canvas board UI (React + Vite)
+    ├── public/
+    │   ├── art/game/      # 1702 real board, striker, puck and effect images
+    │   └── sounds/        # 5 sets of real recorded carrom sounds
     ├── scripts/online-smoke.mjs
     ├── src/
     │   ├── App.tsx
-    │   ├── components/
-    │   │   ├── CarromBoard.tsx   # canvas board, aiming, animation, the turn
-    │   │   ├── ChallengePanel.tsx # the trick shot challenges
-    │   │   ├── GameOverDialog.tsx
-    │   │   ├── Icon.tsx
-    │   │   ├── OnlinePanel.tsx    # lobby, seats, table chat
-    │   │   ├── PointsBar.tsx      # the one score display
-    │   │   ├── RulesDialog.tsx
-    │   │   ├── ScoreCard.tsx      # a seat at the table
-    │   │   ├── StrikerDock.tsx    # the striker control on the board
-    │   │   └── TableSettings.tsx  # table size, game type, striker, clock
-    │   ├── hooks/
-    │   │   └── useOnlineCarrom.ts # Nakama client, seats, shots, chat
-    │   └── lib/
-    │       ├── aim.ts    # power curve, aim raycast, frame interpolation
-    │       ├── audio.ts  # generated wooden shot sounds
-    │       ├── theme.ts
-    │       └── view.ts   # the turned table and the pointer math
-    └── test/
-        ├── aim.test.ts
-        └── view.test.ts
+    │   ├── components/   # board, picker, replay, lobby, dialogs, ...
+    │   ├── hooks/        # useOnlineCarrom, useArtChoices, ...
+    │   └── lib/          # aim, audio, designs, art catalog, physics helpers
+    └── test/             # 15 files: board, art, sound coverage, online, ...
 ```
 
 ## Tables
@@ -172,12 +153,12 @@ A striker is a real choice: it changes how hard the shot leaves the
 baseline. The striker travels with the shot, and the server keeps the one a
 player brought to the table.
 
-| Striker | Power | Note |
-| --- | --- | --- |
-| Classic | 1.00 | the standard 15 g striker |
-| Heavy | 1.14 | hits harder and travels further |
-| Light | 0.86 | a softer touch, easier to control |
-| Swift | 1.05 | quick off the line, less weight behind it |
+| Striker | Power | Mass | Note |
+| --- | --- | --- | --- |
+| Classic | 1.00 | 1.00 | the standard 15 g striker |
+| Heavy | 1.28 | 1.50 | hits through a rattle and travels further |
+| Light | 0.72 | 0.70 | a soft touch for short, careful shots |
+| Swift | 1.12 | 0.85 | quick off the line, little weight behind it |
 
 ### The shot clock
 
@@ -193,7 +174,7 @@ the queen does not need covering and the challenge is only about the shots.
 
 ## Physics
 
-`core/src/physics.ts` runs a fixed 240 Hz step with 60 Hz capture frames:
+`core/src/physics.ts` runs a fixed 240 Hz step with 30 Hz capture frames:
 
 - Elastic disc and striker collisions with mass-weighted impulses and
   positional correction. The striker is nearly three times heavier than a car
@@ -255,9 +236,9 @@ started.
 
 ## Next
 
-- An offline four player table, ratings, and history.
-- A two against two team mode, where the turn order crosses the teams.
-- A parity suite that replays whole matches on both sides.
+- Keyboard aiming is available when the player turns it on in the preferences.
+- The remaining platform work is tracked in `Games/TODO.md`: device QA, a
+  generic asset loader for file-backed WebViews, and stack auto-start.
 
 ## The table speaks
 

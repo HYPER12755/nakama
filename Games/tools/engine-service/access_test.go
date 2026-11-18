@@ -3,20 +3,29 @@ package main
 import (
 	"context"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
 // The engine is for the games against yourself and against the computer, and
 // in a game against a person it is only for the accounts that were named.
 func TestApprovedAccounts(t *testing.T) {
-	if !isApproved("hyper14917374@gmail.com") {
+	// The list is set by the operator, not built into the program. Set it here
+	// the way the environment would and check the normalising.
+	engineApproved["player@example.com"] = true
+	defer delete(engineApproved, "player@example.com")
+
+	if !isApproved("player@example.com") {
 		t.Fatal("the named account is not allowed to have the engine")
 	}
 	if isApproved("someone.else@example.com") {
 		t.Fatal("an account that was not named is allowed")
 	}
-	if !isApproved("HYPER14917374@GMAIL.COM") {
+	if !isApproved("  PLAYER@example.com ") {
 		t.Fatal("the address is not read the same way every time")
+	}
+	if strings.Contains(strings.Join(engineAccounts, ","), "hyper14917374") {
+		t.Fatal("a personal address is built into the program")
 	}
 }
 

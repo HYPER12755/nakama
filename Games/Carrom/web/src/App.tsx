@@ -75,6 +75,8 @@ import {
   OpponentLeftDialog,
   ProfilePanel,
   parseMatchInvite,
+  parseLaunchInvite,
+  clearMatchInviteFromLocation,
   useGamePreferences,
   type GameHistoryEntry,
 } from "@moongames/game-ui";
@@ -248,12 +250,10 @@ export interface AppProps {
 export default function App({ bridge }: AppProps) {
   // A game opened with a room in the address opens that room, so it starts
   // at the online table and not at a local board.
-  const invite = useMemo(
-    () =>
-      typeof window === "undefined"
-        ? null
-        : parseMatchInvite(window.location.search),
-    [],
+  const [invite, setInvite] = useState(() =>
+    typeof window === "undefined"
+      ? null
+      : parseMatchInvite(window.location.search),
   );
   const inviteMatchId = invite?.matchId ?? null;
   const inviteSpectate = invite?.spectate === true;
@@ -327,6 +327,7 @@ export default function App({ bridge }: AppProps) {
   const [hostConfig, setHostConfig] = useState<GameHostConfig | null>(handoff);
   const [hostInitReceived, setHostInitReceived] = useState(handoff !== null);
   const [hostInitTimedOut, setHostInitTimedOut] = useState(false);
+  const hostLaunchHandled = useRef(false);
   // The launcher hands over its account a moment after the game loads. The
   // table waits for that handover, so it never plays as a guest first.
   const hostReady =
@@ -460,6 +461,30 @@ export default function App({ bridge }: AppProps) {
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
+
+  // A native launcher can hand over an invite in its launch query, not only
+  // in the page address. Joining it is the same as opening an invited link.
+  useEffect(() => {
+    const launch = hostConfig?.launch;
+    if (launch === undefined || hostLaunchHandled.current) {
+      return;
+    }
+    hostLaunchHandled.current = true;
+    const launchInvite = parseLaunchInvite(launch);
+    if (launchInvite !== null) {
+      setInvite(launchInvite);
+      setMode("online");
+      clearMatchInviteFromLocation();
+    }
+  }, [hostConfig?.launch]);
+
+  // Once the invited table is really joined, remove the invite from the
+  // address so a reload after leaving does not join it again.
+  useEffect(() => {
+    if (invite !== null && online.matchId === invite.matchId) {
+      clearMatchInviteFromLocation();
+    }
+  }, [invite, online.matchId]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -1019,6 +1044,57 @@ export default function App({ bridge }: AppProps) {
       !aiThinking &&
       !challengeFinished &&
       !isAiPlayer(mode, game.turn, computerPlayers);
+
+  // Keyboard aiming: left/right turn the line, up/down set the power,
+  // bracket keys slide the striker, Enter shoots. This is offered because a
+  // player who cannot drag a pointer still has to be able to take a shot.
+  const [keyAim, setKeyAim] = useState({ angle: -Math.PI / 2, power: 0.5 });
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target !== null &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+      ) {
+        return;
+      }
+      if (!canShoot || !preferences.keyboardMoves) {
+        return;
+      }
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        const turn = event.key === "ArrowLeft" ? -0.04 : 0.04;
+        setKeyAim((current) => ({ ...current, angle: current.angle + turn }));
+      } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        event.preventDefault();
+        const step = event.key === "ArrowUp" ? 0.05 : -0.05;
+        setKeyAim((current) => ({
+          ...current,
+          power: Math.max(0.08, Math.min(1, current.power + step)),
+        }));
+      } else if (event.key === "[" || event.key === "]") {
+        event.preventDefault();
+        nudgeStriker(event.key === "[" ? -1 : 1, dockPlayer);
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        handleShoot({
+          position: strikerPosition,
+          angle: keyAim.angle,
+          power: keyAim.power,
+        });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    canShoot,
+    preferences.keyboardMoves,
+    nudgeStriker,
+    dockPlayer,
+    strikerPosition,
+    handleShoot,
+    keyAim,
+  ]);
 
   // The shot clock. Online tables take the deadline from the server, local
   // tables run it here.
