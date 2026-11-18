@@ -75,6 +75,22 @@ describe("Ludo setup and dice", () => {
     }
   });
 
+  it("gives alternating turns every die face", () => {
+    const game = createGame({ seed: 1004 });
+    const seen = [new Set<number>(), new Set<number>()];
+    for (let i = 0; i < 240; i += 1) {
+      const seat = game.current;
+      const value = rollDice(game);
+      seen[seat]!.add(value);
+      game.phase = "roll";
+      game.dice = null;
+      game.sixStreak = 0;
+      game.current = (seat + 1) % 2;
+    }
+    expect([...seen[0]!].sort()).toEqual([1, 2, 3, 4, 5, 6]);
+    expect([...seen[1]!].sort()).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
   it("keeps every colour entry square 13 apart around a 52 square ring", () => {
     expect(TRACK_LENGTH).toBe(52);
     expect(START_INDEX.red).toBe(0);

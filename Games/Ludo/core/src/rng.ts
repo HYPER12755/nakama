@@ -10,16 +10,18 @@ export function normalizeSeed(seed: number | undefined): number {
   return value === 0 ? DEFAULT_SEED : value;
 }
 
-/** xorshift32: fast, deterministic, and identical in TypeScript and Lua. */
+const MULTIPLIER = 1664525;
+const INCREMENT = 1013904223;
+
+/**
+ * A linear congruential generator. Its multiply and add stay inside exact
+ * double precision, so plain Lua and TypeScript produce identical sequences
+ * without relying on bitwise operators that some runtimes do not provide.
+ */
 export function nextSeed(seed: number): number {
   let x = seed >>> 0;
   if (x === 0) x = DEFAULT_SEED;
-  x ^= (x << 13) >>> 0;
-  x >>>= 0;
-  x ^= x >>> 17;
-  x ^= (x << 5) >>> 0;
-  x >>>= 0;
-  return x >>> 0;
+  return (Math.imul(x, MULTIPLIER) + INCREMENT) >>> 0;
 }
 
 export interface RollResult {
@@ -27,10 +29,16 @@ export interface RollResult {
   seed: number;
 }
 
-/** Produces a die in 1..6 from the next seed. */
+const TWO_32 = 0x1_0000_0000;
+
+/**
+ * Produces a die in 1..6 from the next seed. The high bits are used because
+ * an LCG's low bits repeat in short cycles; alternating players would never
+ * see some faces if the roll were taken from `seed % 6`.
+ */
 export function rollFromSeed(seed: number, sides = 6): RollResult {
   const next = nextSeed(seed);
-  return { value: (next % sides) + 1, seed: next };
+  return { value: Math.floor((next / TWO_32) * sides) + 1, seed: next };
 }
 
 /** A second, derived stream so AI choices cannot disturb the dice seed. */
