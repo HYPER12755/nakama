@@ -25,6 +25,33 @@ describe("the hand-drawn Ludo board", () => {
     }
   });
 
+  it("walks a closed loop with no square teleporting across the board", () => {
+    for (let index = 0; index < TRACK.length; index += 1) {
+      const from = TRACK[index]!;
+      const to = TRACK[(index + 1) % TRACK.length]!;
+      expect(Math.abs(from[0] - to[0])).toBeLessThanOrEqual(1);
+      expect(Math.abs(from[1] - to[1])).toBeLessThanOrEqual(1);
+      expect(from[0] === to[0] && from[1] === to[1]).toBe(false);
+    }
+  });
+
+  it("places each entry on the arm beside its own yard", () => {
+    const entry = {
+      red: trackPoint(START_INDEX.red),
+      green: trackPoint(START_INDEX.green),
+      yellow: trackPoint(START_INDEX.yellow),
+      blue: trackPoint(START_INDEX.blue),
+    };
+    expect(entry.red![0]).toBeLessThan(6);
+    expect(entry.red![1]).toBeGreaterThan(5);
+    expect(entry.green![0]).toBeGreaterThanOrEqual(8);
+    expect(entry.green![1]).toBeLessThan(6);
+    expect(entry.yellow![0]).toBeGreaterThanOrEqual(8);
+    expect(entry.yellow![1]).toBeGreaterThanOrEqual(8);
+    expect(entry.blue![0]).toBeLessThanOrEqual(6);
+    expect(entry.blue![1]).toBeGreaterThan(8);
+  });
+
   it("marks the same squares safe as the rules core", () => {
     expect(SAFE_SQUARES).toEqual([0, 8, 13, 21, 26, 34, 39, 47]);
   });

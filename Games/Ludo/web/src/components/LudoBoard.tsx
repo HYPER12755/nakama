@@ -25,6 +25,9 @@ export interface LudoBoardProps {
 
 /** The shared SDK resolves bundle assets on web and through the host on file://. */
 let boardImage: HTMLImageElement | null = null;
+/** A once-scaled copy of the 1920px artwork; repainting the full-resolution
+ * image on every token move is wasteful on a phone. */
+let boardBitmap: HTMLCanvasElement | null = null;
 let boardPending: Promise<void> | null = null;
 const listeners = new Set<() => void>();
 
@@ -35,6 +38,14 @@ function loadBoardImage(): Promise<void> {
     .then((url) => new Promise<void>((resolve) => {
       const image = new Image();
       image.onload = () => {
+        const scaled = document.createElement("canvas");
+        scaled.width = SIZE;
+        scaled.height = SIZE;
+        const ctx = scaled.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(image, 0, 0, SIZE, SIZE);
+          boardBitmap = scaled;
+        }
         boardImage = image;
         for (const listener of listeners) listener();
         resolve();
@@ -134,7 +145,8 @@ export function LudoBoard({
 
     // The provided board artwork is the table. Tokens and move hints are the
     // only things we draw on top of it, so the picture stays exactly as given.
-    if (boardImage) ctx.drawImage(boardImage, 0, 0, SIZE, SIZE);
+    if (boardBitmap) ctx.drawImage(boardBitmap, 0, 0, SIZE, SIZE);
+    else if (boardImage) ctx.drawImage(boardImage, 0, 0, SIZE, SIZE);
 
     if (lastMove && state.players[lastMove.player]) {
       const color = state.players[lastMove.player]!.color;
