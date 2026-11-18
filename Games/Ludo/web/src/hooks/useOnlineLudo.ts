@@ -7,6 +7,11 @@ import {
   sameOriginServerAddress,
 } from "@moongames/game-sdk";
 import { LUDO_OP, type LudoColor, type LudoMove, type LudoState } from "@moongames/ludo-core";
+import type {
+  GameHistoryEntry,
+  GameLeaderboardEntry,
+  GameProfile,
+} from "@moongames/game-ui";
 
 export { LUDO_OP };
 
@@ -130,6 +135,12 @@ export interface OnlineLudoController {
   accountName: string | null;
   myUserId: string | null;
   matchId: string | null;
+  profile: GameProfile | null;
+  history: GameHistoryEntry[];
+  leaderboard: GameLeaderboardEntry[];
+  profileLoading: boolean;
+  profileError: string | null;
+  refreshProfile: () => Promise<void>;
   connect: () => Promise<void>;
   quickMatch: (seats: number, turnSeconds?: number) => Promise<void>;
   createPrivate: (seats: number, turnSeconds?: number) => Promise<void>;
@@ -153,6 +164,11 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
   const [accountName, setAccountName] = useState<string | null>(null);
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [matchId, setMatchId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<GameProfile | null>(null);
+  const [history, setHistory] = useState<GameHistoryEntry[]>([]);
+  const [leaderboard, setLeaderboard] = useState<GameLeaderboardEntry[]>([]);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   const clientRef = useRef<Client | null>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -265,6 +281,41 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
     }
   }, []);
 
+  const refreshProfile = useCallback(async () => {
+    const client = clientRef.current;
+    const session = sessionRef.current;
+    if (!client || !session) return;
+    setProfileLoading(true);
+    setProfileError(null);
+    try {
+      const [profileResponse, leaderboardResponse] = await Promise.all([
+        client.rpc(session, "ludo_get_profile", {}),
+        client.rpc(session, "ludo_get_leaderboard", { limit: 10 }),
+      ]);
+      const profilePayload = profileResponse.payload as {
+        ok?: boolean;
+        profile?: GameProfile;
+        history?: GameHistoryEntry[];
+        error?: { message?: string };
+      };
+      const leaderboardPayload = leaderboardResponse.payload as {
+        ok?: boolean;
+        entries?: GameLeaderboardEntry[];
+      };
+      if (profilePayload.ok !== true) {
+        setProfileError(profilePayload.error?.message ?? "The profile could not be loaded.");
+        return;
+      }
+      setProfile(profilePayload.profile ?? null);
+      setHistory(Array.isArray(profilePayload.history) ? profilePayload.history : []);
+      setLeaderboard(Array.isArray(leaderboardPayload.entries) ? leaderboardPayload.entries : []);
+    } catch (cause) {
+      setProfileError(cause instanceof Error ? cause.message : "The profile could not be loaded.");
+    } finally {
+      setProfileLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!enabled) return;
     void connect();
@@ -275,6 +326,10 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
       if (socket) void socket.disconnect(false);
     };
   }, [connect, enabled]);
+
+  useEffect(() => {
+    if (enabled && connection === "connected") void refreshProfile();
+  }, [enabled, connection, refreshProfile]);
 
   const joinMatch = useCallback(async (matchId: string, spectator = false) => {
     const socket = socketRef.current;
@@ -384,6 +439,12 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
     accountName,
     myUserId,
     matchId,
+    profile,
+    history,
+    leaderboard,
+    profileLoading,
+    profileError,
+    refreshProfile,
     connect,
     quickMatch,
     createPrivate,

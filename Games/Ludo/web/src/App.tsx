@@ -16,6 +16,7 @@ import {
   Icon,
   MatchChat,
   ModeSwitch,
+  ProfilePanel,
   gameMotif,
 } from "@moongames/game-ui";
 import { LudoBoard } from "./components/LudoBoard";
@@ -325,6 +326,28 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 </>
               )}
             </section>
+          ) : null}
+
+          {onlineMode ? (
+            <ProfilePanel
+              connected={online.connection === "connected"}
+              userId={online.myUserId}
+              profile={online.profile}
+              history={online.history}
+              leaderboard={online.leaderboard}
+              myLeaderboard={online.leaderboard.find((entry) => entry.userId === online.myUserId) ?? null}
+              loading={online.profileLoading}
+              error={online.profileError}
+              onRefresh={() => void online.refreshProfile()}
+              emptyProfileText="Your rating fills in after your first Ludo race."
+              emptyHistoryText="Your finished Ludo games will appear here."
+              emptyLeaderboardText="Play a quick match to enter the rating leaderboard."
+              statLabels={{
+                tokens_finished: "Tokens finished",
+                captures: "Captures",
+                best_streak: "Best streak",
+              }}
+            />
           ) : null}
 
           <section className="panel table-panel">
