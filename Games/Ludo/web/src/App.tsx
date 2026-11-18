@@ -28,7 +28,10 @@ import { LudoPreferences } from "./components/LudoPreferences";
 import { useLocalLudo } from "./hooks/useLocalLudo";
 import { useOnlineLudo } from "./hooks/useOnlineLudo";
 import { readLocalProgress } from "./lib/localProgress";
-import { audibleVolume, BOARD_THEMES, SOUND_SETS, TOKEN_SETS } from "./lib/preferences";
+import {
+  audibleVolume, BOARD_THEMES, GAME_MODES, MODE_RULES, SOUND_SETS,
+  TOKEN_SETS, TURN_CLOCKS, type GameModeId,
+} from "./lib/preferences";
 import { configureSound, isMuted, playEvent, preloadEvent, setMuted } from "./lib/sound";
 
 type Mode = "local" | "ai" | "online";
@@ -65,13 +68,13 @@ const RULES = [
   "A token must land exactly on the centre to finish. First player home wins.",
 ];
 
-function Die({ value }: { value: number | null }) {
+function Die({ value, rolling = false }: { value: number | null; rolling?: boolean }) {
   const face = value ?? 1;
   const top = (face % 6) + 1;
   const right = ((face + 1) % 6) + 1;
   return (
     <div className="dice-wrap" aria-label={value ? `Die shows ${value}` : "Die not rolled"}>
-      <div className={`dice-cube ${value === null ? "" : "dice-cube--settled"}`}>
+      <div className={`dice-cube ${rolling || value === null ? "" : "dice-cube--settled"}`}>
         <div className="dice-face dice-face--front"><PipFace value={face} /></div>
         <div className="dice-face dice-face--top"><PipFace value={top} /></div>
         <div className="dice-face dice-face--right"><PipFace value={right} /></div>
@@ -93,7 +96,11 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const [seats, setSeats] = useState(4);
   const [difficulty, setDifficulty] = useState<LudoDifficulty>("normal");
   const [humanSeats, setHumanSeats] = useState(1);
-  const [rules, setRules] = useState<Partial<LudoRules>>({});
+  const [rules, setRules] = useState<Partial<LudoRules>>(MODE_RULES.classic);
+  const [variant, setVariant] = useState<GameModeId>("classic");
+  const [turnSeconds, setTurnSeconds] = useState(0);
+  const [remaining, setRemaining] = useState(0);
+  const [diceRolling, setDiceRolling] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [soundOn, setSoundOn] = useState(!isMuted());
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -158,15 +165,6 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     if (controller.realGame.winner !== null) setProgress(readLocalProgress());
   }, [controller.realGame.winner]);
 
-  useEffect(() => {
-    if (!controller.isReplaying || !replayPlaying) return;
-    const timer = window.setInterval(() => {
-      if (controller.replayIndex >= controller.replayCount - 1) setReplayPlaying(false);
-      else controller.setReplayIndex(controller.replayIndex + 1);
-    }, 550);
-    return () => window.clearInterval(timer);
-  }, [controller.isReplaying, replayPlaying, controller.replayIndex, controller.replayCount]);
-
   const emptyGame = useMemo(() => createGame({ playerCount: seats }), [seats]);
   const game: LudoState = mode === "online" ? (online.state?.game ?? emptyGame) : controller.game;
   const legalTokens = useMemo(() => {
@@ -177,6 +175,40 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   }, [mode, game, controller.legalTokens]);
 
   const current = game.players[game.current];
+
+  useEffect(() => {
+    if (!diceRolling) return;
+    const timer = window.setTimeout(() => setDiceRolling(false), 650);
+    return () => window.clearTimeout(timer);
+  }, [diceRolling]);
+
+  useEffect(() => {
+    if (turnSeconds > 0) setRemaining(turnSeconds);
+  }, [game.current, game.phase, game.action, turnSeconds]);
+
+  useEffect(() => {
+    if (!turnSeconds || mode === "online" || controller.isReplaying || game.phase === "over") return;
+    const timer = window.setInterval(() => setRemaining((value) => value - 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [turnSeconds, mode === "online", controller.isReplaying, game.phase, game.current, game.action]);
+
+  useEffect(() => {
+    if (remaining > 0 || !turnSeconds || mode === "online" || controller.isReplaying) return;
+    if (game.phase === "over") return;
+    if (game.phase === "move") controller.move(-1);
+    else controller.roll();
+    setRemaining(turnSeconds);
+  }, [remaining, turnSeconds, mode === "online", game.phase, game.current]);
+
+  useEffect(() => {
+    if (!controller.isReplaying || !replayPlaying) return;
+    const timer = window.setInterval(() => {
+      if (controller.replayIndex >= controller.replayCount - 1) setReplayPlaying(false);
+      else controller.setReplayIndex(controller.replayIndex + 1);
+    }, 550);
+    return () => window.clearInterval(timer);
+  }, [controller.isReplaying, replayPlaying, controller.replayIndex, controller.replayCount]);
+
   const lastRoll = useMemo(
     () => [...game.events].reverse().find((event) => event.type === "roll"),
     [game.events],
@@ -228,11 +260,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   }
 
   function doRoll() {
+    setDiceRolling(true);
     if (onlineMode) online.roll();
-    else {
-      controller.roll();
-      if (!soundOn) return;
-    }
+    else controller.roll();
   }
 
   function doMove(token: number) {
@@ -259,7 +289,20 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   function applyRule(key: keyof LudoRules, value: boolean) {
     const next = { ...rules, [key]: value };
     setRules(next);
+    setVariant("custom");
     controller.newGame({ rules: next, seats, humanSeats: seatCount });
+  }
+
+  function applyVariant(next: GameModeId) {
+    setVariant(next);
+    const preset = next === "custom" ? rules : MODE_RULES[next];
+    setRules(preset);
+    controller.newGame({ rules: preset, seats, humanSeats: seatCount });
+  }
+
+  function applyClock(seconds: number) {
+    setTurnSeconds(seconds);
+    setRemaining(seconds);
   }
 
   function toggleSound() {
@@ -326,7 +369,12 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               <span className="eyebrow">Current turn</span>
               <strong>{autoplay && !onlineMode ? "Computer table" : current ? PLAYER_LABEL[current.seat] : "—"}</strong>
             </div>
-            <Die value={lastRoll?.value ?? null} />
+            <Die value={lastRoll?.value ?? null} rolling={diceRolling} />
+            {turnSeconds > 0 && !onlineMode && game.phase !== "over" ? (
+              <span className={`turn-clock${remaining <= 5 ? " turn-clock--urgent" : ""}`} title="Turn clock">
+                <Icon name="clock" size={14} strokeWidth={2} />{remaining}s
+              </span>
+            ) : null}
             {onlineMode ? (
               <span className={`turn-connection turn-connection--${online.connection}`}>
                 {online.connection}
@@ -370,6 +418,14 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 icon: <Icon name="refresh" size={15} />,
                 onClick: newGame,
                 disabled: onlineMode,
+              },
+              {
+                id: "undo",
+                label: "Undo",
+                icon: <Icon name="skip-back" size={15} />,
+                onClick: controller.undo,
+                disabled: onlineMode || !controller.canUndo,
+                title: "Take back the last action",
               },
               {
                 id: "pass",
@@ -494,6 +550,24 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               <div><p className="eyebrow">Table</p><h2>Game controls</h2></div>
               <span className="panel-heading__meta">changes start a new race</span>
             </div>
+            <p className="ludo-note">Game mode</p>
+            <div className="pref-choices" role="radiogroup" aria-label="Game mode">
+              {GAME_MODES.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={variant === option.id}
+                  className={`pref-choice${variant === option.id ? " is-chosen" : ""}`}
+                  title={option.hint}
+                  onClick={() => applyVariant(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
+            <p className="ludo-note">Players</p>
             <div className="pref-choices" role="radiogroup" aria-label="Players">
               {[2, 3, 4].map((count) => (
                 <button
@@ -510,7 +584,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
             </div>
             {mode === "ai" ? (
               <>
-                <p className="ludo-note">Human players · the rest are computer</p>
+                <p className="ludo-note">
+                  {humanSeats} human · {seats - humanSeats} computer
+                </p>
                 <div className="pref-choices" role="radiogroup" aria-label="Human players">
                   {Array.from({ length: seats }, (_, index) => index + 1).map((count) => (
                     <button
@@ -527,6 +603,22 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 </div>
               </>
             ) : null}
+            <p className="ludo-note">Turn clock</p>
+            <div className="pref-choices" role="radiogroup" aria-label="Turn clock">
+              {TURN_CLOCKS.map((seconds) => (
+                <button
+                  key={seconds}
+                  type="button"
+                  role="radio"
+                  aria-checked={turnSeconds === seconds}
+                  className={`pref-choice${turnSeconds === seconds ? " is-chosen" : ""}`}
+                  onClick={() => applyClock(seconds)}
+                >
+                  {seconds === 0 ? "Off" : `${seconds}s`}
+                </button>
+              ))}
+            </div>
+
             <p className="ludo-note">Rules</p>
             <div className="rule-switches">
               {([

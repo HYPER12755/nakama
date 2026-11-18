@@ -18,7 +18,8 @@ export type IconName =
   | "shield-check"
   | "skip-back"
   | "chevron-right"
-  | "check";
+  | "check"
+  | "clock";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -131,6 +132,12 @@ export function Icon({ name, size = 20, strokeWidth = 1.8, ...props }: IconProps
       )}
       {name === "chevron-right" && <path d="m9 5 7 7-7 7" />}
       {name === "check" && <path d="m5 12 4.5 4.5L19 7" />}
+      {name === "clock" && (
+        <>
+          <circle cx="12" cy="12" r="8.4" />
+          <path d="M12 7.2V12l3.2 2" />
+        </>
+      )}
     </svg>
   );
 }

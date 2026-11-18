@@ -42,9 +42,11 @@ export function useLocalLudo(options: LocalGameOptions) {
   const [steps, setSteps] = useState<LocalGameRecord["steps"]>([]);
   const [replayFrames, setReplayFrames] = useState<LudoState[] | null>(null);
   const [replayIndex, setReplayIndex] = useState(0);
+  const [canUndo, setCanUndo] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** The token animation owns the board until its last hop has landed. */
   const busyUntil = useRef(0);
+  const history = useRef<LudoState[]>([]);
   const gameRef = useRef(game);
   const optionsRef = useRef(options);
   gameRef.current = game;
@@ -58,6 +60,8 @@ export function useLocalLudo(options: LocalGameOptions) {
   const newGame = useCallback((overrides: Partial<LocalGameOptions> = {}) => {
     clearTimer();
     busyUntil.current = 0;
+    history.current = [];
+    setCanUndo(false);
     const next = { ...optionsRef.current, ...overrides };
     optionsRef.current = next;
     const fresh = createGame({
@@ -78,6 +82,8 @@ export function useLocalLudo(options: LocalGameOptions) {
     clearTimer();
     const previous = gameRef.current;
     if (previous.phase !== "roll" || previous.winner !== null) return;
+    history.current = [...history.current, cloneState(previous)].slice(-40);
+    setCanUndo(true);
     const next = cloneState(previous);
     try {
       rollDice(next);
@@ -98,6 +104,8 @@ export function useLocalLudo(options: LocalGameOptions) {
     const previous = gameRef.current;
     if (previous.phase !== "move") return;
     if (token < 0) {
+      history.current = [...history.current, cloneState(previous)].slice(-40);
+    setCanUndo(true);
       const passed = cloneState(previous);
       passTurn(passed);
       gameRef.current = passed;
@@ -106,6 +114,8 @@ export function useLocalLudo(options: LocalGameOptions) {
     }
     const chosen = legalMoves(previous).find((entry) => entry.token === token);
     if (!chosen) return;
+    history.current = [...history.current, cloneState(previous)].slice(-40);
+    setCanUndo(true);
     const next = cloneState(previous);
     const result = applyCoreMove(next, token);
     gameRef.current = next;
@@ -154,6 +164,18 @@ export function useLocalLudo(options: LocalGameOptions) {
     [game],
   );
 
+  const undo = useCallback(() => {
+    clearTimer();
+    const previous = history.current.pop();
+    if (!previous) return;
+    gameRef.current = previous;
+    setGame(previous);
+    setCanUndo(history.current.length > 0);
+    setLastMove(null);
+    setSteps((current) => current.slice(0, -1));
+    busyUntil.current = 0;
+  }, [clearTimer]);
+
   const startReplay = useCallback(() => {
     const frames = replaySteps(game, recordReplay(game));
     if (frames.length < 2) return;
@@ -182,6 +204,8 @@ export function useLocalLudo(options: LocalGameOptions) {
     stopReplay,
     roll,
     move,
+    undo,
+    canUndo,
     newGame,
   };
 }
