@@ -15,6 +15,7 @@ import {
   type LudoState,
 } from "@moongames/ludo-core";
 import {
+  AccountPanel,
   DEFAULT_PREFERENCES,
   FullscreenChatButton,
   MatchChat,
@@ -700,6 +701,19 @@ export default function App({ bridge }: { bridge: GameBridge }) {
         </section>
 
         <aside className="sidebar">
+          {onlineMode && !inMatch ? (
+            <AccountPanel
+              account={online.account}
+              authBusy={online.authBusy}
+              authError={online.authError}
+              authNotice={online.authNotice}
+              signIn={online.signIn}
+              signUp={online.signUp}
+              signOut={online.signOut}
+              clearAuthFeedback={online.clearAuthFeedback}
+            />
+          ) : null}
+
           {onlineMode ? (
             <LudoOnlinePanel
               online={online}

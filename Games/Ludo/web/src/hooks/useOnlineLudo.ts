@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Client, Session, type Socket } from "@heroiclabs/nakama-js";
-import { MoonGamesSocialClient } from "@moongames/social";
+import {
+  MoonGamesSocialClient,
+  signInWithMoonGames,
+  signUpWithMoonGames,
+} from "@moongames/social";
 import {
   accountCreationAllowed,
   insecureConnectionRequested,
@@ -14,6 +18,7 @@ import type {
   GameHistoryEntry,
   GameLeaderboardEntry,
   GameProfile,
+  OnlineAuthAccount,
 } from "@moongames/game-ui";
 
 export { LUDO_OP };
@@ -136,6 +141,14 @@ export interface OnlineLudoController {
   spectating: boolean;
   roomCode: string | null;
   accountName: string | null;
+  account: OnlineAuthAccount | null;
+  authBusy: boolean;
+  authError: string | null;
+  authNotice: string | null;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, username?: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  clearAuthFeedback: () => void;
   myUserId: string | null;
   myColour: LudoColor | null;
   matchId: string | null;
@@ -180,6 +193,10 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
   const [spectating, setSpectating] = useState(false);
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [accountName, setAccountName] = useState<string | null>(null);
+  const [account, setAccount] = useState<OnlineAuthAccount | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [matchId, setMatchId] = useState<string | null>(null);
   const [profile, setProfile] = useState<GameProfile | null>(null);
@@ -202,6 +219,12 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
   const fallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const socialRef = useRef<MoonGamesSocialClient | null>(null);
   const friendsPromiseRef = useRef<Promise<void> | null>(null);
+  const pendingAuthRef = useRef<{
+    mode: "sign-in" | "sign-up";
+    email: string;
+    password: string;
+    username?: string;
+  } | null>(null);
 
   const connect = useCallback(async () => {
     if (connectingRef.current || socketRef.current) return;
@@ -225,13 +248,48 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
       }
       const client = new Client(address.serverKey, address.host, address.port, address.useSSL);
       const hostSession = sessionFromConfig(config?.session?.token, config?.session?.refreshToken);
+      const pendingAuth = pendingAuthRef.current;
       let session: Session;
-      if (hostSession && !hostSession.isexpired(Date.now() / 1000)) {
+      if (pendingAuth !== null) {
+        session = pendingAuth.mode === "sign-in"
+          ? await signInWithMoonGames({ client, email: pendingAuth.email, password: pendingAuth.password })
+          : await signUpWithMoonGames({
+            client,
+            email: pendingAuth.email,
+            password: pendingAuth.password,
+            username: pendingAuth.username,
+          });
+        setAccount({
+          kind: "email",
+          userId: session.user_id ?? "",
+          username: session.username ?? pendingAuth.username ?? pendingAuth.email,
+          email: pendingAuth.email,
+        });
+        pendingAuthRef.current = null;
+      } else if (hostSession && !hostSession.isexpired(Date.now() / 1000)) {
         session = hostSession;
+        setAccount({
+          kind: "host",
+          userId: session.user_id ?? "",
+          username: session.username ?? "MoonGames player",
+          email: null,
+        });
       } else if (hostSession && hostSession.refresh_token) {
         session = await client.sessionRefresh(hostSession);
+        setAccount({
+          kind: "host",
+          userId: session.user_id ?? "",
+          username: session.username ?? "MoonGames player",
+          email: null,
+        });
       } else {
         session = await client.authenticateDevice(deviceId(), true);
+        setAccount({
+          kind: "guest",
+          userId: session.user_id ?? "",
+          username: session.username ?? "Player",
+          email: null,
+        });
       }
       const socket = client.createSocket(address.useSSL, false);
       await socket.connect(session, true);
@@ -573,6 +631,79 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
     }
   }, []);
 
+  const disconnect = useCallback(async () => {
+    const socket = socketRef.current;
+    if (socket !== null) {
+      try { (socket as unknown as { close?: () => void }).close?.(); } catch { /* already closed */ }
+    }
+    socketRef.current = null;
+    sessionRef.current = null;
+    matchRef.current = null;
+    socialRef.current = null;
+    friendsPromiseRef.current = null;
+    setMatchId(null);
+    setState(null);
+    setRoomCode(null);
+    setSpectating(false);
+    setSearching(false);
+    setConnection("offline");
+  }, []);
+
+  const clearAuthFeedback = useCallback(() => {
+    setAuthError(null);
+    setAuthNotice(null);
+  }, []);
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    setAuthBusy(true);
+    setAuthError(null);
+    setAuthNotice(null);
+    try {
+      pendingAuthRef.current = { mode: "sign-in", email, password };
+      await disconnect();
+      await connect();
+      setAuthNotice("Signed in. Your rating and history are now synced.");
+    } catch (cause) {
+      pendingAuthRef.current = null;
+      setAuthError(cause instanceof Error ? cause.message : "Sign-in failed.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [connect, disconnect]);
+
+  const signUp = useCallback(async (email: string, password: string, username?: string) => {
+    setAuthBusy(true);
+    setAuthError(null);
+    setAuthNotice(null);
+    try {
+      pendingAuthRef.current = { mode: "sign-up", email, password, username };
+      await disconnect();
+      await connect();
+      setAuthNotice("Account created. Welcome to MoonGames.");
+    } catch (cause) {
+      pendingAuthRef.current = null;
+      setAuthError(cause instanceof Error ? cause.message : "Sign-up failed.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [connect, disconnect]);
+
+  const signOut = useCallback(async () => {
+    setAuthBusy(true);
+    setAuthError(null);
+    setAuthNotice(null);
+    try {
+      pendingAuthRef.current = null;
+      await disconnect();
+      await connect();
+      setAuthNotice("Signed out. You are playing as a guest.");
+    } catch (cause) {
+      setAuthError(cause instanceof Error ? cause.message : "Sign-out failed.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [connect, disconnect]);
+
   const myColour = state?.seats.find((seat) => seat.user_id === myUserId)?.colour ?? null;
 
   return {
@@ -584,6 +715,14 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
     spectating,
     roomCode,
     accountName,
+    account,
+    authBusy,
+    authError,
+    authNotice,
+    signIn,
+    signUp,
+    signOut,
+    clearAuthFeedback,
     myUserId,
     myColour,
     matchId,
