@@ -14,6 +14,7 @@ import {
 import {
   accountCreationAllowed,
   insecureConnectionRequested,
+  matchStateBytes,
   readLauncherHandoff,
   sameOriginServerAddress,
   type GameHostConfig,
@@ -820,7 +821,7 @@ export function useOnlineCarrom(
           .sendMatchState(
             current,
             CARROM_OP.PING,
-            JSON.stringify({ clientTime: Date.now() }),
+            matchStateBytes({ clientTime: Date.now() }),
           )
           .catch(() => undefined);
       }, 10000);
@@ -1006,7 +1007,7 @@ export function useOnlineCarrom(
         .sendMatchState(
           current,
           CARROM_OP.SHOT_REQUEST,
-          JSON.stringify({
+          matchStateBytes({
             position: shot.position,
             angle: shot.angle,
             power: shot.power,
@@ -1026,7 +1027,7 @@ export function useOnlineCarrom(
     if (socket === null || current === null) {
       return;
     }
-    void socket.sendMatchState(current, op, "{}").catch(() => {
+    void socket.sendMatchState(current, op, matchStateBytes({})).catch(() => {
       setError(message);
     });
   }, []);
@@ -1054,7 +1055,7 @@ export function useOnlineCarrom(
       return;
     }
     void socket
-      .sendMatchState(current, CARROM_OP.CHAT_SEND, JSON.stringify({ text }))
+      .sendMatchState(current, CARROM_OP.CHAT_SEND, matchStateBytes({ text }))
       .catch(() => {
         setError("The message could not be sent.");
       });
@@ -1067,7 +1068,7 @@ export function useOnlineCarrom(
       return;
     }
     void socket
-      .sendMatchState(current, CARROM_OP.REQUEST_STATE, "{}")
+      .sendMatchState(current, CARROM_OP.REQUEST_STATE, matchStateBytes({}))
       .catch(() => {
         setError("The table state could not be requested.");
       });

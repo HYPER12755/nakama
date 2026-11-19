@@ -1,8 +1,13 @@
 import { readFileSync } from "node:fs";
+import { matchStateBytes } from "@moongames/game-sdk";
 import { describe, expect, it } from "vitest";
 import { LUDO_OP, normalizeState } from "../src/hooks/useOnlineLudo";
 
 describe("the Ludo online protocol", () => {
+  it("sends emoji payloads as UTF-8 match bytes", () => {
+    expect(new TextDecoder().decode(matchStateBytes({ text: "😀 hello" }))).toBe('{"text":"😀 hello"}');
+  });
+
   it("uses the same opcodes as the authoritative Lua server", () => {
     const source = readFileSync(new URL("../../server/ludo_protocol.lua", import.meta.url), "utf8");
     const block = source.slice(source.indexOf("protocol.OP = {"), source.indexOf("protocol.ERROR"));

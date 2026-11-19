@@ -11,6 +11,7 @@ import {
   accountCreationAllowed,
   insecureConnectionRequested,
   inviteWantsSpectator,
+  matchStateBytes,
   type GameHostConfig,
   type MoonGamesInvite,
   type SocialFriend,
@@ -1073,7 +1074,7 @@ export function useOnlineChess(
               socket.sendMatchState(
                 currentMatchId,
                 ONLINE_OP.MOVE_REQUEST,
-                JSON.stringify({
+                matchStateBytes({
                   from: waiting.from,
                   to: waiting.to,
                   promotion: waiting.promotion,
@@ -2656,7 +2657,7 @@ export function useOnlineChess(
       }
 
       void socket
-        .sendMatchState(currentMatchId, opCode, JSON.stringify(payload))
+        .sendMatchState(currentMatchId, opCode, matchStateBytes(payload))
         .catch((cause: unknown) => {
           setError(errorMessage(cause, "Could not send the action."));
         });

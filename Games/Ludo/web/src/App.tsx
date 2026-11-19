@@ -135,6 +135,13 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const slowWatch = query.has("slow");
 
   useEffect(() => {
+    const room = query.get("room");
+    if (!room) return;
+    setRoomInput(room);
+    setMode("online");
+  }, [query]);
+
+  useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
@@ -297,11 +304,14 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   }, [latestEvent?.action, mode, haptics]);
   const onlineMode = mode === "online";
   const inMatch = onlineMode && online.state !== null;
+  const myTurn = onlineMode
+    ? online.myColour !== null && current?.color === online.myColour
+    : false;
   const awaiting = onlineMode
-    ? inMatch && game.phase === "roll" && !online.spectating
+    ? inMatch && myTurn && game.phase === "roll" && !online.spectating
     : game.phase === "roll" && !current?.ai && !controller.isReplaying;
   const canMove = onlineMode
-    ? inMatch && game.phase === "move" && legalTokens.length > 0 && !online.spectating
+    ? inMatch && myTurn && game.phase === "move" && legalTokens.length > 0 && !online.spectating
     : game.phase === "move" && legalTokens.length > 0 && !current?.ai && !controller.isReplaying;
 
   useEffect(() => {
@@ -355,14 +365,20 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     controller.newGame({ tokensPerPlayer: count });
   }
 
+  async function rematch(count = seats, clock = turnSeconds) {
+    await online.leave();
+    await online.createPrivate(count, clock);
+  }
+
   function doRoll() {
+    if (onlineMode && !awaiting) return;
     setDiceRolling(true);
     if (onlineMode) online.roll();
     else controller.roll();
   }
 
   function rollForSeat(seat: number, ai: boolean) {
-    const usable = !onlineMode && awaiting && current?.seat === seat && game.phase === "roll";
+    const usable = awaiting && current?.seat === seat && game.phase === "roll";
     if (usable) {
       doRoll();
     } else if (ai) {
@@ -373,8 +389,11 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   }
 
   function doMove(token: number) {
-    if (onlineMode) online.move(token);
-    else controller.move(token);
+    if (onlineMode) {
+      if (canMove) online.move(token);
+      return;
+    }
+    controller.move(token);
   }
 
   function applySeats(nextSeats: number) {
@@ -594,7 +613,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 legalTokens={legalTokens}
                 lastMove={!onlineMode ? controller.lastMove : null}
                 onTokenClick={doMove}
-                disabled={onlineMode || !!current?.ai || controller.isReplaying || game.phase === "over"}
+                disabled={controller.isReplaying || game.phase === "over" || (onlineMode ? online.spectating || !canMove : !!current?.ai)}
                 tokenSet={TOKEN_SETS.some((set) => set.id === preferences.pieceSet) ? preferences.pieceSet : "marble"}
                 boardTheme={BOARD_THEMES.some((theme) => theme.id === preferences.boardTheme) ? preferences.boardTheme : "classic"}
                 showLegalMoves={preferences.showLegalMoves}
@@ -605,7 +624,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               />
               <div className="side-dice" aria-label="Player dice">
                 {game.players.slice(0, game.playerCount).map((player) => {
-                  const usable = !onlineMode && awaiting && current?.seat === player.seat && game.phase === "roll";
+                  const usable = awaiting && current?.seat === player.seat && game.phase === "roll";
                   return (
                     <button
                       key={player.seat}
@@ -706,7 +725,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               seats={seats}
               roomInput={roomInput}
               onRoomInput={setRoomInput}
-              onRematch={(count) => void online.createPrivate(count)}
+              onRematch={(count, clock) => void rematch(count, clock)}
             />
           ) : null}
 
@@ -1069,7 +1088,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
           winnerUserId={online.state.result.winnerUserId}
           myUserId={online.myUserId}
           reason={online.state.result.reason}
-          onRematch={() => void online.createPrivate(seats)}
+          onRematch={() => void rematch()}
           onView={() => {}}
           onLeave={() => void online.leave()}
         />

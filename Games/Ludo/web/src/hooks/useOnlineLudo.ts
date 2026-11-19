@@ -3,6 +3,7 @@ import { Client, Session, type Socket } from "@heroiclabs/nakama-js";
 import {
   accountCreationAllowed,
   insecureConnectionRequested,
+  matchStateBytes,
   readLauncherHandoff,
   sameOriginServerAddress,
 } from "@moongames/game-sdk";
@@ -134,6 +135,7 @@ export interface OnlineLudoController {
   roomCode: string | null;
   accountName: string | null;
   myUserId: string | null;
+  myColour: LudoColor | null;
   matchId: string | null;
   profile: GameProfile | null;
   history: GameHistoryEntry[];
@@ -216,6 +218,7 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
         }
         if (data.op_code === LUDO_OP.STATE) {
           setState(normalizeState(message));
+          setError(null);
           return;
         }
         if (data.op_code === LUDO_OP.CHAT) {
@@ -423,10 +426,12 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
     const socket = socketRef.current;
     const matchId = matchRef.current;
     if (!socket || !matchId) return;
-    void socket.sendMatchState(matchId, op, JSON.stringify(payload)).catch((cause: unknown) => {
+    void socket.sendMatchState(matchId, op, matchStateBytes(payload)).catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : "The action could not be sent.");
     });
   }, []);
+
+  const myColour = state?.seats.find((seat) => seat.user_id === myUserId)?.colour ?? null;
 
   return {
     connection,
@@ -438,6 +443,7 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
     roomCode,
     accountName,
     myUserId,
+    myColour,
     matchId,
     profile,
     history,

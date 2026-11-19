@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { PLAYER_COLOR_HEX, type LudoColor } from "@moongames/ludo-core";
 import type { OnlineLudoController } from "../hooks/useOnlineLudo";
+import { TURN_CLOCKS } from "../lib/preferences";
 import { Icon } from "./Icon";
 
 interface LudoOnlinePanelProps {
@@ -8,7 +9,7 @@ interface LudoOnlinePanelProps {
   seats: number;
   roomInput: string;
   onRoomInput: (value: string) => void;
-  onRematch: (seats: number) => void;
+  onRematch: (seats: number, turnSeconds: number) => void;
 }
 
 const STATUS_LABEL: Record<OnlineLudoController["connection"], string> = {
@@ -42,6 +43,7 @@ export function LudoOnlinePanel({
   const [copied, setCopied] = useState<string | null>(null);
   const [searchSeconds, setSearchSeconds] = useState(0);
   const [lobbySeats, setLobbySeats] = useState(seats);
+  const [lobbyClock, setLobbyClock] = useState(0);
 
   useEffect(() => {
     if (!online.searching) {
@@ -62,7 +64,7 @@ export function LudoOnlinePanel({
   }, [copied]);
 
   async function copy(label: string, value: string) {
-    if (await copyText(value)) setCopied(label);
+    setCopied(await copyText(value) ? label : "failed");
   }
 
   const game = online.state?.game;
@@ -120,8 +122,8 @@ export function LudoOnlinePanel({
 
       {!inMatch ? (
         <>
-          <p className="ludo-note">Private room players</p>
-          <div className="pref-choices" role="radiogroup" aria-label="Private room players">
+          <p className="ludo-note">Players</p>
+          <div className="pref-choices" role="radiogroup" aria-label="Players">
             {[2, 3, 4].map((count) => (
               <button
                 key={count}
@@ -136,26 +138,39 @@ export function LudoOnlinePanel({
             ))}
           </div>
 
-          <p className="ludo-note">Quick match</p>
-          <div className="toolbar-grid">
-            {[2, 3, 4].map((count) => (
+          <p className="ludo-note">Turn clock</p>
+          <div className="pref-choices" role="radiogroup" aria-label="Online turn clock">
+            {TURN_CLOCKS.map((seconds) => (
               <button
-                key={count}
+                key={seconds}
                 type="button"
-                className="action-button"
-                disabled={online.connection !== "connected" || online.searching}
-                onClick={() => void online.quickMatch(count)}
+                role="radio"
+                aria-checked={lobbyClock === seconds}
+                className={`pref-choice${lobbyClock === seconds ? " is-chosen" : ""}`}
+                onClick={() => setLobbyClock(seconds)}
               >
-                Quick {count}
+                {seconds === 0 ? "Off" : `${seconds}s`}
               </button>
             ))}
+          </div>
+
+          <p className="ludo-note">Match</p>
+          <div className="toolbar-grid">
+            <button
+              type="button"
+              className="action-button"
+              disabled={online.connection !== "connected" || online.searching}
+              onClick={() => void online.quickMatch(lobbySeats, lobbyClock)}
+            >
+              Quick match · {lobbySeats}
+            </button>
           </div>
           <div className="toolbar-grid online-lobby-actions">
             <button
               type="button"
               className="action-button action-button--accent"
               disabled={online.connection !== "connected" || online.searching}
-              onClick={() => void online.createPrivate(lobbySeats)}
+              onClick={() => void online.createPrivate(lobbySeats, lobbyClock)}
             >
               Private room
             </button>
@@ -163,7 +178,7 @@ export function LudoOnlinePanel({
               type="button"
               className="action-button"
               disabled={online.connection !== "connected" || online.searching}
-              onClick={() => onRematch(lobbySeats)}
+              onClick={() => onRematch(lobbySeats, lobbyClock)}
             >
               New table
             </button>
@@ -218,7 +233,7 @@ export function LudoOnlinePanel({
                 title="Copy room code"
               >
                 <Icon name="copy" size={14} />
-                {copied === "room" ? "Copied" : "Copy"}
+                {copied === "room" ? "Copied" : copied === "failed" ? "Copy failed" : "Copy"}
               </button>
             </div>
           ) : null}
@@ -230,7 +245,7 @@ export function LudoOnlinePanel({
               onClick={() => void copy("link", `${window.location.origin}${window.location.pathname}?room=${online.roomCode ?? ""}`)}
             >
               <Icon name="link" size={14} />
-              {copied === "link" ? "Invite link copied" : "Copy invite link"}
+              {copied === "link" ? "Invite link copied" : copied === "failed" ? "Copy failed — use the room code" : "Copy invite link"}
             </button>
           ) : null}
 

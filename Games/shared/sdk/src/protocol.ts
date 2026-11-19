@@ -52,6 +52,16 @@ const HOST_MESSAGE_TYPES = new Set<string>([
   "assetResponse",
 ]);
 
+/**
+ * Nakama's JavaScript text adapter base64-encodes string payloads with btoa,
+ * which throws on emoji and other non-Latin-1 text. Sending UTF-8 bytes makes
+ * the adapter use its byte path, so chat and RPC payloads carry any language.
+ */
+export function matchStateBytes(payload: unknown): Uint8Array {
+  const text = typeof payload === "string" ? payload : JSON.stringify(payload);
+  return new TextEncoder().encode(text);
+}
+
 export function isHostToGameMessage(value: unknown): value is HostToGameMessage {
   if (typeof value !== "object" || value === null) {
     return false;
