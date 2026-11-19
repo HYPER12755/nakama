@@ -203,6 +203,18 @@ describe("Ludo movement rules", () => {
   });
 });
 
+describe("Ludo rush mode", () => {
+  it("keeps the turn after any legal move", () => {
+    const game = createGame({ seed: 3, rules: { rushMode: true } });
+    const state = withDice(game, 3);
+    putOnTrack(state, 0, 0, 0);
+    const result = applyMove(state, 0);
+    expect(result.extra).toBe(true);
+    expect(state.current).toBe(0);
+    expect(state.phase).toBe("roll");
+  });
+});
+
 describe("Ludo turn order", () => {
   it("passes turns forward by default and backwards in reverse start mode", () => {
     const normal = createGame({ seed: 1 });

@@ -260,6 +260,7 @@ export function applyMove(state: LudoState, tokenId: number): MoveResult {
 
   const wasSix = state.dice === 6;
   const extra =
+    state.rules.rushMode ||
     (wasSix && state.rules.sixExtra) ||
     (move.captures.length > 0 && state.rules.captureExtra);
 

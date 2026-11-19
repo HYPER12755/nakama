@@ -7,6 +7,7 @@ import {
   PLAYER_LABEL,
   TOKENS_PER_PLAYER,
   DEFAULT_RULES,
+  chooseMove,
   createGame,
   legalMoves,
   type LudoColor,
@@ -106,6 +107,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const [startSeat, setStartSeat] = useState(0);
   const [startMode, setStartMode] = useState<StartModeId>("normal");
   const [autoRoll, setAutoRoll] = useState(false);
+  const [haptics, setHaptics] = useState(true);
   const [seatColors, setSeatColors] = useState<LudoColor[]>(["red", "green", "yellow", "blue"]);
   const [seatNames, setSeatNames] = useState<string[]>(["", "", "", ""]);
   const [tokensPerPlayer, setTokensPerPlayer] = useState(4);
@@ -255,6 +257,13 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const latestEvent = game.events[game.events.length - 1];
 
   useEffect(() => {
+    if (!lastRoll) return;
+    setDiceRolling(true);
+    const timer = window.setTimeout(() => setDiceRolling(false), 650);
+    return () => window.clearTimeout(timer);
+  }, [lastRoll?.action]);
+
+  useEffect(() => {
     if (mode === "online" || !latestEvent) return;
     const messages: Record<string, string> = {
       capture: "Capture! A rival token went home.",
@@ -267,9 +276,12 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     const message = messages[latestEvent.type];
     if (!message) return;
     setToast(message);
+    if (haptics && typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(latestEvent.type === "capture" || latestEvent.type === "win" ? [40, 35, 70] : 28);
+    }
     const timer = window.setTimeout(() => setToast(null), 1900);
     return () => window.clearTimeout(timer);
-  }, [latestEvent?.action, mode]);
+  }, [latestEvent?.action, mode, haptics]);
   const onlineMode = mode === "online";
   const inMatch = onlineMode && online.state !== null;
   const awaiting = onlineMode
@@ -284,6 +296,16 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     const timer = window.setTimeout(() => doRoll(), 650);
     return () => window.clearTimeout(timer);
   }, [awaiting, autoRoll, onlineMode, controller.isReplaying, game.action, game.current]);
+
+  useEffect(() => {
+    if (onlineMode || !autoRoll || !canMove || controller.isReplaying) return;
+    const token = legalTokens.length === 1
+      ? legalTokens[0]!
+      : chooseMove(game, difficulty);
+    if (token === null || token === undefined) return;
+    const timer = window.setTimeout(() => controller.move(token), 520);
+    return () => window.clearTimeout(timer);
+  }, [canMove, autoRoll, onlineMode, controller.isReplaying, game.action, game.current, legalTokens, difficulty]);
 
   function changeMode(next: string) {
     const selected = next as Mode;
@@ -325,6 +347,17 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     setDiceRolling(true);
     if (onlineMode) online.roll();
     else controller.roll();
+  }
+
+  function rollForSeat(seat: number, ai: boolean) {
+    const usable = !onlineMode && awaiting && current?.seat === seat && game.phase === "roll";
+    if (usable) {
+      doRoll();
+    } else if (ai) {
+      setToast(`${playerName(seat)} rolls automatically.`);
+    } else {
+      setToast(`Wait for ${playerName(current?.seat ?? 0)} to finish.`);
+    }
   }
 
   function doMove(token: number) {
@@ -410,6 +443,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     setTurnSeconds(0);
     setRemaining(0);
     setAutoRoll(false);
+    setHaptics(true);
     setSoundOn(true);
     setMuted(false);
     setTheme("dark");
@@ -559,19 +593,38 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                     <button
                       key={player.seat}
                       type="button"
-                      className={`side-die side-die--${player.color}${usable ? " is-usable" : ""}`}
-                      disabled={!usable}
-                      onClick={doRoll}
-                      title={`${playerName(player.seat)} die${usable ? " — tap to roll" : ""}`}
+                      className={`side-die side-die--${player.color}${usable ? " is-usable" : ""}${player.ai ? " is-auto" : ""}`}
+                      aria-disabled={!usable}
+                      onClick={() => rollForSeat(player.seat, player.ai)}
+                      title={usable
+                        ? `${playerName(player.seat)} — tap to roll`
+                        : player.ai
+                          ? `${playerName(player.seat)} is computer-controlled`
+                          : `It is ${playerName(current?.seat ?? 0)}'s turn`}
                     >
                       <Die
                         value={rollBySeat[player.seat] ?? null}
-                        rolling={diceRolling && current?.seat === player.seat}
+                        rolling={diceRolling && lastRoll?.player === player.seat}
                       />
+                      <span className="side-die__tag">{usable ? "ROLL" : player.ai ? "AUTO" : "WAIT"}</span>
                     </button>
                   );
                 })}
               </div>
+              {!onlineMode && game.winner !== null && !controller.isReplaying ? (
+                <div className="winner-overlay" role="dialog" aria-label="Race complete">
+                  <div className="winner-card">
+                    <span className="winner-card__icon"><Icon name="trophy" size={28} /></span>
+                    <p className="eyebrow">Race complete</p>
+                    <h2>{playerName(game.winner)} wins</h2>
+                    <p>{game.players[game.winner]?.color} brought every token home.</p>
+                    <div className="winner-card__actions">
+                      <button type="button" className="button" onClick={newGame}>Play again</button>
+                      <button type="button" className="button button--ghost" onClick={controller.startReplay}>Watch replay</button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -712,6 +765,14 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                       />
                     ))}
                   </div>
+                  <button
+                    type="button"
+                    className="race-die"
+                    title={`${playerName(player.seat)} die — tap to roll on their turn`}
+                    onClick={() => rollForSeat(player.seat, player.ai)}
+                  >
+                    {rollBySeat[player.seat] ?? "–"}
+                  </button>
                   <b className="race-count">{player.finished}/{game.tokensPerPlayer ?? TOKENS_PER_PLAYER}</b>
                 </div>
               ))}
@@ -726,7 +787,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               </button>
             </div>
             <p className="ludo-note">Game mode</p>
-            <div className="pref-choices" role="radiogroup" aria-label="Game mode">
+            <div className="pref-choices" role="radiogroup" aria-label="Rule preset">
               {GAME_MODES.map((option) => (
                 <button
                   key={option.id}
@@ -921,6 +982,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 ["captureExtra", "Extra roll on capture"],
                 ["exactFinish", "Exact roll to finish"],
                 ["sixToStart", "Six to leave home"],
+                ["rushMode", "Move again after every move"],
                 ["threeSixesFoul", "Three sixes forfeit"],
               ] as const).map(([key, label]) => (
                 <label key={key} className="rule-switch">
@@ -934,11 +996,19 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               ))}
             </div>
             <label className="rule-switch">
-              <span>Auto-roll human turns</span>
+              <span>Auto-play human turns</span>
               <input
                 type="checkbox"
                 checked={autoRoll}
                 onChange={(event) => setAutoRoll(event.target.checked)}
+              />
+            </label>
+            <label className="rule-switch">
+              <span>Vibrate on captures and wins</span>
+              <input
+                type="checkbox"
+                checked={haptics}
+                onChange={(event) => setHaptics(event.target.checked)}
               />
             </label>
           </section>

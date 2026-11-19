@@ -1044,9 +1044,11 @@ html[data-moonperf="lite"] .die--rolling {
   position: absolute;
   display: grid;
   place-items: center;
-  width: 56px;
-  height: 56px;
-  padding: 0;
+  width: 58px;
+  height: 66px;
+  padding: 4px 0 3px;
+  grid-template-rows: 42px auto;
+  gap: 1px;
   border: 1px solid var(--border-strong);
   border-radius: 13px;
   background: var(--panel);
@@ -1055,6 +1057,17 @@ html[data-moonperf="lite"] .die--rolling {
   transform: scale(0.82);
   pointer-events: auto;
   transition: opacity 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}
+
+.side-die__tag {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.side-die.is-usable .side-die__tag {
+  color: var(--accent);
 }
 
 .side-die .dice-wrap {
@@ -1081,8 +1094,8 @@ html[data-moonperf="lite"] .die--rolling {
 
 @media (max-width: 620px) {
   .side-die {
-    width: 46px;
-    height: 46px;
+    width: 50px;
+    height: 58px;
   }
 
   .side-die .dice-wrap {
@@ -1093,4 +1106,76 @@ html[data-moonperf="lite"] .die--rolling {
 .defaults-button {
   padding: 5px 9px;
   font-size: 11px;
+}
+
+.winner-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  border-radius: 21px;
+  background: rgba(7, 9, 15, 0.78);
+  backdrop-filter: blur(6px);
+}
+
+.winner-card {
+  width: min(340px, 100%);
+  padding: 26px 22px;
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  background: var(--panel-solid);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.winner-card__icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.winner-card h2 {
+  margin: 4px 0 6px;
+  font-size: 24px;
+}
+
+.winner-card p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.winner-card__actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+.race-die {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--panel-raised);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.race-die:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }

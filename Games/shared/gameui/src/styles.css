@@ -3068,7 +3068,29 @@
 .pref-row__label {
 
   flex: 1 1 auto;
+  min-width: 0;
   color: var(--text);
+
+}
+
+.pref-row--sound {
+
+  min-width: 0;
+  overflow: hidden;
+
+}
+
+.pref-row--sound .pref-row__label {
+
+  flex: 0 0 auto;
+
+}
+
+.pref-row--sound .pref-row__value--button {
+
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
 
 }
 
@@ -3103,7 +3125,9 @@
 
 .pref-row__volume {
 
-  flex: 0 0 78px;
+  flex: 0 0 66px;
+  min-width: 0;
+  max-width: 66px;
   accent-color: var(--accent);
   cursor: pointer;
 

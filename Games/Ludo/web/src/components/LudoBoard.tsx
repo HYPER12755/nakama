@@ -112,16 +112,25 @@ function paintToken(
   color: LudoColor,
   image: HTMLImageElement | null,
   legal: boolean,
+  angle: number,
 ): void {
   ctx.save();
   if (legal) {
     ctx.beginPath();
-    ctx.arc(cx, cy, 19, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255, 246, 200, 0.92)";
-    ctx.shadowColor = "#ffd257";
-    ctx.shadowBlur = 14;
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    ctx.arc(cx, cy, 18, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(12, 14, 24, 0.9)";
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 18, angle, angle + Math.PI * 1.25);
+    ctx.strokeStyle = "#fff8d0";
+    ctx.lineWidth = 3.2;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 18, angle + Math.PI, angle + Math.PI * 2.25);
+    ctx.strokeStyle = "#9b8cff";
+    ctx.lineWidth = 3.2;
+    ctx.stroke();
   }
   if (image) {
     ctx.drawImage(image, cx - 15, cy - 15, 30, 30);
@@ -155,6 +164,7 @@ export function LudoBoard({
   const [dpr, setDpr] = useState(1);
   const [tick, setTick] = useState(0);
   const [stepIndex, setStepIndex] = useState<number | null>(null);
+  const [hintAngle, setHintAngle] = useState(0);
   const anim = useRef<{
     key: number;
     path: ReturnType<typeof movePath>;
@@ -212,6 +222,24 @@ export function LudoBoard({
   }, [moveKey, lastMove?.player, lastMove?.token, lastMove?.from, lastMove?.to, stepMs]);
 
   useEffect(() => {
+    if (disabled || legalTokens.length === 0) {
+      setHintAngle(0);
+      return;
+    }
+    let raf = 0;
+    let last = 0;
+    const loop = (now: number) => {
+      if (now - last > 40) {
+        last = now;
+        setHintAngle((now / 1000) % (Math.PI * 2));
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [disabled, legalTokens.length]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const pixelSize = Math.round(SIZE * dpr);
@@ -260,10 +288,11 @@ export function LudoBoard({
           ctx, cx, cy, player.color,
           tokenImage(tokenSet, player.color, () => setTick((value) => value + 1)),
           legal,
+          hintAngle,
         );
       }
     }
-  }, [state, legalTokens, lastMove, disabled, dpr, tick, stepIndex, tokenSet, boardTheme, showLegalMoves, highlightLastMove]);
+  }, [state, legalTokens, lastMove, disabled, dpr, tick, stepIndex, hintAngle, tokenSet, boardTheme, showLegalMoves, highlightLastMove]);
 
   function handlePointer(event: React.PointerEvent<HTMLCanvasElement>): void {
     if (event.pointerType === "mouse" && event.button !== 0) return;

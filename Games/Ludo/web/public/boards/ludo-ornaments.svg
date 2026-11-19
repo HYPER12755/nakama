@@ -9,6 +9,11 @@
       <path d="M9 4 13 9 9 14 5 9Z" fill="url(#rail)" opacity=".6"/>
       <circle cx="9" cy="9" r="1.4" fill="#fff6d6" opacity=".55"/>
     </pattern>
+    <g id="star">
+      <path d="M0-11 3.2-3.5 11-3.5 4.8 1.4 7.1 9 0 4.5-7.1 9-4.8 1.4-11-3.5-3.2-3.5Z"
+        fill="#fff8dc" fill-opacity=".92" stroke="#3a2a18" stroke-opacity=".45" stroke-width="1.2"/>
+      <circle r="2" fill="#ffd257" fill-opacity=".85"/>
+    </g>
     <g id="corner">
       <path d="M8 62C8 34 34 8 62 8M8 84C8 43 43 8 84 8" fill="none" stroke="url(#rail)" stroke-width="2.4" stroke-linecap="round"/>
       <path d="M18 58c14-2 23-11 26-25M58 18c-2 14-11 23-25 26" fill="none" stroke="#fff2c4" stroke-opacity=".5" stroke-width="1.4"/>
@@ -37,4 +42,14 @@
     <path d="M9 150c12 7 12 17 0 24m0 52c12 7 12 17 0 24m0 52c12 7 12 17 0 24m0 52c12 7 12 17 0 24"/>
     <path d="M591 150c-12 7-12 17 0 24m0 52c-12 7-12 17 0 24m0 52c-12 7-12 17 0 24m0 52c-12 7-12 17 0 24"/>
   </g>
+
+  <!-- Safe-square stars, mapped from the 1920px board to this 600px overlay. -->
+  <use href="#star" transform="translate(60 260)"/>
+  <use href="#star" transform="translate(260 100)"/>
+  <use href="#star" transform="translate(340 60)"/>
+  <use href="#star" transform="translate(500 260)"/>
+  <use href="#star" transform="translate(540 340)"/>
+  <use href="#star" transform="translate(340 500)"/>
+  <use href="#star" transform="translate(260 540)"/>
+  <use href="#star" transform="translate(100 340)"/>
 </svg>

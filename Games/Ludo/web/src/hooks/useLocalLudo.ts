@@ -183,11 +183,11 @@ export function useLocalLudo(options: LocalGameOptions) {
         const level = optionsRef.current.seatDifficulty?.[current.current] ?? optionsRef.current.difficulty;
         const token = chooseMove(current, level);
         if (token === null) {
-          setGame((previous) => {
-            const next = cloneState(previous);
-            passTurn(next);
-            return next;
-          });
+          const previous = gameRef.current;
+          const next = cloneState(previous);
+          passTurn(next);
+          gameRef.current = next;
+          setGame(next);
         } else move(token);
       }
     }, Math.max(

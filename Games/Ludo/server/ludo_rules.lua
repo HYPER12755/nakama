@@ -29,6 +29,7 @@ rules.DEFAULT_RULES = {
   exactFinish = true,
   sixToStart = true,
   turnOrder = "normal",
+  rushMode = false,
 }
 
 local function number(value, fallback)
@@ -367,7 +368,8 @@ function rules.apply_move(state, token_id)
   end
 
   local was_six = state.dice == 6
-  local extra = (was_six and state.rules.sixExtra)
+  local extra = state.rules.rushMode
+    or (was_six and state.rules.sixExtra)
     or (#chosen.captures > 0 and state.rules.captureExtra)
 
   if player.finished == state.tokensPerPlayer then

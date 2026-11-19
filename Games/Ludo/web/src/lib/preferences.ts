@@ -43,6 +43,7 @@ export const GAME_MODES = [
   { id: "classic", label: "Classic", hint: "Standard rules, safe stars and walls" },
   { id: "safe", label: "Safe play", hint: "Stars and starts only, no walls" },
   { id: "swift", label: "Swift", hint: "Overshoot finishes, no six penalty" },
+  { id: "rush", label: "Rush", hint: "Move again after every legal move" },
   { id: "custom", label: "Custom", hint: "Use your own rule switches" },
 ] as const;
 
@@ -62,7 +63,12 @@ export const MODE_RULES: Record<Exclude<GameModeId, "custom">, Partial<import("@
   swift: {
     safeSquares: true, blocks: false, sixExtra: true,
     captureExtra: true, exactFinish: false, threeSixesFoul: false,
-    sixToStart: false, turnOrder: "normal",
+    sixToStart: false, turnOrder: "normal", rushMode: false,
+  },
+  rush: {
+    safeSquares: true, blocks: false, sixExtra: true,
+    captureExtra: true, exactFinish: false, threeSixesFoul: false,
+    sixToStart: false, turnOrder: "normal", rushMode: true,
   },
 };
 

@@ -76,6 +76,8 @@ export interface LudoRules {
   sixToStart: boolean;
   /** Direction the turn passes around the table. */
   turnOrder: "normal" | "reverse";
+  /** Rush mode: every legal move earns another roll. */
+  rushMode: boolean;
 }
 
 export const DEFAULT_RULES: LudoRules = {
@@ -87,6 +89,7 @@ export const DEFAULT_RULES: LudoRules = {
   exactFinish: true,
   sixToStart: true,
   turnOrder: "normal",
+  rushMode: false,
 };
 
 export interface LudoState {
