@@ -1,3 +1,4 @@
+import { copyText, MatchActionsPanel } from "@moongames/game-ui";
 import { Icon } from "./Icon";
 
 export interface LudoMatchActionsProps {
@@ -9,6 +10,7 @@ export interface LudoMatchActionsProps {
   canUndo: boolean;
   hasReplay: boolean;
   replaying: boolean;
+  roomCode?: string | null;
   onRoll: () => void;
   onUndo: () => void;
   onPass: () => void;
@@ -18,10 +20,10 @@ export interface LudoMatchActionsProps {
   onResign: () => void;
 }
 
-/** The Ludo match panel, built like Chess/Carrom's dedicated action toolbar. */
+/** Ludo's table actions, built on the same shared panel Chess uses. */
 export function LudoMatchActions({
   mode, spectating, phase, awaiting, canMove, canUndo, hasReplay, replaying,
-  onRoll, onUndo, onPass, onNewGame, onReplay, onLeave, onResign,
+  roomCode, onRoll, onUndo, onPass, onNewGame, onReplay, onLeave, onResign,
 }: LudoMatchActionsProps) {
   const online = mode === "online";
   const inProgress = phase !== "over";
@@ -41,69 +43,95 @@ export function LudoMatchActions({
           ? "Roll the die to start your turn."
           : "Waiting for the next player.";
 
+  const actions = online ? [
+    {
+      id: "roll",
+      label: awaiting ? "Roll dice" : phase === "move" ? "Choose a token" : "Waiting…",
+      accent: true,
+      disabled: replaying || !awaiting,
+      onClick: onRoll,
+      icon: <Icon name="sparkles" size={14} />,
+    },
+    {
+      id: "invite",
+      label: "Invite friend",
+      disabled: !inProgress || spectating,
+      onClick: () => window.dispatchEvent(new CustomEvent("ludo:open-invite")),
+      icon: <Icon name="users" size={14} />,
+    },
+    {
+      id: "copy",
+      label: "Copy room code",
+      disabled: !roomCode,
+      onClick: () => { if (roomCode) void copyText(roomCode); },
+      icon: <Icon name="copy" size={14} />,
+    },
+  ] : [
+    {
+      id: "roll",
+      label: awaiting ? "Roll dice" : phase === "move" ? "Choose a token" : "Waiting…",
+      accent: true,
+      disabled: replaying || !awaiting,
+      onClick: onRoll,
+      icon: <Icon name="sparkles" size={14} />,
+    },
+    {
+      id: "undo",
+      label: "Undo",
+      disabled: replaying || !canUndo,
+      onClick: onUndo,
+      icon: <Icon name="skip-back" size={14} />,
+    },
+    {
+      id: "pass",
+      label: "Pass turn",
+      disabled: replaying || phase !== "move" || canMove,
+      onClick: onPass,
+      title: "Use this when the roll cannot move a token",
+      icon: <Icon name="check" size={14} />,
+    },
+    {
+      id: "new",
+      label: "New game",
+      onClick: onNewGame,
+      icon: <Icon name="refresh" size={14} />,
+    },
+    {
+      id: "replay",
+      label: "Replay",
+      disabled: !hasReplay || replaying,
+      onClick: onReplay,
+      icon: <Icon name="skip-back" size={14} />,
+    },
+  ];
+
   return (
-    <section className="panel toolbar-panel">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">Table</p>
-          <h2>Match actions</h2>
-        </div>
-        {inProgress ? (
-          <span className="live-badge">{online ? (spectating ? "Watching" : "Live") : "Playing"}</span>
-        ) : (
-          <span className="live-badge live-badge--done">Finished</span>
-        )}
-      </div>
-
-      <div className="toolbar-grid">
-        <button
-          type="button"
-          className="action-button action-button--primary"
-          onClick={onRoll}
-          disabled={replaying || !awaiting}
-        >
-          <Icon name="sparkles" size={14} />
-          {awaiting ? "Roll dice" : phase === "move" ? "Choose a token" : "Waiting…"}
-        </button>
-
-        {online ? null : (
-          <>
-            <button type="button" className="action-button" onClick={onUndo} disabled={replaying || !canUndo}>
-              <Icon name="skip-back" size={14} /> Undo
-            </button>
-            <button
-              type="button"
-              className="action-button"
-              onClick={onPass}
-              disabled={replaying || phase !== "move" || canMove}
-              title="Use this when the roll cannot move a token"
-            >
-              <Icon name="check" size={14} /> Pass turn
-            </button>
-            <button type="button" className="action-button" onClick={onNewGame}>
-              <Icon name="refresh" size={14} /> New game
-            </button>
-            <button type="button" className="action-button" onClick={onReplay} disabled={!hasReplay || replaying}>
-              <Icon name="skip-back" size={14} /> Replay
-            </button>
-          </>
-        )}
-      </div>
-
-      <p className="toolbar-note">{hint}</p>
-
-      {online ? (
+    <MatchActionsPanel
+      badge={inProgress ? (
+        <span className="live-badge">
+          {online ? (spectating ? "Watching" : "Live") : "Playing"}
+        </span>
+      ) : (
+        <span className="live-badge live-badge--done">Finished</span>
+      )}
+      actions={actions}
+      footer={
         <>
-          <button type="button" className="text-button" onClick={onLeave}>
-            {spectating ? "Stop watching" : "Leave online table"}
-          </button>
-          {spectating || phase === "over" ? null : (
-            <button type="button" className="text-button text-button--danger" onClick={onResign}>
-              Resign
-            </button>
-          )}
+          <p className="toolbar-note">{hint}</p>
+          {online ? (
+            <>
+              <button type="button" className="text-button" onClick={onLeave}>
+                {spectating ? "Stop watching" : "Leave online table"}
+              </button>
+              {spectating || phase === "over" ? null : (
+                <button type="button" className="text-button text-button--danger" onClick={onResign}>
+                  Resign
+                </button>
+              )}
+            </>
+          ) : null}
         </>
-      ) : null}
-    </section>
+      }
+    />
   );
 }

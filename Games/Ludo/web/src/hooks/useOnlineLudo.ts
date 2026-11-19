@@ -206,6 +206,9 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
   const connect = useCallback(async () => {
     if (connectingRef.current || socketRef.current) return;
     connectingRef.current = true;
+    // Never reuse a social client bound to an old session/token.
+    socialRef.current = null;
+    friendsPromiseRef.current = null;
     setConnection("connecting");
     try {
       const config = readLauncherHandoff(GAME_ID);
@@ -442,6 +445,8 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
     if (socket && matchId) await socket.leaveMatch(matchId).catch(() => undefined);
     if (fallbackRef.current !== null) clearTimeout(fallbackRef.current);
     fallbackRef.current = null;
+    socialRef.current = null;
+    friendsPromiseRef.current = null;
     matchRef.current = null;
     setMatchId(null);
     setState(null);

@@ -14,6 +14,7 @@ import {
 } from "@moongames/chess-core";
 import {
   AccountPanel,
+  FullscreenChatButton,
   GamePreferencesPanel,
   GameToolbar,
   Icon,
@@ -1715,6 +1716,8 @@ export default function App({ bridge }: AppProps) {
           )}
         </aside>
       </main>
+
+      {boardFullscreen && onlineMode ? <FullscreenChatButton /> : null}
 
       {onlineMode &&
         online.serverState !== null &&

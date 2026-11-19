@@ -10,6 +10,7 @@ export type IconName =
   | "lock"
   | "logout"
   | "mail"
+  | "chat"
   | "moon"
   | "refresh"
   | "shield-check"
@@ -67,6 +68,12 @@ export function Icon({
         <>
           <rect x="3" y="5" width="18" height="14" rx="2.5" />
           <path d="m4 7 8 6 8-6" />
+        </>
+      )}
+      {name === "chat" && (
+        <>
+          <path d="M20 15a3 3 0 0 1-3 3H9l-5 3v-4.5A3 3 0 0 1 4 14V7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3Z" />
+          <path d="M8 10h8M8 13h5" />
         </>
       )}
       {name === "refresh" && (

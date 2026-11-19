@@ -70,6 +70,7 @@ import { readReplay, type ReplayData } from "./lib/replay";
 import { boardPlayers } from "./lib/tableSetup";
 import {
   AccountPanel,
+  FullscreenChatButton,
   GamePreferencesPanel,
   MatchChat,
   ModeSwitch,
@@ -1426,15 +1427,18 @@ export default function App({ bridge }: AppProps) {
       <main className="game-layout">
         <section className="board-panel">
           {isFullscreen ? (
-            <button
-              type="button"
-              className="fullscreen-exit"
-              onClick={() => void toggleFullscreen()}
-              aria-label="Exit fullscreen"
-              title="Exit fullscreen"
-            >
-              <Icon name="minimize" size={18} strokeWidth={2} />
-            </button>
+            <>
+              <button
+                type="button"
+                className="fullscreen-exit"
+                onClick={() => void toggleFullscreen()}
+                aria-label="Exit fullscreen"
+                title="Exit fullscreen"
+              >
+                <Icon name="minimize" size={18} strokeWidth={2} />
+              </button>
+              {onlineMode ? <FullscreenChatButton /> : null}
+            </>
           ) : null}
           <PointsBar
             players={seatedPlayers}

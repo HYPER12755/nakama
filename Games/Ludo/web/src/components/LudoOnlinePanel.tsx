@@ -75,6 +75,7 @@ export function LudoOnlinePanel({
     return () => window.clearTimeout(timer);
   }, [copied]);
 
+
   async function copy(label: string, value: string) {
     setCopied(await writeClipboard(value) ? label : "failed");
   }
@@ -95,6 +96,16 @@ export function LudoOnlinePanel({
     return { color, seat, me: seat?.user_id === online.myUserId };
   });
   const spectatorCount = online.state?.spectators.length ?? 0;
+
+  useEffect(() => {
+    const open = () => {
+      if (online.matchId === null) return;
+      void online.loadFriends();
+      setInviteTarget({ matchId: online.matchId, spectate: game !== null || online.spectating });
+    };
+    window.addEventListener("ludo:open-invite", open);
+    return () => window.removeEventListener("ludo:open-invite", open);
+  }, [online.matchId, online.spectating, game]);
 
   return (
     <section className="panel online-panel">

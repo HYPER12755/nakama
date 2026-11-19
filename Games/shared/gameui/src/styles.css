@@ -3460,3 +3460,26 @@
   font-weight: 700;
   color: var(--muted);
 }
+
+.fullscreen-chat-button {
+  position: fixed;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--panel-solid);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.fullscreen-chat-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

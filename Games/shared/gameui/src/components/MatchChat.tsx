@@ -5,6 +5,7 @@ import {
   type FormEvent,
 } from "react";
 import { insertEmojiAtSelection } from "@moongames/game-sdk";
+import { OPEN_MATCH_CHAT_EVENT } from "../lib/chat";
 import type { GameChatMessage } from "../types";
 import { EmojiPicker } from "./EmojiPicker";
 import { Icon } from "./Icon";
@@ -134,6 +135,12 @@ export function MatchChat({
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [open]);
+
+  useEffect(() => {
+    const openFromOverlay = () => setOpen(true);
+    window.addEventListener(OPEN_MATCH_CHAT_EVENT, openFromOverlay);
+    return () => window.removeEventListener(OPEN_MATCH_CHAT_EVENT, openFromOverlay);
+  }, []);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();

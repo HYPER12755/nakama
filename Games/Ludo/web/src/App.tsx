@@ -16,6 +16,7 @@ import {
 } from "@moongames/ludo-core";
 import {
   DEFAULT_PREFERENCES,
+  FullscreenChatButton,
   MatchChat,
   ModeSwitch,
   ProfilePanel,
@@ -579,9 +580,12 @@ export default function App({ bridge }: { bridge: GameBridge }) {
       <main className="game-layout">
         <section className="board-panel">
           {isFullscreen ? (
-            <button type="button" className="fullscreen-exit" onClick={toggleFullscreen} title="Exit fullscreen" aria-label="Exit fullscreen">
-              <Icon name="minimize" size={18} />
-            </button>
+            <>
+              <button type="button" className="fullscreen-exit" onClick={toggleFullscreen} title="Exit fullscreen" aria-label="Exit fullscreen">
+                <Icon name="minimize" size={18} />
+              </button>
+              {onlineMode ? <FullscreenChatButton /> : null}
+            </>
           ) : null}
           <LudoRaceBar
             players={game.players}
@@ -682,6 +686,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
             canUndo={controller.canUndo}
             hasReplay={controller.replayCount > 0}
             replaying={controller.isReplaying}
+            roomCode={online.roomCode}
             onRoll={doRoll}
             onUndo={controller.undo}
             onPass={() => doMove(-1)}

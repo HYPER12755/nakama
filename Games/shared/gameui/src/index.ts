@@ -67,6 +67,13 @@ export type {
   StoredEmailSession,
 } from "./lib/auth";
 export { copyText } from "./lib/clipboard";
+export { OPEN_MATCH_CHAT_EVENT, requestOpenMatchChat } from "./lib/chat";
+export { FullscreenChatButton } from "./components/FullscreenChatButton";
+export { MatchActionsPanel } from "./components/MatchActionsPanel";
+export type {
+  MatchActionItem,
+  MatchActionsPanelProps,
+} from "./components/MatchActionsPanel";
 export {
   AnimationSpeed,
   ANIMATION_SPEED_LABELS,

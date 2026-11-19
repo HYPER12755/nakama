@@ -1,3 +1,5 @@
+import { MatchActionsPanel } from "@moongames/game-ui";
+
 export interface OnlineGameToolbarProps {
   inProgress: boolean;
   spectating: boolean;
@@ -27,50 +29,43 @@ export function OnlineGameToolbar({
   onLeave,
 }: OnlineGameToolbarProps) {
   return (
-    <section className="panel toolbar-panel">
-      <div className="panel-heading">
-        <h2>Match actions</h2>
-        {inProgress && (
-          <span className="live-badge">{spectating ? "Watching" : "Live"}</span>
-        )}
-      </div>
-      <div className="toolbar-grid">
-        <button
-          type="button"
-          className="action-button action-button--danger"
-          onClick={onResign}
-          disabled={!canResign}
-        >
-          Resign
+    <MatchActionsPanel
+      badge={inProgress ? (
+        <span className="live-badge">{spectating ? "Watching" : "Live"}</span>
+      ) : null}
+      kicker=""
+      actions={[
+        {
+          id: "resign",
+          label: "Resign",
+          danger: true,
+          onClick: onResign,
+          disabled: !canResign,
+        },
+        {
+          id: "draw",
+          label: "Offer draw",
+          onClick: onOfferDraw,
+          disabled: !canOfferDraw,
+        },
+        { id: "flip", label: "Flip board", onClick: onFlip },
+        {
+          id: "pgn",
+          label: "Copy PGN",
+          onClick: onCopyPgn,
+          disabled: !hasMoves,
+        },
+        ...(onOpenings === undefined ? [] : [{
+          id: "openings",
+          label: "Explore the openings",
+          onClick: onOpenings,
+        }]),
+      ]}
+      footer={
+        <button type="button" className="text-button" onClick={onLeave}>
+          {spectating ? "Stop watching" : "Leave online match"}
         </button>
-        <button
-          type="button"
-          className="action-button"
-          onClick={onOfferDraw}
-          disabled={!canOfferDraw}
-        >
-          Offer draw
-        </button>
-        <button type="button" className="action-button" onClick={onFlip}>
-          Flip board
-        </button>
-        <button
-          type="button"
-          className="action-button"
-          onClick={onCopyPgn}
-          disabled={!hasMoves}
-        >
-          Copy PGN
-        </button>
-        {onOpenings === undefined ? null : (
-          <button type="button" className="action-button" onClick={onOpenings}>
-            Explore the openings
-          </button>
-        )}
-      </div>
-      <button type="button" className="text-button" onClick={onLeave}>
-        {spectating ? "Stop watching" : "Leave online match"}
-      </button>
-    </section>
+      }
+    />
   );
 }
