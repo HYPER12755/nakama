@@ -3483,3 +3483,12 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+
+body.chat-open .app--board-only .chat-dock {
+  display: flex;
+  position: fixed;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(78px, calc(env(safe-area-inset-bottom) + 78px));
+  z-index: 31;
+  margin: 0;
+}

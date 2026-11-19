@@ -25,6 +25,7 @@ import {
   ProfilePanel,
   Replay,
   ShowResizeHandle,
+  useLauncherHandoff,
   animationDuration,
   copyText,
   parseLaunchInvite,
@@ -203,6 +204,13 @@ export default function App({ bridge }: AppProps) {
     launcherHandoff !== null,
   );
   const [hostInitTimedOut, setHostInitTimedOut] = useState(false);
+  const launcherConfig = useLauncherHandoff(__MOONGAMES_GAME_ID__);
+
+  useEffect(() => {
+    if (launcherConfig === null) return;
+    setHostConfig(launcherConfig);
+    setHostInitReceived(true);
+  }, [launcherConfig]);
 
   // The customizations of the table: the pieces, the board, the sound, and
   // the way a piece is moved. They are read before the game, because the
@@ -285,6 +293,14 @@ export default function App({ bridge }: AppProps) {
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
+
+  // A board size saved on a larger screen must not overflow a phone. Keeping
+  // it inside the measured panel prevents the whole page from zooming out.
+  useEffect(() => {
+    if (boardSize === null || boardWidth === 0) return;
+    const maximum = Math.max(280, boardWidth - 24);
+    if (boardSize > maximum) setBoardSize(maximum);
+  }, [boardSize, boardWidth]);
 
   const onlineMode = mode === "online";
   const aiMode = mode === "ai";

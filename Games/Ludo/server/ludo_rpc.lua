@@ -183,38 +183,42 @@ local function matchmaker_matched(context, matched)
   if #matched < 2 then
     return nil
   end
-  local first, second = matched[1], matched[2]
-  if not first.presence or not second.presence then
-    return nil
+  local expected_users = {}
+  local seats = nil
+  local clock = nil
+  local seed = nil
+  for _, entry in ipairs(matched) do
+    if not entry.presence then
+      return nil
+    end
+    local properties = entry.properties or {}
+    if properties.game and properties.game ~= "ludo" then
+      return nil
+    end
+    local entry_seats = protocol.clamp_seats(properties.seats)
+    local entry_clock = protocol.clamp_turn_seconds(properties.turnSeconds)
+    if seats == nil then
+      seats = entry_seats
+      clock = entry_clock
+      seed = tonumber(properties.seed)
+    elseif seats ~= entry_seats or clock ~= entry_clock then
+      return nil
+    end
+    expected_users[#expected_users + 1] = {
+      user_id = entry.presence.user_id,
+      username = entry.presence.username,
+    }
   end
-  local first_properties = first.properties or {}
-  local second_properties = second.properties or {}
-  if first_properties.game and first_properties.game ~= "ludo" then
-    return nil
-  end
-  if second_properties.game and second_properties.game ~= "ludo" then
-    return nil
-  end
-  local first_seats = protocol.clamp_seats(first_properties.seats)
-  local second_seats = protocol.clamp_seats(second_properties.seats)
-  if first_seats ~= second_seats then
-    return nil
-  end
-  local first_clock = protocol.clamp_turn_seconds(first_properties.turnSeconds)
-  local second_clock = protocol.clamp_turn_seconds(second_properties.turnSeconds)
-  if first_clock ~= second_clock then
+  if #expected_users > seats then
     return nil
   end
   return nk.match_create("ludo_match", {
     mode = "quick",
     rated = true,
-    seats = first_seats,
-    turnSeconds = first_clock,
-    seed = tonumber(first_properties.seed),
-    expected_users = {
-      { user_id = first.presence.user_id, username = first.presence.username },
-      { user_id = second.presence.user_id, username = second.presence.username },
-    },
+    seats = seats,
+    turnSeconds = clock,
+    seed = seed,
+    expected_users = expected_users,
   })
 end
 social.register_matchmaker_game("ludo", matchmaker_matched)

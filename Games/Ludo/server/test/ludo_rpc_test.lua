@@ -114,6 +114,21 @@ test("the matchmaker only pairs matching Ludo requests", function()
     { presence = { user_id = "b" }, properties = { game = "carrom", seats = 2 } },
   })
   assert_equal(different, nil, "does not mix games")
+  local mixed_seats = fake_social.matchmakers.ludo({}, {
+    { presence = { user_id = "a" }, properties = { game = "ludo", seats = 2, turnSeconds = 0 } },
+    { presence = { user_id = "b" }, properties = { game = "ludo", seats = 4, turnSeconds = 0 } },
+  })
+  assert_equal(mixed_seats, nil, "does not mix two- and four-player tables")
+  local four = fake_social.matchmakers.ludo({}, {
+    { presence = { user_id = "a" }, properties = { game = "ludo", seats = 4, turnSeconds = 0 } },
+    { presence = { user_id = "b" }, properties = { game = "ludo", seats = 4, turnSeconds = 0 } },
+    { presence = { user_id = "c" }, properties = { game = "ludo", seats = 4, turnSeconds = 0 } },
+    { presence = { user_id = "d" }, properties = { game = "ludo", seats = 4, turnSeconds = 0 } },
+  })
+  assert_equal(four ~= nil, true, "fills a four-player table")
+  local last = created[#created]
+  assert_equal(last.props.seats, 4, "four seats on the match")
+  assert_equal(#last.props.expected_users, 4, "four expected players")
 end)
 
 if failures > 0 then

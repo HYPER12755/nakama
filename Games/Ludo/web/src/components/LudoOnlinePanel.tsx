@@ -130,16 +130,16 @@ export function LudoOnlinePanel({
                 ))}
               </div>
             </div>
-            <div className="setting">
-              <span className="setting__label">Turn clock</span>
-              <div className="setting__options" role="radiogroup" aria-label="Online turn clock">
+            <div className="online-size online-size--clock">
+              <span className="online-size__label">Turn clock</span>
+              <div className="online-size__options" role="radiogroup" aria-label="Online turn clock">
                 {TURN_CLOCKS.map((seconds) => (
                   <button
                     key={seconds}
                     type="button"
                     role="radio"
                     aria-checked={lobbyClock === seconds}
-                    className={`setting__option${lobbyClock === seconds ? " setting__option--active" : ""}`}
+                    className={`online-size__option${lobbyClock === seconds ? " online-size__option--active" : ""}`}
                     onClick={() => setLobbyClock(seconds)}
                   >
                     {seconds === 0 ? "Off" : `${seconds}s`}

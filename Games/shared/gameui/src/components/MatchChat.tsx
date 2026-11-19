@@ -119,6 +119,11 @@ export function MatchChat({
   }, [messages.length, open]);
 
   useEffect(() => {
+    document.body.classList.toggle("chat-open", open);
+    return () => document.body.classList.remove("chat-open");
+  }, [open]);
+
+  useEffect(() => {
     if (!open) {
       return;
     }

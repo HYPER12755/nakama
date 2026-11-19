@@ -1,4 +1,4 @@
-import { copyText, MatchActionsPanel } from "@moongames/game-ui";
+import { MatchActionsPanel, type MatchActionItem } from "@moongames/game-ui";
 import { Icon } from "./Icon";
 
 export interface LudoMatchActionsProps {
@@ -20,10 +20,10 @@ export interface LudoMatchActionsProps {
   onResign: () => void;
 }
 
-/** Ludo's table actions, built on the same shared panel Chess uses. */
+/** One identical action panel in every mode; unavailable actions stay visible but greyed out. */
 export function LudoMatchActions({
   mode, spectating, phase, awaiting, canMove, canUndo, hasReplay, replaying,
-  roomCode, onRoll, onUndo, onPass, onNewGame, onReplay, onLeave, onResign,
+  onRoll, onUndo, onPass, onNewGame, onReplay,
 }: LudoMatchActionsProps) {
   const online = mode === "online";
   const inProgress = phase !== "over";
@@ -43,30 +43,7 @@ export function LudoMatchActions({
           ? "Roll the die to start your turn."
           : "Waiting for the next player.";
 
-  const actions = online ? [
-    {
-      id: "roll",
-      label: awaiting ? "Roll dice" : phase === "move" ? "Choose a token" : "Waiting…",
-      accent: true,
-      disabled: replaying || !awaiting,
-      onClick: onRoll,
-      icon: <Icon name="sparkles" size={14} />,
-    },
-    {
-      id: "invite",
-      label: "Invite friend",
-      disabled: !inProgress || spectating,
-      onClick: () => window.dispatchEvent(new CustomEvent("ludo:open-invite")),
-      icon: <Icon name="users" size={14} />,
-    },
-    {
-      id: "copy",
-      label: "Copy room code",
-      disabled: !roomCode,
-      onClick: () => { if (roomCode) void copyText(roomCode); },
-      icon: <Icon name="copy" size={14} />,
-    },
-  ] : [
+  const actions: MatchActionItem[] = [
     {
       id: "roll",
       label: awaiting ? "Roll dice" : phase === "move" ? "Choose a token" : "Waiting…",
@@ -78,14 +55,14 @@ export function LudoMatchActions({
     {
       id: "undo",
       label: "Undo",
-      disabled: replaying || !canUndo,
+      disabled: online || replaying || !canUndo,
       onClick: onUndo,
       icon: <Icon name="skip-back" size={14} />,
     },
     {
       id: "pass",
       label: "Pass turn",
-      disabled: replaying || phase !== "move" || canMove,
+      disabled: online || replaying || phase !== "move" || canMove,
       onClick: onPass,
       title: "Use this when the roll cannot move a token",
       icon: <Icon name="check" size={14} />,
@@ -93,13 +70,14 @@ export function LudoMatchActions({
     {
       id: "new",
       label: "New game",
+      disabled: online,
       onClick: onNewGame,
       icon: <Icon name="refresh" size={14} />,
     },
     {
       id: "replay",
       label: "Replay",
-      disabled: !hasReplay || replaying,
+      disabled: online || !hasReplay || replaying,
       onClick: onReplay,
       icon: <Icon name="skip-back" size={14} />,
     },
@@ -115,23 +93,7 @@ export function LudoMatchActions({
         <span className="live-badge live-badge--done">Finished</span>
       )}
       actions={actions}
-      footer={
-        <>
-          <p className="toolbar-note">{hint}</p>
-          {online ? (
-            <>
-              <button type="button" className="text-button" onClick={onLeave}>
-                {spectating ? "Stop watching" : "Leave online table"}
-              </button>
-              {spectating || phase === "over" ? null : (
-                <button type="button" className="text-button text-button--danger" onClick={onResign}>
-                  Resign
-                </button>
-              )}
-            </>
-          ) : null}
-        </>
-      }
+      footer={<p className="toolbar-note">{hint}</p>}
     />
   );
 }

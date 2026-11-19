@@ -80,6 +80,7 @@ import {
   parseLaunchInvite,
   clearMatchInviteFromLocation,
   useGamePreferences,
+  useLauncherHandoff,
   type GameHistoryEntry,
 } from "@moongames/game-ui";
 import {
@@ -341,7 +342,14 @@ export default function App({ bridge }: AppProps) {
   const [hostConfig, setHostConfig] = useState<GameHostConfig | null>(handoff);
   const [hostInitReceived, setHostInitReceived] = useState(handoff !== null);
   const [hostInitTimedOut, setHostInitTimedOut] = useState(false);
+  const launcherConfig = useLauncherHandoff(__MOONGAMES_GAME_ID__);
   const hostLaunchHandled = useRef(false);
+
+  useEffect(() => {
+    if (launcherConfig === null) return;
+    setHostConfig(launcherConfig);
+    setHostInitReceived(true);
+  }, [launcherConfig]);
   // The launcher hands over its account a moment after the game loads. The
   // table waits for that handover, so it never plays as a guest first.
   const hostReady =

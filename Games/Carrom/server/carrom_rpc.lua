@@ -251,63 +251,46 @@ local function matchmaker_matched(context, matched)
   if #matched < 2 then
     return nil
   end
-
-  local first = matched[1]
-  local second = matched[2]
-
-  if not first.presence or not second.presence then
+  local expected_users = {}
+  local seats = nil
+  local variant = nil
+  local clock = nil
+  local teams = false
+  for _, entry in ipairs(matched) do
+    if not entry.presence then
+      return nil
+    end
+    local properties = entry.properties or {}
+    if properties.game and properties.game ~= "carrom" then
+      return nil
+    end
+    local entry_seats = protocol.clamp_seats(properties.seats)
+    local entry_variant = protocol.clamp_variant(properties.variant)
+    local entry_clock = protocol.clamp_turn_seconds(properties.turnSeconds)
+    if seats == nil then
+      seats = entry_seats
+      variant = entry_variant
+      clock = entry_clock
+      teams = truthy(properties.teams) and seats == 4
+    elseif seats ~= entry_seats or variant ~= entry_variant or clock ~= entry_clock then
+      return nil
+    end
+    expected_users[#expected_users + 1] = {
+      user_id = entry.presence.user_id,
+      username = entry.presence.username,
+    }
+  end
+  if #expected_users > seats then
     return nil
   end
-
-  local first_properties = first.properties or {}
-  local second_properties = second.properties or {}
-
-  if first_properties.game and first_properties.game ~= "carrom" then
-    return nil
-  end
-  if second_properties.game and second_properties.game ~= "carrom" then
-    return nil
-  end
-
-  local first_seats = protocol.clamp_seats(first_properties.seats)
-  local second_seats = protocol.clamp_seats(second_properties.seats)
-  if first_seats ~= second_seats then
-    return nil
-  end
-
-  -- The two players asked for the same table size. They have to want the
-  -- same game type as well, or one of them would play different rules.
-  local first_variant = protocol.clamp_variant(first_properties.variant)
-  local second_variant = protocol.clamp_variant(second_properties.variant)
-  if first_variant ~= second_variant then
-    return nil
-  end
-
-  -- The shot clock is part of the table settings. A pair that asked for
-  -- different clocks must not be put on one table.
-  local first_clock = protocol.clamp_turn_seconds(first_properties.turnSeconds)
-  local second_clock = protocol.clamp_turn_seconds(second_properties.turnSeconds)
-  if first_clock ~= second_clock then
-    return nil
-  end
-
   return nk.match_create("carrom_match", {
     mode = "quick",
     rated = true,
-    seats = first_seats,
-    variant = first_variant,
-    turnSeconds = first_clock,
-    teams = truthy(first_properties.teams) and first_seats == 4,
-    expected_users = {
-      {
-        user_id = first.presence.user_id,
-        username = first.presence.username,
-      },
-      {
-        user_id = second.presence.user_id,
-        username = second.presence.username,
-      },
-    },
+    seats = seats,
+    variant = variant,
+    turnSeconds = clock,
+    teams = teams,
+    expected_users = expected_users,
   })
 end
 -- The shared module owns the single Nakama matchmaker callback and routes a

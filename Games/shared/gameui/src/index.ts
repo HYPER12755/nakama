@@ -109,6 +109,7 @@ export type {
   PreferenceScope,
 } from "./lib/preferences";
 export { useGamePreferences } from "./hooks/useGamePreferences";
+export { useLauncherHandoff } from "./hooks/useLauncherHandoff";
 export type { UseGamePreferencesResult } from "./hooks/useGamePreferences";
 export {
   buildMatchInviteUrl,

@@ -254,6 +254,7 @@ function AccountTab({ social }: { social: LauncherSocialController }) {
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
   const isEmail = social.account?.kind === "email";
 
   useEffect(() => {
@@ -267,6 +268,11 @@ function AccountTab({ social }: { social: LauncherSocialController }) {
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (social.authBusy) {
+      return;
+    }
+    setLocalError(null);
+    if (mode === "sign-up" && !/^[A-Za-z0-9_]{3,20}$/.test(username.trim())) {
+      setLocalError("Choose a player name of 3–20 letters, numbers, or underscores.");
       return;
     }
     if (mode === "sign-in") {
@@ -412,7 +418,7 @@ function AccountTab({ social }: { social: LauncherSocialController }) {
             </label>
             {mode === "sign-up" ? (
               <label className="account-field">
-                <span>Player name <em>optional</em></span>
+                <span>Player name <em>required</em></span>
                 <span className="account-field__input">
                   <Icon name="user" size={16} />
                   <input

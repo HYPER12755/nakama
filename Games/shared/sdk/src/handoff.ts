@@ -168,6 +168,11 @@ export function writeLauncherHandoff(
       launcherHandoffKey(handoff.gameId),
       JSON.stringify(parsed),
     );
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("moongames:launcher-handoff", {
+        detail: { gameId: handoff.gameId },
+      }));
+    }
     return true;
   } catch {
     return false;

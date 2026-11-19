@@ -93,6 +93,10 @@ export function AccountPanel({
       setFormError("The passwords do not match.");
       return;
     }
+    if (username.trim().length === 0) {
+      setFormError("Choose the name other players will see.");
+      return;
+    }
     const usernameError = validateUsername(username);
     if (usernameError !== null) {
       setFormError(usernameError);
@@ -249,7 +253,7 @@ export function AccountPanel({
         {signingUp && (
           <label className="auth-field">
             <span className="auth-field__label">
-              Player name <span>optional</span>
+              Player name <span>required</span>
             </span>
             <span className="auth-field__control">
               <Icon name="user" size={17} />
@@ -261,9 +265,10 @@ export function AccountPanel({
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                placeholder="3–20 letters or numbers"
+                placeholder="e.g. Asha"
                 maxLength={20}
                 disabled={authBusy}
+                required
               />
             </span>
           </label>

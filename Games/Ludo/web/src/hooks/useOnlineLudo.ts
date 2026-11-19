@@ -11,6 +11,7 @@ import {
   matchStateBytes,
   readLauncherHandoff,
   sameOriginServerAddress,
+  type GameHostConfig,
   type SocialFriend,
 } from "@moongames/game-sdk";
 import { LUDO_OP, type LudoColor, type LudoMove, type LudoState } from "@moongames/ludo-core";
@@ -184,7 +185,10 @@ export interface OnlineLudoController {
   clearNotice: () => void;
 }
 
-export function useOnlineLudo(enabled = true): OnlineLudoController {
+export function useOnlineLudo(
+  enabled = true,
+  hostConfig: GameHostConfig | null = null,
+): OnlineLudoController {
   const [connection, setConnection] = useState<OnlineConnection>("offline");
   const [state, setState] = useState<OnlineState | null>(null);
   const [error, setError] = useState<string | null>(null);

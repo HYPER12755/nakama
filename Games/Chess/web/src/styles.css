@@ -4834,3 +4834,78 @@ html[data-moonperf="lite"] .check-glow {
   font-size: 11.5px;
   line-height: 1.55;
 }
+
+/* Engine analysis must not squeeze or shift the board. The eval gauge is
+   taken out of flow so the board keeps the full panel width. */
+.board-with-eval {
+  position: relative;
+}
+
+.board-with-eval .board-wrap {
+  flex: 1 1 auto;
+  width: min(100%, 720px);
+}
+
+.board-with-eval .eval-gauge {
+  position: absolute;
+  left: -18px;
+  top: 0;
+  bottom: 0;
+  flex: none;
+}
+
+@media (max-width: 620px) {
+  .board-with-eval,
+  .board-with-eval .board-wrap {
+    width: 100%;
+  }
+
+  .board-with-eval .eval-gauge {
+    left: -10px;
+    width: 8px;
+  }
+
+  .engine-panel {
+    width: 100%;
+    max-width: 100%;
+    margin-top: 8px;
+  }
+
+  .engine-panel .pv-box {
+    width: 100%;
+  }
+}
+
+.engine-panel,
+.engine-panel .pv-box,
+.engine-panel .pv {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.engine-panel {
+  overflow: hidden;
+}
+
+.engine-panel .pv__moves {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+@media (max-width: 900px) {
+  .game-layout {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    min-width: 0;
+  }
+
+  .board-panel,
+  .board-with-eval,
+  .board-with-eval .board-wrap,
+  .board-with-eval .board,
+  .engine-panel {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+}

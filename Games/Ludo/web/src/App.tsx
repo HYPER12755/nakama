@@ -11,6 +11,7 @@ import {
   legalMoves,
   type LudoColor,
   type LudoDifficulty,
+  type LudoMove,
   type LudoRules,
   type LudoState,
 } from "@moongames/ludo-core";
@@ -24,6 +25,7 @@ import {
   ReplayShell,
   gameMotif,
   useGamePreferences,
+  useLauncherHandoff,
 } from "@moongames/game-ui";
 import { Icon } from "./components/Icon";
 import { LudoBoard } from "./components/LudoBoard";
@@ -193,7 +195,8 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     startSeat,
     startMode,
   });
-  const online = useOnlineLudo(mode === "online");
+  const launcherConfig = useLauncherHandoff(__MOONGAMES_GAME_ID__);
+  const online = useOnlineLudo(mode === "online", launcherConfig);
 
   useEffect(() => {
     if (controller.realGame.winner !== null) setProgress(readLocalProgress());
@@ -265,6 +268,22 @@ export default function App({ bridge }: { bridge: GameBridge }) {
       event.type === "move" || event.type === "leave-home" || event.type === "finish"),
     [game.events],
   );
+  const onlineMove = useMemo<LudoMove | null>(() => {
+    if (!lastMoveEvent || lastMoveEvent.token === undefined) return null;
+    return {
+      player: lastMoveEvent.player,
+      token: lastMoveEvent.token,
+      from: lastMoveEvent.from ?? -1,
+      to: lastMoveEvent.to ?? 0,
+      leavesHome: lastMoveEvent.type === "leave-home" || (lastMoveEvent.from ?? -1) < 0,
+      finishes: lastMoveEvent.type === "finish" || (lastMoveEvent.to ?? 0) >= 56,
+      captures: (lastMoveEvent.captured ?? []).map((entry) => ({
+        player: entry.player,
+        token: entry.token,
+      })),
+      safe: false,
+    };
+  }, [lastMoveEvent]);
   const latestEvent = game.events[game.events.length - 1];
 
   useEffect(() => {
@@ -287,7 +306,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   }, [lastRoll?.action]);
 
   useEffect(() => {
-    if (mode === "online" || !latestEvent) return;
+    if (!latestEvent) return;
     const messages: Record<string, string> = {
       capture: "Capture! A rival token went home.",
       extra: "Extra roll earned.",
@@ -625,15 +644,15 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               <LudoBoard
                 state={game}
                 legalTokens={legalTokens}
-                lastMove={!onlineMode ? controller.lastMove : null}
+                lastMove={onlineMode ? onlineMove : controller.lastMove}
                 onTokenClick={doMove}
                 disabled={controller.isReplaying || game.phase === "over" || (onlineMode ? online.spectating || !canMove : !!current?.ai)}
                 tokenSet={TOKEN_SETS.some((set) => set.id === preferences.pieceSet) ? preferences.pieceSet : "marble"}
                 boardTheme={BOARD_THEMES.some((theme) => theme.id === preferences.boardTheme) ? preferences.boardTheme : "classic"}
                 showLegalMoves={preferences.showLegalMoves}
                 highlightLastMove={preferences.highlightLastMove}
-                moveKey={!onlineMode ? lastMoveEvent?.action : undefined}
-                onStep={!onlineMode && soundOn ? () => playEvent("move") : undefined}
+                moveKey={lastMoveEvent?.action}
+                onStep={soundOn ? () => playEvent("move") : undefined}
                 stepMs={slowWatch ? 180 : autoplay ? 60 : TABLE_SPEEDS.find((entry) => entry.id === tableSpeed)!.stepMs}
               />
               <div className="side-dice" aria-label="Player dice">
