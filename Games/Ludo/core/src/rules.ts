@@ -108,8 +108,9 @@ export function advanceTurn(state: LudoState): void {
   state.phase = "roll";
   if (state.winner !== null) return;
   let next = state.current;
+  const direction = state.rules.turnOrder === "reverse" ? -1 : 1;
   for (let step = 0; step < state.playerCount; step += 1) {
-    next = (next + 1) % state.playerCount;
+    next = (next + direction + state.playerCount) % state.playerCount;
     if (playerAt(state, next).finished < state.tokensPerPlayer) {
       state.current = next;
       return;

@@ -74,6 +74,8 @@ export interface LudoRules {
   exactFinish: boolean;
   /** A token may only leave home on a six (standard Ludo). */
   sixToStart: boolean;
+  /** Direction the turn passes around the table. */
+  turnOrder: "normal" | "reverse";
 }
 
 export const DEFAULT_RULES: LudoRules = {
@@ -84,6 +86,7 @@ export const DEFAULT_RULES: LudoRules = {
   sixExtra: true,
   exactFinish: true,
   sixToStart: true,
+  turnOrder: "normal",
 };
 
 export interface LudoState {

@@ -4,6 +4,7 @@ import {
   START_INDEX,
   TOKENS_PER_PLAYER,
   TRACK_LENGTH,
+  advanceTurn,
   applyMove,
   cloneState,
   createGame,
@@ -199,6 +200,18 @@ describe("Ludo movement rules", () => {
     expect(game.winner).toBe(0);
     expect(game.phase).toBe("over");
     expect(game.ranking).toEqual([0]);
+  });
+});
+
+describe("Ludo turn order", () => {
+  it("passes turns forward by default and backwards in reverse start mode", () => {
+    const normal = createGame({ seed: 1 });
+    advanceTurn(normal);
+    expect(normal.current).toBe(1);
+
+    const reverse = createGame({ seed: 1, rules: { turnOrder: "reverse" } });
+    advanceTurn(reverse);
+    expect(reverse.current).toBe(3);
   });
 });
 

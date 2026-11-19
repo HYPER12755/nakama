@@ -15,6 +15,7 @@ import {
   type LudoState,
 } from "@moongames/ludo-core";
 import {
+  DEFAULT_PREFERENCES,
   GameToolbar,
   MatchChat,
   ModeSwitch,
@@ -31,8 +32,8 @@ import { useOnlineLudo } from "./hooks/useOnlineLudo";
 import { readLocalProgress } from "./lib/localProgress";
 import {
   audibleVolume, BOARD_THEMES, GAME_MODES, MODE_RULES, SOUND_SETS,
-  TABLE_SPEEDS, TOKEN_SETS, TURN_CLOCKS,
-  type GameModeId, type TableSpeedId,
+  START_MODES, TABLE_SPEEDS, TOKEN_SETS, TURN_CLOCKS,
+  type GameModeId, type StartModeId, type TableSpeedId,
 } from "./lib/preferences";
 import { configureSound, isMuted, playEvent, preloadEvent, setMuted } from "./lib/sound";
 
@@ -103,6 +104,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const [seatHuman, setSeatHuman] = useState<boolean[]>([true, false, false, false]);
   const [seatDifficulty, setSeatDifficulty] = useState<LudoDifficulty[]>(["normal", "normal", "normal", "normal"]);
   const [startSeat, setStartSeat] = useState(0);
+  const [startMode, setStartMode] = useState<StartModeId>("normal");
   const [autoRoll, setAutoRoll] = useState(false);
   const [seatColors, setSeatColors] = useState<LudoColor[]>(["red", "green", "yellow", "blue"]);
   const [seatNames, setSeatNames] = useState<string[]>(["", "", "", ""]);
@@ -122,7 +124,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const [progress, setProgress] = useState(() => readLocalProgress());
   const [toast, setToast] = useState<string | null>(null);
   const [replayPlaying, setReplayPlaying] = useState(false);
-  const { preferences, setPreference } = useGamePreferences(__MOONGAMES_GAME_ID__);
+  const { preferences, setPreference, resetPreference } = useGamePreferences(__MOONGAMES_GAME_ID__);
   const appRef = useRef<HTMLDivElement>(null);
 
   const query = useMemo(() => new URLSearchParams(window.location.search), []);
@@ -176,6 +178,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     seatHuman,
     seatDifficulty,
     startSeat,
+    startMode,
   });
   const online = useOnlineLudo(mode === "online");
 
@@ -371,6 +374,70 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   function applyStartSeat(seat: number) {
     setStartSeat(seat);
     controller.newGame({ startSeat: seat });
+  }
+
+  function applyStartMode(next: StartModeId) {
+    const nextRules = {
+      ...rules,
+      turnOrder: next === "reverse" ? "reverse" as const : "normal" as const,
+    };
+    setStartMode(next);
+    setRules(nextRules);
+    if (next !== "random") setStartSeat(0);
+    controller.newGame({ rules: nextRules, startMode: next, startSeat: next === "random" ? undefined : 0 });
+  }
+
+  function applyDefaults() {
+    const roles = [true, false, false, false];
+    const levels: LudoDifficulty[] = ["normal", "normal", "normal", "normal"];
+    const colors: LudoColor[] = ["red", "green", "yellow", "blue"];
+    const names = ["", "", "", ""];
+    const defaultRules = { ...MODE_RULES.classic };
+
+    setSeats(4);
+    setHumanSeats(1);
+    setSeatHuman(roles);
+    setSeatDifficulty(levels);
+    setDifficulty("normal");
+    setStartSeat(0);
+    setStartMode("normal");
+    setSeatColors(colors);
+    setSeatNames(names);
+    setTokensPerPlayer(4);
+    setTableSpeed("normal");
+    setRules(defaultRules);
+    setVariant("classic");
+    setTurnSeconds(0);
+    setRemaining(0);
+    setAutoRoll(false);
+    setSoundOn(true);
+    setMuted(false);
+    setTheme("dark");
+
+    for (const key of Object.keys(preferences) as Parameters<typeof resetPreference>[0][]) {
+      resetPreference(key);
+    }
+    setPreference("pieceSet", "regalia");
+    setPreference("boardTheme", "classic");
+    setPreference("soundSet", "ludo");
+    setPreference("soundEnabled", DEFAULT_PREFERENCES.soundEnabled);
+    setPreference("soundVolume", DEFAULT_PREFERENCES.soundVolume);
+    setPreference("showLegalMoves", DEFAULT_PREFERENCES.showLegalMoves);
+
+    controller.newGame({
+      seats: 4,
+      humanSeats: mode === "local" ? 4 : 1,
+      seatHuman: mode === "local" ? [true, true, true, true] : roles,
+      seatDifficulty: levels,
+      difficulty: "normal",
+      rules: defaultRules,
+      colors,
+      names,
+      tokensPerPlayer: 4,
+      startSeat: 0,
+      startMode: "normal",
+    });
+    playEvent("start");
   }
 
   function applyRule(key: keyof LudoRules, value: boolean) {
@@ -654,7 +721,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
           <section className="panel table-panel">
             <div className="panel-heading">
               <div><p className="eyebrow">Table</p><h2>Game controls</h2></div>
-              <span className="panel-heading__meta">changes start a new race</span>
+              <button type="button" className="button button--ghost defaults-button" onClick={applyDefaults} title="Restore default match and look settings">
+                <Icon name="refresh" size={14} /> Defaults
+              </button>
             </div>
             <p className="ludo-note">Game mode</p>
             <div className="pref-choices" role="radiogroup" aria-label="Game mode">
@@ -741,6 +810,23 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               ))}
             </div>
 
+            <p className="ludo-note">Start mode</p>
+            <div className="pref-choices" role="radiogroup" aria-label="Start mode">
+              {START_MODES.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={startMode === option.id}
+                  className={`pref-choice${startMode === option.id ? " is-chosen" : ""}`}
+                  title={option.hint}
+                  onClick={() => applyStartMode(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
             <p className="ludo-note">First turn</p>
             <div className="pref-choices" role="radiogroup" aria-label="First turn">
               {Array.from({ length: seats }, (_, seat) => seat + 1).map((seat) => (
@@ -749,6 +835,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                   type="button"
                   role="radio"
                   aria-checked={startSeat === seat - 1}
+                  disabled={startMode === "random"}
                   className={`pref-choice${startSeat === seat - 1 ? " is-chosen" : ""}`}
                   onClick={() => applyStartSeat(seat - 1)}
                 >

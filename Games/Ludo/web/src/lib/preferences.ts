@@ -16,7 +16,7 @@ export const TOKEN_SETS: TokenSet[] = [
 
 /** The supplied board art is the only board; ornaments are an SVG edge layer. */
 export const BOARD_THEMES = [
-  { id: "classic", label: "Classic table" },
+  { id: "classic", label: "Classic table", texture: "boards/ludo-classic.jpg" },
 ];
 
 /** Pace of computer turns and token hops. */
@@ -35,6 +35,7 @@ export const SOUND_SETS = [
 
 export const LUDO_FEATURES = {
   replay: true,
+  showLegalMoves: true,
 } as const;
 
 /** Rule presets a player can pick before a race. */
@@ -51,19 +52,28 @@ export const MODE_RULES: Record<Exclude<GameModeId, "custom">, Partial<import("@
   classic: {
     safeSquares: true, blocks: true, sixExtra: true,
     captureExtra: true, exactFinish: true, threeSixesFoul: true,
-    sixToStart: true,
+    sixToStart: true, turnOrder: "normal",
   },
   safe: {
     safeSquares: true, blocks: false, sixExtra: true,
     captureExtra: false, exactFinish: true, threeSixesFoul: true,
-    sixToStart: true,
+    sixToStart: true, turnOrder: "normal",
   },
   swift: {
     safeSquares: true, blocks: false, sixExtra: true,
     captureExtra: true, exactFinish: false, threeSixesFoul: false,
-    sixToStart: false,
+    sixToStart: false, turnOrder: "normal",
   },
 };
+
+/** How the first turn and the turn order are chosen. */
+export const START_MODES = [
+  { id: "normal", label: "Normal", hint: "Turns pass in seat order" },
+  { id: "reverse", label: "Reverse", hint: "Turns pass back through the seats" },
+  { id: "random", label: "Random", hint: "A fresh starting seat each race" },
+] as const;
+
+export type StartModeId = (typeof START_MODES)[number]["id"];
 
 /** Turn clocks offered on a table, in seconds. Zero means no clock. */
 export const TURN_CLOCKS = [0, 15, 30, 60] as const;

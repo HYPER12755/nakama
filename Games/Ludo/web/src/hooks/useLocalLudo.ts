@@ -36,6 +36,7 @@ export interface LocalGameOptions {
   seatDifficulty?: LudoDifficulty[];
   /** Seat that takes the first turn; omit for the default seat 1. */
   startSeat?: number;
+  startMode?: "normal" | "reverse" | "random";
 }
 
 /** A computer player should feel like someone thinking at the table, not a
@@ -53,6 +54,11 @@ function withStartSeat(state: LudoState, start: number | undefined): LudoState {
   return state;
 }
 
+function startingSeat(options: Pick<LocalGameOptions, "seats" | "startSeat" | "startMode">): number | undefined {
+  if (options.startMode === "random") return Math.floor(Math.random() * options.seats);
+  return options.startSeat;
+}
+
 export function useLocalLudo(options: LocalGameOptions) {
   const [game, setGame] = useState<LudoState>(() => withStartSeat(createGame({
     playerCount: options.seats,
@@ -62,7 +68,7 @@ export function useLocalLudo(options: LocalGameOptions) {
     colors: options.colors,
     names: options.names,
     tokensPerPlayer: options.tokensPerPlayer,
-  }), options.startSeat));
+  }), startingSeat(options)));
   const [lastMove, setLastMove] = useState<LudoMove | null>(null);
   const [steps, setSteps] = useState<LocalGameRecord["steps"]>([]);
   const [replayFrames, setReplayFrames] = useState<LudoState[] | null>(null);
@@ -98,7 +104,7 @@ export function useLocalLudo(options: LocalGameOptions) {
       colors: next.colors,
       names: next.names,
       tokensPerPlayer: next.tokensPerPlayer,
-    }), next.startSeat);
+    }), startingSeat(next));
     gameRef.current = fresh;
     setGame(fresh);
     setLastMove(null);

@@ -80,6 +80,8 @@ export interface PreferenceFeatures {
   blindMode?: boolean;
   /** A move of the game can be written with the keyboard. */
   keyboardMoves?: boolean;
+  /** The board can mark the squares a piece may go to. */
+  showLegalMoves?: boolean;
 }
 
 export interface GamePreferencesPanelProps {
@@ -262,6 +264,20 @@ export function GamePreferencesPanel({
             aria-label="Play the table music"
           />
         </label>
+
+        {features.showLegalMoves === true && (
+          <label className="pref-row pref-row--toggle">
+            <span className="pref-row__label">Legal move helper</span>
+            <input
+              type="checkbox"
+              checked={preferences.showLegalMoves}
+              onChange={(event) =>
+                choose("showLegalMoves", event.target.checked)
+              }
+              aria-label="Show legal move helper"
+            />
+          </label>
+        )}
       </div>
 
       <button

@@ -28,6 +28,7 @@ rules.DEFAULT_RULES = {
   sixExtra = true,
   exactFinish = true,
   sixToStart = true,
+  turnOrder = "normal",
 }
 
 local function number(value, fallback)
@@ -184,8 +185,9 @@ function rules.advance_turn(state)
     return
   end
   local next_seat = state.current
+  local direction = state.rules.turnOrder == "reverse" and -1 or 1
   for _ = 1, state.playerCount do
-    next_seat = (next_seat + 1) % state.playerCount
+    next_seat = (next_seat + direction + state.playerCount) % state.playerCount
     if player_at(state, next_seat).finished < state.tokensPerPlayer then
       state.current = next_seat
       return

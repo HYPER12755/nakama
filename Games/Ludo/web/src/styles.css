@@ -1089,3 +1089,8 @@ html[data-moonperf="lite"] .die--rolling {
     transform: scale(0.7);
   }
 }
+
+.defaults-button {
+  padding: 5px 9px;
+  font-size: 11px;
+}
