@@ -1113,6 +1113,7 @@ html[data-moonperf="lite"] .die--rolling {
 .side-dice {
   position: absolute;
   inset: 0;
+  z-index: 3;
   pointer-events: none;
 }
 
@@ -1563,3 +1564,42 @@ html[data-moonperf="lite"] .die--rolling {
   font-size: 12px;
   font-weight: 800;
 }
+
+.live-badge {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(52, 211, 153, 0.12);
+  color: var(--success);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.live-badge--done {
+  background: var(--panel-raised);
+  color: var(--muted);
+}
+
+.toolbar-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.text-button {
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.text-button:hover { color: var(--text); }
+.text-button--danger { color: var(--danger); }
+.text-button--danger:hover { color: var(--danger); }

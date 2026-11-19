@@ -16,7 +16,6 @@ import {
 } from "@moongames/ludo-core";
 import {
   DEFAULT_PREFERENCES,
-  GameToolbar,
   MatchChat,
   ModeSwitch,
   ProfilePanel,
@@ -26,6 +25,7 @@ import {
 } from "@moongames/game-ui";
 import { Icon } from "./components/Icon";
 import { LudoBoard } from "./components/LudoBoard";
+import { LudoMatchActions } from "./components/LudoMatchActions";
 import { LudoOnlinePanel, LudoOnlineResult } from "./components/LudoOnlinePanel";
 import { LudoRaceBar } from "./components/LudoRaceBar";
 import { LudoPreferences } from "./components/LudoPreferences";
@@ -673,58 +673,24 @@ export default function App({ bridge }: { bridge: GameBridge }) {
             </div>
           </div>
 
-          <GameToolbar
-            title="Table actions"
-            actions={[
-              {
-                id: "roll",
-                label: awaiting ? "Roll dice" : game.phase === "move" ? "Choose a token" : "Waiting…",
-                icon: <Icon name="sparkles" size={15} />,
-                onClick: doRoll,
-                disabled: !awaiting,
-              },
-              ...(onlineMode ? [] : [
-                {
-                  id: "new",
-                  label: "New game",
-                  icon: <Icon name="refresh" size={15} />,
-                  onClick: newGame,
-                  disabled: false,
-                },
-                {
-                  id: "undo",
-                  label: "Undo",
-                  icon: <Icon name="skip-back" size={15} />,
-                  onClick: controller.undo,
-                  disabled: !controller.canUndo,
-                  title: "Take back the last action",
-                },
-                {
-                  id: "pass",
-                  label: "Pass turn",
-                  icon: <Icon name="check" size={15} />,
-                  onClick: () => doMove(-1),
-                  disabled: game.phase !== "move" || legalTokens.length > 0 || !!current?.ai,
-                  title: "Use this when the roll cannot move a token",
-                },
-                {
-                  id: "replay",
-                  label: "Replay",
-                  icon: <Icon name="skip-back" size={15} />,
-                  onClick: controller.startReplay,
-                  disabled: controller.replayCount === 0,
-                },
-              ]),
-            ]}
+          <LudoMatchActions
+            mode={mode}
+            spectating={online.spectating}
+            phase={game.phase}
+            awaiting={awaiting}
+            canMove={canMove}
+            canUndo={controller.canUndo}
+            hasReplay={controller.replayCount > 0}
+            replaying={controller.isReplaying}
+            onRoll={doRoll}
+            onUndo={controller.undo}
+            onPass={() => doMove(-1)}
+            onNewGame={newGame}
+            onReplay={controller.startReplay}
+            onLeave={() => void online.leave()}
+            onResign={online.resign}
           />
 
-          <p className="roll-hint">
-            {controller.isReplaying && !onlineMode ? "Watching the recorded race."
-              : canMove ? "Tap a glowing token to move it."
-              : awaiting ? "Roll the dice to start your turn."
-              : current?.ai ? `${playerName(current.seat)} is thinking…`
-              : "Waiting for the next player."}
-          </p>
 
         </section>
 
