@@ -7,7 +7,6 @@ import {
   PLAYER_LABEL,
   TOKENS_PER_PLAYER,
   DEFAULT_RULES,
-  chooseMove,
   createGame,
   legalMoves,
   type LudoColor,
@@ -27,6 +26,7 @@ import {
 } from "@moongames/game-ui";
 import { Icon } from "./components/Icon";
 import { LudoBoard } from "./components/LudoBoard";
+import { LudoOnlinePanel, LudoOnlineResult } from "./components/LudoOnlinePanel";
 import { LudoPreferences } from "./components/LudoPreferences";
 import { useLocalLudo } from "./hooks/useLocalLudo";
 import { useOnlineLudo } from "./hooks/useOnlineLudo";
@@ -106,7 +106,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const [seatDifficulty, setSeatDifficulty] = useState<LudoDifficulty[]>(["normal", "normal", "normal", "normal"]);
   const [startSeat, setStartSeat] = useState(0);
   const [startMode, setStartMode] = useState<StartModeId>("normal");
-  const [autoRoll, setAutoRoll] = useState(false);
+  const [autoForced, setAutoForced] = useState(true);
   const [haptics, setHaptics] = useState(true);
   const [seatColors, setSeatColors] = useState<LudoColor[]>(["red", "green", "yellow", "blue"]);
   const [seatNames, setSeatNames] = useState<string[]>(["", "", "", ""]);
@@ -116,6 +116,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const [variant, setVariant] = useState<GameModeId>("classic");
   const [turnSeconds, setTurnSeconds] = useState(0);
   const [remaining, setRemaining] = useState(0);
+  const [onlineRemaining, setOnlineRemaining] = useState(0);
   const [diceRolling, setDiceRolling] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [soundOn, setSoundOn] = useState(!isMuted());
@@ -257,6 +258,18 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const latestEvent = game.events[game.events.length - 1];
 
   useEffect(() => {
+    const deadline = online.state?.turnDeadline;
+    if (mode !== "online" || deadline === null || deadline === undefined) {
+      setOnlineRemaining(0);
+      return;
+    }
+    const update = () => setOnlineRemaining(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    update();
+    const timer = window.setInterval(update, 500);
+    return () => window.clearInterval(timer);
+  }, [mode, online.state?.turnDeadline]);
+
+  useEffect(() => {
     if (!lastRoll) return;
     setDiceRolling(true);
     const timer = window.setTimeout(() => setDiceRolling(false), 650);
@@ -292,20 +305,19 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     : game.phase === "move" && legalTokens.length > 0 && !current?.ai && !controller.isReplaying;
 
   useEffect(() => {
-    if (onlineMode || !autoRoll || !awaiting || controller.isReplaying) return;
-    const timer = window.setTimeout(() => doRoll(), 650);
+    if (onlineMode || !autoForced || !canMove || controller.isReplaying || legalTokens.length !== 1) return;
+    const timer = window.setTimeout(() => controller.move(legalTokens[0]!), 420);
     return () => window.clearTimeout(timer);
-  }, [awaiting, autoRoll, onlineMode, controller.isReplaying, game.action, game.current]);
+  }, [canMove, autoForced, onlineMode, controller.isReplaying, game.action, game.current, legalTokens]);
 
   useEffect(() => {
-    if (onlineMode || !autoRoll || !canMove || controller.isReplaying) return;
-    const token = legalTokens.length === 1
-      ? legalTokens[0]!
-      : chooseMove(game, difficulty);
-    if (token === null || token === undefined) return;
-    const timer = window.setTimeout(() => controller.move(token), 520);
+    if (
+      onlineMode || !autoForced || controller.isReplaying ||
+      game.phase !== "move" || legalTokens.length > 0 || current?.ai
+    ) return;
+    const timer = window.setTimeout(() => controller.move(-1), 420);
     return () => window.clearTimeout(timer);
-  }, [canMove, autoRoll, onlineMode, controller.isReplaying, game.action, game.current, legalTokens, difficulty]);
+  }, [autoForced, onlineMode, controller.isReplaying, game.phase, game.current, legalTokens.length, current?.ai]);
 
   function changeMode(next: string) {
     const selected = next as Mode;
@@ -442,7 +454,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     setVariant("classic");
     setTurnSeconds(0);
     setRemaining(0);
-    setAutoRoll(false);
+    setAutoForced(true);
     setHaptics(true);
     setSoundOn(true);
     setMuted(false);
@@ -555,11 +567,16 @@ export default function App({ bridge }: { bridge: GameBridge }) {
             <span className="race-disc" style={{ background: current ? PLAYER_COLOR_HEX[current.color] : undefined }} />
             <div className="turn-strip__copy">
               <span className="eyebrow">Current turn</span>
-              <strong>{autoplay && !onlineMode ? "Computer table" : current ? playerName(current.seat) : "—"}</strong>
+              <strong>
+                {autoplay && !onlineMode ? "Computer table"
+                  : onlineMode && current
+                    ? online.state?.seats.find((seat) => seat.colour === current.color)?.username ?? playerName(current.seat)
+                    : current ? playerName(current.seat) : "—"}
+              </strong>
             </div>
-            {turnSeconds > 0 && !onlineMode && game.phase !== "over" ? (
-              <span className={`turn-clock${remaining <= 5 ? " turn-clock--urgent" : ""}`} title="Turn clock">
-                <Icon name="clock" size={14} strokeWidth={2} />{remaining}s
+            {((turnSeconds > 0 && !onlineMode && game.phase !== "over") || (onlineMode && online.state?.turnDeadline != null)) ? (
+              <span className={`turn-clock${(onlineMode ? onlineRemaining : remaining) <= 5 ? " turn-clock--urgent" : ""}`} title="Turn clock">
+                <Icon name="clock" size={14} strokeWidth={2} />{onlineMode ? onlineRemaining : remaining}s
               </span>
             ) : null}
             {onlineMode ? (
@@ -638,36 +655,38 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 onClick: doRoll,
                 disabled: !awaiting,
               },
-              {
-                id: "new",
-                label: "New game",
-                icon: <Icon name="refresh" size={15} />,
-                onClick: newGame,
-                disabled: onlineMode,
-              },
-              {
-                id: "undo",
-                label: "Undo",
-                icon: <Icon name="skip-back" size={15} />,
-                onClick: controller.undo,
-                disabled: onlineMode || !controller.canUndo,
-                title: "Take back the last action",
-              },
-              {
-                id: "pass",
-                label: "Pass turn",
-                icon: <Icon name="check" size={15} />,
-                onClick: () => doMove(-1),
-                disabled: onlineMode || game.phase !== "move" || legalTokens.length > 0 || !!current?.ai,
-                title: "Use this when the roll cannot move a token",
-              },
-              {
-                id: "replay",
-                label: "Replay",
-                icon: <Icon name="skip-back" size={15} />,
-                onClick: controller.startReplay,
-                disabled: onlineMode || controller.replayCount === 0,
-              },
+              ...(onlineMode ? [] : [
+                {
+                  id: "new",
+                  label: "New game",
+                  icon: <Icon name="refresh" size={15} />,
+                  onClick: newGame,
+                  disabled: false,
+                },
+                {
+                  id: "undo",
+                  label: "Undo",
+                  icon: <Icon name="skip-back" size={15} />,
+                  onClick: controller.undo,
+                  disabled: !controller.canUndo,
+                  title: "Take back the last action",
+                },
+                {
+                  id: "pass",
+                  label: "Pass turn",
+                  icon: <Icon name="check" size={15} />,
+                  onClick: () => doMove(-1),
+                  disabled: game.phase !== "move" || legalTokens.length > 0 || !!current?.ai,
+                  title: "Use this when the roll cannot move a token",
+                },
+                {
+                  id: "replay",
+                  label: "Replay",
+                  icon: <Icon name="skip-back" size={15} />,
+                  onClick: controller.startReplay,
+                  disabled: controller.replayCount === 0,
+                },
+              ]),
             ]}
           />
           <p className="roll-hint">
@@ -682,42 +701,13 @@ export default function App({ bridge }: { bridge: GameBridge }) {
 
         <aside className="sidebar">
           {onlineMode ? (
-            <section className="panel online-panel">
-              <div className="panel-heading">
-                <div><p className="eyebrow">Online table</p><h2>{inMatch ? "At the table" : "Find a game"}</h2></div>
-                <span className="panel-heading__meta">{online.accountName ?? "Guest"}</span>
-              </div>
-              {online.error ? <p className="profile-error">{online.error}</p> : null}
-              {!inMatch ? (
-                <>
-                  <div className="toolbar-grid">
-                    {[2, 3, 4].map((count) => (
-                      <button key={count} type="button" className="action-button" onClick={() => void online.quickMatch(count)}>
-                        Quick {count}
-                      </button>
-                    ))}
-                    <button type="button" className="action-button action-button--accent" onClick={() => void online.createPrivate(seats)}>
-                      Private
-                    </button>
-                  </div>
-                  <div className="invite-actions">
-                    <input className="room-input" value={roomInput} onChange={(event) => setRoomInput(event.target.value)} placeholder="Room code" aria-label="Room code" />
-                    <button type="button" className="mini-button" onClick={() => void online.joinByCode(roomInput)}>Join</button>
-                    <button type="button" className="mini-button" onClick={() => void online.joinByCode(roomInput, true)}>Watch</button>
-                  </div>
-                  {online.searching ? <p className="ludo-note">Looking for players…</p> : null}
-                </>
-              ) : (
-                <>
-                  {online.roomCode ? <p className="room-code">Room code <strong>{online.roomCode}</strong></p> : null}
-                  {online.spectating ? <p className="ludo-note">You are watching this table.</p> : null}
-                  <div className="toolbar-grid">
-                    <button type="button" className="action-button" onClick={() => void online.leave()}>Leave</button>
-                    <button type="button" className="action-button action-button--danger" onClick={online.resign}>Resign</button>
-                  </div>
-                </>
-              )}
-            </section>
+            <LudoOnlinePanel
+              online={online}
+              seats={seats}
+              roomInput={roomInput}
+              onRoomInput={setRoomInput}
+              onRematch={(count) => void online.createPrivate(count)}
+            />
           ) : null}
 
           {onlineMode ? (
@@ -996,11 +986,11 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               ))}
             </div>
             <label className="rule-switch">
-              <span>Auto-play human turns</span>
+              <span>Auto-play the only legal token</span>
               <input
                 type="checkbox"
-                checked={autoRoll}
-                onChange={(event) => setAutoRoll(event.target.checked)}
+                checked={autoForced}
+                onChange={(event) => setAutoForced(event.target.checked)}
               />
             </label>
             <label className="rule-switch">
@@ -1071,6 +1061,19 @@ export default function App({ bridge }: { bridge: GameBridge }) {
       </main>
 
       {toast ? <div className="toast" role="status">{toast}</div> : null}
+
+      {onlineMode && online.state?.result ? (
+        <LudoOnlineResult
+          winnerColour={online.state.result.winnerColour}
+          winnerName={online.state.seats.find((seat) => seat.colour === online.state!.result!.winnerColour)?.username}
+          winnerUserId={online.state.result.winnerUserId}
+          myUserId={online.myUserId}
+          reason={online.state.result.reason}
+          onRematch={() => void online.createPrivate(seats)}
+          onView={() => {}}
+          onLeave={() => void online.leave()}
+        />
+      ) : null}
 
       {onlineMode ? (
         <div className="chat-dock">

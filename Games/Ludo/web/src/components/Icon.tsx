@@ -19,7 +19,11 @@ export type IconName =
   | "skip-back"
   | "chevron-right"
   | "check"
-  | "clock";
+  | "clock"
+  | "copy"
+  | "link"
+  | "alert"
+  | "stop";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -138,6 +142,25 @@ export function Icon({ name, size = 20, strokeWidth = 1.8, ...props }: IconProps
           <path d="M12 7.2V12l3.2 2" />
         </>
       )}
+      {name === "copy" && (
+        <>
+          <rect x="8" y="8" width="12" height="12" rx="2" />
+          <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+        </>
+      )}
+      {name === "link" && (
+        <>
+          <path d="M10.5 13.5a4 4 0 0 0 5.7 0l2.3-2.3a4 4 0 0 0-5.7-5.7L11.6 6.7" />
+          <path d="M13.5 10.5a4 4 0 0 0-5.7 0l-2.3 2.3a4 4 0 0 0 5.7 5.7l1.2-1.2" />
+        </>
+      )}
+      {name === "alert" && (
+        <>
+          <path d="M12 4 3 20h18Z" />
+          <path d="M12 10v5M12 18h.01" />
+        </>
+      )}
+      {name === "stop" && <rect x="6" y="6" width="12" height="12" rx="2" />}
     </svg>
   );
 }
