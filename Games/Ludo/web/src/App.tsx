@@ -100,6 +100,10 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const [seats, setSeats] = useState(4);
   const [difficulty, setDifficulty] = useState<LudoDifficulty>("normal");
   const [humanSeats, setHumanSeats] = useState(1);
+  const [seatHuman, setSeatHuman] = useState<boolean[]>([true, false, false, false]);
+  const [seatDifficulty, setSeatDifficulty] = useState<LudoDifficulty[]>(["normal", "normal", "normal", "normal"]);
+  const [startSeat, setStartSeat] = useState(0);
+  const [autoRoll, setAutoRoll] = useState(false);
   const [seatColors, setSeatColors] = useState<LudoColor[]>(["red", "green", "yellow", "blue"]);
   const [seatNames, setSeatNames] = useState<string[]>(["", "", "", ""]);
   const [tokensPerPlayer, setTokensPerPlayer] = useState(4);
@@ -169,6 +173,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     colors: seatColors,
     names: seatNames,
     tokensPerPlayer,
+    seatHuman,
+    seatDifficulty,
+    startSeat,
   });
   const online = useOnlineLudo(mode === "online");
 
@@ -176,9 +183,13 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     if (controller.realGame.winner !== null) setProgress(readLocalProgress());
   }, [controller.realGame.winner]);
 
-  const emptyGame = useMemo(() => createGame({
-    playerCount: seats, colors: seatColors, names: seatNames, tokensPerPlayer,
-  }), [seats, seatColors, seatNames, tokensPerPlayer]);
+  const emptyGame = useMemo(() => {
+    const fresh = createGame({
+      playerCount: seats, colors: seatColors, names: seatNames, tokensPerPlayer,
+    });
+    fresh.current = Math.min(startSeat, seats - 1);
+    return fresh;
+  }, [seats, seatColors, seatNames, tokensPerPlayer, startSeat]);
   const game: LudoState = mode === "online" ? (online.state?.game ?? emptyGame) : controller.game;
   const legalTokens = useMemo(() => {
     if (mode === "online") {
@@ -265,11 +276,20 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     ? inMatch && game.phase === "move" && legalTokens.length > 0 && !online.spectating
     : game.phase === "move" && legalTokens.length > 0 && !current?.ai && !controller.isReplaying;
 
+  useEffect(() => {
+    if (onlineMode || !autoRoll || !awaiting || controller.isReplaying) return;
+    const timer = window.setTimeout(() => doRoll(), 650);
+    return () => window.clearTimeout(timer);
+  }, [awaiting, autoRoll, onlineMode, controller.isReplaying, game.action, game.current]);
+
   function changeMode(next: string) {
     const selected = next as Mode;
     setMode(selected);
     if (selected !== "online") {
-      controller.newGame({ humanSeats: selected === "local" ? seats : 1 });
+      const roles = Array.from({ length: seats }, (_, seat) => selected === "local" || seat === 0);
+      setSeatHuman(roles);
+      setHumanSeats(roles.filter(Boolean).length);
+      controller.newGame({ humanSeats: roles.filter(Boolean).length, seatHuman: roles });
     }
   }
 
@@ -310,19 +330,47 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   }
 
   function applySeats(nextSeats: number) {
+    const roles = Array.from({ length: nextSeats }, (_, seat) =>
+      mode === "local" || autoplay ? false : seatHuman[seat] ?? seat === 0);
+    const nextHumans = roles.filter(Boolean).length;
+    const nextStart = Math.min(startSeat, nextSeats - 1);
     setSeats(nextSeats);
-    const nextHumans = Math.min(humanSeats, nextSeats);
+    setSeatHuman(roles);
     setHumanSeats(nextHumans);
+    setStartSeat(nextStart);
     controller.newGame({
       seats: nextSeats,
-      humanSeats: mode === "local" ? nextSeats : autoplay ? 0 : nextHumans,
+      humanSeats: nextHumans,
+      seatHuman: roles,
+      startSeat: nextStart,
       rules,
     });
   }
 
   function applyHumanSeats(nextHumans: number) {
+    const roles = Array.from({ length: seats }, (_, seat) => seat < nextHumans);
     setHumanSeats(nextHumans);
-    controller.newGame({ humanSeats: nextHumans, seats, rules });
+    setSeatHuman(roles);
+    controller.newGame({ humanSeats: nextHumans, seatHuman: roles, seats, rules });
+  }
+
+  function applySeatRole(seat: number, human: boolean) {
+    const next = [...seatHuman];
+    next[seat] = human;
+    setSeatHuman(next);
+    setHumanSeats(next.filter(Boolean).length);
+    controller.newGame({ seatHuman: next, humanSeats: next.filter(Boolean).length });
+  }
+
+  function applySeatDifficulty(seat: number, level: LudoDifficulty) {
+    const next = [...seatDifficulty];
+    next[seat] = level;
+    setSeatDifficulty(next);
+  }
+
+  function applyStartSeat(seat: number) {
+    setStartSeat(seat);
+    controller.newGame({ startSeat: seat });
   }
 
   function applyRule(key: keyof LudoRules, value: boolean) {
@@ -693,6 +741,22 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               ))}
             </div>
 
+            <p className="ludo-note">First turn</p>
+            <div className="pref-choices" role="radiogroup" aria-label="First turn">
+              {Array.from({ length: seats }, (_, seat) => seat + 1).map((seat) => (
+                <button
+                  key={seat}
+                  type="button"
+                  role="radio"
+                  aria-checked={startSeat === seat - 1}
+                  className={`pref-choice${startSeat === seat - 1 ? " is-chosen" : ""}`}
+                  onClick={() => applyStartSeat(seat - 1)}
+                >
+                  {`P${seat}`}
+                </button>
+              ))}
+            </div>
+
             <p className="ludo-note">Seats · colour and name</p>
             <div className="seat-setup">
               {Array.from({ length: seats }, (_, seat) => (
@@ -719,6 +783,27 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                     {COLOR_OPTIONS.map((color) => (
                       <option key={color} value={color}>{color}</option>
                     ))}
+                  </select>
+                  <select
+                    className="seat-setup__role"
+                    aria-label={`Player ${seat + 1} role`}
+                    value={seatHuman[seat] ? "human" : "computer"}
+                    disabled={mode === "local" || autoplay}
+                    onChange={(event) => applySeatRole(seat, event.target.value === "human")}
+                  >
+                    <option value="human">Human</option>
+                    <option value="computer">Computer</option>
+                  </select>
+                  <select
+                    className="seat-setup__level"
+                    aria-label={`Player ${seat + 1} AI level`}
+                    value={seatDifficulty[seat] ?? "normal"}
+                    disabled={seatHuman[seat] || mode === "local" || autoplay}
+                    onChange={(event) => applySeatDifficulty(seat, event.target.value as LudoDifficulty)}
+                  >
+                    <option value="easy">Easy</option>
+                    <option value="normal">Normal</option>
+                    <option value="hard">Hard</option>
                   </select>
                 </div>
               ))}
@@ -761,6 +846,14 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 </label>
               ))}
             </div>
+            <label className="rule-switch">
+              <span>Auto-roll human turns</span>
+              <input
+                type="checkbox"
+                checked={autoRoll}
+                onChange={(event) => setAutoRoll(event.target.checked)}
+              />
+            </label>
           </section>
 
           {mode === "ai" ? (

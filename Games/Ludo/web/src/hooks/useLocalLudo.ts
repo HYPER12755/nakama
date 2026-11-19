@@ -31,22 +31,38 @@ export interface LocalGameOptions {
   colors?: LudoColor[];
   names?: string[];
   tokensPerPlayer?: number;
+  /** Explicit per-seat roles override the simple human-count control. */
+  seatHuman?: boolean[];
+  seatDifficulty?: LudoDifficulty[];
+  /** Seat that takes the first turn; omit for the default seat 1. */
+  startSeat?: number;
 }
 
 /** A computer player should feel like someone thinking at the table, not a
  * script burning through turns. Each action gets a deliberate pause. */
 const DEFAULT_AI_DELAY_MS = 850;
 
+function aiFlags(options: Pick<LocalGameOptions, "seats" | "humanSeats" | "seatHuman">): boolean[] {
+  return Array.from({ length: options.seats }, (_, seat) => options.seatHuman
+    ? !(options.seatHuman[seat] ?? seat < options.humanSeats)
+    : seat >= options.humanSeats);
+}
+
+function withStartSeat(state: LudoState, start: number | undefined): LudoState {
+  if (start !== undefined && start >= 0 && start < state.playerCount) state.current = start;
+  return state;
+}
+
 export function useLocalLudo(options: LocalGameOptions) {
-  const [game, setGame] = useState<LudoState>(() => createGame({
+  const [game, setGame] = useState<LudoState>(() => withStartSeat(createGame({
     playerCount: options.seats,
     seed: options.seed,
-    ai: Array.from({ length: options.seats }, (_, seat) => seat >= options.humanSeats),
+    ai: aiFlags(options),
     rules: options.rules,
     colors: options.colors,
     names: options.names,
     tokensPerPlayer: options.tokensPerPlayer,
-  }));
+  }), options.startSeat));
   const [lastMove, setLastMove] = useState<LudoMove | null>(null);
   const [steps, setSteps] = useState<LocalGameRecord["steps"]>([]);
   const [replayFrames, setReplayFrames] = useState<LudoState[] | null>(null);
@@ -74,15 +90,15 @@ export function useLocalLudo(options: LocalGameOptions) {
     setCanUndo(false);
     const next = { ...optionsRef.current, ...overrides };
     optionsRef.current = next;
-    const fresh = createGame({
+    const fresh = withStartSeat(createGame({
       playerCount: next.seats,
       seed: next.seed,
-      ai: Array.from({ length: next.seats }, (_, seat) => seat >= next.humanSeats),
+      ai: aiFlags(next),
       rules: next.rules,
       colors: next.colors,
       names: next.names,
       tokensPerPlayer: next.tokensPerPlayer,
-    });
+    }), next.startSeat);
     gameRef.current = fresh;
     setGame(fresh);
     setLastMove(null);
@@ -158,7 +174,8 @@ export function useLocalLudo(options: LocalGameOptions) {
     timer.current = setTimeout(() => {
       if (current.phase === "roll") roll();
       else {
-        const token = chooseMove(current, optionsRef.current.difficulty);
+        const level = optionsRef.current.seatDifficulty?.[current.current] ?? optionsRef.current.difficulty;
+        const token = chooseMove(current, level);
         if (token === null) {
           setGame((previous) => {
             const next = cloneState(previous);
