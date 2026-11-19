@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { FriendInviteDialog, buildMatchInviteUrl, copyText } from "@moongames/game-ui";
 import { PLAYER_COLOR_HEX, type LudoColor } from "@moongames/ludo-core";
 import type { OnlineLudoController } from "../hooks/useOnlineLudo";
 import { TURN_CLOCKS } from "../lib/preferences";
@@ -10,6 +11,7 @@ interface LudoOnlinePanelProps {
   roomInput: string;
   onRoomInput: (value: string) => void;
   onRematch: (seats: number, turnSeconds: number) => void;
+  onNotify: (message: string) => void;
 }
 
 const STATUS_LABEL: Record<OnlineLudoController["connection"], string> = {
@@ -19,7 +21,13 @@ const STATUS_LABEL: Record<OnlineLudoController["connection"], string> = {
   error: "Connection problem",
 };
 
-async function copyText(value: string): Promise<boolean> {
+function formatClock(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+async function writeClipboard(value: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(value);
     return true;
@@ -38,12 +46,16 @@ async function copyText(value: string): Promise<boolean> {
 
 /** The online table UI, following the lobby and roster language of Chess/Carrom. */
 export function LudoOnlinePanel({
-  online, seats, roomInput, onRoomInput, onRematch,
+  online, seats, roomInput, onRoomInput, onRematch, onNotify,
 }: LudoOnlinePanelProps) {
   const [copied, setCopied] = useState<string | null>(null);
   const [searchSeconds, setSearchSeconds] = useState(0);
   const [lobbySeats, setLobbySeats] = useState(seats);
   const [lobbyClock, setLobbyClock] = useState(0);
+  const [inviteTarget, setInviteTarget] = useState<{
+    matchId: string;
+    spectate: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (!online.searching) {
@@ -64,7 +76,13 @@ export function LudoOnlinePanel({
   }, [copied]);
 
   async function copy(label: string, value: string) {
-    setCopied(await copyText(value) ? label : "failed");
+    setCopied(await writeClipboard(value) ? label : "failed");
+  }
+
+  async function createPrivateAndInvite() {
+    const matchId = await online.createPrivate(lobbySeats, lobbyClock);
+    void online.loadFriends();
+    setInviteTarget({ matchId, spectate: false });
   }
 
   const game = online.state?.game;
@@ -155,24 +173,31 @@ export function LudoOnlinePanel({
           </div>
 
           <p className="ludo-note">Match</p>
-          <div className="toolbar-grid">
+          <div className="online-actions online-actions--stack">
             <button
               type="button"
-              className="action-button"
-              disabled={online.connection !== "connected" || online.searching}
+              className="action-button action-button--primary"
+              disabled={online.connection !== "connected" || (online.searching === false && online.matchId !== null)}
               onClick={() => void online.quickMatch(lobbySeats, lobbyClock)}
             >
-              Quick match · {lobbySeats}
+              {online.searching
+                ? `Searching… ${formatClock(searchSeconds)}`
+                : `Quick match · ${lobbySeats}`}
             </button>
+            {online.searching ? (
+              <button type="button" className="action-button" onClick={() => void online.leave()}>
+                Cancel search
+              </button>
+            ) : null}
           </div>
           <div className="toolbar-grid online-lobby-actions">
             <button
               type="button"
               className="action-button action-button--accent"
               disabled={online.connection !== "connected" || online.searching}
-              onClick={() => void online.createPrivate(lobbySeats, lobbyClock)}
+              onClick={() => void createPrivateAndInvite()}
             >
-              Private room
+              Create & invite friend
             </button>
             <button
               type="button"
@@ -209,77 +234,90 @@ export function LudoOnlinePanel({
               Watch
             </button>
           </div>
-          {online.searching ? (
-            <div className="online-search" role="status">
-              <span className="online-search__pulse" />
-              Looking for players · {searchSeconds}s
-              <button type="button" className="mini-button" onClick={() => void online.leave()}>Stop</button>
-            </div>
-          ) : null}
           <p className="online-hint">Private rooms give you a code to share. Watch joins as a spectator.</p>
         </>
       ) : (
-        <>
-          {online.roomCode ? (
-            <div className="copy-code">
-              <div>
-                <p className="eyebrow">Room code</p>
-                <strong>{online.roomCode}</strong>
-              </div>
-              <button
-                type="button"
-                className="mini-button"
-                onClick={() => void copy("room", online.roomCode!)}
-                title="Copy room code"
-              >
-                <Icon name="copy" size={14} />
-                {copied === "room" ? "Copied" : copied === "failed" ? "Copy failed" : "Copy"}
+        <div className="online-match">
+          <div className="match-summary">
+            <div><span className="field-label">Mode</span><strong>{online.roomCode !== null ? "Private" : "Quick"}</strong></div>
+            <div><span className="field-label">Players</span><strong>{game?.playerCount ?? lobbySeats}</strong></div>
+            <div>
+              <span className="field-label">You</span>
+              <strong>
+                {online.spectating ? "Watching" : online.myColour ?? "—"}
+              </strong>
+            </div>
+            <div><span className="field-label">Clock</span><strong>{lobbyClock === 0 ? "Off" : `${lobbyClock}s`}</strong></div>
+          </div>
+
+          <div className="match-code">
+            <span className="field-label">Room code</span>
+            <div className="match-code-row">
+              <code>{online.roomCode ?? "—"}</code>
+              <button type="button" className="mini-button" disabled={online.roomCode === null} onClick={() => void copy("room", online.roomCode ?? "")}>Copy</button>
+            </div>
+            <span className="field-label">Match ID</span>
+            <div className="match-code-row">
+              <code>{online.matchId ?? "—"}</code>
+              <button type="button" className="mini-button" disabled={online.matchId === null} onClick={() => void copy("id", online.matchId ?? "")}>Copy</button>
+            </div>
+            <div className="invite-actions">
+              {online.matchId !== null ? (
+                <button
+                  type="button"
+                  className="mini-button mini-button--accent"
+                  onClick={() => {
+                    void online.loadFriends();
+                    setInviteTarget({ matchId: online.matchId!, spectate: game !== null });
+                  }}
+                >
+                  {game !== null ? "Invite a friend to watch" : "Invite a friend"}
+                </button>
+              ) : null}
+              <button type="button" className="mini-button" onClick={() => void copy("link", `${window.location.origin}${window.location.pathname}?room=${online.roomCode ?? ""}`)}>
+                {copied === "link" ? "Invite link copied" : "Copy invite link"}
               </button>
             </div>
-          ) : null}
+          </div>
 
-          {online.matchId ? (
-            <button
-              type="button"
-              className="online-link"
-              onClick={() => void copy("link", `${window.location.origin}${window.location.pathname}?room=${online.roomCode ?? ""}`)}
-            >
-              <Icon name="link" size={14} />
-              {copied === "link" ? "Invite link copied" : copied === "failed" ? "Copy failed — use the room code" : "Copy invite link"}
-            </button>
-          ) : null}
-
-          {!game ? (
-            <div className="online-banner online-banner--notice" role="status">
-              <Icon name="users" size={16} />
-              <span>Waiting for the other players to join before the race begins.</span>
-            </div>
-          ) : null}
-
-          <p className="ludo-note">Players</p>
-          <div className="online-roster">
-            {roster.length === 0 ? <p className="online-hint">Waiting for the table to seat players…</p> : null}
+          <div className="online-players">
             {roster.map(({ color, seat, me }, index) => (
-              <div className={`online-seat${seat?.connected === false ? " is-away" : ""}`} key={`${color}-${index}`}>
-                <span className="online-seat__disc" style={{ background: PLAYER_COLOR_HEX[color as LudoColor] }} />
-                <span className="online-seat__name">{seat?.username ?? "Open seat"}</span>
+              <div key={`${color}-${index}`} className="online-player-row">
+                <span
+                  className={`seat-dot seat-dot--${color}`}
+                  style={{ background: PLAYER_COLOR_HEX[color] }}
+                />
+                <span className="online-player-name">{seat?.username ?? "Open seat"}</span>
                 {me ? <span className="online-seat__tag">you</span> : null}
-                {seat ? (
-                  <span className="online-seat__state">{seat.connected ? "here" : "away"}</span>
-                ) : (
-                  <span className="online-seat__state">waiting</span>
-                )}
+                <span className={`online-player-connection${seat?.connected === false ? " online-player-connection--off" : ""}`}>
+                  {seat ? seat.connected ? "online" : "offline" : "waiting"}
+                </span>
               </div>
             ))}
           </div>
 
-          {spectatorCount > 0 ? (
-            <p className="online-hint">
-              {online.spectating ? "You are watching · " : ""}
-              {spectatorCount} spectator{spectatorCount === 1 ? "" : "s"} at the table
+          <div className="online-spectators">
+            <span className="field-label">Spectators ({spectatorCount})</span>
+            <span className="online-spectator-names">
+              {spectatorCount === 0
+                ? "No one watching yet"
+                : online.state?.spectators.map((entry) => entry.username).join(", ")}
+            </span>
+          </div>
+
+          {!game ? (
+            <p className="online-copy online-copy--compact">Waiting for the other players to join before the race begins.</p>
+          ) : null}
+          {online.spectating ? (
+            <p className="online-copy online-copy--compact">You are watching this match. Tokens, dice and results update live.</p>
+          ) : null}
+          {online.state?.result ? (
+            <p className="match-result">
+              {online.state.result.winnerUserId === online.myUserId
+                ? "You win"
+                : `${online.state.seats.find((seat) => seat.colour === online.state?.result?.winnerColour)?.username ?? "Opponent"} wins`}
             </p>
           ) : null}
-          {online.spectating ? <p className="online-banner online-banner--notice">You are watching this table.</p> : null}
 
           <p className="ludo-note">Match actions</p>
           <div className="toolbar-grid">
@@ -290,8 +328,45 @@ export function LudoOnlinePanel({
               <button type="button" className="action-button action-button--danger" onClick={online.resign}>Resign</button>
             )}
           </div>
-        </>
+        </div>
       )}
+
+      {inviteTarget !== null ? (
+        <FriendInviteDialog
+          open
+          matchId={inviteTarget.matchId}
+          spectate={inviteTarget.spectate}
+          accountName={online.accountName}
+          friends={online.friends}
+          loading={online.friendsLoading}
+          loadError={online.friendsError}
+          sendingId={online.inviteSendingId}
+          inviteError={online.inviteError}
+          inviteNotice={online.inviteNotice}
+          onClose={() => setInviteTarget(null)}
+          onRetry={() => void online.loadFriends()}
+          onInvite={async (friend) => {
+            try {
+              await online.inviteFriend({
+                userId: friend.userId,
+                username: friend.username,
+                state: friend.state,
+                matchId: inviteTarget.matchId,
+                spectate: inviteTarget.spectate,
+              });
+              onNotify(`Invite sent to ${friend.username}`);
+              return true;
+            } catch {
+              return false;
+            }
+          }}
+          onCopyInvite={() => {
+            void copyText(buildMatchInviteUrl(inviteTarget.matchId, inviteTarget.spectate)).then((copied) => {
+              onNotify(copied ? "Invite link copied" : "Could not copy the invite link");
+            });
+          }}
+        />
+      ) : null}
     </section>
   );
 }

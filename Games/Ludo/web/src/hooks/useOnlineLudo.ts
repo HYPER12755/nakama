@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Client, Session, type Socket } from "@heroiclabs/nakama-js";
+import { MoonGamesSocialClient } from "@moongames/social";
 import {
   accountCreationAllowed,
   insecureConnectionRequested,
   matchStateBytes,
   readLauncherHandoff,
   sameOriginServerAddress,
+  type SocialFriend,
 } from "@moongames/game-sdk";
 import { LUDO_OP, type LudoColor, type LudoMove, type LudoState } from "@moongames/ludo-core";
 import type {
@@ -142,10 +144,24 @@ export interface OnlineLudoController {
   leaderboard: GameLeaderboardEntry[];
   profileLoading: boolean;
   profileError: string | null;
+  friends: SocialFriend[];
+  friendsLoading: boolean;
+  friendsError: string | null;
+  inviteSendingId: string | null;
+  inviteError: string | null;
+  inviteNotice: string | null;
+  loadFriends: () => Promise<void>;
+  inviteFriend: (input: {
+    userId: string;
+    username: string;
+    state: number;
+    matchId: string;
+    spectate: boolean;
+  }) => Promise<void>;
   refreshProfile: () => Promise<void>;
   connect: () => Promise<void>;
   quickMatch: (seats: number, turnSeconds?: number) => Promise<void>;
-  createPrivate: (seats: number, turnSeconds?: number) => Promise<void>;
+  createPrivate: (seats: number, turnSeconds?: number) => Promise<string>;
   joinByCode: (code: string, spectator?: boolean) => Promise<void>;
   leave: () => Promise<void>;
   roll: () => void;
@@ -171,6 +187,12 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
   const [leaderboard, setLeaderboard] = useState<GameLeaderboardEntry[]>([]);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [friends, setFriends] = useState<SocialFriend[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState(false);
+  const [friendsError, setFriendsError] = useState<string | null>(null);
+  const [inviteSendingId, setInviteSendingId] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
 
   const clientRef = useRef<Client | null>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -178,6 +200,8 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
   const matchRef = useRef<string | null>(null);
   const connectingRef = useRef(false);
   const fallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const socialRef = useRef<MoonGamesSocialClient | null>(null);
+  const friendsPromiseRef = useRef<Promise<void> | null>(null);
 
   const connect = useCallback(async () => {
     if (connectingRef.current || socketRef.current) return;
@@ -391,6 +415,7 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
     }
     await joinMatch(payload.matchId);
     setRoomCode(payload.roomCode ?? null);
+    return payload.matchId;
   }, [joinMatch]);
 
   const joinByCode = useCallback(async (code: string, spectator = false) => {
@@ -415,11 +440,14 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
     const socket = socketRef.current;
     const matchId = matchRef.current;
     if (socket && matchId) await socket.leaveMatch(matchId).catch(() => undefined);
+    if (fallbackRef.current !== null) clearTimeout(fallbackRef.current);
+    fallbackRef.current = null;
     matchRef.current = null;
     setMatchId(null);
     setState(null);
     setRoomCode(null);
     setSpectating(false);
+    setSearching(false);
   }, []);
 
   const send = useCallback((op: number, payload: Record<string, unknown>) => {
@@ -429,6 +457,115 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
     void socket.sendMatchState(matchId, op, matchStateBytes(payload)).catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : "The action could not be sent.");
     });
+  }, []);
+
+  const loadFriends = useCallback(async (): Promise<void> => {
+    if (friendsPromiseRef.current !== null) return friendsPromiseRef.current;
+    const client = clientRef.current;
+    const session = sessionRef.current;
+    if (client === null || session === null) {
+      setFriendsError("Connect to the game server to load your friends.");
+      return;
+    }
+    setFriendsLoading(true);
+    setFriendsError(null);
+    const request = (async () => {
+      try {
+        const social = socialRef.current ?? new MoonGamesSocialClient({
+          client,
+          session,
+          socket: socketRef.current,
+          selfUserId: session.user_id,
+        });
+        socialRef.current = social;
+        const responses = await Promise.allSettled([
+          social.listFriends(0),
+          social.listFriends(1),
+          social.listFriends(2),
+        ]);
+        const groups = responses.flatMap((result) =>
+          result.status === "fulfilled" ? [result.value] : [],
+        );
+        if (groups.length === 0) {
+          const rejected = responses.find(
+            (result): result is PromiseRejectedResult => result.status === "rejected",
+          );
+          throw rejected?.reason ?? new Error("Friend list unavailable.");
+        }
+        const byId = new Map<string, SocialFriend>();
+        for (const group of groups) {
+          for (const friend of group) byId.set(friend.userId, friend);
+        }
+        const rank = (friendState: number) =>
+          friendState === 0 ? 0 : friendState === 2 ? 1 : friendState === 1 ? 2 : 3;
+        setFriends([...byId.values()].sort((left, right) =>
+          rank(left.state) - rank(right.state) ||
+          left.username.localeCompare(right.username, undefined, { sensitivity: "base" }),
+        ));
+      } catch (cause) {
+        setFriendsError(cause instanceof Error ? cause.message : "Could not load your MoonGames friends.");
+      } finally {
+        setFriendsLoading(false);
+        friendsPromiseRef.current = null;
+      }
+    })();
+    friendsPromiseRef.current = request;
+    await request;
+  }, []);
+
+  const inviteFriend = useCallback(async (input: {
+    userId: string;
+    username: string;
+    state: number;
+    matchId: string;
+    spectate: boolean;
+  }): Promise<void> => {
+    const client = clientRef.current;
+    const session = sessionRef.current;
+    if (client === null || session === null) {
+      throw new Error("Connect to the game server first.");
+    }
+    setInviteSendingId(input.userId);
+    setInviteError(null);
+    setInviteNotice(null);
+    try {
+      const social = socialRef.current ?? new MoonGamesSocialClient({
+        client,
+        session,
+        socket: socketRef.current,
+        selfUserId: session.user_id,
+      });
+      socialRef.current = social;
+      if (input.state === 1) {
+        throw new Error("That player must accept your friend request first.");
+      }
+      if (input.state === 2) await social.acceptFriend({ userId: input.userId });
+      const invite = await social.createInvite({
+        gameId: GAME_ID,
+        mode: "private",
+        matchId: input.matchId,
+        recipientId: input.userId,
+        recipientUsername: input.username,
+        metadata: { spectate: input.spectate },
+      });
+      let chatCardSent = false;
+      if (socketRef.current !== null) {
+        try {
+          await social.sendInviteMessage(input.userId, invite);
+          chatCardSent = true;
+        } catch {
+          // The persistent notification remains authoritative.
+        }
+      }
+      setInviteNotice(chatCardSent
+        ? `Invite sent to ${input.username}.`
+        : `Invite sent to ${input.username}. The chat card could not be delivered, but the invite is waiting in MoonGames.`);
+    } catch (cause) {
+      setInviteError(cause instanceof Error ? cause.message : "Could not send that friend invitation.");
+      throw cause;
+    } finally {
+      setInviteSendingId(null);
+    }
   }, []);
 
   const myColour = state?.seats.find((seat) => seat.user_id === myUserId)?.colour ?? null;
@@ -450,6 +587,14 @@ export function useOnlineLudo(enabled = true): OnlineLudoController {
     leaderboard,
     profileLoading,
     profileError,
+    friends,
+    friendsLoading,
+    friendsError,
+    inviteSendingId,
+    inviteError,
+    inviteNotice,
+    loadFriends,
+    inviteFriend,
     refreshProfile,
     connect,
     quickMatch,

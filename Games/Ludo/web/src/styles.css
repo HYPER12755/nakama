@@ -1034,6 +1034,82 @@ html[data-moonperf="lite"] .die--rolling {
   color: var(--muted);
 }
 
+.ludo-race-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--shadow-soft);
+}
+
+.ludo-race-bar__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ludo-race-bar__row--active .ludo-race-bar__name {
+  color: var(--text);
+}
+
+.ludo-race-bar__disc {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35);
+}
+
+.ludo-race-bar__name {
+  flex: 0 1 auto;
+  min-width: 46px;
+  max-width: 110px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ludo-race-bar__track {
+  position: relative;
+  flex: 1 1 40px;
+  min-width: 24px;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.ludo-race-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.35s ease;
+}
+
+.ludo-race-bar__count {
+  width: 34px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ludo-race-bar__count small {
+  color: var(--faint);
+  font-size: 8.5px;
+  font-weight: 700;
+}
+
 .side-dice {
   position: absolute;
   inset: 0;
@@ -1329,3 +1405,161 @@ html[data-moonperf="lite"] .die--rolling {
 }
 .online-seat__tag { color: var(--accent); }
 .winner-overlay--fixed { position: fixed; z-index: 40; }
+
+.ludo-board-base {
+  position: absolute;
+  inset: 9px;
+  width: calc(100% - 18px);
+  height: calc(100% - 18px);
+  border-radius: 21px;
+  object-fit: cover;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ludo-canvas {
+  position: relative;
+  z-index: 1;
+}
+
+/* Online table panel: same shape and rhythm as Chess/Carrom. */
+.online-match {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.online-copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.online-copy--compact { font-size: 11px; }
+
+.online-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.online-actions--stack { flex-direction: column; }
+.online-actions .action-button { flex: 1; }
+
+.match-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--panel-raised);
+}
+
+.match-summary > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.match-summary strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-code {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.match-code-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.match-code code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: var(--panel-raised);
+  color: var(--muted-strong);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.online-players {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.online-player-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 8px;
+  border-radius: 9px;
+  background: var(--panel-raised);
+  font-size: 11px;
+}
+
+.seat-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+}
+
+.online-player-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.online-player-connection {
+  color: var(--success);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.online-player-connection--off { color: var(--danger); }
+
+.online-spectators {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 9px;
+  border-radius: 9px;
+  background: var(--panel-raised);
+}
+
+.online-spectator-names {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-result {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+}

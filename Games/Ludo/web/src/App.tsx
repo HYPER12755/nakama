@@ -27,6 +27,7 @@ import {
 import { Icon } from "./components/Icon";
 import { LudoBoard } from "./components/LudoBoard";
 import { LudoOnlinePanel, LudoOnlineResult } from "./components/LudoOnlinePanel";
+import { LudoRaceBar } from "./components/LudoRaceBar";
 import { LudoPreferences } from "./components/LudoPreferences";
 import { useLocalLudo } from "./hooks/useLocalLudo";
 import { useOnlineLudo } from "./hooks/useOnlineLudo";
@@ -558,13 +559,13 @@ export default function App({ bridge }: { bridge: GameBridge }) {
           <button type="button" className="icon-button" onClick={() => setRulesOpen(true)} title="Rules" aria-label="Open rules">
             <Icon name="book" size={18} />
           </button>
-          <button type="button" className="icon-button" onClick={toggleSound} aria-pressed={soundOn} title={soundOn ? "Mute" : "Unmute"}>
+          <button type="button" className="icon-button" onClick={toggleSound} aria-pressed={soundOn} aria-label={soundOn ? "Mute sound" : "Enable sound"} title={soundOn ? "Mute sound" : "Enable sound"}>
             <Icon name={soundOn ? "volume" : "volume-off"} size={18} />
           </button>
-          <button type="button" className="icon-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Theme">
+          <button type="button" className="icon-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Toggle light and dark theme" title="Toggle theme">
             <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
           </button>
-          <button type="button" className="icon-button" onClick={toggleFullscreen} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+          <button type="button" className="icon-button" onClick={toggleFullscreen} aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
             <Icon name={isFullscreen ? "minimize" : "maximize"} size={18} />
           </button>
           {onlineMode ? null : (
@@ -582,6 +583,13 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               <Icon name="minimize" size={18} />
             </button>
           ) : null}
+          <LudoRaceBar
+            players={game.players}
+            names={game.players.map((player) => playerName(player.seat))}
+            activeSeat={game.current}
+            tokensPerPlayer={game.tokensPerPlayer ?? TOKENS_PER_PLAYER}
+          />
+
           <div className="turn-strip">
             <span className="race-disc" style={{ background: current ? PLAYER_COLOR_HEX[current.color] : undefined }} />
             <div className="turn-strip__copy">
@@ -608,6 +616,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
 
           <div className="board-frame">
             <div className="board-stage">
+              <img className="ludo-board-base" src="boards/ludo-classic.jpg" alt="" aria-hidden="true" />
               <LudoBoard
                 state={game}
                 legalTokens={legalTokens}
@@ -708,6 +717,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               ]),
             ]}
           />
+
           <p className="roll-hint">
             {controller.isReplaying && !onlineMode ? "Watching the recorded race."
               : canMove ? "Tap a glowing token to move it."
@@ -726,6 +736,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               roomInput={roomInput}
               onRoomInput={setRoomInput}
               onRematch={(count, clock) => void rematch(count, clock)}
+              onNotify={setToast}
             />
           ) : null}
 
