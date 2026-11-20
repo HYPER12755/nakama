@@ -27,17 +27,44 @@ export interface DiceSet {
   label: string;
   texture?: string;
   color?: string;
+  faces?: boolean;
 }
 
 export const DICE_SETS: DiceSet[] = [
   { id: "classic", label: "Classic die" },
-  { id: "lk1", label: "King · Wood", texture: "dice/bpacksnl1/texture.png", color: "#b77a3e" },
-  { id: "lk2", label: "King · Dark wood", texture: "dice/bpacksnl2/texture.png", color: "#7c4d2a" },
-  { id: "lk3", label: "King · Sand", texture: "dice/bpacksnl3/texture.png", color: "#c7a26d" },
-  { id: "lk4", label: "King · Clay", texture: "dice/bpacksnl4/texture.png", color: "#a4563c" },
-  { id: "lk5", label: "King · Slate", texture: "dice/bpacksnl5/texture.png", color: "#66727c" },
-  { id: "lk6", label: "King · Cream", texture: "dice/bpacksnl6/texture.png", color: "#d8c49b" },
-  { id: "lk7", label: "King · Red wood", texture: "dice/bpacksnl7/texture.png", color: "#9b4a3a" },
+  { id: "lk1", label: "King · Board 1", texture: "dice/bpacksnl1/texture.png", color: "#b77a3e" },
+  { id: "lk2", label: "King · Board 2", texture: "dice/bpacksnl2/texture.png", color: "#b77a3e" },
+  { id: "lk3", label: "King · Board 3", texture: "dice/bpacksnl3/texture.png", color: "#b77a3e" },
+  { id: "lk4", label: "King · Board 4", texture: "dice/bpacksnl4/texture.png", color: "#b77a3e" },
+  { id: "lk5", label: "King · Board 5", texture: "dice/bpacksnl5/texture.png", color: "#b77a3e" },
+  { id: "lk6", label: "King · Board 6", texture: "dice/bpacksnl6/texture.png", color: "#b77a3e" },
+  { id: "lk7", label: "King · Board 7", texture: "dice/bpacksnl7/texture.png", color: "#b77a3e" },
+  { id: "dicepack1_0", label: "APK · Toy", texture: "dice/dicepack1_0/texture.png", faces: true },
+  { id: "dicepack1_1", label: "APK · Neon", texture: "dice/dicepack1_1/texture.png", faces: true },
+  { id: "dicepack1_2", label: "APK · Marble", texture: "dice/dicepack1_2/texture.png", faces: true },
+  { id: "dicepack1_3", label: "APK · Candy", texture: "dice/dicepack1_3/texture.png", faces: true },
+  { id: "dicepack1_4", label: "APK · Gold", texture: "dice/dicepack1_4/texture.png", faces: true },
+  { id: "dicepack1_5", label: "APK · Spooky", texture: "dice/dicepack1_5/texture.png", faces: true },
+  { id: "dicepack2", label: "APK · Royal", texture: "dice/dicepack2/texture.png", faces: true },
+  { id: "dicepack3", label: "APK · Nature", texture: "dice/dicepack3/texture.png", faces: true },
+  { id: "dicepack4", label: "APK · Luxury", texture: "dice/dicepack4/texture.png", faces: true },
+  { id: "dicepack5_0", label: "APK · Pearl", texture: "dice/dicepack5_0/texture.png", faces: true },
+  { id: "dicepack5_1", label: "APK · Coral", texture: "dice/dicepack5_1/texture.png", faces: true },
+  { id: "dicepack5_2", label: "APK · Amber", texture: "dice/dicepack5_2/texture.png", faces: true },
+  { id: "dicepack5_3", label: "APK · Mint", texture: "dice/dicepack5_3/texture.png", faces: true },
+  { id: "dicepack5_4", label: "APK · Slate", texture: "dice/dicepack5_4/texture.png", faces: true },
+  { id: "dicepack5_5", label: "APK · Violet", texture: "dice/dicepack5_5/texture.png", faces: true },
+  { id: "dicepack6", label: "APK · Pack6", texture: "dice/dicepack6/texture.png", faces: true },
+  { id: "dicepack8", label: "APK · Pack8", texture: "dice/dicepack8/texture.png", faces: true },
+  { id: "dicepack9", label: "APK · Pack9", texture: "dice/dicepack9/texture.png", faces: true },
+  { id: "dicepack10", label: "APK · Pack10", texture: "dice/dicepack10/texture.png", faces: true },
+  { id: "dicepack11", label: "APK · Pack11", texture: "dice/dicepack11/texture.png", faces: true },
+  { id: "dicepack12", label: "APK · Pack12", texture: "dice/dicepack12/texture.png", faces: true },
+  { id: "dicepack13", label: "APK · Pack13", texture: "dice/dicepack13/texture.png", faces: true },
+  { id: "dicepack14", label: "APK · Pack14", texture: "dice/dicepack14/texture.png", faces: true },
+  { id: "dicepack15", label: "APK · Pack15", texture: "dice/dicepack15/texture.png", faces: true },
+  { id: "dicepack16", label: "APK · Pack16", texture: "dice/dicepack16/texture.png", faces: true },
+  { id: "dicepack17", label: "APK · Pack17", texture: "dice/dicepack17/texture.png", faces: true },
 ];
 
 /** The supplied board art is the only board; ornaments are an SVG edge layer. */

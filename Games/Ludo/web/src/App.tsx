@@ -101,19 +101,22 @@ function Die({
   const top = (face % 6) + 1;
   const right = ((face + 1) % 6) + 1;
   const selected = DICE_SETS.find((entry) => entry.id === setId);
-  const faceStyle = selected?.texture
-    ? {
-        backgroundImage: `url("${selected.texture}")`,
-        backgroundColor: selected.color,
-      }
-    : undefined;
-  const faceClass = `dice-face${selected?.texture ? " dice-face--textured" : ""}`;
+  const faceFor = (value: number) => selected?.faces
+    ? `dice/${selected.id}/face-${value}.png`
+    : selected?.texture;
+  const faceStyle = (value: number) => {
+    const image = faceFor(value);
+    return image
+      ? { backgroundImage: `url("${image}")`, backgroundColor: selected?.color }
+      : undefined;
+  };
+  const faceClass = `dice-face${selected?.texture ? " dice-face--textured" : ""}${selected?.faces ? " dice-face--image" : ""}`;
   return (
     <div className="dice-wrap" aria-label={value ? `Die shows ${value}` : "Die not rolled"}>
       <div className={`dice-cube ${rolling || value === null ? "" : "dice-cube--settled"}`}>
-        <div className={`${faceClass} dice-face--front`} style={faceStyle}><PipFace value={face} /></div>
-        <div className={`${faceClass} dice-face--top`} style={faceStyle}><PipFace value={top} /></div>
-        <div className={`${faceClass} dice-face--right`} style={faceStyle}><PipFace value={right} /></div>
+        <div className={`${faceClass} dice-face--front`} style={faceStyle(face)}>{selected?.faces ? null : <PipFace value={face} />}</div>
+        <div className={`${faceClass} dice-face--top`} style={faceStyle(top)}>{selected?.faces ? null : <PipFace value={top} />}</div>
+        <div className={`${faceClass} dice-face--right`} style={faceStyle(right)}>{selected?.faces ? null : <PipFace value={right} />}</div>
       </div>
     </div>
   );

@@ -34,7 +34,9 @@ export function LudoPreferences({ gameId }: { gameId: string }) {
       diceSets={DICE_SETS.map((set) => ({
         id: set.id,
         label: set.label,
-        preview: (
+        preview: set.faces ? (
+          <img src={`dice/${set.id}/face-1.png`} alt="" width={28} height={28} />
+        ) : (
           <span
             className={`dice-preview${set.texture ? " dice-preview--textured" : ""}`}
             style={set.texture
