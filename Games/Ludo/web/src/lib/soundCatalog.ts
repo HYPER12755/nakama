@@ -17,7 +17,7 @@ export type LudoSound =
   | "chat"
   | "clock";
 
-export type LudoSoundSetId = "ludo" | "ludo-apk";
+export type LudoSoundSetId = "ludo" | "ludo-original" | "ludo-apk";
 
 interface SoundSetDefinition {
   directory: string;
@@ -46,6 +46,26 @@ export const SOUND_SET_DEFINITIONS: Record<LudoSoundSetId, SoundSetDefinition> =
       clock: ["foul.ogg"],
     },
   },
+  "ludo-original": {
+    directory: "ludo-original",
+    gain: 0.85,
+    rate: 1,
+    files: {
+      // Earlier recovered APK set: original SoundManager-style clips.
+      roll: ["dice.ogg"],
+      move: ["cursor_move.ogg"],
+      capture: ["sword.ogg"],
+      home: ["goal.ogg"],
+      safe: ["safe_block.ogg"],
+      foul: ["net_time.ogg"],
+      turn: ["turn.ogg"],
+      start: ["start_game.ogg"],
+      win: ["cheers.ogg"],
+      join: ["net_join.ogg"],
+      chat: ["chat-pop.ogg"],
+      clock: ["net_time.ogg"],
+    },
+  },
   "ludo-apk": {
     directory: "ludo-apk",
     gain: 0.85,
@@ -70,6 +90,7 @@ export const SOUND_SET_DEFINITIONS: Record<LudoSoundSetId, SoundSetDefinition> =
 
 /** The genuine in-game music clip from the board pack. */
 export const MUSIC_FILES: Partial<Record<LudoSoundSetId, string[]>> = {
+  "ludo-original": ["title_bgm.ogg"],
   "ludo-apk": ["clip_bg.ogg"],
 };
 

@@ -1,7 +1,7 @@
 Ludo sound credits
 ==================
 
-Two selectable sound sets are bundled. Both are real recordings.
+Three selectable sound sets are bundled. All are real recordings.
 
 1. Recorded table (public/sounds/ludo)
 --------------------------------------
@@ -23,14 +23,29 @@ home.ogg, turn.ogg, start.ogg, win.ogg, foul.ogg
   lavenderdotpet/CC0-Public-Domain-Sounds, released under CC0 1.0.
   https://github.com/lavenderdotpet/CC0-Public-Domain-Sounds
 
-2. Ludo King (APK) (public/sounds/ludo-apk)
+2. Ludo Original (public/sounds/ludo-original)
+----------------------------------------------
+
+Earlier recovered Ludo King APK recordings from sharedassets0.resource. These
+are the original SoundManager-style clips that matched the earlier game feel:
+
+  dice.ogg        -> diceSound
+  cursor_move.ogg -> CurserMove
+  sword.ogg       -> SwordSound
+  goal.ogg        -> gamewin
+  safe_block.ogg  -> safePoints
+  net_time.ogg    -> clocktick
+  turn.ogg        -> myturn
+  start_game.ogg  -> startGame
+  cheers.ogg      -> cheersSound
+  net_join.ogg    -> netjoin
+  chat-pop.ogg    -> chat-msg
+  title_bgm.ogg   -> IntroMusic
+
+3. Ludo Board Pack (public/sounds/ludo-apk)
 -------------------------------------------
 
-Fresh 1:1 copy from the user-supplied Ludo King APK. The original recordings
-belong to the Ludo King game and its publisher; they are included because the
-user supplied the APK for this MoonGames build.
-
-The default board pack (bpacksnl1) contains the real gameplay sounds:
+Exact default board-pack clips from the supplied Ludo King APK:
 
   clip_roll.ogg   -> roll
   clip_move.ogg   -> move
@@ -40,16 +55,10 @@ The default board pack (bpacksnl1) contains the real gameplay sounds:
   clip_die.ogg    -> foul / no legal move
   clip_bg.ogg     -> in-game background music
 
-The shared SoundManager clips fill the remaining table events:
+  start_game.ogg, goal.ogg, rullet_active.ogg, net_join.ogg, chat-pop.ogg and
+  net_time.ogg fill the remaining table events from the shared SoundManager.
 
-  start_game.ogg  -> startGame
-  goal.ogg        -> gamewin
-  rullet_active.ogg -> turnChange
-  net_join.ogg    -> netjoin
-  chat-pop.ogg    -> chat-msg
-  net_time.ogg    -> clocktick
-
-No clip is used in another clip's place.
+No clip is used in another clip's place inside a set.
 
 Extraction tooling:
   python-fsb5   https://github.com/HearthSim/python-fsb5

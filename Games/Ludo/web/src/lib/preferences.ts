@@ -56,7 +56,8 @@ export type TableSpeedId = (typeof TABLE_SPEEDS)[number]["id"];
 
 export const SOUND_SETS = [
   { id: "ludo", label: "Recorded table" },
-  { id: "ludo-apk", label: "Ludo King (APK)" },
+  { id: "ludo-original", label: "Ludo Original" },
+  { id: "ludo-apk", label: "Ludo Board Pack" },
 ];
 
 export const LUDO_FEATURES = {

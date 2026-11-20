@@ -44,7 +44,7 @@ import {
   type GameModeId, type StartModeId, type TableSpeedId,
 } from "./lib/preferences";
 import { configureSound, isMuted, playEvent, playMusic, preloadEvent, setMuted, stopMusic } from "./lib/sound";
-import type { LudoSound } from "./lib/soundCatalog";
+import { MUSIC_FILES, type LudoSound } from "./lib/soundCatalog";
 
 type Mode = "local" | "ai" | "online";
 
@@ -201,7 +201,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   }, [preferences.soundSet]);
 
   useEffect(() => {
-    if (preferences.musicEnabled && soundOn && preferences.soundSet === "ludo-apk") {
+    if (preferences.musicEnabled && soundOn && MUSIC_FILES[preferences.soundSet as keyof typeof MUSIC_FILES] !== undefined) {
       playMusic(0);
     } else {
       stopMusic();
