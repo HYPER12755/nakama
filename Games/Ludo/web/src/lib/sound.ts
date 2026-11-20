@@ -10,14 +10,18 @@
 import { loadAsset } from "@moongames/game-sdk";
 import {
   EVENT_GAIN,
+  MUSIC_FILES,
   SOUND_PROFILES,
   soundDirectory,
   soundsFor,
   type LudoSound,
+  type LudoSoundSetId,
 } from "./soundCatalog";
 
 let context: AudioContext | null = null;
 let limiter: DynamicsCompressorNode | null = null;
+let musicNode: AudioBufferSourceNode | null = null;
+let musicGain: GainNode | null = null;
 const buffers = new Map<string, AudioBuffer | null>();
 const loading = new Map<string, Promise<AudioBuffer | null>>();
 const nextIndex = new Map<LudoSound, number>();
@@ -78,6 +82,7 @@ export function configureSound(options: { enabled?: boolean; volume?: number; se
   if (options.enabled !== undefined) enabled = options.enabled;
   if (options.volume !== undefined) volume = Math.max(0, Math.min(1, options.volume));
   if (options.set !== undefined && options.set !== set) {
+    stopMusic();
     stopActive();
     nextIndex.clear();
     lastPlayed.clear();
@@ -120,6 +125,46 @@ function load(file: string): Promise<AudioBuffer | null> {
 /** Warm an event so the first roll does not wait for the network. */
 export function preloadEvent(event: LudoSound): void {
   for (const file of soundsFor(event, set)) void load(file);
+}
+
+/** Loop the selected set's original background music. */
+export function playMusic(index = 0): void {
+  const files = MUSIC_FILES[set as LudoSoundSetId];
+  const file = files?.[index];
+  if (file === undefined || !enabled || volume <= 0) {
+    return;
+  }
+  stopMusic();
+  void load(file).then((buffer) => {
+    const ctx = audio();
+    if (buffer === null || ctx === null) {
+      return;
+    }
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    source.buffer = buffer;
+    source.loop = true;
+    gain.gain.value = volume * 0.22;
+    source.connect(gain).connect(limiter ?? ctx.destination);
+    source.start();
+    musicNode = source;
+    musicGain = gain;
+  });
+}
+
+export function stopMusic(): void {
+  if (musicNode !== null) {
+    try {
+      musicNode.stop();
+    } catch {
+      // The track may already have ended.
+    }
+    musicNode = null;
+  }
+  if (musicGain !== null) {
+    musicGain.disconnect();
+    musicGain = null;
+  }
 }
 
 export function playEvent(event: LudoSound): void {

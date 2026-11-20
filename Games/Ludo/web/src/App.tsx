@@ -42,7 +42,7 @@ import {
   START_MODES, TABLE_SPEEDS, TOKEN_SETS, TURN_CLOCKS,
   type GameModeId, type StartModeId, type TableSpeedId,
 } from "./lib/preferences";
-import { configureSound, isMuted, playEvent, preloadEvent, setMuted } from "./lib/sound";
+import { configureSound, isMuted, playEvent, playMusic, preloadEvent, setMuted, stopMusic } from "./lib/sound";
 import type { LudoSound } from "./lib/soundCatalog";
 
 type Mode = "local" | "ai" | "online";
@@ -193,6 +193,15 @@ export default function App({ bridge }: { bridge: GameBridge }) {
       preloadEvent(event);
     }
   }, [preferences.soundSet]);
+
+  useEffect(() => {
+    if (preferences.musicEnabled && soundOn && preferences.soundSet === "ludo-apk") {
+      playMusic(0);
+    } else {
+      stopMusic();
+    }
+    return () => stopMusic();
+  }, [preferences.musicEnabled, preferences.soundSet, soundOn]);
 
   useEffect(() => {
     const update = () => setIsFullscreen(document.fullscreenElement === appRef.current);

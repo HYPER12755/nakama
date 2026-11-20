@@ -1,11 +1,12 @@
 Ludo sound credits
 ==================
 
-Two selectable sound sets are bundled. Both are real recordings; neither is
-synthesised.
+Two selectable sound sets are bundled. Both are real recordings.
 
 1. Recorded table (public/sounds/ludo)
 --------------------------------------
+
+Original MoonGames Ludo set, unchanged:
 
 dice-roll.mp3 / dice-roll.ogg
   "Shake and Roll Dice" by Mike Koenig, Attribution 3.0 (CC BY 3.0).
@@ -14,7 +15,7 @@ dice-roll.mp3 / dice-roll.ogg
 
 move.ogg, capture.ogg
   wooden_01.ogg and wooden_02.ogg from lavenderdotpet/CC0-Public-Domain-Sounds,
-  released under CC0 1.0 (public domain dedication).
+  released under CC0 1.0.
   https://github.com/lavenderdotpet/CC0-Public-Domain-Sounds
 
 home.ogg, turn.ogg, start.ogg, win.ogg, foul.ogg
@@ -25,29 +26,30 @@ home.ogg, turn.ogg, start.ogg, win.ogg, foul.ogg
 2. Ludo King (APK) (public/sounds/ludo-apk)
 -------------------------------------------
 
-These clips were extracted directly from the user-supplied Ludo King APK at
-~/unzip/com.ludo.king.apk, from assets/bin/Data/sharedassets0.resource.
+Fresh 1:1 copy from the user-supplied Ludo King APK at ~/unzip/com.ludo.king.apk.
 The original recordings belong to the Ludo King game and its publisher; they
 are included here because the user supplied the APK for this MoonGames build.
 
-Original clip names used here:
+The AudioSource roles were read from the APK's IL2CPP dump and its serialized
+scene, then each role was filled with the matching extracted clip. No clip is
+used in another clip's place.
 
-  dice.ogg        <- dice (stereo dice roll; restored after review)
-  dice2.mp3       <- dice2 (second real dice roll; restored after review)
-  dice2.ogg       <- dice2 (same recording in OGG form, kept for comparison)
-  move.ogg        <- cursor_move
-  capture.ogg     <- coins_collect
-  home.ogg        <- up_level_small
-  foul.ogg        <- net_time (short cue; replaces the hissing down_level clip)
-  turn.ogg        <- turn
-  start.ogg       <- start_game
-  win.ogg         <- up_level_big
-
-The FSB5 banks were decoded on this device with python-fsb5 and vgmstream,
-then converted to OGG/MP3 with FFmpeg.
+  roll.ogg          <- diceSound / dice
+  move.ogg          <- CurserMove / cursor_move
+  capture.ogg       <- SwordSound / sword
+  home.ogg          <- safePoints / safe_block
+  foul.ogg          <- clocktick / net_time
+  turn.ogg          <- turnChange / turn
+  start.ogg         <- startGame / start_game
+  win.ogg           <- cheersSound / cheers
+  music-ingame.ogg  <- InGameMusic / SpinOrPlayerSearch
+  music-intro.ogg   <- IntroMusic / title_bgm
+  dice-7updown.ogg  <- dice2Roll7UpDown / dice2 (reference only)
+  rullet.ogg        <- RulletSpin / rullet_active (reference only)
 
 Extraction tooling:
   python-fsb5   https://github.com/HearthSim/python-fsb5
   vgmstream     https://github.com/vgmstream/vgmstream
+  IL2CPP dump   https://github.com/springmusk026/Il2CppDumper-Python
 
 The attributions above must travel with the game bundle.

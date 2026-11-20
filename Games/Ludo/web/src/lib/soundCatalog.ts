@@ -1,6 +1,6 @@
 /**
- * Real recorded Ludo sounds. Each set keeps its own directory and file list so
- * a player can switch without losing the original recordings.
+ * Real recorded Ludo sounds. Each set keeps its own directory and file list.
+ * The APK set is mapped 1:1 to the original game's named AudioSources.
  */
 
 export type LudoSound =
@@ -40,12 +40,14 @@ export const SOUND_SET_DEFINITIONS: Record<LudoSoundSetId, SoundSetDefinition> =
   },
   "ludo-apk": {
     directory: "ludo-apk",
-    gain: 0.9,
+    gain: 0.85,
     rate: 1,
     files: {
-      // The hiss was the old foul clip, not the dice. Both real dice rolls
-      // are back; the foul sound now uses a short net-time cue.
-      roll: ["dice.ogg", "dice2.mp3"],
+      // Original AudioSource -> extracted clip:
+      // diceSound -> dice, CurserMove -> cursor_move, SwordSound -> sword,
+      // safePoints -> safe_block, clocktick -> net_time, turnChange -> turn,
+      // startGame -> start_game, cheersSound -> cheers.
+      roll: ["roll.ogg"],
       move: ["move.ogg"],
       capture: ["capture.ogg"],
       home: ["home.ogg"],
@@ -57,7 +59,11 @@ export const SOUND_SET_DEFINITIONS: Record<LudoSoundSetId, SoundSetDefinition> =
   },
 };
 
-/** Kept for callers that only need the original set. */
+/** Background music loops, from the original game's InGameMusic/IntroMusic. */
+export const MUSIC_FILES: Partial<Record<LudoSoundSetId, string[]>> = {
+  "ludo-apk": ["music-ingame.ogg", "music-intro.ogg"],
+};
+
 export const LUDO_SOUNDS: Record<LudoSound, string[]> =
   SOUND_SET_DEFINITIONS.ludo.files;
 
@@ -87,6 +93,6 @@ export function soundDirectory(setId: string): string {
 
 export function soundsFor(event: LudoSound, setId = "ludo"): string[] {
   const known = setId as LudoSoundSetId;
-  const set = SOUND_SET_DEFINITIONS[known] ?? SOUND_SET_DEFINITIONS.ludo;
-  return set.files[event];
+  const definition = SOUND_SET_DEFINITIONS[known] ?? SOUND_SET_DEFINITIONS.ludo;
+  return definition.files[event];
 }
