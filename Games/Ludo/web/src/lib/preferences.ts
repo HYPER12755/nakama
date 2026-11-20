@@ -55,9 +55,6 @@ export type TableSpeedId = (typeof TABLE_SPEEDS)[number]["id"];
 
 export const SOUND_SETS = [
   { id: "ludo", label: "Recorded table" },
-  { id: "soft", label: "Soft table" },
-  { id: "arcade", label: "Arcade table" },
-  { id: "royal", label: "Royal table" },
 ];
 
 export const LUDO_FEATURES = {
