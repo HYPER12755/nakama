@@ -6,12 +6,37 @@ export interface TokenSet {
   id: string;
   label: string;
   color: string;
+  kind?: "svg" | "copied";
 }
 
-/** Each set has four genuinely different token designs, one per seating colour. */
+/** Each set has four token designs, one per seating colour. */
 export const TOKEN_SETS: TokenSet[] = [
-  { id: "regalia", label: "Regalia", color: "#c8434a" },
-  { id: "celestial", label: "Celestial", color: "#5b9cff" },
+  { id: "regalia", label: "Regalia", color: "#c8434a", kind: "svg" },
+  { id: "celestial", label: "Celestial", color: "#5b9cff", kind: "svg" },
+  { id: "lk1", label: "King · Blue", color: "#30b6ed", kind: "copied" },
+  { id: "lk2", label: "King · Wood", color: "#a86b35", kind: "copied" },
+  { id: "lk3", label: "King · Stone", color: "#88939c", kind: "copied" },
+  { id: "lk4", label: "King · Gold", color: "#c99a2e", kind: "copied" },
+  { id: "lk5", label: "King · Ivory", color: "#eee2c8", kind: "copied" },
+  { id: "lk6", label: "King · Jade", color: "#45a777", kind: "copied" },
+  { id: "lk7", label: "King · Ruby", color: "#c8434a", kind: "copied" },
+];
+
+export interface DiceSet {
+  id: string;
+  label: string;
+  texture?: string;
+}
+
+export const DICE_SETS: DiceSet[] = [
+  { id: "classic", label: "Classic die" },
+  { id: "lk1", label: "King · Wood", texture: "dice/bpacksnl1/texture.png" },
+  { id: "lk2", label: "King · Dark wood", texture: "dice/bpacksnl2/texture.png" },
+  { id: "lk3", label: "King · Sand", texture: "dice/bpacksnl3/texture.png" },
+  { id: "lk4", label: "King · Clay", texture: "dice/bpacksnl4/texture.png" },
+  { id: "lk5", label: "King · Slate", texture: "dice/bpacksnl5/texture.png" },
+  { id: "lk6", label: "King · Cream", texture: "dice/bpacksnl6/texture.png" },
+  { id: "lk7", label: "King · Red wood", texture: "dice/bpacksnl7/texture.png" },
 ];
 
 /** The supplied board art is the only board; ornaments are an SVG edge layer. */
@@ -31,6 +56,8 @@ export type TableSpeedId = (typeof TABLE_SPEEDS)[number]["id"];
 export const SOUND_SETS = [
   { id: "ludo", label: "Recorded table" },
   { id: "soft", label: "Soft table" },
+  { id: "arcade", label: "Arcade table" },
+  { id: "royal", label: "Royal table" },
 ];
 
 export const LUDO_FEATURES = {

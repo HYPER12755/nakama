@@ -187,6 +187,8 @@ export function animationDuration(speed: AnimationSpeed): number {
 export interface GamePreferences {
   /** The set of pieces on the board. A title with no pieces ignores this. */
   pieceSet: string;
+  /** The look of the dice, for games that roll dice. */
+  diceSet: string;
   /** The design of the striker, for games that have one. */
   strikerDesign: string;
   /** The colours of the board. */
@@ -225,6 +227,7 @@ export interface GamePreferences {
 
 export const DEFAULT_PREFERENCES: GamePreferences = {
   pieceSet: "moongames",
+  diceSet: "classic",
   strikerDesign: "brass",
   boardTheme: "moongames",
   coordinates: Coordinates.Outside,

@@ -1,0 +1,9 @@
+Copied visual art
+=================
+
+The dice textures and token art under public/dice/ and public/tokens-copied/
+were extracted directly from the user-supplied Ludo King APK in ~/unzip/.
+They are included as selectable cosmetic sets in this MoonGames build.
+
+No board art was copied: Ludo keeps the supplied matching board so the token
+coordinates remain exact.

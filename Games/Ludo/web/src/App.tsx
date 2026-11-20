@@ -37,7 +37,7 @@ import { useLocalLudo } from "./hooks/useLocalLudo";
 import { useOnlineLudo } from "./hooks/useOnlineLudo";
 import { readLocalProgress } from "./lib/localProgress";
 import {
-  audibleVolume, BOARD_THEMES, GAME_MODES, MODE_RULES, SOUND_SETS,
+  audibleVolume, BOARD_THEMES, DICE_SETS, GAME_MODES, MODE_RULES, SOUND_SETS,
   START_MODES, TABLE_SPEEDS, TOKEN_SETS, TURN_CLOCKS,
   type GameModeId, type StartModeId, type TableSpeedId,
 } from "./lib/preferences";
@@ -79,16 +79,20 @@ const RULES = [
   "A token must land exactly on the centre to finish. First player home wins.",
 ];
 
-function Die({ value, rolling = false }: { value: number | null; rolling?: boolean }) {
+function Die({
+  value, rolling = false, setId = "classic",
+}: { value: number | null; rolling?: boolean; setId?: string }) {
   const face = value ?? 1;
   const top = (face % 6) + 1;
   const right = ((face + 1) % 6) + 1;
+  const texture = DICE_SETS.find((entry) => entry.id === setId)?.texture;
+  const faceStyle = texture ? { backgroundImage: `url("${texture}")` } : undefined;
   return (
     <div className="dice-wrap" aria-label={value ? `Die shows ${value}` : "Die not rolled"}>
       <div className={`dice-cube ${rolling || value === null ? "" : "dice-cube--settled"}`}>
-        <div className="dice-face dice-face--front"><PipFace value={face} /></div>
-        <div className="dice-face dice-face--top"><PipFace value={top} /></div>
-        <div className="dice-face dice-face--right"><PipFace value={right} /></div>
+        <div className="dice-face dice-face--front" style={faceStyle}><PipFace value={face} /></div>
+        <div className="dice-face dice-face--top" style={faceStyle}><PipFace value={top} /></div>
+        <div className="dice-face dice-face--right" style={faceStyle}><PipFace value={right} /></div>
       </div>
     </div>
   );
@@ -154,9 +158,10 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     // The shared defaults name Chess/Carrom art. Point a new Ludo player at
     // this title's own sets so the picker and the board agree on first load.
     if (!TOKEN_SETS.some((set) => set.id === preferences.pieceSet)) setPreference("pieceSet", "regalia");
+    if (!DICE_SETS.some((set) => set.id === preferences.diceSet)) setPreference("diceSet", "classic");
     if (!BOARD_THEMES.some((theme) => theme.id === preferences.boardTheme)) setPreference("boardTheme", "classic");
     if (!SOUND_SETS.some((set) => set.id === preferences.soundSet)) setPreference("soundSet", "ludo");
-  }, [preferences.pieceSet, preferences.boardTheme, preferences.soundSet, setPreference]);
+  }, [preferences.pieceSet, preferences.diceSet, preferences.boardTheme, preferences.soundSet, setPreference]);
 
   useEffect(() => {
     configureSound({
@@ -505,6 +510,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
       resetPreference(key);
     }
     setPreference("pieceSet", "regalia");
+    setPreference("diceSet", "classic");
     setPreference("boardTheme", "classic");
     setPreference("soundSet", "ludo");
     setPreference("soundEnabled", DEFAULT_PREFERENCES.soundEnabled);
@@ -674,6 +680,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                       <Die
                         value={rollBySeat[player.seat] ?? null}
                         rolling={diceRolling && lastRoll?.player === player.seat}
+                        setId={DICE_SETS.some((set) => set.id === preferences.diceSet) ? preferences.diceSet : "classic"}
                       />
                       <span className="side-die__tag">{usable ? "ROLL" : player.ai ? "AUTO" : "WAIT"}</span>
                     </button>

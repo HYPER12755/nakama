@@ -9,6 +9,7 @@ import {
   type LudoToken,
 } from "@moongames/ludo-core";
 import { GRID_SIZE, HOME_COLUMN, TRACK, movePath, tokenPoint } from "../lib/boardGeometry";
+import { TOKEN_SETS } from "../lib/preferences";
 
 const CELL = 40;
 const SIZE = GRID_SIZE * CELL;
@@ -95,7 +96,12 @@ function tokenImage(
     onLoad?.();
   };
   image.onerror = () => tokenImages.delete(key);
-  void assetUrl(`tokens/${set}-${color}.svg`)
+  const meta = TOKEN_SETS.find((entry) => entry.id === set);
+  const colourIndex = (["red", "green", "yellow", "blue"] as LudoColor[]).indexOf(color);
+  const path = meta?.kind === "copied"
+    ? `tokens-copied/${set}/token-${colourIndex + 1}.png`
+    : `tokens/${set}-${color}.svg`;
+  void assetUrl(path)
     .then((url) => { image.src = url; })
     .catch(() => tokenImages.delete(key));
   return null;

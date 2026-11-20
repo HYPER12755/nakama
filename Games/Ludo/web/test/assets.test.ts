@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { BOARD_THEMES, SOUND_SETS, TOKEN_SETS } from "../src/lib/preferences";
+import { BOARD_THEMES, DICE_SETS, SOUND_SETS, TOKEN_SETS } from "../src/lib/preferences";
 
 const root = new URL("../public/", import.meta.url);
 
@@ -9,9 +9,21 @@ describe("Ludo's own art and sound", () => {
     expect(existsSync(new URL("boards/ludo-classic.jpg", root))).toBe(true);
     expect(existsSync(new URL("boards/ludo-ornaments.svg", root))).toBe(true);
     for (const set of TOKEN_SETS) {
-      for (const color of ["red", "green", "yellow", "blue"]) {
-        expect(existsSync(new URL(`tokens/${set.id}-${color}.svg`, root)), `${set.id}-${color}`).toBe(true);
+      if (set.kind === "copied") {
+        for (let token = 1; token <= 4; token += 1) {
+          expect(existsSync(new URL(`tokens-copied/${set.id}/token-${token}.png`, root)), `${set.id}-${token}`).toBe(true);
+        }
+      } else {
+        for (const color of ["red", "green", "yellow", "blue"]) {
+          expect(existsSync(new URL(`tokens/${set.id}-${color}.svg`, root)), `${set.id}-${color}`).toBe(true);
+        }
       }
+    }
+  });
+
+  it("ships every selectable dice texture", () => {
+    for (const set of DICE_SETS) {
+      if (set.texture) expect(existsSync(new URL(set.texture, root)), set.id).toBe(true);
     }
   });
 

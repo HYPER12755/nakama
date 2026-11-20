@@ -35,6 +35,14 @@ export const EVENT_GAIN: Record<LudoSound, number> = {
   win: 0.9,
 };
 
+/** Selectable sound characters. All files are the real recorded Ludo clips. */
+export const SOUND_PROFILES: Record<string, { gain: number; rate: number }> = {
+  ludo: { gain: 1, rate: 1 },
+  soft: { gain: 0.45, rate: 0.92 },
+  arcade: { gain: 0.85, rate: 1.18 },
+  royal: { gain: 0.75, rate: 0.86 },
+};
+
 export function soundsFor(event: LudoSound): string[] {
   return LUDO_SOUNDS[event];
 }

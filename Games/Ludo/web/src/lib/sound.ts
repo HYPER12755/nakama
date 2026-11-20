@@ -4,7 +4,7 @@
  */
 
 import { loadAsset } from "@moongames/game-sdk";
-import { EVENT_GAIN, soundsFor, type LudoSound } from "./soundCatalog";
+import { EVENT_GAIN, SOUND_PROFILES, soundsFor, type LudoSound } from "./soundCatalog";
 
 let context: AudioContext | null = null;
 const buffers = new Map<string, AudioBuffer | null>();
@@ -85,8 +85,10 @@ export function playEvent(event: LudoSound): void {
     if (!buffer || !ctx) return;
     const source = ctx.createBufferSource();
     const gain = ctx.createGain();
+    const profile = SOUND_PROFILES[set] ?? SOUND_PROFILES.ludo!;
     source.buffer = buffer;
-    gain.gain.value = volume * EVENT_GAIN[event] * (set === "soft" ? 0.45 : 1);
+    source.playbackRate.value = profile.rate;
+    gain.gain.value = volume * EVENT_GAIN[event] * profile.gain;
     source.connect(gain).connect(ctx.destination);
     source.start();
   });

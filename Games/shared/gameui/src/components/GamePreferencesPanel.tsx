@@ -40,6 +40,13 @@ export interface PieceChoice {
   previewDark?: ReactNode;
 }
 
+/** A look of the dice a player can choose. */
+export interface DiceChoice {
+  id: string;
+  label: string;
+  preview?: ReactNode;
+}
+
 /** A colouring of the board a player can choose. */
 export interface ThemeChoice {
   id: string;
@@ -89,6 +96,8 @@ export interface GamePreferencesPanelProps {
   gameId: string;
   /** The sets of pieces, when the game has pieces. */
   pieceSets?: PieceChoice[];
+  /** The looks of the dice, when the game rolls dice. */
+  diceSets?: DiceChoice[];
   /** The colourings of the board. */
   themes?: ThemeChoice[];
   /** The sets of sounds, when the game has sounds. */
@@ -102,7 +111,7 @@ export interface GamePreferencesPanelProps {
 }
 
 /** The group of choices a picker is showing. */
-type PickerGroup = "pieces" | "board" | "sounds" | null;
+type PickerGroup = "pieces" | "dice" | "board" | "sounds" | null;
 
 /**
  * The customizations of a game.
@@ -116,6 +125,7 @@ type PickerGroup = "pieces" | "board" | "sounds" | null;
 export function GamePreferencesPanel({
   gameId,
   pieceSets = [],
+  diceSets = [],
   themes = [],
   soundSets = [],
   features = {},
@@ -159,6 +169,9 @@ export function GamePreferencesPanel({
   const chosenPieces = pieceSets.find(
     (choice) => choice.id === preferences.pieceSet,
   );
+  const chosenDice = diceSets.find(
+    (choice) => choice.id === preferences.diceSet,
+  );
   const chosenTheme = themes.find(
     (choice) => choice.id === preferences.boardTheme,
   );
@@ -200,6 +213,23 @@ export function GamePreferencesPanel({
             <span className="pref-row__label">Pieces</span>
             <span className="pref-row__value">
               {chosenPieces?.label ?? preferences.pieceSet}
+            </span>
+            <Icon name="chevron-right" size={16} />
+          </button>
+        )}
+
+        {diceSets.length > 0 && (
+          <button
+            type="button"
+            className="pref-row"
+            onClick={() => setPicker("dice")}
+          >
+            <span className="pref-row__preview pref-row__preview--pieces">
+              {chosenDice?.preview ?? null}
+            </span>
+            <span className="pref-row__label">Dice</span>
+            <span className="pref-row__value">
+              {chosenDice?.label ?? preferences.diceSet}
             </span>
             <Icon name="chevron-right" size={16} />
           </button>
@@ -652,6 +682,31 @@ export function GamePreferencesPanel({
                 <span className="pref-picker__pieceArt">
                   {choice.preview ?? null}
                   {choice.previewDark ?? null}
+                </span>
+                <small>{choice.label}</small>
+              </button>
+            ))}
+          </div>
+        </PreferencePicker>
+      )}
+
+      {picker === "dice" && (
+        <PreferencePicker title="Dice" onClose={() => setPicker(null)}>
+          <div className="pref-picker__grid">
+            {diceSets.map((choice) => (
+              <button
+                key={choice.id}
+                type="button"
+                className={`pref-picker__piece${
+                  preferences.diceSet === choice.id ? " is-chosen" : ""
+                }`}
+                onClick={() => {
+                  choose("diceSet", choice.id);
+                  setPicker(null);
+                }}
+              >
+                <span className="pref-picker__pieceArt">
+                  {choice.preview ?? null}
                 </span>
                 <small>{choice.label}</small>
               </button>
