@@ -37,10 +37,14 @@ const MIN_GAP_MS: Record<LudoSound, number> = {
   move: 80,
   capture: 220,
   home: 220,
+  safe: 220,
   foul: 260,
   turn: 300,
   start: 400,
   win: 500,
+  join: 400,
+  chat: 300,
+  clock: 500,
 };
 
 function audio(): AudioContext | null {

@@ -8,6 +8,7 @@ import {
   TOKENS_PER_PLAYER,
   DEFAULT_RULES,
   createGame,
+  isSafeSquare,
   legalMoves,
   type LudoColor,
   type LudoDifficulty,
@@ -62,6 +63,7 @@ const ONLINE_EVENT_SOUNDS: Partial<Record<LudoEvent["type"], LudoSound>> = {
   "no-move": "foul",
   capture: "capture",
   finish: "home",
+  "leave-home": "move",
   extra: "turn",
   win: "win",
 };
@@ -155,6 +157,10 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const { preferences, setPreference, resetPreference } = useGamePreferences(__MOONGAMES_GAME_ID__);
   const appRef = useRef<HTMLDivElement>(null);
   const onlineSoundSeenRef = useRef<Set<string> | null>(null);
+  const onlineSeatSoundRef = useRef<number | null>(null);
+  const onlineChatSoundRef = useRef<number | null>(null);
+  const onlineTurnSoundRef = useRef<string | null>(null);
+  const onlineClockSoundRef = useRef(false);
 
   const query = useMemo(() => new URLSearchParams(window.location.search), []);
   const autoplay = query.has("autoplay");
@@ -189,7 +195,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   }, [preferences.soundSet, preferences.soundEnabled, preferences.soundVolume, soundOn]);
 
   useEffect(() => {
-    for (const event of ["roll", "move", "capture", "home", "foul", "turn", "start", "win"] as const) {
+    for (const event of ["roll", "move", "capture", "home", "safe", "foul", "turn", "start", "win", "join", "chat", "clock"] as const) {
       preloadEvent(event);
     }
   }, [preferences.soundSet]);
@@ -254,6 +260,10 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   useEffect(() => {
     if (mode !== "online" || online.state === null) {
       onlineSoundSeenRef.current = null;
+      onlineSeatSoundRef.current = null;
+      onlineChatSoundRef.current = null;
+      onlineTurnSoundRef.current = null;
+      onlineClockSoundRef.current = false;
       return;
     }
     const events: LudoEvent[] = online.state.game?.events ?? [];
@@ -271,7 +281,25 @@ export default function App({ bridge }: { bridge: GameBridge }) {
       const sound = ONLINE_EVENT_SOUNDS[event.type];
       if (sound !== undefined) playEvent(sound);
     }
-  }, [mode, online.state, soundOn]);
+
+    const seatCount = online.state.seats.length;
+    if (onlineSeatSoundRef.current !== null && seatCount > onlineSeatSoundRef.current) {
+      playEvent("join");
+    }
+    onlineSeatSoundRef.current = seatCount;
+
+    const chatCount = online.state.chat.length;
+    if (onlineChatSoundRef.current !== null && chatCount > onlineChatSoundRef.current) {
+      playEvent("chat");
+    }
+    onlineChatSoundRef.current = chatCount;
+
+    const turnKey = `${game.current}:${game.action}`;
+    if (onlineTurnSoundRef.current !== null && onlineTurnSoundRef.current !== turnKey) {
+      playEvent("turn");
+    }
+    onlineTurnSoundRef.current = turnKey;
+  }, [mode, online.state, soundOn, game.current, game.action]);
 
   const legalTokens = useMemo(() => {
     if (mode === "online") {
@@ -331,6 +359,15 @@ export default function App({ bridge }: { bridge: GameBridge }) {
       event.type === "move" || event.type === "leave-home" || event.type === "finish"),
     [game.events],
   );
+  const lastSafeLanding = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastMoveEvent === undefined || !soundOn) return;
+    const key = String(lastMoveEvent.action);
+    if (lastSafeLanding.current === key) return;
+    lastSafeLanding.current = key;
+    const to = lastMoveEvent.to;
+    if (to !== undefined && isSafeSquare(to)) playEvent("safe");
+  }, [lastMoveEvent, soundOn]);
   const onlineMove = useMemo<LudoMove | null>(() => {
     if (!lastMoveEvent || lastMoveEvent.token === undefined) return null;
     return {
@@ -360,6 +397,16 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     const timer = window.setInterval(update, 500);
     return () => window.clearInterval(timer);
   }, [mode, online.state?.turnDeadline]);
+
+  useEffect(() => {
+    if (mode !== "online" || !soundOn || onlineRemaining > 5) {
+      onlineClockSoundRef.current = false;
+      return;
+    }
+    if (onlineClockSoundRef.current) return;
+    onlineClockSoundRef.current = true;
+    playEvent("clock");
+  }, [mode, onlineRemaining, soundOn]);
 
   useEffect(() => {
     if (!lastRoll) return;

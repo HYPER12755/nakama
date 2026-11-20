@@ -59,7 +59,8 @@ export function LudoPreferences({ gameId }: { gameId: string }) {
         playEvent("roll");
         window.setTimeout(() => playEvent("move"), 340);
         window.setTimeout(() => playEvent("capture"), 620);
-        window.setTimeout(() => playEvent("home"), 900);
+        window.setTimeout(() => playEvent("safe"), 900);
+        window.setTimeout(() => playEvent("home"), 1180);
       }}
     />
   );

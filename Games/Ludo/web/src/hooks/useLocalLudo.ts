@@ -17,6 +17,7 @@ import {
 } from "@moongames/ludo-core";
 import { recordLocalGame, type LocalGameRecord } from "../lib/localProgress";
 import { playLudoSound } from "../lib/sound";
+import { isSafeSquare } from "@moongames/ludo-core";
 
 export interface LocalGameOptions {
   seats: number;
@@ -130,6 +131,7 @@ export function useLocalLudo(options: LocalGameOptions) {
     if (next.phase === "move" && legalMoves(next).length === 0) {
       if (optionsRef.current.sound !== false) playLudoSound("foul");
       passTurn(next);
+      if (optionsRef.current.sound !== false) playLudoSound("turn");
     }
     gameRef.current = next;
     setGame(next);
@@ -166,6 +168,9 @@ export function useLocalLudo(options: LocalGameOptions) {
       if (chosen.captures.length > 0) playLudoSound("capture");
       else if (chosen.finishes) playLudoSound("home");
       else playLudoSound("move");
+      if (!chosen.leavesHome && chosen.to >= 0 && isSafeSquare(chosen.to)) {
+        playLudoSound("safe");
+      }
       if (result.won) playLudoSound("win");
     }
     if (result.won) recordLocalGame(next, stepsRef.current);

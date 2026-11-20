@@ -26,30 +26,33 @@ home.ogg, turn.ogg, start.ogg, win.ogg, foul.ogg
 2. Ludo King (APK) (public/sounds/ludo-apk)
 -------------------------------------------
 
-Fresh 1:1 copy from the user-supplied Ludo King APK at ~/unzip/com.ludo.king.apk.
-The original recordings belong to the Ludo King game and its publisher; they
-are included here because the user supplied the APK for this MoonGames build.
+Fresh 1:1 copy from the user-supplied Ludo King APK. The original recordings
+belong to the Ludo King game and its publisher; they are included because the
+user supplied the APK for this MoonGames build.
 
-The AudioSource roles were read from the APK's IL2CPP dump and its serialized
-scene, then each role was filled with the matching extracted clip. No clip is
-used in another clip's place.
+The default board pack (bpacksnl1) contains the real gameplay sounds:
 
-  roll.ogg          <- diceSound / dice
-  move.ogg          <- CurserMove / cursor_move
-  capture.ogg       <- SwordSound / sword
-  home.ogg          <- safePoints / safe_block
-  foul.ogg          <- clocktick / net_time
-  turn.ogg          <- turnChange / turn
-  start.ogg         <- startGame / start_game
-  win.ogg           <- cheersSound / cheers
-  music-ingame.ogg  <- InGameMusic / SpinOrPlayerSearch
-  music-intro.ogg   <- IntroMusic / title_bgm
-  dice-7updown.ogg  <- dice2Roll7UpDown / dice2 (reference only)
-  rullet.ogg        <- RulletSpin / rullet_active (reference only)
+  clip_roll.ogg   -> roll
+  clip_move.ogg   -> move
+  clip_kill.ogg   -> capture
+  clip_home.ogg   -> token reached home
+  clip_safe.ogg   -> safe star / safe box
+  clip_die.ogg    -> foul / no legal move
+  clip_bg.ogg     -> in-game background music
+
+The shared SoundManager clips fill the remaining table events:
+
+  start_game.ogg  -> startGame
+  goal.ogg        -> gamewin
+  rullet_active.ogg -> turnChange
+  net_join.ogg    -> netjoin
+  chat-pop.ogg    -> chat-msg
+  net_time.ogg    -> clocktick
+
+No clip is used in another clip's place.
 
 Extraction tooling:
   python-fsb5   https://github.com/HearthSim/python-fsb5
   vgmstream     https://github.com/vgmstream/vgmstream
-  IL2CPP dump   https://github.com/springmusk026/Il2CppDumper-Python
 
 The attributions above must travel with the game bundle.
