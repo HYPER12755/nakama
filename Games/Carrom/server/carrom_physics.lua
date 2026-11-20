@@ -277,8 +277,37 @@ function physics.simulate(state, shot)
   local pocketed = {}
   local time = 0
   local striker_pocketed = false
-  local damping = math.exp(-physics.FRICTION * physics.STEP_SECONDS)
-  local maximum_steps = math.ceil(physics.MAX_SIMULATION_SECONDS / physics.STEP_SECONDS)
+  local step = physics.STEP_SECONDS
+  local damping = math.exp(-physics.FRICTION * step)
+  local maximum_steps = math.ceil(physics.MAX_SIMULATION_SECONDS / step)
+  local stop_speed_squared = physics.STOP_SPEED * physics.STOP_SPEED
+  local body_count = #bodies
+  local pockets = physics.POCKETS
+  local pocket_count = #pockets
+  local pocket_radius_squared = physics.POCKET_RADIUS * physics.POCKET_RADIUS
+  local pocket_low = math.huge
+  local pocket_high = -math.huge
+  for index = 1, pocket_count do
+    local centre = pockets[index].x
+    pocket_low = math.min(pocket_low, centre - physics.POCKET_RADIUS)
+    pocket_high = math.max(pocket_high, centre + physics.POCKET_RADIUS)
+  end
+  local active = {}
+  local pair_left = {}
+  local pair_right = {}
+  local pair_minimum = {}
+  for left_index = 1, body_count do
+    for right_index = left_index + 1, body_count do
+      local left = bodies[left_index]
+      local right = bodies[right_index]
+      local minimum = left.r + right.r
+      local slot = #pair_left + 1
+      pair_left[slot] = left
+      pair_right[slot] = right
+      pair_minimum[slot] = minimum * minimum
+    end
+  end
+  local pair_count = #pair_left
 
   local function pocket_body(body, pocket)
     body.active = false
@@ -306,29 +335,68 @@ function physics.simulate(state, shot)
     end
   end
 
-  for _ = 1, maximum_steps do
-    time = time + physics.STEP_SECONDS
-
-    for _, body in ipairs(bodies) do
+  -- The squared-distance test and numeric loops are equivalent to
+  -- physics.find_pocket with ipairs, but avoid per-body sqrt and iterator
+  -- allocations in the server's hottest path.
+  local function settle_pockets()
+    for index = 1, body_count do
+      local body = bodies[index]
       if body.active then
-        body.vx = body.vx * damping
-        body.vy = body.vy * damping
-        body.x = body.x + body.vx * physics.STEP_SECONDS
-        body.y = body.y + body.vy * physics.STEP_SECONDS
-      end
-    end
-
-    for _, body in ipairs(bodies) do
-      if body.active then
-        local pocket = physics.find_pocket(body.x, body.y)
-        if pocket then
-          pocket_body(body, pocket)
+        local x = body.x
+        local y = body.y
+        -- A pocket only covers the four corners; skip the centre of the board.
+        if
+          (x >= pocket_low and x <= pocket_high)
+          and (y >= pocket_low and y <= pocket_high)
+        then
+          for pocket_index = 1, pocket_count do
+            local pocket = pockets[pocket_index]
+            local dx = x - pocket.x
+            local dy = y - pocket.y
+            if dx * dx + dy * dy <= pocket_radius_squared then
+              pocket_body(body, pocket)
+              break
+            end
+          end
         end
       end
     end
+  end
 
-    for _, body in ipairs(bodies) do
+  local function build_active()
+    local count = 0
+    for index = 1, body_count do
+      local body = bodies[index]
       if body.active then
+        count = count + 1
+        active[count] = body
+      end
+    end
+    return count
+  end
+
+  for _ = 1, maximum_steps do
+    time = time + step
+
+    for index = 1, body_count do
+      local body = bodies[index]
+      if body.active then
+        body.vx = body.vx * damping
+        body.vy = body.vy * damping
+        body.x = body.x + body.vx * step
+        body.y = body.y + body.vy * step
+      end
+    end
+
+    settle_pockets()
+
+    local active_count = build_active()
+    for index = 1, active_count do
+      local body = active[index]
+      local minimum = body.r
+      local maximum = 1 - minimum
+      local x, y = body.x, body.y
+      if x < minimum or x > maximum or y < minimum or y > maximum then
         resolve_wall(body, time, events)
       end
     end
@@ -336,34 +404,33 @@ function physics.simulate(state, shot)
     -- The pair order matches the TypeScript core exactly: the broad phase is
     -- an inline overlap test so only touching pairs pay for a function call.
     for _ = 1, 3 do
-      for left_index = 1, #bodies do
-        local left = bodies[left_index]
-        if left.active then
-          for right_index = left_index + 1, #bodies do
-            local right = bodies[right_index]
-            if right.active then
-              local dx = right.x - left.x
-              local dy = right.y - left.y
-              local minimum = left.r + right.r
-              if dx * dx + dy * dy < minimum * minimum then
-                collide(left, right, time, events)
-              end
-            end
+      for index = 1, pair_count do
+        local left = pair_left[index]
+        local right = pair_right[index]
+        if left.active and right.active then
+          local dx = right.x - left.x
+          local dy = right.y - left.y
+          if dx * dx + dy * dy < pair_minimum[index] then
+            collide(left, right, time, events)
           end
         end
       end
     end
 
-    for _, body in ipairs(bodies) do
+    settle_pockets()
+
+    local moving = false
+    for index = 1, body_count do
+      local body = bodies[index]
       if body.active then
-        local pocket = physics.find_pocket(body.x, body.y)
-        if pocket then
-          pocket_body(body, pocket)
+        local speed_squared = body.vx * body.vx + body.vy * body.vy
+        if speed_squared >= stop_speed_squared then
+          moving = true
+          break
         end
       end
     end
-
-    if max_speed(bodies) < physics.STOP_SPEED then
+    if not moving then
       break
     end
   end

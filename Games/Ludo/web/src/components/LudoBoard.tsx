@@ -158,7 +158,7 @@ export function LudoBoard({
   lastMove,
   onTokenClick,
   disabled = false,
-  tokenSet = "marble",
+  tokenSet = "regalia",
   boardTheme = "classic",
   showLegalMoves = true,
   highlightLastMove = true,

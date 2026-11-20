@@ -280,12 +280,16 @@ export function useLauncherSocial(
 
   const handleStatusPresence = useCallback(
     (event: StatusPresenceEvent) => {
+      // Nakama can send a sparse status event. A missing array must not take
+      // down the launcher library while friends are being refreshed.
+      const joins = Array.isArray(event?.joins) ? event.joins : [];
+      const leaves = Array.isArray(event?.leaves) ? event.leaves : [];
       applyOnline(
-        event.joins.map((presence) => presence.user_id),
+        joins.map((presence) => presence?.user_id).filter(Boolean) as string[],
         true,
       );
       applyOnline(
-        event.leaves.map((presence) => presence.user_id),
+        leaves.map((presence) => presence?.user_id).filter(Boolean) as string[],
         false,
       );
     },

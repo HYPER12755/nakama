@@ -792,7 +792,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 lastMove={onlineMode ? onlineMove : controller.lastMove}
                 onTokenClick={doMove}
                 disabled={controller.isReplaying || game.phase === "over" || (onlineMode ? online.spectating || !canMove : !!current?.ai)}
-                tokenSet={TOKEN_SETS.some((set) => set.id === preferences.pieceSet) ? preferences.pieceSet : "marble"}
+                tokenSet={TOKEN_SETS.some((set) => set.id === preferences.pieceSet) ? preferences.pieceSet : "regalia"}
                 boardTheme={BOARD_THEMES.some((theme) => theme.id === preferences.boardTheme) ? preferences.boardTheme : "classic"}
                 showLegalMoves={preferences.showLegalMoves}
                 highlightLastMove={preferences.highlightLastMove}
