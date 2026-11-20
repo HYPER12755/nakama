@@ -34,9 +34,23 @@ export function LudoPreferences({ gameId }: { gameId: string }) {
       diceSets={DICE_SETS.map((set) => ({
         id: set.id,
         label: set.label,
-        preview: set.texture
-          ? <img src={set.texture} alt="" width={22} height={22} />
-          : <span className="dice-preview-classic">⚄</span>,
+        preview: (
+          <span
+            className={`dice-preview${set.texture ? " dice-preview--textured" : ""}`}
+            style={set.texture
+              ? {
+                  backgroundImage: `url("${set.texture}")`,
+                  backgroundColor: set.color,
+                }
+              : undefined}
+          >
+            <span className="dice-preview__grid">
+              {Array.from({ length: 9 }, (_, index) => (
+                <span className={[1, 3, 4, 5, 7].includes(index) ? "is-pip" : ""} />
+              ))}
+            </span>
+          </span>
+        ),
       }))}
       themes={BOARD_THEMES}
       soundSets={SOUND_SETS}

@@ -26,17 +26,18 @@ export interface DiceSet {
   id: string;
   label: string;
   texture?: string;
+  color?: string;
 }
 
 export const DICE_SETS: DiceSet[] = [
   { id: "classic", label: "Classic die" },
-  { id: "lk1", label: "King · Wood", texture: "dice/bpacksnl1/texture.png" },
-  { id: "lk2", label: "King · Dark wood", texture: "dice/bpacksnl2/texture.png" },
-  { id: "lk3", label: "King · Sand", texture: "dice/bpacksnl3/texture.png" },
-  { id: "lk4", label: "King · Clay", texture: "dice/bpacksnl4/texture.png" },
-  { id: "lk5", label: "King · Slate", texture: "dice/bpacksnl5/texture.png" },
-  { id: "lk6", label: "King · Cream", texture: "dice/bpacksnl6/texture.png" },
-  { id: "lk7", label: "King · Red wood", texture: "dice/bpacksnl7/texture.png" },
+  { id: "lk1", label: "King · Wood", texture: "dice/bpacksnl1/texture.png", color: "#b77a3e" },
+  { id: "lk2", label: "King · Dark wood", texture: "dice/bpacksnl2/texture.png", color: "#7c4d2a" },
+  { id: "lk3", label: "King · Sand", texture: "dice/bpacksnl3/texture.png", color: "#c7a26d" },
+  { id: "lk4", label: "King · Clay", texture: "dice/bpacksnl4/texture.png", color: "#a4563c" },
+  { id: "lk5", label: "King · Slate", texture: "dice/bpacksnl5/texture.png", color: "#66727c" },
+  { id: "lk6", label: "King · Cream", texture: "dice/bpacksnl6/texture.png", color: "#d8c49b" },
+  { id: "lk7", label: "King · Red wood", texture: "dice/bpacksnl7/texture.png", color: "#9b4a3a" },
 ];
 
 /** The supplied board art is the only board; ornaments are an SVG edge layer. */
