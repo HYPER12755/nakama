@@ -1,20 +1,27 @@
 Ludo sound credits
 ==================
 
-dice-roll.mp3 / dice-roll.ogg
-  "Shake and Roll Dice" by Mike Koenig, Attribution 3.0 (CC BY 3.0).
-  Edited down from soundbible.com/182-Shake, distributed with tremby/dice:
-  https://github.com/tremby/dice/blob/main/public/roll.mp3
+All sounds in this folder were extracted directly from the user-supplied
+Ludo King APK at ~/unzip/com.ludo.king.apk. They live in the
+assets/bin/Data/sharedassets0.resource FSB5 bank inside that APK.
 
-move.ogg, capture.ogg
-  wooden_01.ogg and wooden_02.ogg from lavenderdotpet/CC0-Public-Domain-Sounds,
-  released under CC0 1.0 (public domain dedication).
-  https://github.com/lavenderdotpet/CC0-Public-Domain-Sounds
+The FSB5 banks were decoded on this device with python-fsb5 and vgmstream,
+then converted to OGG/MP3 with FFmpeg. No sounds were recreated or synthesised.
+The original recordings belong to the Ludo King game and its publisher; they
+are bundled here because the user supplied the APK for this MoonGames build.
 
-home.ogg, turn.ogg, start.ogg, win.ogg, foul.ogg
-  Beep3, Beep7, Click1, Beep1 and Beep5 from the MMRetro Arcade Sounds Pack in
-  lavenderdotpet/CC0-Public-Domain-Sounds, released under CC0 1.0.
-  https://github.com/lavenderdotpet/CC0-Public-Domain-Sounds
+Original clip names used here:
 
-The files are bundled with MoonGames Ludo. The attributions above must travel
-with the game bundle.
+  dice-roll.ogg   <- dice (stereo dice roll)
+  dice-roll.mp3   <- dice (mono dice roll)
+  move.ogg        <- cursor_move
+  capture.ogg     <- coins_collect
+  home.ogg        <- up_level_medium
+  foul.ogg        <- down_level
+  turn.ogg        <- turn
+  start.ogg       <- start_game
+  win.ogg         <- up_level_big
+
+Extraction tooling:
+  python-fsb5   https://github.com/HearthSim/python-fsb5
+  vgmstream     https://github.com/vgmstream/vgmstream

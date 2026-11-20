@@ -11,6 +11,7 @@ import {
   legalMoves,
   type LudoColor,
   type LudoDifficulty,
+  type LudoEvent,
   type LudoMove,
   type LudoRules,
   type LudoState,
@@ -42,6 +43,7 @@ import {
   type GameModeId, type StartModeId, type TableSpeedId,
 } from "./lib/preferences";
 import { configureSound, isMuted, playEvent, preloadEvent, setMuted } from "./lib/sound";
+import type { LudoSound } from "./lib/soundCatalog";
 
 type Mode = "local" | "ai" | "online";
 
@@ -52,6 +54,17 @@ const MODES = [
   { id: "ai", label: "vs AI", icon: <Icon name="sparkles" size={15} /> },
   { id: "online", label: "Online", icon: <Icon name="shield-check" size={15} /> },
 ];
+
+/** Authoritative online events that need a sound. Piece hops already play per step. */
+const ONLINE_EVENT_SOUNDS: Partial<Record<LudoEvent["type"], LudoSound>> = {
+  roll: "roll",
+  "six-foul": "foul",
+  "no-move": "foul",
+  capture: "capture",
+  finish: "home",
+  extra: "turn",
+  win: "win",
+};
 
 const DIFFICULTIES: { id: LudoDifficulty; label: string }[] = [
   { id: "easy", label: "Easy" },
@@ -144,6 +157,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const [replayPlaying, setReplayPlaying] = useState(false);
   const { preferences, setPreference, resetPreference } = useGamePreferences(__MOONGAMES_GAME_ID__);
   const appRef = useRef<HTMLDivElement>(null);
+  const onlineSoundSeenRef = useRef<Set<string> | null>(null);
 
   const query = useMemo(() => new URLSearchParams(window.location.search), []);
   const autoplay = query.has("autoplay");
@@ -221,6 +235,32 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     return fresh;
   }, [seats, seatColors, seatNames, tokensPerPlayer, startSeat]);
   const game: LudoState = mode === "online" ? (online.state?.game ?? emptyGame) : controller.game;
+
+  // The local controller plays sounds when it applies a move. Online play has
+  // no controller, so every client plays the authoritative events it receives.
+  // Seen keys stop a rejoining clock update from repeating an old roll.
+  useEffect(() => {
+    if (mode !== "online" || online.state === null) {
+      onlineSoundSeenRef.current = null;
+      return;
+    }
+    const events: LudoEvent[] = online.state.game?.events ?? [];
+    const keyOf = (event: LudoEvent) =>
+      `${event.action}|${event.type}|${event.player}|${event.token ?? ""}|${event.value ?? ""}`;
+    const seen = onlineSoundSeenRef.current;
+    if (seen === null) {
+      onlineSoundSeenRef.current = new Set(events.map(keyOf));
+      return;
+    }
+    const fresh = events.filter((event) => !seen.has(keyOf(event)));
+    for (const event of fresh) seen.add(keyOf(event));
+    if (!soundOn) return;
+    for (const event of fresh) {
+      const sound = ONLINE_EVENT_SOUNDS[event.type];
+      if (sound !== undefined) playEvent(sound);
+    }
+  }, [mode, online.state, soundOn]);
+
   const legalTokens = useMemo(() => {
     if (mode === "online") {
       return game.phase === "move" ? legalMoves(game).map((move) => move.token) : [];

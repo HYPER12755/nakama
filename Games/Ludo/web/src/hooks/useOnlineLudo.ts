@@ -73,12 +73,18 @@ const GAME_ID = __MOONGAMES_GAME_ID__;
 const DEVICE_KEY = `moongames.${GAME_ID}.device`;
 const SERVER_KEY = "defaultkey";
 
+/**
+ * A guest is one browser tab. Keeping the id in localStorage made two tabs on
+ * the same device share one account, so the server could not seat both players
+ * and the table waited forever.
+ */
 function deviceId(): string {
   try {
-    const existing = window.localStorage.getItem(DEVICE_KEY);
+    const existing = window.sessionStorage.getItem(DEVICE_KEY);
     if (existing) return existing;
     const created = `${GAME_ID}-${Math.random().toString(36).slice(2)}-${Date.now()}`;
-    window.localStorage.setItem(DEVICE_KEY, created);
+    window.sessionStorage.setItem(DEVICE_KEY, created);
+    window.localStorage.removeItem(DEVICE_KEY);
     return created;
   } catch {
     return `${GAME_ID}-${Date.now()}`;
