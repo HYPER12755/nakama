@@ -121,9 +121,6 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   useEffect(() => {
     configureAssets(bridge);
     readLauncherHandoff(__MOONGAMES_GAME_ID__);
-    for (const event of ["roll", "move", "capture", "home", "foul", "turn", "start", "win"] as const) {
-      preloadEvent(event);
-    }
   }, [bridge]);
 
   const [mode, setMode] = useState<Mode>("ai");
@@ -190,6 +187,12 @@ export default function App({ bridge }: { bridge: GameBridge }) {
       enabled: soundOn,
     });
   }, [preferences.soundSet, preferences.soundEnabled, preferences.soundVolume, soundOn]);
+
+  useEffect(() => {
+    for (const event of ["roll", "move", "capture", "home", "foul", "turn", "start", "win"] as const) {
+      preloadEvent(event);
+    }
+  }, [preferences.soundSet]);
 
   useEffect(() => {
     const update = () => setIsFullscreen(document.fullscreenElement === appRef.current);

@@ -1,27 +1,52 @@
 Ludo sound credits
 ==================
 
-All sounds in this folder were extracted directly from the user-supplied
-Ludo King APK at ~/unzip/com.ludo.king.apk. They live in the
-assets/bin/Data/sharedassets0.resource FSB5 bank inside that APK.
+Two selectable sound sets are bundled. Both are real recordings; neither is
+synthesised.
 
-The FSB5 banks were decoded on this device with python-fsb5 and vgmstream,
-then converted to OGG/MP3 with FFmpeg. No sounds were recreated or synthesised.
+1. Recorded table (public/sounds/ludo)
+--------------------------------------
+
+dice-roll.mp3 / dice-roll.ogg
+  "Shake and Roll Dice" by Mike Koenig, Attribution 3.0 (CC BY 3.0).
+  Edited down from soundbible.com/182-Shake, distributed with tremby/dice:
+  https://github.com/tremby/dice/blob/main/public/roll.mp3
+
+move.ogg, capture.ogg
+  wooden_01.ogg and wooden_02.ogg from lavenderdotpet/CC0-Public-Domain-Sounds,
+  released under CC0 1.0 (public domain dedication).
+  https://github.com/lavenderdotpet/CC0-Public-Domain-Sounds
+
+home.ogg, turn.ogg, start.ogg, win.ogg, foul.ogg
+  Beep3, Beep7, Click1, Beep1 and Beep5 from the MMRetro Arcade Sounds Pack in
+  lavenderdotpet/CC0-Public-Domain-Sounds, released under CC0 1.0.
+  https://github.com/lavenderdotpet/CC0-Public-Domain-Sounds
+
+2. Ludo King (APK) (public/sounds/ludo-apk)
+-------------------------------------------
+
+These clips were extracted directly from the user-supplied Ludo King APK at
+~/unzip/com.ludo.king.apk, from assets/bin/Data/sharedassets0.resource.
 The original recordings belong to the Ludo King game and its publisher; they
-are bundled here because the user supplied the APK for this MoonGames build.
+are included here because the user supplied the APK for this MoonGames build.
 
 Original clip names used here:
 
-  dice-roll.ogg   <- dice (stereo dice roll)
-  dice-roll.mp3   <- dice (mono dice roll)
+  dice2.ogg       <- dice2 (the real dice-roll recording; the hissing
+                     stereo "dice" bank was analysed and excluded)
   move.ogg        <- cursor_move
   capture.ogg     <- coins_collect
-  home.ogg        <- up_level_medium
+  home.ogg        <- up_level_small
   foul.ogg        <- down_level
   turn.ogg        <- turn
   start.ogg       <- start_game
   win.ogg         <- up_level_big
 
+The FSB5 banks were decoded on this device with python-fsb5 and vgmstream,
+then converted to OGG/MP3 with FFmpeg.
+
 Extraction tooling:
   python-fsb5   https://github.com/HearthSim/python-fsb5
   vgmstream     https://github.com/vgmstream/vgmstream
+
+The attributions above must travel with the game bundle.

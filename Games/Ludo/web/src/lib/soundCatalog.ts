@@ -1,6 +1,6 @@
 /**
- * Real recorded sounds for Ludo events. Every file is bundled in
- * public/sounds/ludo and loaded through the shared SDK asset loader.
+ * Real recorded Ludo sounds. Each set keeps its own directory and file list so
+ * a player can switch without losing the original recordings.
  */
 
 export type LudoSound =
@@ -13,16 +13,53 @@ export type LudoSound =
   | "start"
   | "win";
 
-export const LUDO_SOUNDS: Record<LudoSound, string[]> = {
-  roll: ["dice-roll.ogg", "dice-roll.mp3"],
-  move: ["move.ogg"],
-  capture: ["capture.ogg"],
-  home: ["home.ogg"],
-  foul: ["foul.ogg"],
-  turn: ["turn.ogg"],
-  start: ["start.ogg"],
-  win: ["win.ogg"],
+export type LudoSoundSetId = "ludo" | "ludo-apk";
+
+interface SoundSetDefinition {
+  directory: string;
+  files: Record<LudoSound, string[]>;
+  gain: number;
+  rate: number;
+}
+
+export const SOUND_SET_DEFINITIONS: Record<LudoSoundSetId, SoundSetDefinition> = {
+  ludo: {
+    directory: "ludo",
+    gain: 1,
+    rate: 1,
+    files: {
+      roll: ["dice-roll.ogg", "dice-roll.mp3"],
+      move: ["move.ogg"],
+      capture: ["capture.ogg"],
+      home: ["home.ogg"],
+      foul: ["foul.ogg"],
+      turn: ["turn.ogg"],
+      start: ["start.ogg"],
+      win: ["win.ogg"],
+    },
+  },
+  "ludo-apk": {
+    directory: "ludo-apk",
+    gain: 0.9,
+    rate: 1,
+    files: {
+      // The APK's stereo "dice" bank is a noise hiss, not a dice roll.
+      // Only the real transient dice2 recording is used here.
+      roll: ["dice2.ogg"],
+      move: ["move.ogg"],
+      capture: ["capture.ogg"],
+      home: ["home.ogg"],
+      foul: ["foul.ogg"],
+      turn: ["turn.ogg"],
+      start: ["start.ogg"],
+      win: ["win.ogg"],
+    },
+  },
 };
+
+/** Kept for callers that only need the original set. */
+export const LUDO_SOUNDS: Record<LudoSound, string[]> =
+  SOUND_SET_DEFINITIONS.ludo.files;
 
 export const EVENT_GAIN: Record<LudoSound, number> = {
   roll: 0.9,
@@ -35,11 +72,21 @@ export const EVENT_GAIN: Record<LudoSound, number> = {
   win: 0.9,
 };
 
-/** Selectable sound characters. All files are the real recorded Ludo clips. */
-export const SOUND_PROFILES: Record<string, { gain: number; rate: number }> = {
-  ludo: { gain: 1, rate: 1 },
-};
+export const SOUND_PROFILES: Record<string, { gain: number; rate: number }> =
+  Object.fromEntries(
+    Object.entries(SOUND_SET_DEFINITIONS).map(([id, definition]) => [
+      id,
+      { gain: definition.gain, rate: definition.rate },
+    ]),
+  );
 
-export function soundsFor(event: LudoSound): string[] {
-  return LUDO_SOUNDS[event];
+export function soundDirectory(setId: string): string {
+  const known = setId as LudoSoundSetId;
+  return (SOUND_SET_DEFINITIONS[known] ?? SOUND_SET_DEFINITIONS.ludo).directory;
+}
+
+export function soundsFor(event: LudoSound, setId = "ludo"): string[] {
+  const known = setId as LudoSoundSetId;
+  const set = SOUND_SET_DEFINITIONS[known] ?? SOUND_SET_DEFINITIONS.ludo;
+  return set.files[event];
 }
