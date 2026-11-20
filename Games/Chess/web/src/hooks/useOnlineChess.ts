@@ -92,7 +92,7 @@ const SERVER_ADDRESS_KEY = `moongames.${GAME_ID}.serverAddress`;
 const TIME_CONTROL_KEY = `moongames.${GAME_ID}.timeControl`;
 const MATCH_ID_KEY = `moongames.${GAME_ID}.matchId`;
 const SPECTATE_KEY = `moongames.${GAME_ID}.spectate`;
-const QUICK_MATCH_FALLBACK_MS = 5000;
+const QUICK_MATCH_FALLBACK_MS = 1200;
 
 export interface PendingOnlinePromotion {
   from: Square;
@@ -305,10 +305,20 @@ function storedSpectating(): boolean {
   return readStorage(SPECTATE_KEY) === "1";
 }
 
+/**
+ * A guest is one browser tab, not one browser profile. Two tabs on the same
+ * device must be able to sit at the same table as two different players; a
+ * device id kept in localStorage gave both tabs the same account, so the
+ * server could only seat one of them and the match waited forever.
+ */
 function getDeviceId(): string {
-  const existing = readStorage(DEVICE_ID_KEY);
-  if (existing !== null && existing.length > 0) {
-    return existing;
+  try {
+    const existing = window.sessionStorage.getItem(DEVICE_ID_KEY);
+    if (existing !== null && existing.length > 0) {
+      return existing;
+    }
+  } catch {
+    // Storage can be unavailable in private browsing or embedded webviews.
   }
 
   const created =
@@ -316,13 +326,20 @@ function getDeviceId(): string {
     typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
       : `device-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  writeStorage(DEVICE_ID_KEY, created);
+  try {
+    window.sessionStorage.setItem(DEVICE_ID_KEY, created);
+    // Remove the old shared identifier so a returning player never falls back
+    // to an account that another open tab is already using.
+    window.localStorage.removeItem(DEVICE_ID_KEY);
+  } catch {
+    // Storage can be unavailable.
+  }
   return created;
 }
 
 function rotateGuestDeviceId(): void {
   try {
-    window.localStorage.removeItem(DEVICE_ID_KEY);
+    window.sessionStorage.removeItem(DEVICE_ID_KEY);
   } catch {
     // Storage can be unavailable.
   }

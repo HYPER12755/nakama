@@ -9,6 +9,7 @@ local tournament = require("chess_tournament")
 local social = require("moongames_social")
 
 local PRIVATE_LOBBY_TIMEOUT_MS = social.INVITE_TTL_MS + 60000
+local QUICK_TABLE_COLLECTION = "chess_quick_table"
 
 local function label_fields(label)
   if type(label) ~= "string" then
@@ -158,6 +159,71 @@ local function time_control_from(params)
   return protocol.parse_time_control(source)
 end
 
+local function quick_table_key(time_control)
+  return string.format(
+    "%d_%d",
+    tonumber(time_control.initial_ms) or 0,
+    tonumber(time_control.increment_ms) or 0
+  )
+end
+
+local function open_quick_match(match_id)
+  if type(match_id) ~= "string" or match_id == "" then
+    return false
+  end
+  local ok, match = pcall(nk.match_get, match_id)
+  if not ok or type(match) ~= "table" then
+    return false
+  end
+  local fields = label_fields(match.label)
+  return fields ~= nil and fields[2] == "quick" and fields[5] == "open"
+end
+
+local function read_quick_table(time_control, excluded)
+  local objects = nk.storage_read({
+    {
+      collection = QUICK_TABLE_COLLECTION,
+      key = quick_table_key(time_control),
+    },
+  })
+  local record = objects and objects[1]
+  local version = record and record.version or nil
+  local value = record and record.value
+  if type(value) == "table" then
+    local match_id = value.matchId or value.match_id
+    if match_id ~= excluded and open_quick_match(match_id) then
+      return match_id, version
+    end
+  end
+  return nil, version
+end
+
+local function claim_quick_table(time_control, match_id, version)
+  local ok = pcall(nk.storage_write, {
+    {
+      collection = QUICK_TABLE_COLLECTION,
+      key = quick_table_key(time_control),
+      value = {
+        matchId = match_id,
+        updatedAt = nk.time(),
+      },
+      version = version or "*",
+      permission_read = 0,
+      permission_write = 0,
+    },
+  })
+  return ok
+end
+
+local function quick_match_response(match_id, time_control)
+  return nk.json_encode({
+    ok = true,
+    matchId = match_id,
+    mode = "quick",
+    timeControl = protocol.time_control_wire(time_control),
+  })
+end
+
 local function quick_match(context, payload)
   if not context.user_id or context.user_id == "" then
     return response_error("unauthenticated", "A user session is required")
@@ -173,13 +239,17 @@ local function quick_match(context, payload)
     return response_error("invalid_time_control", time_error)
   end
 
-  -- match_list is eventually consistent. The web client calls this only after
-  -- the atomic matchmaker has had a few seconds to pair concurrent players, so
-  -- the table is normally visible to anyone arriving later.
-  local label = protocol.label("quick", time_control, "open")
   local excluded = params.excludeMatchId or params.exclude_match_id
+  local match_id, version = read_quick_table(time_control, excluded)
+  if match_id then
+    return quick_match_response(match_id, time_control)
+  end
+
+  -- match_list is eventually consistent. Keeping a claimed table in storage as
+  -- well means two players who arrive together still get the same room when
+  -- the index has not caught up with the first table yet.
+  local label = protocol.label("quick", time_control, "open")
   local matches = nk.match_list(10, true, label, 0, 1, nil)
-  local match_id = nil
   for _, candidate in ipairs(matches or {}) do
     if excluded == nil or candidate.match_id ~= excluded then
       match_id = candidate.match_id
@@ -187,23 +257,40 @@ local function quick_match(context, payload)
     end
   end
 
-  if not match_id then
-    match_id = nk.match_create("chess_match", {
-      mode = "quick",
-      rated = true,
-      time_control = {
-        initial_ms = time_control.initial_ms,
-        increment_ms = time_control.increment_ms,
-      },
-    })
+  if match_id then
+    if claim_quick_table(time_control, match_id, version) then
+      return quick_match_response(match_id, time_control)
+    end
+    local winner, next_version = read_quick_table(time_control, excluded)
+    version = next_version
+    if winner then
+      return quick_match_response(winner, time_control)
+    end
   end
 
-  return nk.json_encode({
-    ok = true,
-    matchId = match_id,
+  match_id = nk.match_create("chess_match", {
     mode = "quick",
-    timeControl = protocol.time_control_wire(time_control),
+    rated = true,
+    time_control = {
+      initial_ms = time_control.initial_ms,
+      increment_ms = time_control.increment_ms,
+    },
   })
+
+  for _ = 1, 4 do
+    if claim_quick_table(time_control, match_id, version) then
+      return quick_match_response(match_id, time_control)
+    end
+    local winner, next_version = read_quick_table(time_control, excluded)
+    version = next_version
+    if winner then
+      -- Another table was claimed first. Use that table so both searches end
+      -- up in one room instead of two half-empty rooms.
+      return quick_match_response(winner, time_control)
+    end
+  end
+
+  return quick_match_response(match_id, time_control)
 end
 nk.register_rpc(quick_match, "chess_quick_match")
 

@@ -236,6 +236,7 @@ export default function App({ bridge }: AppProps) {
   const [boardFullscreen, setBoardFullscreen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [resultOpen, setResultOpen] = useState(false);
+  const onlineResultAnnouncedRef = useRef<string>("");
   const [replayEntry, setReplayEntry] = useState<OnlineHistoryEntry | null>(
     null,
   );
@@ -647,6 +648,22 @@ export default function App({ bridge }: AppProps) {
       setResultOpen(true);
     }
   }, [activeState, online.myColor]);
+
+  // A resign, timeout, or disconnect does not change the board's status, so
+  // watching only the moves left the result dialog closed. The server result
+  // is the authority for every way an online game can end.
+  useEffect(() => {
+    if (activeResult === null) {
+      onlineResultAnnouncedRef.current = "";
+      return;
+    }
+    const key = `${activeResult.status}:${activeResult.endedAt}`;
+    if (onlineResultAnnouncedRef.current === key) {
+      return;
+    }
+    onlineResultAnnouncedRef.current = key;
+    setResultOpen(true);
+  }, [activeResult]);
 
   // The sounds of the table are fetched while the game is loaded, so the
   // first move is not late.
