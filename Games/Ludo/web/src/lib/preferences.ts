@@ -13,6 +13,7 @@ export interface TokenSet {
 export const TOKEN_SETS: TokenSet[] = [
   { id: "regalia", label: "Regalia", color: "#c8434a", kind: "svg" },
   { id: "celestial", label: "Celestial", color: "#5b9cff", kind: "svg" },
+  { id: "stylish", label: "King · Stylish", color: "#c8434a", kind: "copied" },
   { id: "lk1", label: "King · Blue", color: "#30b6ed", kind: "copied" },
   { id: "lk2", label: "King · Wood", color: "#a86b35", kind: "copied" },
   { id: "lk3", label: "King · Stone", color: "#88939c", kind: "copied" },
