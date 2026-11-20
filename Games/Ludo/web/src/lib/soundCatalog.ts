@@ -1,6 +1,6 @@
 /**
  * Real recorded Ludo sounds. Each set keeps its own directory and file list.
- * The APK set uses the original clip names from the game's board pack.
+ * Board packs 1-7 are the complete set shipped inside the supplied APK.
  */
 
 export type LudoSound =
@@ -17,13 +17,44 @@ export type LudoSound =
   | "chat"
   | "clock";
 
-export type LudoSoundSetId = "ludo" | "ludo-original" | "ludo-apk";
+export type LudoSoundSetId =
+  | "ludo"
+  | "ludo-original"
+  | "ludo-apk"
+  | "ludo-board-2"
+  | "ludo-board-3"
+  | "ludo-board-4"
+  | "ludo-board-5"
+  | "ludo-board-6"
+  | "ludo-board-7";
 
 interface SoundSetDefinition {
   directory: string;
   files: Record<LudoSound, string[]>;
   gain: number;
   rate: number;
+}
+
+function boardSet(directory: string): SoundSetDefinition {
+  return {
+    directory,
+    gain: 0.85,
+    rate: 1,
+    files: {
+      roll: ["clip_roll.ogg"],
+      move: ["clip_move.ogg"],
+      capture: ["clip_kill.ogg"],
+      home: ["clip_home.ogg"],
+      safe: ["clip_safe.ogg"],
+      foul: ["clip_die.ogg"],
+      turn: ["rullet_active.ogg"],
+      start: ["start_game.ogg"],
+      win: ["goal.ogg"],
+      join: ["net_join.ogg"],
+      chat: ["chat-pop.ogg"],
+      clock: ["net_time.ogg"],
+    },
+  };
 }
 
 export const SOUND_SET_DEFINITIONS: Record<LudoSoundSetId, SoundSetDefinition> = {
@@ -51,7 +82,6 @@ export const SOUND_SET_DEFINITIONS: Record<LudoSoundSetId, SoundSetDefinition> =
     gain: 0.85,
     rate: 1,
     files: {
-      // Earlier recovered APK set: original SoundManager-style clips.
       roll: ["dice.ogg"],
       move: ["cursor_move.ogg"],
       capture: ["sword.ogg"],
@@ -66,32 +96,25 @@ export const SOUND_SET_DEFINITIONS: Record<LudoSoundSetId, SoundSetDefinition> =
       clock: ["net_time.ogg"],
     },
   },
-  "ludo-apk": {
-    directory: "ludo-apk",
-    gain: 0.85,
-    rate: 1,
-    files: {
-      // Exact board-pack / SoundManager clip roles.
-      roll: ["clip_roll.ogg"],
-      move: ["clip_move.ogg"],
-      capture: ["clip_kill.ogg"],
-      home: ["clip_home.ogg"],
-      safe: ["clip_safe.ogg"],
-      foul: ["clip_die.ogg"],
-      turn: ["rullet_active.ogg"],
-      start: ["start_game.ogg"],
-      win: ["goal.ogg"],
-      join: ["net_join.ogg"],
-      chat: ["chat-pop.ogg"],
-      clock: ["net_time.ogg"],
-    },
-  },
+  "ludo-apk": boardSet("ludo-apk"),
+  "ludo-board-2": boardSet("ludo-board-2"),
+  "ludo-board-3": boardSet("ludo-board-3"),
+  "ludo-board-4": boardSet("ludo-board-4"),
+  "ludo-board-5": boardSet("ludo-board-5"),
+  "ludo-board-6": boardSet("ludo-board-6"),
+  "ludo-board-7": boardSet("ludo-board-7"),
 };
 
-/** The genuine in-game music clip from the board pack. */
+/** Background music from each APK sound bank. */
 export const MUSIC_FILES: Partial<Record<LudoSoundSetId, string[]>> = {
   "ludo-original": ["title_bgm.ogg"],
   "ludo-apk": ["clip_bg.ogg"],
+  "ludo-board-2": ["clip_bg.ogg"],
+  "ludo-board-3": ["clip_bg.ogg"],
+  "ludo-board-4": ["clip_bg.ogg"],
+  "ludo-board-5": ["clip_bg.ogg"],
+  "ludo-board-6": ["clip_bg.ogg"],
+  "ludo-board-7": ["clip_bg.ogg"],
 };
 
 export const LUDO_SOUNDS: Record<LudoSound, string[]> =

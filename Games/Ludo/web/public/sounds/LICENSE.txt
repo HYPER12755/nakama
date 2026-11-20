@@ -65,3 +65,14 @@ Extraction tooling:
   vgmstream     https://github.com/vgmstream/vgmstream
 
 The attributions above must travel with the game bundle.
+
+Board Packs 2-7 (public/sounds/ludo-board-2 ... ludo-board-7)
+-------------------------------------------------------------
+
+These are the remaining complete board sound packs embedded in the supplied
+Ludo King APK at assets/SNL/Android/BOARD/bpacksnl2 ... bpacksnl7. Each pack
+contains its own clip_roll, clip_move, clip_kill, clip_home, clip_safe,
+clip_die and clip_bg. They are bundled as separate selectable sets with their
+original clip names and roles. Shared table events use the exact shared asset
+clips from Ludo Original (start_game, goal, rullet_active, net_join, chat-pop,
+net_time).

@@ -57,7 +57,13 @@ export type TableSpeedId = (typeof TABLE_SPEEDS)[number]["id"];
 export const SOUND_SETS = [
   { id: "ludo", label: "Recorded table" },
   { id: "ludo-original", label: "Ludo Original" },
-  { id: "ludo-apk", label: "Ludo Board Pack" },
+  { id: "ludo-apk", label: "Ludo Board Pack 1" },
+  { id: "ludo-board-2", label: "Ludo Board Pack 2" },
+  { id: "ludo-board-3", label: "Ludo Board Pack 3" },
+  { id: "ludo-board-4", label: "Ludo Board Pack 4" },
+  { id: "ludo-board-5", label: "Ludo Board Pack 5" },
+  { id: "ludo-board-6", label: "Ludo Board Pack 6" },
+  { id: "ludo-board-7", label: "Ludo Board Pack 7" },
 ];
 
 export const LUDO_FEATURES = {
