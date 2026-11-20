@@ -384,6 +384,21 @@ function decodeMatchData(data: Uint8Array | string): unknown {
   return JSON.parse(new TextDecoder().decode(data));
 }
 
+/** A FEN with the chosen side to move, for looking at premove targets. */
+function fenForColor(fen: string, color: Color): string {
+  const parts = fen.trim().split(/\s+/);
+  if (parts.length < 2) {
+    return fen;
+  }
+  parts[1] = color;
+  // The en-passant target belongs to the side that just moved. With the turn
+  // flipped, chess.js rejects a target that the new side cannot legally use.
+  if (parts.length > 3) {
+    parts[3] = "-";
+  }
+  return parts.join(" ");
+}
+
 function errorMessage(cause: unknown, fallback: string): string {
   if (cause instanceof Error && cause.message.length > 0) {
     return cause.message;
@@ -515,6 +530,35 @@ export function useOnlineChess(
   const friendsPromiseRef = useRef<Promise<void> | null>(null);
   const socialRef = useRef<MoonGamesSocialClient | null>(null);
   const loadFriendsRef = useRef<(() => Promise<void>) | null>(null);
+  // The refs keep a piece choice through harmless state broadcasts. Without
+  // them, a spectator arriving or another player's clock update can wipe the
+  // selected square and its move dots while the player is choosing a move.
+  const selectedRef = useRef<Square | null>(null);
+  const promotionRef = useRef<PendingOnlinePromotion | null>(null);
+
+  const clearSelection = useCallback(() => {
+    selectedRef.current = null;
+    setSelected(null);
+  }, []);
+
+  const clearPromotion = useCallback(() => {
+    promotionRef.current = null;
+    setPendingPromotion(null);
+  }, []);
+
+  const toggleSelected = useCallback((square: Square) => {
+    const next = selectedRef.current === square ? null : square;
+    selectedRef.current = next;
+    setSelected(next);
+  }, []);
+
+  const choosePromotionTarget = useCallback(
+    (promotion: PendingOnlinePromotion) => {
+      promotionRef.current = promotion;
+      setPendingPromotion(promotion);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!matchmaking) {
@@ -599,16 +643,47 @@ export function useOnlineChess(
   }, [hostConfig?.session?.refreshToken, hostConfig?.session?.token]);
 
   const applyPayload = useCallback((payload: OnlineStatePayload) => {
+    const previous = lastServerStateRef.current;
     const normalized = normalizedOnlineState(payload);
     setServerState(normalized);
     lastServerStateRef.current = normalized;
     setDrawOffer(normalized.drawOffer ?? null);
-    setSelected(null);
-    setPendingPromotion(null);
     setError(null);
     // The server has answered, so the move is no longer on its way.
     pendingMoveRef.current = null;
     setPendingMove(false);
+
+    const matchChanged =
+      previous !== null && previous.match.id !== normalized.match.id;
+    const myColor =
+      normalized.players.find(
+        (player) => player.userId === sessionRef.current?.user_id,
+      )?.color ?? null;
+    const selection = selectedRef.current;
+    const selectionStillValid =
+      selection !== null &&
+      normalized.result === null &&
+      myColor !== null &&
+      normalized.state.turn === myColor &&
+      normalized.state.board.some(
+        (piece) => piece.square === selection && piece.color === myColor,
+      );
+    if (matchChanged || normalized.result !== null || !selectionStillValid) {
+      clearSelection();
+    }
+
+    const promotion = promotionRef.current;
+    const promotionStillValid =
+      promotion !== null &&
+      normalized.result === null &&
+      normalized.state.turn === promotion.color &&
+      normalized.state.board.some(
+        (piece) =>
+          piece.square === promotion.from && piece.color === promotion.color,
+      );
+    if (matchChanged || !promotionStillValid) {
+      clearPromotion();
+    }
 
     if (normalized.match.id) {
       matchIdRef.current = normalized.match.id;
@@ -623,7 +698,7 @@ export function useOnlineChess(
     if (normalized.result !== null) {
       setProfileRefresh((current) => current + 1);
     }
-  }, []);
+  }, [clearPromotion, clearSelection]);
 
   const handleMatchData = useCallback(
     (matchData: MatchData) => {
@@ -809,8 +884,8 @@ export function useOnlineChess(
     rememberMatchId(null);
     rememberSpectating(false);
     setDrawOffer(null);
-    setSelected(null);
-    setPendingPromotion(null);
+    clearSelection();
+    clearPromotion();
     setFriends([]);
     setFriendsError(null);
     setFriendsLoading(false);
@@ -828,7 +903,7 @@ export function useOnlineChess(
     setMyLeaderboard(null);
     setProfileError(null);
     setProfileLoading(false);
-  }, [failPendingMatchmaker]);
+  }, [clearPromotion, clearSelection, failPendingMatchmaker]);
 
   const connect = useCallback((): Promise<void> => {
     if (socketRef.current !== null) {
@@ -2652,13 +2727,13 @@ export function useOnlineChess(
     rememberMatchId(null);
     rememberSpectating(false);
     setDrawOffer(null);
-    setSelected(null);
-    setPendingPromotion(null);
+    clearSelection();
+    clearPromotion();
     setInviteError(null);
     setInviteNotice(null);
     setInviteSendingId(null);
     setError(null);
-  }, []);
+  }, [clearPromotion, clearSelection]);
 
   const sendMatchState = useCallback(
     (opCode: number, payload: object) => {
@@ -2744,11 +2819,11 @@ export function useOnlineChess(
         to,
         promotion,
       });
-      setSelected(null);
-      setPendingPromotion(null);
+      clearSelection();
+      clearPromotion();
       setError(null);
     },
-    [sendMatchState, serverState],
+    [clearPromotion, clearSelection, sendMatchState, serverState],
   );
 
   const selectSquare = useCallback(
@@ -2805,7 +2880,7 @@ export function useOnlineChess(
               sendMove(selected, square, queen);
               return;
             }
-            setPendingPromotion({
+            choosePromotionTarget({
               from: selected,
               to: square,
               color: myColor,
@@ -2821,20 +2896,23 @@ export function useOnlineChess(
 
       const piece = state.board.find((candidate) => candidate.square === square);
       if (piece?.color === myColor && state.turn === myColor) {
-        setSelected((current) => (current === square ? null : square));
+        toggleSelected(square);
         setError(null);
         return;
       }
 
-      setSelected(null);
+      clearSelection();
     },
     [
       autoQueen,
+      choosePromotionTarget,
+      clearSelection,
       myColor,
       pendingPromotion,
       sendMove,
       selected,
       serverState,
+      toggleSelected,
     ],
   );
 
@@ -2877,7 +2955,7 @@ export function useOnlineChess(
           sendMove(from, to, queen);
           return;
         }
-        setPendingPromotion({
+        choosePromotionTarget({
           from,
           to,
           color: myColor,
@@ -2888,7 +2966,7 @@ export function useOnlineChess(
 
       sendMove(from, to);
     },
-    [autoQueen, myColor, pendingMove, sendMove, serverState],
+    [autoQueen, choosePromotionTarget, myColor, pendingMove, sendMove, serverState],
   );
 
   /**
@@ -2920,7 +2998,12 @@ export function useOnlineChess(
       }
 
       try {
-        const engine = createChessEngine(serverState.state.fen);
+        // chess.js only lists moves for the side to move. Looking at a premove
+        // happens while the opponent is still on the clock, so the side in the
+        // FEN has to be changed first or every own piece looks immobile.
+        const engine = createChessEngine(
+          fenForColor(serverState.state.fen, myColor),
+        );
         const moves = engine.movesFrom(square);
         setPremoveFrom(square);
         setPremoveTargets([...new Set(moves.map((move) => move.to))]);
@@ -2938,6 +3021,23 @@ export function useOnlineChess(
     setPremoveFrom(null);
     setPremoveTargets([]);
   }, []);
+
+  // A half-chosen premove belongs to the opponent's turn only. Once the turn
+  // comes back, stale targets would replace the real move dots and make the
+  // board look unplayable, so they are cleared unless a full move was armed.
+  useEffect(() => {
+    if (serverState === null || myColor === null || premove !== null) {
+      return;
+    }
+    if (serverState.state.turn !== myColor) {
+      return;
+    }
+    if (premoveFrom === null && premoveTargets.length === 0) {
+      return;
+    }
+    setPremoveFrom(null);
+    setPremoveTargets([]);
+  }, [myColor, premove, premoveFrom, premoveTargets.length, serverState]);
 
   // The move that is ready is played as soon as it is the player's turn.
   useEffect(() => {
@@ -2976,7 +3076,7 @@ export function useOnlineChess(
         return false;
       }
       if (found.promotion !== undefined) {
-        setPendingPromotion({
+        choosePromotionTarget({
           from: found.from,
           to: found.to,
           color: myColor,
@@ -2987,7 +3087,7 @@ export function useOnlineChess(
       sendMove(found.from, found.to);
       return true;
     },
-    [myColor, sendMove, serverState],
+    [choosePromotionTarget, myColor, sendMove, serverState],
   );
 
   const choosePromotion = useCallback(
@@ -3001,9 +3101,9 @@ export function useOnlineChess(
   );
 
   const cancelPromotion = useCallback(() => {
-    setPendingPromotion(null);
-    setSelected(null);
-  }, []);
+    clearPromotion();
+    clearSelection();
+  }, [clearPromotion, clearSelection]);
 
   const resign = useCallback(() => {
     sendMatchState(ONLINE_OP.RESIGN, {});
@@ -3042,9 +3142,15 @@ export function useOnlineChess(
   );
 
   const legalTargets = useMemo(() => {
-    // While a move for the next turn is being chosen, the squares it may
-    // go to are the ones that are shown.
-    if (premoveFrom !== null) {
+    // A premove is only shown while it is still the opponent's turn. On the
+    // player's own turn the dots must follow the selected piece, not a stale
+    // choice from a moment earlier.
+    const choosingPremove =
+      premoveFrom !== null &&
+      serverState !== null &&
+      myColor !== null &&
+      serverState.state.turn !== myColor;
+    if (choosingPremove) {
       return premoveTargets;
     }
 
@@ -3059,7 +3165,7 @@ export function useOnlineChess(
         ),
       ),
     ];
-  }, [selected, serverState]);
+  }, [myColor, premoveFrom, premoveTargets, selected, serverState]);
 
   const checkSquare = useMemo(() => {
     if (serverState === null || !serverState.state.inCheck) {

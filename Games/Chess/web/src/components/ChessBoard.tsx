@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type {
   BoardPiece,
   MoveRecord,
@@ -97,7 +97,37 @@ export const ChessBoard = memo(function ChessBoard({
   }>({ square: null, x: 0, y: 0, moved: false });
   // A drag ends with a click, and the click must not move the piece again.
   const skipClickRef = useRef(false);
+  const skipClickTimerRef = useRef<number | null>(null);
   const [dragging, setDragging] = useState<Square | null>(null);
+
+  const clearSkipTimer = () => {
+    if (skipClickTimerRef.current !== null) {
+      window.clearTimeout(skipClickTimerRef.current);
+      skipClickTimerRef.current = null;
+    }
+  };
+
+  // Touch browsers do not always synthesize the click after pointerup. The
+  // flag is timed so a missing click cannot hold the next tap hostage.
+  const skipNextClick = () => {
+    skipClickRef.current = true;
+    clearSkipTimer();
+    skipClickTimerRef.current = window.setTimeout(() => {
+      skipClickRef.current = false;
+      skipClickTimerRef.current = null;
+    }, 80);
+  };
+
+  const consumeSkipClick = () => {
+    if (!skipClickRef.current) {
+      return false;
+    }
+    skipClickRef.current = false;
+    clearSkipTimer();
+    return true;
+  };
+
+  useEffect(() => clearSkipTimer, []);
 
   const draggingAllowed = moveEvent !== MoveEvent.Click;
 
@@ -124,7 +154,7 @@ export const ChessBoard = memo(function ChessBoard({
     }
     onSquareClick(square);
     // The click that follows the press must not undo the picking up.
-    skipClickRef.current = true;
+    skipNextClick();
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -146,17 +176,30 @@ export const ChessBoard = memo(function ChessBoard({
     dragRef.current = { square: null, x: 0, y: 0, moved: false };
     setDragging(null);
 
-    if (drag.square === null || !drag.moved || onMove === undefined) {
+    if (drag.square === null) {
+      return;
+    }
+
+    if (!drag.moved) {
+      // A tap on a destination square is a move even when the browser does
+      // not follow pointerup with a click. A later real click is ignored.
+      if (targets.has(square) && selected !== null) {
+        skipNextClick();
+        onSquareClick(square);
+      }
+      return;
+    }
+
+    if (onMove === undefined) {
       return;
     }
     // The click that follows the drag must not move the piece a second time.
-    skipClickRef.current = true;
+    skipNextClick();
     onMove(drag.square, square);
   };
 
   const handleClick = (square: Square) => {
-    if (skipClickRef.current) {
-      skipClickRef.current = false;
+    if (consumeSkipClick()) {
       return;
     }
     if (moveEvent === MoveEvent.Drag) {
