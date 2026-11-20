@@ -32,12 +32,13 @@ are included here because the user supplied the APK for this MoonGames build.
 
 Original clip names used here:
 
-  dice2.ogg       <- dice2 (the real dice-roll recording; the hissing
-                     stereo "dice" bank was analysed and excluded)
+  dice.ogg        <- dice (stereo dice roll; restored after review)
+  dice2.mp3       <- dice2 (second real dice roll; restored after review)
+  dice2.ogg       <- dice2 (same recording in OGG form, kept for comparison)
   move.ogg        <- cursor_move
   capture.ogg     <- coins_collect
   home.ogg        <- up_level_small
-  foul.ogg        <- down_level
+  foul.ogg        <- net_time (short cue; replaces the hissing down_level clip)
   turn.ogg        <- turn
   start.ogg       <- start_game
   win.ogg         <- up_level_big

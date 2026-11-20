@@ -43,9 +43,9 @@ export const SOUND_SET_DEFINITIONS: Record<LudoSoundSetId, SoundSetDefinition> =
     gain: 0.9,
     rate: 1,
     files: {
-      // The APK's stereo "dice" bank is a noise hiss, not a dice roll.
-      // Only the real transient dice2 recording is used here.
-      roll: ["dice2.ogg"],
+      // The hiss was the old foul clip, not the dice. Both real dice rolls
+      // are back; the foul sound now uses a short net-time cue.
+      roll: ["dice.ogg", "dice2.mp3"],
       move: ["move.ogg"],
       capture: ["capture.ogg"],
       home: ["home.ogg"],
