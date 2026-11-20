@@ -159,7 +159,8 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const onlineSoundSeenRef = useRef<Set<string> | null>(null);
   const onlineSeatSoundRef = useRef<number | null>(null);
   const onlineChatSoundRef = useRef<number | null>(null);
-  const onlineTurnSoundRef = useRef<string | null>(null);
+  const onlineTurnSoundRef = useRef<number | null>(null);
+  const localTurnSoundRef = useRef<number | null>(null);
   const onlineClockSoundRef = useRef(false);
 
   const query = useMemo(() => new URLSearchParams(window.location.search), []);
@@ -264,6 +265,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
       onlineChatSoundRef.current = null;
       onlineTurnSoundRef.current = null;
       onlineClockSoundRef.current = false;
+      localTurnSoundRef.current = null;
       return;
     }
     const events: LudoEvent[] = online.state.game?.events ?? [];
@@ -294,12 +296,34 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     }
     onlineChatSoundRef.current = chatCount;
 
-    const turnKey = `${game.current}:${game.action}`;
-    if (onlineTurnSoundRef.current !== null && onlineTurnSoundRef.current !== turnKey) {
+    // The turn cue is personal: only the player who now owns the turn hears it,
+    // and only when the seat actually changes after the previous move.
+    const previousTurn = onlineTurnSoundRef.current;
+    if (
+      previousTurn !== null &&
+      previousTurn !== game.current &&
+      game.players[game.current]?.color === online.myColour &&
+      game.phase === "roll"
+    ) {
       playEvent("turn");
     }
-    onlineTurnSoundRef.current = turnKey;
-  }, [mode, online.state, soundOn, game.current, game.action]);
+    onlineTurnSoundRef.current = game.current;
+  }, [mode, online.state, soundOn, game.current, game.players, online.myColour]);
+
+  useEffect(() => {
+    if (mode === "online" || !soundOn || controller.isReplaying || game.winner !== null || game.phase === "over") {
+      localTurnSoundRef.current = null;
+      return;
+    }
+    const previousTurn = localTurnSoundRef.current;
+    if (previousTurn !== null && previousTurn !== game.current && game.phase === "roll") {
+      const player = game.players[game.current];
+      if (player !== undefined && !player.ai) {
+        playEvent("turn");
+      }
+    }
+    localTurnSoundRef.current = game.current;
+  }, [mode, soundOn, controller.isReplaying, game.current, game.players, game.winner, game.phase]);
 
   const legalTokens = useMemo(() => {
     if (mode === "online") {

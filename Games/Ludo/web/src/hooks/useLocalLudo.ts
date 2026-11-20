@@ -131,7 +131,6 @@ export function useLocalLudo(options: LocalGameOptions) {
     if (next.phase === "move" && legalMoves(next).length === 0) {
       if (optionsRef.current.sound !== false) playLudoSound("foul");
       passTurn(next);
-      if (optionsRef.current.sound !== false) playLudoSound("turn");
     }
     gameRef.current = next;
     setGame(next);
