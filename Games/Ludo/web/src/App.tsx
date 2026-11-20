@@ -165,6 +165,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const onlineTurnSoundRef = useRef<number | null>(null);
   const localTurnSoundRef = useRef<number | null>(null);
   const onlineClockSoundRef = useRef(false);
+  const onlineForcedMoveRef = useRef<string | null>(null);
 
   const query = useMemo(() => new URLSearchParams(window.location.search), []);
   const autoplay = query.has("autoplay");
@@ -474,10 +475,16 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     : game.phase === "move" && legalTokens.length > 0 && !current?.ai && !controller.isReplaying;
 
   useEffect(() => {
-    if (onlineMode || !autoForced || !canMove || controller.isReplaying || legalTokens.length !== 1) return;
-    const timer = window.setTimeout(() => controller.move(legalTokens[0]!), 420);
+    if (!onlineMode || !autoForced || controller.isReplaying || !canMove || legalTokens.length !== 1) return;
+    const token = legalTokens[0]!;
+    const key = `${online.matchId ?? ""}:${game.action}:${game.current}:${token}`;
+    if (onlineForcedMoveRef.current === key) return;
+    const timer = window.setTimeout(() => {
+      onlineForcedMoveRef.current = key;
+      online.move(token);
+    }, 420);
     return () => window.clearTimeout(timer);
-  }, [canMove, autoForced, onlineMode, controller.isReplaying, game.action, game.current, legalTokens]);
+  }, [canMove, autoForced, onlineMode, controller.isReplaying, game.action, game.current, legalTokens, online.matchId]);
 
   useEffect(() => {
     if (
