@@ -78,12 +78,11 @@ connections. It verifies a private match (including creator-white reservation),
 spectator join/read-only behavior and result delivery, temporary player and
 spectator chat, authoritative moves and clock broadcasts, reconnect within the
 grace window, draw-offer state snapshots,
-resignation, atomic matchmaker pairing, the delayed quick-table fallback, draw
-agreement, casual/rated persistence, Elo changes, profile history with SANs, and
-leaderboard records. The web client uses the matchmaker first, then calls the
-quick-match RPC after five seconds if no concurrent partner is found. That RPC
-opens or reuses a persistent open table so players arriving at different times
-can still be paired.
+resignation, atomic matchmaker pairing, draw agreement, casual/rated
+persistence, Elo changes, profile history with SANs, and leaderboard records.
+Quick match queues a matchmaker ticket only. The server creates one reserved
+room when the matchmaker pairs two players, so waiting never leaves an empty
+table behind.
 
 Spectators opt in with join metadata `{ spectate: "1" }`. Because Nakama only
 exposes join metadata to `match_join_attempt`, the handler records the choice in

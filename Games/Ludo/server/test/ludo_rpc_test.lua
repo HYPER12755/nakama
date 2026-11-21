@@ -78,28 +78,23 @@ test("registers Ludo with the social layer", function()
   assert_equal(fake_social.matchmakers.ludo ~= nil, true, "matchmaker registered")
 end)
 
-test("registers all four RPCs", function()
+test("registers the private and profile RPCs", function()
   for _, name in ipairs({
-    "ludo_quick_match", "ludo_create_private_match",
-    "ludo_get_profile", "ludo_get_leaderboard",
+    "ludo_create_private_match", "ludo_get_profile", "ludo_get_leaderboard",
   }) do
     assert_equal(type(rpcs[name]), "function", name)
   end
 end)
 
-test("creates a quick table through the RPC", function()
-  local payload = rpcs.ludo_quick_match({ user_id = "a" }, { seats = 4, turnSeconds = 30 })
-  assert_equal(payload.ok, true, "ok")
-  assert_equal(#created, 1, "one match")
-  assert_equal(created[1].name, "ludo_match", "handler")
-  assert_equal(created[1].props.turnSeconds, 30, "clock")
-  assert_equal(created[1].props.rated, true, "rated")
+test("quick match cannot open a room before a partner is found", function()
+  assert_equal(rpcs.ludo_quick_match, nil, "no eager quick match RPC")
+  assert_equal(#created, 0, "no match created")
 end)
 
 test("creates a private room with a room code", function()
   local payload = rpcs.ludo_create_private_match({ user_id = "a", username = "Alice" }, { seats = 2 })
   assert_equal(payload.ok, true, "ok")
-  assert_equal(payload.roomCode, "LUDO-ludo-match-2", "room code")
+  assert_equal(payload.roomCode, "LUDO-ludo-match-1", "room code")
   assert_equal(created[#created].props.mode, "private", "private mode")
 end)
 
@@ -129,6 +124,11 @@ test("the matchmaker only pairs matching Ludo requests", function()
   local last = created[#created]
   assert_equal(last.props.seats, 4, "four seats on the match")
   assert_equal(#last.props.expected_users, 4, "four expected players")
+  local partial = fake_social.matchmakers.ludo({}, {
+    { presence = { user_id = "a" }, properties = { game = "ludo", seats = 4, turnSeconds = 0 } },
+    { presence = { user_id = "b" }, properties = { game = "ludo", seats = 4, turnSeconds = 0 } },
+  })
+  assert_equal(partial, nil, "does not open a four-seat table for two players")
 end)
 
 if failures > 0 then

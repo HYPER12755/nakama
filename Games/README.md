@@ -365,10 +365,10 @@ mobile QA, and real-device build validation:
   status, authoritative clocks, reconnect, resign, draw offers, and server
   results. Email accounts upgrade the current guest by default, preserving
   rating and history, and use Nakama's built-in email authentication.
-- Quick match first uses Nakama's atomic matchmaker for players searching at
-  the same time. If no partner appears within five seconds, it opens a
-  persistent quick table so a player arriving later can join. The search UI
-  shows elapsed time and can be cancelled without leaving a queued ticket.
+- Quick match uses Nakama's atomic matchmaker for every player searching at the
+  same time. A room is created only when the matchmaker pairs an opponent;
+  waiting never opens a table. The search UI shows elapsed time and can be
+  cancelled without leaving a queued ticket.
 - Spectators can join a live or finished match in read-only mode. They receive
   state snapshots, clocks, and results without occupying a seat, and the match
   UI shows the current spectator gallery.
@@ -510,15 +510,14 @@ mobile QA, and real-device build validation:
   routes a ticket to the game that asked for it. Chess and Carrom therefore
   pair their own tables instead of overwriting each other, and the matchmaker
   query is scoped to the game and table size.
-- A table's label follows its state, so the quick table lookup only ever
-  hands out a table that has not started yet.
+- A table's label follows its state, so a room that has started or finished is
+  never handed out as an open table.
 - The TypeScript core and the Lua server share the same rules and the same
   physics. Both resolve the reference shot to the same piece positions, and
   that vector is asserted on both sides. The live smoke test creates a room,
   plays a shot, checks that the turn passes, checks that an out-of-turn shot
   is refused, checks that the chat arrives, starts a four player table with
-  37 pieces, opens a quick table, and pairs two players through the atomic
-  matchmaker.
+  37 pieces and pairs two players through the atomic matchmaker.
 - The launcher no longer hardcodes games. Artwork resolves from the catalog:
   a registered motif when the catalog names one, otherwise a generated mark
   derived from the game id, so a new title never needs a launcher change. The

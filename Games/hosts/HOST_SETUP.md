@@ -353,8 +353,8 @@ Run these checks on each platform:
 | Change theme prop | game updates theme |
 | Refresh session | game keeps/reuses the new Nakama session |
 | Online game | profile/rating matches the same account in the browser |
-| Quick match, no concurrent partner | after about five seconds a persistent quick table opens |
-| Quick match, second player arrives later | the later player joins the open quick table |
+| Quick match, no concurrent partner | the player waits; no table is created |
+| Quick match, second player arrives later | the matchmaker pairs both and opens one room |
 | Cancel quick match | matchmaker ticket is removed and no table is opened |
 | Invite link in browser | opens the correct match |
 | Native match link | `launchQuery` reaches the game and joins/spectates the correct match |

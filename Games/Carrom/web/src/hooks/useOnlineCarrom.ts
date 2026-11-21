@@ -290,6 +290,7 @@ export interface OnlineCarromController {
     seats: number,
     options?: CarromTableSettings,
   ) => Promise<void>;
+  cancelQuickMatch: () => void;
   createPrivateRoom: (
     seats: number,
     options?: CarromTableSettings,
@@ -376,7 +377,8 @@ export function useOnlineCarrom(
   const serialRef = useRef(0);
   const gameRef = useRef<CarromState | null>(null);
   const ticketRef = useRef<string | null>(null);
-  const fallbackRef = useRef<number | null>(null);
+  const searchTimerRef = useRef<number | null>(null);
+  const searchRunRef = useRef(0);
   const connectingRef = useRef(false);
   const refreshProfileRef = useRef<(() => Promise<void>) | null>(null);
   // The account and server the launcher handed over. It is read through a
@@ -391,6 +393,26 @@ export function useOnlineCarrom(
     }
     throw new Error("The realtime connection is not ready yet.");
   }, []);
+
+  const clearSearchTimer = useCallback(() => {
+    if (searchTimerRef.current !== null) {
+      window.clearTimeout(searchTimerRef.current);
+      searchTimerRef.current = null;
+    }
+  }, []);
+
+  const cancelSearch = useCallback(() => {
+    searchRunRef.current += 1;
+    clearSearchTimer();
+    const ticket = ticketRef.current;
+    ticketRef.current = null;
+    setSearching(false);
+    if (ticket !== null && socketRef.current !== null) {
+      void socketRef.current.removeMatchmaker(ticket).catch(() => {
+        // The ticket may already be paired or gone.
+      });
+    }
+  }, [clearSearchTimer]);
 
   const joinMatch = useCallback(
     async (
@@ -434,6 +456,7 @@ export function useOnlineCarrom(
    */
   const joinByRoomCode = useCallback(
     async (code: string, options: { spectator?: boolean } = {}): Promise<void> => {
+      cancelSearch();
       const client = clientRef.current;
       const session = sessionRef.current;
       if (client === null || session === null) {
@@ -470,7 +493,7 @@ export function useOnlineCarrom(
         setRoomSeats(parsed.seats);
       }
     },
-    [joinMatch],
+    [cancelSearch, joinMatch],
   );
 
   const applyServerState = useCallback((payload: CarromServerState) => {
@@ -749,12 +772,7 @@ export function useOnlineCarrom(
       };
 
       socket.onmatchmakermatched = (matched: { match_id: string; token?: string }) => {
-        setSearching(false);
-        if (fallbackRef.current !== null) {
-          window.clearTimeout(fallbackRef.current);
-          fallbackRef.current = null;
-        }
-        ticketRef.current = null;
+        cancelSearch();
         void (async () => {
           try {
             await socket.joinMatch(matched.match_id, matched.token);
@@ -769,6 +787,7 @@ export function useOnlineCarrom(
         setError("The realtime connection reported an error.");
       };
       socket.ondisconnect = () => {
+        cancelSearch();
         if (pingRef.current !== null) {
           window.clearInterval(pingRef.current);
           pingRef.current = null;
@@ -853,13 +872,21 @@ export function useOnlineCarrom(
     } finally {
       connectingRef.current = false;
     }
-  }, [applyServerState, options.autoJoinMatchId, options.autoSpectate]);
+  }, [applyServerState, cancelSearch, options.autoJoinMatchId, options.autoSpectate]);
 
   const quickMatch = useCallback(
     async (
       seats: number,
       settings: CarromTableSettings = {},
     ): Promise<void> => {
+      if (searchTimerRef.current !== null) {
+        setError("A quick match search is already running.");
+        return;
+      }
+      if (matchIdRef.current !== null) {
+        setError("Leave the current table before starting a quick match.");
+        return;
+      }
       let socket = socketRef.current;
       if (socket === null) {
         await connect();
@@ -869,15 +896,12 @@ export function useOnlineCarrom(
         setError("The realtime connection is not ready yet.");
         return;
       }
+      const run = searchRunRef.current + 1;
+      searchRunRef.current = run;
       setError(null);
       setSearching(true);
       try {
-        // The matchmaker query is scoped to the properties, so only players
-        // who asked for the same game, table size, and game type are paired.
         const variant = settings.variant ?? "classic";
-        // The clock is part of the table settings, so it belongs in the query
-        // as well as the properties: players with different clocks must not be
-        // paired, and the matched table has to know the chosen clock.
         const turnSeconds = settings.turnSeconds ?? 0;
         const teams = settings.teams === true && seats === 4;
         const ticket = await socket.addMatchmaker(
@@ -892,53 +916,56 @@ export function useOnlineCarrom(
             teams: String(teams),
           },
         );
+        if (run !== searchRunRef.current) {
+          try {
+            await socket.removeMatchmaker(ticket.ticket);
+          } catch {
+            // The ticket may already be gone.
+          }
+          return;
+        }
         ticketRef.current = ticket.ticket;
-        // The atomic matchmaker pairs players who asked for the same size.
-        // A table that is already open is used when nobody pairs in time.
-        fallbackRef.current = window.setTimeout(() => {
-          void (async () => {
-            try {
-              const client = clientRef.current;
-              const session = sessionRef.current;
-              if (client === null || session === null) {
-                return;
-              }
-              const response = await client.rpc(session, "carrom_quick_match", {
-                seats,
-                variant: settings.variant,
-                turnSeconds,
-                teams,
-              });
-              const parsed = (response.payload ?? {}) as {
-                ok?: boolean;
-                matchId?: string;
-              };
-              if (parsed.ok !== true || typeof parsed.matchId !== "string") {
-                return;
-              }
-              await joinMatch(parsed.matchId);
-              // The fallback found a table: stop the lobby spinner.
-              setSearching(false);
-            } catch {
-              // The matchmaker may still pair the two players.
-            }
-          })();
-        }, 5000);
+        searchTimerRef.current = window.setTimeout(() => {
+          if (run !== searchRunRef.current) {
+            return;
+          }
+          const active = socketRef.current;
+          const current = ticketRef.current;
+          if (active !== null && current !== null) {
+            void active.removeMatchmaker(current).catch(() => {
+              // The ticket may already be paired or gone.
+            });
+          }
+          ticketRef.current = null;
+          searchTimerRef.current = null;
+          setSearching(false);
+          setError("No opponent found. Try again.");
+        }, 60000);
       } catch (cause) {
-        setSearching(false);
-        setError(
-          cause instanceof Error ? cause.message : "The search could not start.",
-        );
+        if (run === searchRunRef.current) {
+          setSearching(false);
+          setError(
+            cause instanceof Error ? cause.message : "The search could not start.",
+          );
+        }
       }
     },
-    [connect, joinMatch],
+    [connect],
   );
+
+  const cancelQuickMatch = useCallback(() => {
+    if (searchTimerRef.current === null) {
+      return;
+    }
+    cancelSearch();
+  }, [cancelSearch]);
 
   const createPrivateRoom = useCallback(
     async (
       seats: number,
       settings: CarromTableSettings = {},
     ): Promise<void> => {
+      cancelSearch();
       const client = clientRef.current;
       const session = sessionRef.current;
       if (client === null || session === null) {
@@ -974,10 +1001,11 @@ export function useOnlineCarrom(
         );
       }
     },
-    [joinMatch],
+    [cancelSearch, joinMatch],
   );
 
   const leaveMatch = useCallback(async (): Promise<void> => {
+    cancelSearch();
     const socket = socketRef.current;
     const current = matchIdRef.current;
     if (socket !== null && current !== null) {
@@ -994,7 +1022,7 @@ export function useOnlineCarrom(
     setRoomCode(null);
     setRoomSeats(null);
     gameRef.current = null;
-  }, []);
+  }, [cancelSearch]);
 
   const sendShot = useCallback(
     (shot: CarromShotInput, striker?: string): void => {
@@ -1099,9 +1127,9 @@ export function useOnlineCarrom(
         window.clearInterval(pingRef.current);
         pingRef.current = null;
       }
-      if (fallbackRef.current !== null) {
-        window.clearTimeout(fallbackRef.current);
-        fallbackRef.current = null;
+      if (searchTimerRef.current !== null) {
+        window.clearTimeout(searchTimerRef.current);
+        searchTimerRef.current = null;
       }
       if (reconnectRef.current !== null) {
         window.clearTimeout(reconnectRef.current);
@@ -1479,6 +1507,7 @@ export function useOnlineCarrom(
     signOut,
     connect,
     quickMatch,
+    cancelQuickMatch,
     createPrivateRoom,
     joinMatch,
     joinByRoomCode,

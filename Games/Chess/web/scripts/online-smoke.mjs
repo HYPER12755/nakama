@@ -1148,58 +1148,51 @@ async function main() {
     assert(carolLeaderboard.me?.rank >= 1, "carol has a leaderboard rank");
     console.log("[ok] rating leaderboard reflects the current rating");
 
-    // The web client falls back to the quick-match RPC when the atomic
-    // matchmaker does not find a concurrent partner. That path must let a
-    // second player join a table opened earlier.
     const gina = await authenticate(`moongames-smoke-${runId}-gina`);
     const hank = await authenticate(`moongames-smoke-${runId}-hank`);
     connections.push(gina, hank);
     const ginaEvents = createCollector(gina.socket, "gina");
     const hankEvents = createCollector(hank.socket, "hank");
-    const slowQuickTimeControl = { initialMs: 600000, incrementMs: 0 };
 
-    const ginaQuick = await gina.client.rpc(
-      gina.session,
-      "chess_quick_match",
-      { timeControl: slowQuickTimeControl },
-    );
-    assert(
-      ginaQuick.payload?.ok && ginaQuick.payload.matchId,
-      `gina quick table failed: ${JSON.stringify(ginaQuick.payload)}`,
-    );
-    await gina.socket.joinMatch(ginaQuick.payload.matchId);
-    await ginaEvents.waitFor(
-      (message) => message.op === OP.STATE,
-      "gina receives quick table state",
-    );
-    // A real second player arrives after the search fallback delay. match_list
-    // is eventually consistent, so wait briefly before checking the table.
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const eagerRoom = await gina.client
+      .rpc(gina.session, "chess_quick_match", {
+        timeControl: { initialMs: 600000, incrementMs: 0 },
+      })
+      .then(() => true)
+      .catch(() => false);
+    assert(eagerRoom === false, "quick match must not create a room through an RPC");
 
-    const hankQuick = await hank.client.rpc(
-      hank.session,
-      "chess_quick_match",
-      { timeControl: slowQuickTimeControl },
-    );
+    const ginaMatched = waitForMatchmaker(gina.socket, "gina");
+    const hankMatched = waitForMatchmaker(hank.socket, "hank");
+    const slowQuery =
+      "+properties.game:chess +properties.timeControlKey:600000_0";
+    const slowProperties = {
+      game: "chess",
+      timeControl: "10+0",
+      timeControlKey: "600000_0",
+    };
+    await Promise.all([
+      gina.socket.addMatchmaker(slowQuery, 2, 2, slowProperties),
+      hank.socket.addMatchmaker(slowQuery, 2, 2, slowProperties),
+    ]);
+    const ginaPair = await ginaMatched;
+    const hankPair = await hankMatched;
     assert(
-      hankQuick.payload?.ok,
-      `hank quick table failed: ${JSON.stringify(hankQuick.payload)}`,
-    );
-    assert(
-      hankQuick.payload.matchId === ginaQuick.payload.matchId,
-      "a later player should find the open quick table",
+      ginaPair.match_id === hankPair.match_id,
+      "both players must land in the one room created by the matchmaker",
     );
 
-    await hank.socket.joinMatch(hankQuick.payload.matchId);
+    await gina.socket.joinMatch(ginaPair.match_id, ginaPair.token);
+    await hank.socket.joinMatch(hankPair.match_id, hankPair.token);
     await ginaEvents.waitFor(
       (message) => message.op === OP.MATCH_STARTED,
-      "gina delayed quick match started",
+      "gina quick match started",
     );
     await hankEvents.waitFor(
       (message) => message.op === OP.MATCH_STARTED,
-      "hank delayed quick match started",
+      "hank quick match started",
     );
-    console.log("[ok] quick table fallback pairs players who arrive later");
+    console.log("[ok] a quick match room is created only when both players pair");
 
     console.log("\nAll online smoke checks passed.");
   } finally {

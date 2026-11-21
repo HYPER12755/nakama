@@ -161,7 +161,7 @@ export function LudoOnlinePanel({
                 )}
               </button>
               {online.searching ? (
-                <button type="button" className="button button--ghost" onClick={() => void online.leave()}>
+                <button type="button" className="button button--ghost" onClick={online.cancelQuickMatch}>
                   Cancel search
                 </button>
               ) : null}

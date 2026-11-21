@@ -241,10 +241,22 @@ local function matchmaker_matched(context, matched)
   if #matched < 2 then
     return nil
   end
-  local first = matched[1]
-  local properties = first.properties or {}
-  local game_id = properties.game
-  if type(game_id) ~= "string" then
+  local game_id = nil
+  for _, entry in ipairs(matched) do
+    local entry_properties = entry.properties or {}
+    local entry_game = entry_properties.game
+    if entry_game ~= nil then
+      if type(entry_game) ~= "string" then
+        return nil
+      end
+      if game_id == nil then
+        game_id = entry_game
+      elseif game_id ~= entry_game then
+        return nil
+      end
+    end
+  end
+  if game_id == nil then
     return nil
   end
   local handler = matchmaker_games[game_id]

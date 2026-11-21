@@ -181,6 +181,7 @@ export interface OnlineLudoController {
   refreshProfile: () => Promise<void>;
   connect: () => Promise<void>;
   quickMatch: (seats: number, turnSeconds?: number) => Promise<void>;
+  cancelQuickMatch: () => void;
   createPrivate: (seats: number, turnSeconds?: number) => Promise<string>;
   joinByCode: (code: string, spectator?: boolean) => Promise<void>;
   leave: () => Promise<void>;
@@ -226,7 +227,10 @@ export function useOnlineLudo(
   const sessionRef = useRef<Session | null>(null);
   const matchRef = useRef<string | null>(null);
   const connectingRef = useRef(false);
-  const fallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRunRef = useRef(0);
+  const ticketRef = useRef<string | null>(null);
+  const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const socialRef = useRef<MoonGamesSocialClient | null>(null);
   const friendsPromiseRef = useRef<Promise<void> | null>(null);
   const pendingAuthRef = useRef<{
@@ -235,6 +239,26 @@ export function useOnlineLudo(
     password: string;
     username?: string;
   } | null>(null);
+
+  const clearSearchTimer = useCallback(() => {
+    if (searchTimerRef.current !== null) {
+      clearTimeout(searchTimerRef.current);
+      searchTimerRef.current = null;
+    }
+  }, []);
+
+  const cancelSearch = useCallback(() => {
+    searchRunRef.current += 1;
+    clearSearchTimer();
+    const ticket = ticketRef.current;
+    ticketRef.current = null;
+    setSearching(false);
+    if (ticket !== null && socketRef.current !== null) {
+      void socketRef.current.removeMatchmaker(ticket).catch(() => {
+        // The ticket may already be paired or gone.
+      });
+    }
+  }, [clearSearchTimer]);
 
   const connect = useCallback(async () => {
     if (connectingRef.current || socketRef.current) return;
@@ -346,9 +370,7 @@ export function useOnlineLudo(
         }
       };
       socket.onmatchmakermatched = (matched) => {
-        setSearching(false);
-        if (fallbackRef.current) clearTimeout(fallbackRef.current);
-        fallbackRef.current = null;
+        cancelSearch();
         void socket.joinMatch(matched.match_id, matched.token).then(() => {
           matchRef.current = matched.match_id;
           setMatchId(matched.match_id);
@@ -357,8 +379,32 @@ export function useOnlineLudo(
         });
       };
       socket.ondisconnect = () => {
+        cancelSearch();
         socketRef.current = null;
         setConnection("offline");
+        const joined = matchRef.current;
+        if (joined === null) {
+          return;
+        }
+        reconnectRef.current = setTimeout(() => {
+          reconnectRef.current = null;
+          if (socketRef.current !== null || matchRef.current === null) {
+            return;
+          }
+          void connect().then(() => {
+            const live = socketRef.current;
+            const current = matchRef.current;
+            if (live === null || current === null) {
+              return;
+            }
+            void live.joinMatch(current).catch(() => {
+              setNotice("The table could not be rejoined. Open a new one.");
+              matchRef.current = null;
+              setMatchId(null);
+              setState(null);
+            });
+          });
+        }, 1200);
       };
       socket.onerror = () => setError("The realtime connection reported an error.");
 
@@ -377,7 +423,7 @@ export function useOnlineLudo(
     } finally {
       connectingRef.current = false;
     }
-  }, []);
+  }, [cancelSearch]);
 
   const refreshProfile = useCallback(async () => {
     const client = clientRef.current;
@@ -418,12 +464,16 @@ export function useOnlineLudo(
     if (!enabled) return;
     void connect();
     return () => {
-      if (fallbackRef.current) clearTimeout(fallbackRef.current);
+      clearSearchTimer();
+      if (reconnectRef.current !== null) {
+        clearTimeout(reconnectRef.current);
+        reconnectRef.current = null;
+      }
       const socket = socketRef.current;
       socketRef.current = null;
       if (socket) void socket.disconnect(false);
     };
-  }, [connect, enabled]);
+  }, [clearSearchTimer, connect, enabled]);
 
   useEffect(() => {
     if (enabled && connection === "connected") void refreshProfile();
@@ -443,39 +493,76 @@ export function useOnlineLudo(
   }, []);
 
   const quickMatch = useCallback(async (seats: number, turnSeconds = 0) => {
-    const socket = socketRef.current;
-    const client = clientRef.current;
-    const session = sessionRef.current;
-    if (!socket || !client || !session) {
-      await connect();
+    if (searchTimerRef.current !== null) {
+      setError("A quick match search is already running.");
       return;
     }
-    setSearching(true);
+    if (matchRef.current !== null) {
+      setError("Leave the current table before starting a quick match.");
+      return;
+    }
+    let socket = socketRef.current;
+    if (socket === null) {
+      await connect();
+      socket = socketRef.current;
+    }
+    if (socket === null) {
+      setError("The realtime connection is not ready yet.");
+      return;
+    }
+    const run = searchRunRef.current + 1;
+    searchRunRef.current = run;
     setError(null);
+    setSearching(true);
     try {
-      await socket.addMatchmaker(
+      const ticket = await socket.addMatchmaker(
         `+properties.game:ludo +properties.seats:${seats} +properties.turnSeconds:${turnSeconds}`,
         seats,
         seats,
         { game: GAME_ID, seats: String(seats), turnSeconds: String(turnSeconds) },
       );
-      fallbackRef.current = setTimeout(() => {
-        void (async () => {
-          const response = await client.rpc(session, "ludo_quick_match", { seats, turnSeconds });
-          const payload = response.payload as { ok?: boolean; matchId?: string };
-          if (payload.ok === true && payload.matchId) {
-            await joinMatch(payload.matchId);
-            setSearching(false);
-          }
-        })().catch(() => undefined);
-      }, 5000);
+      if (run !== searchRunRef.current) {
+        try {
+          await socket.removeMatchmaker(ticket.ticket);
+        } catch {
+          // The ticket may already be gone.
+        }
+        return;
+      }
+      ticketRef.current = ticket.ticket;
+      searchTimerRef.current = setTimeout(() => {
+        if (run !== searchRunRef.current) {
+          return;
+        }
+        const active = socketRef.current;
+        const current = ticketRef.current;
+        if (active !== null && current !== null) {
+          void active.removeMatchmaker(current).catch(() => {
+            // The ticket may already be paired or gone.
+          });
+        }
+        ticketRef.current = null;
+        searchTimerRef.current = null;
+        setSearching(false);
+        setError("No opponent found. Try again.");
+      }, 60000);
     } catch (cause) {
-      setSearching(false);
-      setError(cause instanceof Error ? cause.message : "The search could not start.");
+      if (run === searchRunRef.current) {
+        setSearching(false);
+        setError(cause instanceof Error ? cause.message : "The search could not start.");
+      }
     }
-  }, [connect, joinMatch]);
+  }, [connect]);
+
+  const cancelQuickMatch = useCallback(() => {
+    if (searchTimerRef.current === null) {
+      return;
+    }
+    cancelSearch();
+  }, [cancelSearch]);
 
   const createPrivate = useCallback(async (seats: number, turnSeconds = 0) => {
+    cancelSearch();
     const client = clientRef.current;
     const session = sessionRef.current;
     if (!client || !session) throw new Error("The realtime connection is not ready yet.");
@@ -487,9 +574,10 @@ export function useOnlineLudo(
     await joinMatch(payload.matchId);
     setRoomCode(payload.roomCode ?? null);
     return payload.matchId;
-  }, [joinMatch]);
+  }, [cancelSearch, joinMatch]);
 
   const joinByCode = useCallback(async (code: string, spectator = false) => {
+    cancelSearch();
     const client = clientRef.current;
     const session = sessionRef.current;
     if (!client || !session) throw new Error("The realtime connection is not ready yet.");
@@ -505,14 +593,13 @@ export function useOnlineLudo(
     }
     await joinMatch(payload.matchId, spectator);
     setRoomCode(payload.code ?? code.trim().toUpperCase());
-  }, [joinMatch]);
+  }, [cancelSearch, joinMatch]);
 
   const leave = useCallback(async () => {
+    cancelSearch();
     const socket = socketRef.current;
     const matchId = matchRef.current;
     if (socket && matchId) await socket.leaveMatch(matchId).catch(() => undefined);
-    if (fallbackRef.current !== null) clearTimeout(fallbackRef.current);
-    fallbackRef.current = null;
     socialRef.current = null;
     friendsPromiseRef.current = null;
     matchRef.current = null;
@@ -521,7 +608,7 @@ export function useOnlineLudo(
     setRoomCode(null);
     setSpectating(false);
     setSearching(false);
-  }, []);
+  }, [cancelSearch]);
 
   const send = useCallback((op: number, payload: Record<string, unknown>) => {
     const socket = socketRef.current;
@@ -642,6 +729,11 @@ export function useOnlineLudo(
   }, []);
 
   const disconnect = useCallback(async () => {
+    cancelSearch();
+    if (reconnectRef.current !== null) {
+      clearTimeout(reconnectRef.current);
+      reconnectRef.current = null;
+    }
     const socket = socketRef.current;
     if (socket !== null) {
       try { (socket as unknown as { close?: () => void }).close?.(); } catch { /* already closed */ }
@@ -657,7 +749,7 @@ export function useOnlineLudo(
     setSpectating(false);
     setSearching(false);
     setConnection("offline");
-  }, []);
+  }, [cancelSearch]);
 
   const clearAuthFeedback = useCallback(() => {
     setAuthError(null);
@@ -752,6 +844,7 @@ export function useOnlineLudo(
     refreshProfile,
     connect,
     quickMatch,
+    cancelQuickMatch,
     createPrivate,
     joinByCode,
     leave,

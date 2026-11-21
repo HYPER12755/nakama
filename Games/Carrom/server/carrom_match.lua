@@ -304,6 +304,7 @@ local function match_init(context, params)
     draw_offer = nil,
     chat = {},
     created_at = now,
+    lobby_timeout_ms = tonumber(params.lobby_timeout_ms) or LOBBY_TIMEOUT_MS,
     started_at = nil,
     last_activity = now,
     result = nil,

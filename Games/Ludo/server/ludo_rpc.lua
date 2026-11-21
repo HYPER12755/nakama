@@ -117,38 +117,6 @@ social.register_game("ludo", {
   end,
 })
 
-local function quick_match(context, payload)
-  if not context.user_id or context.user_id == "" then
-    return response_error("unauthenticated", "A user session is required")
-  end
-  local params, decode_error = decode_payload(payload)
-  if not params then
-    return response_error("invalid_payload", decode_error)
-  end
-  local seats = seats_from(params)
-  local label = protocol.quick_label(seats)
-  local excluded = params.excludeMatchId or params.exclude_match_id
-  local matches = nk.match_list(10, true, label, 0, 1, nil)
-  local match_id = nil
-  for _, candidate in ipairs(matches or {}) do
-    if excluded == nil or candidate.match_id ~= excluded then
-      match_id = candidate.match_id
-      break
-    end
-  end
-  if not match_id then
-    match_id = nk.match_create("ludo_match", {
-      mode = "quick",
-      rated = true,
-      seats = seats,
-      turnSeconds = protocol.clamp_turn_seconds(params.turnSeconds),
-      seed = tonumber(params.seed),
-    })
-  end
-  return nk.json_encode({ ok = true, matchId = match_id, mode = "quick", seats = seats })
-end
-nk.register_rpc(quick_match, "ludo_quick_match")
-
 local function create_private_match(context, payload)
   if not context.user_id or context.user_id == "" then
     return response_error("unauthenticated", "A user session is required")
@@ -209,7 +177,7 @@ local function matchmaker_matched(context, matched)
       username = entry.presence.username,
     }
   end
-  if #expected_users > seats then
+  if #expected_users ~= seats then
     return nil
   end
   return nk.match_create("ludo_match", {

@@ -629,6 +629,51 @@ test("the matched quick table keeps the chosen shot clock", function()
   )
 end)
 
+test("the matchmaker keeps team settings consistent across tickets", function()
+  local mismatched = {
+    {
+      presence = presence("u1", "Ivory"),
+      properties = { game = "carrom", seats = "4", teams = "true" },
+    },
+    {
+      presence = presence("u2", "Onyx"),
+      properties = { game = "carrom", seats = "4", teams = "false" },
+    },
+  }
+  assert_equal(
+    fake_nk.matchmaker_matched({ user_id = "u1" }, mismatched),
+    nil,
+    "a pair that disagrees about teams is not seated"
+  )
+end)
+
+test("the matchmaker does not open a four-seat table for two players", function()
+  local partial = {
+    {
+      presence = presence("u1", "Ivory"),
+      properties = { game = "carrom", seats = "4" },
+    },
+    {
+      presence = presence("u2", "Onyx"),
+      properties = { game = "carrom", seats = "4" },
+    },
+  }
+  assert_equal(
+    fake_nk.matchmaker_matched({ user_id = "u1" }, partial),
+    nil,
+    "a four-seat table needs four players"
+  )
+end)
+
+test("a private room keeps its configured lobby timeout", function()
+  local state = match.match_init({ match_id = "m1" }, {
+    mode = "private",
+    seats = 2,
+    lobby_timeout_ms = 123456,
+  })
+  assert_equal(state.lobby_timeout_ms, 123456, "the configured timeout is used")
+end)
+
 local function started_two_player_table(dispatcher)
   local state = match.match_init({ match_id = "m1" }, {
     mode = "quick",

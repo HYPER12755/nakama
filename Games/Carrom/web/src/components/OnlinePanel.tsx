@@ -213,6 +213,15 @@ export function OnlinePanel({
                   "Quick match"
                 )}
               </button>
+              {online.searching && (
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={online.cancelQuickMatch}
+                >
+                  Cancel search
+                </button>
+              )}
               <button
                 type="button"
                 className="button button--ghost"

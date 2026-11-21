@@ -610,6 +610,53 @@ tests[#tests + 1] = {
 }
 
 tests[#tests + 1] = {
+  name = "the matchmaker hook reads the game from every ticket",
+  fn = function()
+    local called = false
+    social.register_matchmaker_game("sharedtest", function(_, matched)
+      called = true
+      assert_equal(#matched, 2, "matched entries")
+      return "shared-match-id"
+    end)
+    local result = matchmaker_handler({}, {
+      {
+        properties = {},
+        presence = { user_id = "user-a", username = "A" },
+      },
+      {
+        properties = { game = "sharedtest" },
+        presence = { user_id = "user-b", username = "B" },
+      },
+    })
+    assert_equal(called, true, "the game handler ran")
+    assert_equal(result, "shared-match-id", "the handler result was returned")
+  end,
+}
+
+tests[#tests + 1] = {
+  name = "the matchmaker hook rejects tickets for different games",
+  fn = function()
+    local called = false
+    social.register_matchmaker_game("sharedtest", function()
+      called = true
+      return "should-not-happen"
+    end)
+    local result = matchmaker_handler({}, {
+      {
+        properties = { game = "sharedtest" },
+        presence = { user_id = "user-a", username = "A" },
+      },
+      {
+        properties = { game = "anothertest" },
+        presence = { user_id = "user-b", username = "B" },
+      },
+    })
+    assert_equal(called, false, "no game handler ran")
+    assert_equal(result, nil, "the pair was refused")
+  end,
+}
+
+tests[#tests + 1] = {
   name = "a room code names the table it was made for",
   fn = function()
     reset()

@@ -55,6 +55,7 @@ function controller(overrides: Partial<OnlineCarromController> = {}) {
     signOut: async () => undefined,
     connect: async () => undefined,
     quickMatch: async () => undefined,
+    cancelQuickMatch: () => undefined,
     createPrivateRoom: async () => undefined,
     joinMatch: async () => undefined,
     joinByRoomCode: async () => undefined,
@@ -87,6 +88,11 @@ describe("the online lobby", () => {
     const html = renderToStaticMarkup(panel(controller({ searching: true })));
     expect(html).toContain("online-search-clock");
     expect(html).toMatch(/00:0\d/);
+  });
+
+  it("offers to cancel a quick match search", () => {
+    const html = renderToStaticMarkup(panel(controller({ searching: true })));
+    expect(html).toContain("Cancel search");
   });
 
   it("shows the round trip when the server has answered a ping", () => {

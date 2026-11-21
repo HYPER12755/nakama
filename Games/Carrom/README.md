@@ -222,17 +222,17 @@ the rules, and the result:
   shot so every client replays the same animation. The striker and the
   colour travel with the shot, because the striker changes how hard it
   leaves the baseline.
-- `carrom_rpc.lua` creates private rooms, finds open quick tables, pairs the
-  atomic matchmaker, and registers the shared invite room hook.
+- `carrom_rpc.lua` creates private rooms, pairs the atomic matchmaker, and
+  registers the shared invite room hook.
 
 The Lua modules are copied to the local Nakama runtime with
 `pnpm stack sync`.
 
 Nakama keeps a single matchmaker callback, so the shared module owns it and
 routes a ticket to the game that asked for it. The matchmaker query is scoped
-to the game, the table size, and the game type, and a table's label follows
-its state so the quick table lookup never hands out a table that has already
-started.
+to the game, the table size, the game type, the shot clock and the teams
+choice. A quick match room is created only when the matchmaker has paired a
+full table, so waiting players never leave empty rooms behind.
 
 ## Next
 

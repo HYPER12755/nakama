@@ -387,38 +387,17 @@ async function playThreePlayerTable(runId) {
   }
 }
 
-async function playQuickTable(runId) {
+async function playNoEagerQuickTable(runId) {
   const alice = await authenticate(`moongames-carrom-${runId}-quick-a`);
-  const bob = await authenticate(`moongames-carrom-${runId}-quick-b`);
   try {
-    const aliceEvents = createCollector(alice.socket, "quick-a");
-    const bobEvents = createCollector(bob.socket, "quick-b");
-
-    const response = await alice.client.rpc(alice.session, "carrom_quick_match", {
-      seats: 2,
-    });
-    const payload = response.payload ?? {};
-    assert(
-      payload.ok === true && typeof payload.matchId === "string",
-      `quick match RPC failed: ${JSON.stringify(payload)}`,
-    );
-    console.log(`[ok] the quick match RPC opened a table: ${payload.matchId}`);
-
-    await bob.socket.joinMatch(payload.matchId);
-    await alice.socket.joinMatch(payload.matchId);
-
-    const started = await aliceEvents.waitFor(
-      (message) => message.op === OP.STATE && message.data?.game?.discs?.length > 0,
-      "the quick table to start",
-    );
-    assert(
-      started.data.seats.length === 2,
-      `expected two seats, got ${started.data.seats.length}`,
-    );
-    console.log("[ok] the quick table started for two players");
+    const eager = await alice.client
+      .rpc(alice.session, "carrom_quick_match", { seats: 2 })
+      .then(() => true)
+      .catch(() => false);
+    assert(eager === false, "quick match must not create a room through an RPC");
+    console.log("[ok] quick match has no eager table RPC");
   } finally {
     close(alice);
-    close(bob);
   }
 }
 
@@ -690,7 +669,7 @@ async function main() {
   await playTwoPlayerTable(runId);
   await playThreePlayerTable(runId);
   await playFourPlayerTable(runId);
-  await playQuickTable(runId);
+  await playNoEagerQuickTable(runId);
   await playMatchmakerTable(runId);
   await playTableSettings(runId);
   await playTableControls(runId);

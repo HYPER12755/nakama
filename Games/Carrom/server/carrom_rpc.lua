@@ -157,52 +157,6 @@ social.register_game("carrom", {
   end,
 })
 
-local function quick_match(context, payload)
-  if not context.user_id or context.user_id == "" then
-    return response_error("unauthenticated", "A user session is required")
-  end
-
-  local params, decode_error = decode_payload(payload)
-  if not params then
-    return response_error("invalid_payload", decode_error)
-  end
-
-  local seats = seats_from(params)
-  local settings = settings_from(params)
-  local label = protocol.quick_label(seats, settings.variant)
-
-  -- match_list is eventually consistent. The web client calls this only after
-  -- the atomic matchmaker has had a few seconds to pair concurrent players.
-  local excluded = params.excludeMatchId or params.exclude_match_id
-  local matches = nk.match_list(10, true, label, 0, 1, nil)
-  local match_id = nil
-  for _, candidate in ipairs(matches or {}) do
-    if excluded == nil or candidate.match_id ~= excluded then
-      match_id = candidate.match_id
-      break
-    end
-  end
-
-  if not match_id then
-    match_id = nk.match_create("carrom_match", {
-      mode = "quick",
-      rated = true,
-      seats = seats,
-      variant = settings.variant,
-      turnSeconds = settings.turnSeconds,
-      teams = settings.teams,
-    })
-  end
-
-  return nk.json_encode({
-    ok = true,
-    matchId = match_id,
-    mode = "quick",
-    seats = seats,
-  })
-end
-nk.register_rpc(quick_match, "carrom_quick_match")
-
 local function create_private_match(context, payload)
   if not context.user_id or context.user_id == "" then
     return response_error("unauthenticated", "A user session is required")
@@ -267,12 +221,13 @@ local function matchmaker_matched(context, matched)
     local entry_seats = protocol.clamp_seats(properties.seats)
     local entry_variant = protocol.clamp_variant(properties.variant)
     local entry_clock = protocol.clamp_turn_seconds(properties.turnSeconds)
+    local entry_teams = truthy(properties.teams) and entry_seats == 4
     if seats == nil then
       seats = entry_seats
       variant = entry_variant
       clock = entry_clock
-      teams = truthy(properties.teams) and seats == 4
-    elseif seats ~= entry_seats or variant ~= entry_variant or clock ~= entry_clock then
+      teams = entry_teams
+    elseif seats ~= entry_seats or variant ~= entry_variant or clock ~= entry_clock or teams ~= entry_teams then
       return nil
     end
     expected_users[#expected_users + 1] = {
@@ -280,7 +235,7 @@ local function matchmaker_matched(context, matched)
       username = entry.presence.username,
     }
   end
-  if #expected_users > seats then
+  if #expected_users ~= seats then
     return nil
   end
   return nk.match_create("carrom_match", {

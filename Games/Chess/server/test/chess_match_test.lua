@@ -893,71 +893,9 @@ test("chat is cleared when the match ends", function()
   assert_equal(#game_over.data.chat, 0)
 end)
 
-test("quick match RPC reuses an open match", function()
-  fake_nk.match_list_result = {
-    { match_id = "existing-match" },
-  }
+test("quick match cannot open a room without an opponent", function()
   fake_nk.match_creates = {}
-
-  local response = fake_nk.rpcs["chess_quick_match"]({
-    user_id = "u1",
-  }, "{}")
-
-  assert_equal(response.ok, true)
-  assert_equal(response.matchId, "existing-match")
-  assert_equal(#fake_nk.match_creates, 0)
-end)
-
-test("quick match RPC creates a match when none is open", function()
-  fake_nk.match_list_result = {}
-  fake_nk.match_creates = {}
-  fake_nk.next_match_id = "new-quick-match"
-
-  local response = fake_nk.rpcs["chess_quick_match"]({
-    user_id = "u1",
-  }, {
-    timeControl = { initialMs = 600000, incrementMs = 2000 },
-  })
-
-  assert_equal(response.ok, true)
-  assert_equal(response.matchId, "new-quick-match")
-  assert_equal(#fake_nk.match_creates, 1)
-  assert_equal(fake_nk.match_creates[1].module, "chess_match")
-  assert_equal(fake_nk.match_creates[1].params.mode, "quick")
-  assert_equal(fake_nk.match_creates[1].params.rated, true)
-  assert_equal(fake_nk.match_creates[1].params.time_control.initial_ms, 600000)
-end)
-
-test("quick match reuses the claimed table when the match index is stale", function()
-  fake_nk.storage_records = {}
-  fake_nk.match_list_result = {}
-  fake_nk.match_creates = {}
-  fake_nk.match_get_result = {}
-  fake_nk.next_match_id = "claimed-quick-match"
-  fake_nk.match_get_result["claimed-quick-match"] = {
-    label = "chess|quick|300000|0|open",
-  }
-
-  local first = fake_nk.rpcs["chess_quick_match"]({
-    user_id = "u1",
-  }, {
-    timeControl = { initialMs = 300000, incrementMs = 0 },
-  })
-  assert_equal(first.matchId, "claimed-quick-match")
-  assert_equal(#fake_nk.match_creates, 1)
-
-  -- A second search must not open another table just because match_list has
-  -- not seen the first one yet.
-  fake_nk.match_list_result = {}
-  fake_nk.match_creates = {}
-  fake_nk.next_match_id = "duplicate-quick-match"
-
-  local second = fake_nk.rpcs["chess_quick_match"]({
-    user_id = "u2",
-  }, {
-    timeControl = { initialMs = 300000, incrementMs = 0 },
-  })
-  assert_equal(second.matchId, "claimed-quick-match")
+  assert_nil(fake_nk.rpcs["chess_quick_match"])
   assert_equal(#fake_nk.match_creates, 0)
 end)
 
@@ -980,27 +918,6 @@ test("private match RPC records the creator", function()
     fake_nk.match_creates[1].params.lobby_timeout_ms,
     social.INVITE_TTL_MS + 60000
   )
-end)
-
-test("quick match can exclude a full room and open a new one", function()
-  fake_nk.storage_records = {}
-  fake_nk.match_get_result = {}
-  fake_nk.match_creates = {}
-  fake_nk.next_match_id = "fresh-quick-match"
-  fake_nk.match_list_result = {
-    { match_id = "busy-quick-match" },
-  }
-
-  local response = fake_nk.rpcs["chess_quick_match"]({
-    user_id = "u1",
-  }, {
-    timeControl = { initialMs = 300000, incrementMs = 0 },
-    excludeMatchId = "busy-quick-match",
-  })
-
-  assert_equal(response.ok, true)
-  assert_equal(response.matchId, "fresh-quick-match")
-  assert_equal(#fake_nk.match_creates, 1)
 end)
 
 test("private room attach validates seat availability", function()
@@ -1064,9 +981,9 @@ test("private room attach rejects finished and non-private rooms", function()
   assert_equal(missing_ok, false)
 end)
 
-test("invalid RPC time control is rejected", function()
+test("invalid private match time control is rejected", function()
   fake_nk.match_creates = {}
-  local response = fake_nk.rpcs["chess_quick_match"]({
+  local response = fake_nk.rpcs["chess_create_private_match"]({
     user_id = "u1",
   }, {
     timeControl = { initialMs = 1000 },

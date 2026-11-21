@@ -22,7 +22,7 @@ The classic four-colour race, built as a first-class MoonGames title.
 
 Local pass-and-play supports two to four colours. In computer mode you take
 the first seat and the computer drives the rest; Easy, Normal and Hard change
-how carefully it chooses moves. Online play has quick tables, private room
+how carefully it chooses moves. Online play has quick match, private room
 codes, spectators and table chat.
 
 A token needs a six to leave its yard. Four baselines form a wall that

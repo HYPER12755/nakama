@@ -92,7 +92,7 @@ const SERVER_ADDRESS_KEY = `moongames.${GAME_ID}.serverAddress`;
 const TIME_CONTROL_KEY = `moongames.${GAME_ID}.timeControl`;
 const MATCH_ID_KEY = `moongames.${GAME_ID}.matchId`;
 const SPECTATE_KEY = `moongames.${GAME_ID}.spectate`;
-const QUICK_MATCH_FALLBACK_MS = 1200;
+const MATCHMAKING_TIMEOUT_MS = 60000;
 
 export interface PendingOnlinePromotion {
   from: Square;
@@ -439,7 +439,6 @@ interface PendingMatchmaker {
   reject: (error: Error) => void;
   ticket: string | null;
   timer: number;
-  fallbackTimer: number | null;
 }
 
 export function useOnlineChess(
@@ -822,9 +821,6 @@ export function useOnlineChess(
       return;
     }
     window.clearTimeout(pending.timer);
-    if (pending.fallbackTimer !== null) {
-      window.clearTimeout(pending.fallbackTimer);
-    }
     matchmakerRef.current = null;
     pending.reject(new Error(message));
   }, []);
@@ -1037,9 +1033,6 @@ export function useOnlineChess(
             return;
           }
           window.clearTimeout(pending.timer);
-          if (pending.fallbackTimer !== null) {
-            window.clearTimeout(pending.fallbackTimer);
-          }
           matchmakerRef.current = null;
           pending.resolve(matched);
         };
@@ -2136,10 +2129,7 @@ export function useOnlineChess(
 
   const callRpc = useCallback(
     async (
-      id:
-        | "chess_quick_match"
-        | "chess_create_private_match"
-        | "moongames_room_code_resolve",
+      id: "chess_create_private_match" | "moongames_room_code_resolve",
       input: object,
     ): Promise<OnlineRpcResponse> => {
       const client = clientRef.current;
@@ -2415,6 +2405,10 @@ export function useOnlineChess(
       setError("A quick match search is already running.");
       return;
     }
+    if (matchIdRef.current !== null) {
+      setError("Leave the current table before starting a quick match.");
+      return;
+    }
 
     const run = matchmakingRunRef.current + 1;
     matchmakingRunRef.current = run;
@@ -2452,22 +2446,19 @@ export function useOnlineChess(
         reject: rejectMatched,
         ticket: null,
         timer: 0,
-        fallbackTimer: null,
       };
       pending.timer = window.setTimeout(() => {
-        if (matchmakerRef.current === pending) {
-          matchmakerRef.current = null;
-          if (pending.fallbackTimer !== null) {
-            window.clearTimeout(pending.fallbackTimer);
-          }
-          if (pending.ticket !== null) {
-            void activeSocket.removeMatchmaker(pending.ticket).catch(() => {
-              // The ticket may already be gone.
-            });
-          }
+        if (matchmakerRef.current !== pending) {
+          return;
         }
-        pending.reject(new Error("Matchmaking timed out. Try again."));
-      }, 60000);
+        matchmakerRef.current = null;
+        if (pending.ticket !== null) {
+          void activeSocket.removeMatchmaker(pending.ticket).catch(() => {
+            // The ticket may already be gone.
+          });
+        }
+        pending.reject(new Error("No opponent found. Try again."));
+      }, MATCHMAKING_TIMEOUT_MS);
       matchmakerRef.current = pending;
 
       const ticket = await activeSocket.addMatchmaker(query, 2, 2, {
@@ -2494,32 +2485,6 @@ export function useOnlineChess(
         pending.reject(new Error("Matchmaking cancelled."));
       } else {
         pending.ticket = ticket.ticket;
-        // The matchmaker is great at pairing players who are searching at the
-        // same moment. In a small game, however, two players often arrive a
-        // minute apart. If no atomic pairing happens quickly, open a normal
-        // quick table instead so the next player can join it later.
-        pending.fallbackTimer = window.setTimeout(() => {
-          if (matchmakerRef.current !== pending) {
-            return;
-          }
-          window.clearTimeout(pending.timer);
-          // Keep the pending matchmaker alive until the ticket is actually
-          // removed. A pairing can land while removal is in flight, and that
-          // match must not be silently discarded.
-          const removal =
-            pending.ticket === null
-              ? Promise.resolve()
-              : activeSocket.removeMatchmaker(pending.ticket).catch(() => {
-                  // The ticket may already be gone or matched.
-                });
-          void removal.finally(() => {
-            if (matchmakerRef.current !== pending) {
-              return;
-            }
-            matchmakerRef.current = null;
-            pending.resolve(null);
-          });
-        }, QUICK_MATCH_FALLBACK_MS);
       }
 
       const matched = await matchedPromise;
@@ -2544,40 +2509,7 @@ export function useOnlineChess(
         return;
       }
 
-      const openQuickRoom = async (excludeMatchId?: string) => {
-        const result = await callRpc("chess_quick_match", {
-          timeControl,
-          ...(excludeMatchId === undefined ? {} : { excludeMatchId }),
-        });
-        if (run !== matchmakingRunRef.current) {
-          return null;
-        }
-        if (!result.ok || !result.matchId) {
-          throw new Error(
-            result.error?.message ?? "Could not open a quick match.",
-          );
-        }
-        return result.matchId;
-      };
-
-      const quickMatchId = await openQuickRoom();
-      if (quickMatchId === null) {
-        return;
-      }
-      try {
-        await joinMatch(quickMatchId);
-      } catch (cause) {
-        // The open-table fallback can race with another player taking the
-        // last seat. Ask the backend to ignore that room and try once more.
-        if (!/full/i.test(errorMessage(cause, ""))) {
-          throw cause;
-        }
-        const replacement = await openQuickRoom(quickMatchId);
-        if (replacement === null) {
-          return;
-        }
-        await joinMatch(replacement);
-      }
+      throw new Error("No opponent found. Try again.");
     } catch (cause) {
       if (run !== matchmakingRunRef.current) {
         return;
@@ -2585,9 +2517,6 @@ export function useOnlineChess(
       const pending = matchmakerRef.current;
       if (pending !== null) {
         window.clearTimeout(pending.timer);
-        if (pending.fallbackTimer !== null) {
-          window.clearTimeout(pending.fallbackTimer);
-        }
         matchmakerRef.current = null;
         if (pending.ticket !== null && socket !== null) {
           try {
@@ -2604,7 +2533,7 @@ export function useOnlineChess(
         setMatchmaking(false);
       }
     }
-  }, [callRpc, joinMatch, requireSocket, timeControl]);
+  }, [requireSocket, timeControl]);
 
   const cancelQuickMatch = useCallback(() => {
     if (!matchmakingActiveRef.current) {
@@ -2623,9 +2552,6 @@ export function useOnlineChess(
 
     matchmakerRef.current = null;
     window.clearTimeout(pending.timer);
-    if (pending.fallbackTimer !== null) {
-      window.clearTimeout(pending.fallbackTimer);
-    }
     if (pending.ticket !== null && socketRef.current !== null) {
       void socketRef.current.removeMatchmaker(pending.ticket).catch(() => {
         // The ticket may already be gone.
@@ -2697,9 +2623,6 @@ export function useOnlineChess(
       matchmakingActiveRef.current = false;
       setMatchmaking(false);
       window.clearTimeout(pending.timer);
-      if (pending.fallbackTimer !== null) {
-        window.clearTimeout(pending.fallbackTimer);
-      }
       matchmakerRef.current = null;
       if (pending.ticket !== null && socketRef.current !== null) {
         try {

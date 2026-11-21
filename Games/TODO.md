@@ -49,8 +49,8 @@
 - [x] Add server-authoritative clocks with one-second broadcasts and client interpolation.
 - [x] Add resign, draw offers, timeout, and disconnect forfeit.
 - [x] Add the online client UI: quick match, private match ID sharing/joining, connection status, clocks, resign/draw controls, and leave match.
-- [x] Fall back from the atomic matchmaker to a persistent quick table, with elapsed search time and cancellation.
-- [x] Add a real multi-client WebSocket smoke test covering private matches, matchmaker pairing, delayed quick-table fallback, moves, clocks, draw offers, resign, reconnect, and state snapshots.
+- [x] Use the atomic matchmaker for every quick match, create the room only when players pair, and show elapsed search time with cancellation.
+- [x] Add a real multi-client WebSocket smoke test covering private matches, matchmaker pairing, moves, clocks, draw offers, resign, reconnect, and state snapshots.
 
 ## Phase 5 — Persistence and progression
 

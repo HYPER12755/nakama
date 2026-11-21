@@ -396,7 +396,7 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
             <p className="online-copy online-copy--compact">
               {serverState.match.mode === "private"
                 ? "Invite a MoonGames friend directly, or share the room link. White stays reserved for the match creator."
-                : "This quick table is open. Another player searching the same time control will join automatically, or share the invite link."}
+                : "Waiting for the other player to join this room. Share the invite link to bring them in."}
             </p>
           )}
 
@@ -511,8 +511,8 @@ export function OnlinePanel({ controller, onNotify }: OnlinePanelProps) {
 
           {matchmaking && (
             <p className="online-copy online-copy--compact" aria-live="polite">
-              Pairing you with the same time control. If nobody is waiting, a
-              quick table opens so the next player can join.
+              Waiting for an opponent with the same time control. A table is
+              created only once both players are paired.
             </p>
           )}
 
