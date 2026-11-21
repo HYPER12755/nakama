@@ -1,0 +1,150 @@
+{
+  "format": 1,
+  "generatedAt": "2026-11-21T05:46:19.400Z",
+  "games": [
+    {
+      "id": "chess",
+      "name": "Chess",
+      "tagline": "Classic chess. Local, AI, or rated online.",
+      "description": "Standard chess with local, AI, online, private-match, spectator, invite-link, replay, fullscreen, temporary match-chat, friend invites with persistent chat cards, in-game invite alerts, launcher notifications, and a shared MoonGames account when launched from the verified web menu.",
+      "status": "available",
+      "minPlayers": 2,
+      "maxPlayers": 2,
+      "capabilities": [
+        "local",
+        "ai",
+        "online",
+        "private-match",
+        "spectators",
+        "invite-links",
+        "replay"
+      ],
+      "orientation": "any",
+      "tags": [
+        "strategy",
+        "1v1",
+        "rated",
+        "online",
+        "chat",
+        "invites",
+        "notifications"
+      ],
+      "accent": "#e5b85c",
+      "icon": "chess",
+      "featured": true,
+      "sortOrder": 10,
+      "webPath": "chess/",
+      "timed": true,
+      "version": "0.8.5",
+      "release": {
+        "version": "0.8.5",
+        "minHostProtocol": 2,
+        "publishedAt": "2026-11-21T05:46:11.281Z",
+        "sha256": "3a61651ce2c9e0ec54938e34a3583127a6e6b36273da85b0da00020d268705a1",
+        "size": 4837419,
+        "keyId": "dev-1"
+      }
+    },
+    {
+      "id": "ludo",
+      "name": "Ludo",
+      "tagline": "Race, block, and roll your way home.",
+      "description": "The classic four-colour race, drawn by hand for MoonGames. Roll to leave home, capture rivals, build walls and be the first to bring all four tokens to the centre. Play locally against friends or the computer, or take a table online with spectators and chat.",
+      "status": "available",
+      "minPlayers": 2,
+      "maxPlayers": 4,
+      "capabilities": [
+        "local",
+        "ai",
+        "online",
+        "private-match",
+        "spectators",
+        "invite-links",
+        "replay"
+      ],
+      "orientation": "any",
+      "tags": [
+        "board",
+        "family",
+        "race",
+        "classic",
+        "local",
+        "ai"
+      ],
+      "accent": "#9b8cff",
+      "icon": "ludo",
+      "featured": false,
+      "sortOrder": 30,
+      "webPath": "ludo/",
+      "version": "0.1.0",
+      "release": {
+        "version": "0.1.0",
+        "minHostProtocol": 2,
+        "publishedAt": "2026-11-21T05:46:14.763Z",
+        "sha256": "1913fe6713696ca5cb400fd1f1a5c142e8ca00d9ddcd9fbe2c559639ea952023",
+        "size": 13789871,
+        "keyId": "dev-1"
+      }
+    },
+    {
+      "id": "carrom",
+      "name": "Carrom",
+      "tagline": "Flick, bank, and pocket your way to the queen.",
+      "description": "A tactile carrom table built to the International Carrom Federation board: a 74 cm surface, 4.45 cm pockets, baseline strips with red base circles, diagonal foul lines, and a tight 19-piece medallion. Deterministic pocket physics, local pass-and-play, a simulation-backed AI opponent, and server-owned online tables for two, three, or four players with spectators and table chat. Choose the game type, bring your own striker, and play under a shot clock.",
+      "status": "available",
+      "minPlayers": 2,
+      "maxPlayers": 4,
+      "capabilities": [
+        "local",
+        "ai",
+        "online",
+        "private-match",
+        "spectators",
+        "invite-links",
+        "replay"
+      ],
+      "orientation": "any",
+      "tags": [
+        "board",
+        "precision",
+        "classic",
+        "local",
+        "ai"
+      ],
+      "accent": "#48c9b0",
+      "icon": "carrom",
+      "featured": false,
+      "sortOrder": 40,
+      "webPath": "carrom/",
+      "version": "0.6.0",
+      "release": {
+        "version": "0.6.0",
+        "minHostProtocol": 2,
+        "publishedAt": "2026-11-21T05:46:13.143Z",
+        "sha256": "ee5b185d2f6a0b45b216e8f681fa9f160ea5457934cc2030f8adcce45a5eef7f",
+        "size": 13611185,
+        "keyId": "dev-1"
+      }
+    },
+    {
+      "id": "cards",
+      "name": "Card Game",
+      "tagline": "A fresh social card game built around color, numbers, and bold choices.",
+      "description": "An original MoonGames card game for quick online and local rounds. The final name, artwork, and rules will be announced when the game enters preview.",
+      "status": "coming-soon",
+      "minPlayers": 2,
+      "maxPlayers": 8,
+      "capabilities": [],
+      "orientation": "any",
+      "tags": [
+        "cards",
+        "social",
+        "party"
+      ],
+      "accent": "#ff6b6b",
+      "icon": "cards",
+      "featured": false,
+      "sortOrder": 20
+    }
+  ]
+}

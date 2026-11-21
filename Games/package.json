@@ -5,6 +5,10 @@
   "description": "Portable MoonGames game packages sharing one Nakama backend.",
   "packageManager": "pnpm@12.19.0",
   "scripts": {
+    "bootstrap": "bash scripts/setup.sh",
+    "setup": "bash scripts/setup.sh",
+    "setup:force": "bash scripts/setup.sh --force",
+    "setup:reset": "bash scripts/setup.sh --reset --force --yes",
     "stack": "node tools/stack.mjs",
     "stack:watchdog": "node tools/stack-watchdog.mjs",
     "dev:chess": "pnpm --filter @moongames/chess-web dev",

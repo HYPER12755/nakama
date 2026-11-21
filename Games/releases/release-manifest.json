@@ -1,0 +1,87 @@
+{
+  "format": 1,
+  "generatedAt": "2026-11-21T05:46:14.853Z",
+  "signers": {
+    "dev-1": {
+      "algorithm": "ed25519",
+      "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE="
+    }
+  },
+  "bundles": [
+    {
+      "format": 1,
+      "gameId": "carrom",
+      "gameName": "Carrom",
+      "version": "0.6.0",
+      "sdkVersion": "0.1.0",
+      "minHostProtocol": 2,
+      "entry": "index.html",
+      "capabilities": [
+        "local",
+        "ai",
+        "online",
+        "private-match",
+        "spectators",
+        "invite-links",
+        "replay"
+      ],
+      "publishedAt": "2026-11-21T05:46:13.143Z",
+      "sha256": "ee5b185d2f6a0b45b216e8f681fa9f160ea5457934cc2030f8adcce45a5eef7f",
+      "size": 13611185,
+      "url": "carrom/0.6.0/carrom-0.6.0.zip",
+      "keyId": "dev-1",
+      "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE=",
+      "signature": "BOLFyabcjLNw4hAwJqQwhsQJ4NR1i6fDwVvjv6LfDjHQKpDifNGmwx5c4E3T3Y7OI6tkCDmVLrfPhiP6TgCzBQ=="
+    },
+    {
+      "format": 1,
+      "gameId": "chess",
+      "gameName": "Chess",
+      "version": "0.8.5",
+      "sdkVersion": "0.1.0",
+      "minHostProtocol": 2,
+      "entry": "index.html",
+      "capabilities": [
+        "local",
+        "ai",
+        "online",
+        "private-match",
+        "spectators",
+        "invite-links",
+        "replay"
+      ],
+      "publishedAt": "2026-11-21T05:46:11.281Z",
+      "sha256": "3a61651ce2c9e0ec54938e34a3583127a6e6b36273da85b0da00020d268705a1",
+      "size": 4837419,
+      "url": "chess/0.8.5/chess-0.8.5.zip",
+      "keyId": "dev-1",
+      "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE=",
+      "signature": "xEFMzx5bsWhgPXLD0uhS+atAFpgClyvL7wyP9uCzZhxvwu0KyzJ6pMHdzHNhgdqrkMX3P/zPF0463h/UAqvABQ=="
+    },
+    {
+      "format": 1,
+      "gameId": "ludo",
+      "gameName": "Ludo",
+      "version": "0.1.0",
+      "sdkVersion": "0.1.0",
+      "minHostProtocol": 2,
+      "entry": "index.html",
+      "capabilities": [
+        "local",
+        "ai",
+        "online",
+        "private-match",
+        "spectators",
+        "invite-links",
+        "replay"
+      ],
+      "publishedAt": "2026-11-21T05:46:14.763Z",
+      "sha256": "1913fe6713696ca5cb400fd1f1a5c142e8ca00d9ddcd9fbe2c559639ea952023",
+      "size": 13789871,
+      "url": "ludo/0.1.0/ludo-0.1.0.zip",
+      "keyId": "dev-1",
+      "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE=",
+      "signature": "57Eo1loPr83av0bZpPt3y3GE63xCTOcci5DdLWUGHHZFIx5/+vjWzZujB13kLXXNvsH7rM/QG+7bNbENUFY4BQ=="
+    }
+  ]
+}

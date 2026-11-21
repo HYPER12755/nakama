@@ -1,0 +1,25 @@
+{
+  "format": 1,
+  "gameId": "carrom",
+  "gameName": "Carrom",
+  "version": "0.6.0",
+  "sdkVersion": "0.1.0",
+  "minHostProtocol": 2,
+  "entry": "index.html",
+  "capabilities": [
+    "local",
+    "ai",
+    "online",
+    "private-match",
+    "spectators",
+    "invite-links",
+    "replay"
+  ],
+  "publishedAt": "2026-11-21T05:46:13.143Z",
+  "sha256": "ee5b185d2f6a0b45b216e8f681fa9f160ea5457934cc2030f8adcce45a5eef7f",
+  "size": 13611185,
+  "url": "carrom/0.6.0/carrom-0.6.0.zip",
+  "keyId": "dev-1",
+  "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE=",
+  "signature": "BOLFyabcjLNw4hAwJqQwhsQJ4NR1i6fDwVvjv6LfDjHQKpDifNGmwx5c4E3T3Y7OI6tkCDmVLrfPhiP6TgCzBQ=="
+}
