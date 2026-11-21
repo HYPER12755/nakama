@@ -12,7 +12,8 @@ DESTINATION="${MOONGAMES_NAKAMA_MODULES:-$GAMES_DIR/runtime/modules}"
 mkdir -p "$DESTINATION"
 
 for module in \
-  moongames_social.lua; do
+  moongames_social.lua \
+  moongames_guest_cleanup.lua; do
   if [[ -f "$SHARED_DIR/$module" ]]; then
     cp "$SHARED_DIR/$module" "$DESTINATION/$module"
   fi

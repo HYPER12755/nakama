@@ -15,11 +15,11 @@
     "invite-links",
     "replay"
   ],
-  "publishedAt": "2026-11-21T05:46:14.763Z",
-  "sha256": "1913fe6713696ca5cb400fd1f1a5c142e8ca00d9ddcd9fbe2c559639ea952023",
-  "size": 13789871,
+  "publishedAt": "2026-11-21T08:05:48.818Z",
+  "sha256": "ac3ca02507fc5983b9240b4eb4f0e9588ce6c8135a34340d56b90d94bceb8189",
+  "size": 13790239,
   "url": "ludo/0.1.0/ludo-0.1.0.zip",
   "keyId": "dev-1",
   "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE=",
-  "signature": "57Eo1loPr83av0bZpPt3y3GE63xCTOcci5DdLWUGHHZFIx5/+vjWzZujB13kLXXNvsH7rM/QG+7bNbENUFY4BQ=="
+  "signature": "AeTKnHf+dzqYqJ3HG5ZHiVTEIm/QLx6N51xbJ8sTeNGdsgbk0+TnjhzYOS0xBksf0dgwm9jzuvjtvGcfrUaeCA=="
 }

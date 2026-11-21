@@ -10,7 +10,11 @@ NAKAMA_DIR="$RUNTIME/nakama"
 NAKAMA_BIN="$NAKAMA_DIR/nakama"
 NAKAMA_CONFIG="$RUNTIME/nakama.yml"
 ENV_FILE="$RUNTIME/env.sh"
-PG_PORT=55432
+
+source "$GAMES_ROOT/scripts/dotenv.sh"
+load_dotenv
+
+PG_PORT="${MOONGAMES_PG_PORT:-55432}"
 PNPM_VERSION="12.19.0"
 
 FORCE=0
@@ -298,21 +302,39 @@ write_env() {
   if command -v stockfish >/dev/null 2>&1; then
     engine_path="$(command -v stockfish)"
   fi
+  local emit_default
+  emit_default() {
+    printf 'export %s=${%s-%q}\n' "$1" "$1" "$2"
+  }
   {
-    printf 'export PATH=%q\n' "$HOME/.local/nodejs/bin:$HOME/.local/bin:$PGBIN:$NAKAMA_DIR:$PATH"
-    printf 'export GOTOOLCHAIN=auto\n'
-    printf 'export MOONGAMES_NAKAMA_BIN=%q\n' "$NAKAMA_BIN"
-    printf 'export MOONGAMES_NAKAMA_CONFIG=%q\n' "$NAKAMA_CONFIG"
-    printf 'export MOONGAMES_PG_DATA=%q\n' "$PG_DATA"
-    printf 'export MOONGAMES_PG_SOCKET=%q\n' "$PG_SOCKET"
-    printf 'export MOONGAMES_PG_PORT=%s\n' "$PG_PORT"
-    printf 'export MOONGAMES_PG_HOST=127.0.0.1\n'
-    printf 'export MOONGAMES_PG_CTL=%q\n' "$PGBIN/pg_ctl"
-    printf 'export MOONGAMES_PG_ISREADY=%q\n' "$PGBIN/pg_isready"
-    printf 'export MOONGAMES_PSQL=%q\n' "$PGBIN/psql"
+    emit_default PATH "$HOME/.local/nodejs/bin:$HOME/.local/bin:$PGBIN:$NAKAMA_DIR:$PATH"
+    emit_default GOTOOLCHAIN auto
+    emit_default MOONGAMES_NAKAMA_BIN "$NAKAMA_BIN"
+    emit_default MOONGAMES_NAKAMA_CONFIG "$NAKAMA_CONFIG"
+    emit_default MOONGAMES_PG_DATA "$PG_DATA"
+    emit_default MOONGAMES_PG_SOCKET "$PG_SOCKET"
+    emit_default MOONGAMES_PG_CTL "$PGBIN/pg_ctl"
+    emit_default MOONGAMES_PG_ISREADY "$PGBIN/pg_isready"
+    emit_default MOONGAMES_PSQL "$PGBIN/psql"
     if [[ -n "$engine_path" ]]; then
-      printf 'export MOONGAMES_ENGINE_PATH=%q\n' "$engine_path"
+      emit_default MOONGAMES_ENGINE_PATH "$engine_path"
     fi
+    local name
+    for name in \
+      MOONGAMES_PG_PORT MOONGAMES_PG_HOST \
+      MOONGAMES_NAKAMA_DB MOONGAMES_NAKAMA_DATA MOONGAMES_NAKAMA_MODULES \
+      MOONGAMES_NAKAMA_HOST MOONGAMES_NAKAMA_PORT \
+      MOONGAMES_CONSOLE_HOST MOONGAMES_CONSOLE_PORT \
+      MOONGAMES_CONSOLE_USERNAME \
+      MOONGAMES_WEB_HOST MOONGAMES_WEB_PORT \
+      MOONGAMES_RELEASES_HOST MOONGAMES_RELEASES_PORT \
+      MOONGAMES_ENGINE_HOST MOONGAMES_ENGINE_PORT \
+      MOONGAMES_ENGINE_ACCOUNTS MOONGAMES_WATCHDOG_PORT \
+      MOONGAMES_PNPM MOONGAMES_STACK_DIR; do
+      if [[ -n "${!name:-}" ]]; then
+        emit_default "$name" "${!name}"
+      fi
+    done
   } > "$ENV_FILE"
   source "$ENV_FILE"
   ok "Wrote $ENV_FILE"
@@ -397,6 +419,10 @@ run_tests() {
     warn "Some tests failed; the stack is still running. See the output above."
   fi
 }
+
+if [[ -f "$ENV_FILE" ]]; then
+  source "$ENV_FILE"
+fi
 
 info "MoonGames native setup (no Docker)"
 [[ -d "$REPO_ROOT/server" && -f "$REPO_ROOT/go.mod" ]] || fail "Repository root does not look like the Nakama source tree"

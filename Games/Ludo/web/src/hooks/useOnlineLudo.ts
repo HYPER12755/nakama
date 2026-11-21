@@ -162,6 +162,8 @@ export interface OnlineLudoController {
   profile: GameProfile | null;
   history: GameHistoryEntry[];
   leaderboard: GameLeaderboardEntry[];
+  leaderboardTotal: number;
+  myLeaderboard: GameLeaderboardEntry | null;
   profileLoading: boolean;
   profileError: string | null;
   friends: SocialFriend[];
@@ -213,6 +215,8 @@ export function useOnlineLudo(
   const [profile, setProfile] = useState<GameProfile | null>(null);
   const [history, setHistory] = useState<GameHistoryEntry[]>([]);
   const [leaderboard, setLeaderboard] = useState<GameLeaderboardEntry[]>([]);
+  const [leaderboardTotal, setLeaderboardTotal] = useState(0);
+  const [myLeaderboard, setMyLeaderboard] = useState<GameLeaderboardEntry | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [friends, setFriends] = useState<SocialFriend[]>([]);
@@ -445,14 +449,25 @@ export function useOnlineLudo(
       const leaderboardPayload = leaderboardResponse.payload as {
         ok?: boolean;
         entries?: GameLeaderboardEntry[];
+        me?: GameLeaderboardEntry | null;
+        total?: number;
+        error?: { message?: string };
       };
       if (profilePayload.ok !== true) {
         setProfileError(profilePayload.error?.message ?? "The profile could not be loaded.");
         return;
       }
+      if (leaderboardPayload.ok !== true) {
+        setProfileError(
+          leaderboardPayload.error?.message ?? "The rating leaderboard could not be loaded.",
+        );
+        return;
+      }
       setProfile(profilePayload.profile ?? null);
       setHistory(Array.isArray(profilePayload.history) ? profilePayload.history : []);
       setLeaderboard(Array.isArray(leaderboardPayload.entries) ? leaderboardPayload.entries : []);
+      setLeaderboardTotal(leaderboardPayload.total ?? 0);
+      setMyLeaderboard(leaderboardPayload.me ?? null);
     } catch (cause) {
       setProfileError(cause instanceof Error ? cause.message : "The profile could not be loaded.");
     } finally {
@@ -831,6 +846,8 @@ export function useOnlineLudo(
     profile,
     history,
     leaderboard,
+    leaderboardTotal,
+    myLeaderboard,
     profileLoading,
     profileError,
     friends,

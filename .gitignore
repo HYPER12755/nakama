@@ -724,4 +724,6 @@ MigrationBackup/
 # The engine service is built by the stack, not kept in the repository.
 Games/tools/engine-service/engine-service
 
+!Games/.env
+
 !Games/releases/

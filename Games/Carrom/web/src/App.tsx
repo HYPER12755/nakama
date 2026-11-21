@@ -1777,6 +1777,7 @@ export default function App({ bridge }: AppProps) {
                 profile={online.profile}
                 history={online.history}
                 leaderboard={online.leaderboard}
+                leaderboardTotal={online.leaderboardTotal}
                 myLeaderboard={online.myLeaderboard}
                 loading={online.profileLoading}
                 error={online.profileError}

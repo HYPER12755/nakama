@@ -12,6 +12,7 @@ export interface ProfilePanelProps {
   profile: GameProfile | null;
   history: GameHistoryEntry[];
   leaderboard: GameLeaderboardEntry[];
+  leaderboardTotal?: number;
   myLeaderboard: GameLeaderboardEntry | null;
   loading: boolean;
   error: string | null;
@@ -109,6 +110,7 @@ export function ProfilePanel({
   profile,
   history,
   leaderboard,
+  leaderboardTotal = 0,
   myLeaderboard,
   loading,
   error,
@@ -207,7 +209,13 @@ export function ProfilePanel({
       <div className="profile-section">
         <div className="profile-section-heading">
           <h3>Leaderboard</h3>
-          <span>{leaderboardRows.length > 0 ? `Top ${leaderboardRows.length}` : "—"}</span>
+          <span>
+            {leaderboardRows.length > 0
+              ? leaderboardTotal > leaderboardRows.length
+                ? `Top ${leaderboardRows.length} of ${leaderboardTotal}`
+                : `Top ${leaderboardRows.length}`
+              : "—"}
+          </span>
         </div>
         {leaderboardRows.length === 0 ? (
           <p className="empty-state">{emptyLeaderboardText}</p>

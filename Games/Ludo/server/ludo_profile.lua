@@ -21,6 +21,21 @@ local function number(value, fallback)
   return parsed
 end
 
+local function error_payload(code, message)
+  return { ok = false, error = { code = code, message = message } }
+end
+
+local function is_email_account(user_id)
+  if type(nk.account_get_id) ~= "function" then
+    return true
+  end
+  local ok, account = pcall(nk.account_get_id, user_id)
+  return ok
+    and type(account) == "table"
+    and type(account.email) == "string"
+    and account.email ~= ""
+end
+
 function progression.default_profile(username, now)
   return {
     username = username or "Player",
@@ -170,21 +185,28 @@ local function ensure_leaderboard()
   return true
 end
 
-local function write_leaderboard(player, profile, state)
-  if state.rated ~= true or not ensure_leaderboard() then
+local function write_leaderboard(player, profile, state, outcome)
+  if
+    state.rated ~= true
+    or outcome == "abandoned"
+    or not is_email_account(player.user_id)
+    or not ensure_leaderboard()
+  then
     return
   end
   local ok, err = pcall(
     nk.leaderboard_record_write,
     progression.LEADERBOARD_ID,
     player.user_id,
-    profile.username,
+    profile.username or player.username or "Player",
     profile.rating,
-    0,
+    profile.wins or 0,
     {
       wins = profile.wins,
       losses = profile.losses,
+      draws = profile.draws,
       games = profile.games,
+      rated = state.rated == true,
       mode = state.mode or "quick",
     },
     "set"
@@ -270,6 +292,7 @@ function progression.finalize_match(context, state, result, now)
 
   local writes = {}
   local history_writes = {}
+  local finalized = {}
   for _, player in ipairs(players) do
     local outcome = progression.outcome_for_result(result, player.colour, player.user_id)
     local profile = progression.normalize_profile(
@@ -324,6 +347,7 @@ function progression.finalize_match(context, state, result, now)
       end
     end
     profile.updated_at = now
+    finalized[player.user_id] = profile
 
     writes[#writes + 1] = {
       collection = progression.PROFILE_COLLECTION,
@@ -337,11 +361,14 @@ function progression.finalize_match(context, state, result, now)
       user_id = player.user_id,
       value = history_record(context, state, player, outcome, rating_before, profile, opponents, now, result),
     }
-    write_leaderboard(player, profile, state)
   end
 
   commit(writes)
   commit(history_writes)
+
+  for _, player in ipairs(players) do
+    write_leaderboard(player, finalized[player.user_id], state, outcome)
+  end
 
   local social_ok, social = pcall(require, "moongames_social")
   if social_ok and type(social) == "table" and social.record_play then
@@ -410,32 +437,72 @@ function progression.profile_payload(context)
   }
 end
 
+local function normalize_leaderboard_record(record)
+  if type(record) ~= "table" then
+    return nil
+  end
+  return {
+    rank = number(record.rank, 0),
+    userId = record.owner_id or record.user_id or "",
+    username = record.username or "Player",
+    rating = math.floor(number(record.score, number(record.rating, progression.DEFAULT_RATING))),
+    metadata = type(record.metadata) == "table" and record.metadata or {},
+  }
+end
+
 function progression.leaderboard_payload(context, payload)
   local user_id = context and context.user_id
   if not user_id or user_id == "" then
-    return { ok = false, error = { code = "unauthenticated", message = "A user session is required" } }
+    return error_payload("unauthenticated", "A user session is required")
   end
   local limit = 10
   if type(payload) == "table" and payload.limit ~= nil then
     limit = math.max(1, math.min(50, number(payload.limit, 10)))
   end
+  if not ensure_leaderboard() then
+    return error_payload("leaderboard_unavailable", "The rating leaderboard is not available")
+  end
   local ok, records, _, _, _, rank_count = pcall(
     nk.leaderboard_records_list, progression.LEADERBOARD_ID, nil, limit, "", 0
   )
   if not ok or type(records) ~= "table" then
-    return { ok = true, entries = {}, me = nil, total = 0 }
+    return error_payload(
+      "leaderboard_unavailable",
+      "Could not load the rating leaderboard: " .. tostring(records)
+    )
   end
   local entries = {}
-  for index, record in ipairs(records) do
-    entries[#entries + 1] = {
-      rank = index,
-      userId = record.user_id or "",
-      username = record.username or "Player",
-      rating = number(record.rating, progression.DEFAULT_RATING),
-      metadata = type(record.metadata) == "table" and record.metadata or {},
-    }
+  for _, record in ipairs(records) do
+    local entry = normalize_leaderboard_record(record)
+    if entry and is_email_account(entry.userId) then
+      entries[#entries + 1] = entry
+    end
   end
-  return { ok = true, entries = entries, me = nil, total = math.floor(number(rank_count, #entries)) }
+  local me
+  local own_ok, own_records, own_owner_records = pcall(
+    nk.leaderboard_records_list, progression.LEADERBOARD_ID, { user_id }, 1, "", 0
+  )
+  if own_ok then
+    local own_record = own_owner_records and own_owner_records[1]
+    if not own_record and type(own_records) == "table" then
+      for _, record in ipairs(own_records) do
+        if record.owner_id == user_id then
+          own_record = record
+          break
+        end
+      end
+    end
+    me = normalize_leaderboard_record(own_record)
+    if me ~= nil and not is_email_account(me.userId) then
+      me = nil
+    end
+  end
+  return {
+    ok = true,
+    entries = entries,
+    me = me,
+    total = math.floor(number(rank_count, #entries)),
+  }
 end
 
 return progression

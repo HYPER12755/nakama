@@ -119,7 +119,7 @@ statistics or Elo.
 - `chess_rating` is an authoritative, descending, `set`-operator leaderboard.
   Its score is the current rating and its metadata carries the player's record.
 
-Quick matches are rated with Elo (default 1200, K=32). Private matches are
+Quick matches are rated with Glicko-2 (default 1200). Private matches are
 casual: they update the win/loss/draw record and history but not the rating.
 Only rated matches write to `chess_rating`, so a private-only player stays
 unranked. Abandoned matches are recorded without changing statistics or the
@@ -152,4 +152,4 @@ replay in addition to PGN and final FEN.
 
 The real multi-client smoke test passes against the local Nakama server,
 including spectator behavior, player/spectator chat, rated/casual persistence,
-Elo changes, history, and leaderboard records.
+rating changes, history, and leaderboard records.

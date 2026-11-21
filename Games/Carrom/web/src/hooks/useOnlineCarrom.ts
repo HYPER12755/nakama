@@ -258,6 +258,7 @@ export interface OnlineCarromController {
   profile: GameProfile | null;
   history: GameHistoryEntry[];
   leaderboard: GameLeaderboardEntry[];
+  leaderboardTotal: number;
   myLeaderboard: GameLeaderboardEntry | null;
   profileLoading: boolean;
   profileError: string | null;
@@ -335,6 +336,7 @@ export function useOnlineCarrom(
   const [profile, setProfile] = useState<GameProfile | null>(null);
   const [history, setHistory] = useState<GameHistoryEntry[]>([]);
   const [leaderboard, setLeaderboard] = useState<GameLeaderboardEntry[]>([]);
+  const [leaderboardTotal, setLeaderboardTotal] = useState(0);
   const [myLeaderboard, setMyLeaderboard] =
     useState<GameLeaderboardEntry | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -1187,7 +1189,15 @@ export function useOnlineCarrom(
         ok?: boolean;
         entries?: GameLeaderboardEntry[];
         me?: GameLeaderboardEntry | null;
+        total?: number;
+        error?: { message?: string };
       };
+      if (leaderboardPayload.ok !== true) {
+        throw new Error(
+          leaderboardPayload.error?.message ?? "The rating leaderboard could not be loaded.",
+        );
+      }
+      setLeaderboardTotal(leaderboardPayload.total ?? 0);
       setLeaderboard(
         Array.isArray(leaderboardPayload.entries) ? leaderboardPayload.entries : [],
       );
@@ -1482,6 +1492,7 @@ export function useOnlineCarrom(
     profile,
     history,
     leaderboard,
+    leaderboardTotal,
     myLeaderboard,
     profileLoading,
     profileError,

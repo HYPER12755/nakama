@@ -171,6 +171,12 @@ fake_nk = {
     end
     return top, {}, nil, nil, #records
   end,
+  account_get_id = function(user_id)
+    if user_id == "guest" then
+      return { devices = { { id = "device" } } }
+    end
+    return { email = "player@example.com", devices = { { id = "device" } } }
+  end,
 }
 
 package.preload["nakama"] = function()
@@ -542,6 +548,20 @@ test("leaderboard payload does not invent a record for new players", function()
   assert_equal(payload.ok, true)
   assert_equal(#payload.entries, 2)
   assert_nil(payload.me)
+end)
+
+test("guest records are not shown in the leaderboard", function()
+  reset()
+  leaderboards["chess_rating"] = {
+    records = {
+      guest = { owner_id = "guest", username = "Guest", score = 1500, rank = 1 },
+      email = { owner_id = "email", username = ".email", score = 1300, rank = 2 },
+    },
+  }
+  local payload = progression.leaderboard_payload({ user_id = "email" }, { limit = 10 })
+  assert_equal(#payload.entries, 1, "only the email account is listed")
+  assert_equal(payload.entries[1].userId, "email", "the listed account")
+  assert_equal(payload.me.userId, "email", "the caller's own row is returned")
 end)
 
 -- A game the player brought from somewhere else is kept, and it is

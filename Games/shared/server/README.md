@@ -32,10 +32,30 @@ module path. Restart Nakama after changing modules.
 | `moongames_invites` | system | Invite record at `invite_<id>`, token index at `token_<sha256>` |
 | `moongames_notification_state` | user | Read notification ids |
 | `moongames_recent_players` | user | Completed-match opponents |
+| `moongames_cleanup` | system | Hourly guest-cleanup run guard |
 
 Invite records store a hashed token, never the raw token in the token index.
 Raw tokens are returned only to the creator. Invite TTL is 24 hours. Temporary
 in-match chat is never written to storage.
+
+## Guest account cleanup
+
+`moongames_guest_cleanup.lua` starts one authoritative cleanup match after the
+first RPC, then runs a pass once an hour. It never touches a rating leaderboard.
+It deletes only device-only accounts with no email or linked provider, in
+batches of 200. Nakama removes the user row, devices, friends, notifications,
+stored objects, chat, wallet ledger, groups and leaderboard records for each
+deleted account; no tombstone is left. A storage version guard makes the run
+safe when several server nodes start the same job. Guests who play again are
+recreated by device authentication, so the job prunes stale guests rather than
+banning their device. Only email accounts are written to the rating
+leaderboards, so guests never appear there.
+
+`moongames_cleanup_guest_accounts` runs the same pass on demand. It is a
+server-key RPC: a client session is refused. Call it with the runtime HTTP key,
+for example `POST /v2/rpc/moongames_cleanup_guest_accounts?http_key=<key>` with
+the body `"{}"`. The response reports `scanned`, `deleted`, `failed` and
+`skipped` counts.
 
 ## RPC contract
 

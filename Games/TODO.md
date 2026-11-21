@@ -55,7 +55,7 @@
 ## Phase 5 — Persistence and progression
 
 - [x] Persist completed games in Nakama storage (`chess_profile`, `chess_history`).
-- [x] Add Elo/rating updates: quick matches are rated, private matches are casual.
+- [x] Add Glicko-2 rating updates: quick matches are rated, private matches are casual.
 - [x] Add the authoritative `chess_rating` leaderboard.
 - [x] Add match history UI with results and rating changes; persist PGN for later export.
 - [x] Add player profile/statistics and profile/leaderboard RPCs.

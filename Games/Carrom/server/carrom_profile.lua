@@ -34,6 +34,17 @@ local function number(value, fallback)
   return parsed
 end
 
+local function is_email_account(user_id)
+  if type(nk.account_get_id) ~= "function" then
+    return true
+  end
+  local ok, account = pcall(nk.account_get_id, user_id)
+  return ok
+    and type(account) == "table"
+    and type(account.email) == "string"
+    and account.email ~= ""
+end
+
 function progression.expected_score(rating, opponent_rating)
   return 1 / (1 + math.pow(10, (opponent_rating - rating) / 400))
 end
@@ -309,7 +320,12 @@ local function ensure_leaderboard()
 end
 
 local function write_leaderboard(player, value, state, outcome)
-  if outcome == "abandoned" or state.rated ~= true or not ensure_leaderboard() then
+  if
+    outcome == "abandoned"
+    or state.rated ~= true
+    or not is_email_account(player.user_id)
+    or not ensure_leaderboard()
+  then
     return false
   end
 
@@ -319,7 +335,7 @@ local function write_leaderboard(player, value, state, outcome)
     player.user_id,
     value.username or player.username or "Player",
     value.rating,
-    0,
+    value.wins or 0,
     {
       wins = value.wins,
       losses = value.losses,
@@ -492,6 +508,7 @@ function progression.finalize_match(context, state, result, now)
     summary = (result.winnerColour or "") .. " cleared the board"
   end
 
+  local finalized = {}
   for _, player in ipairs(players) do
     local outcome = progression.outcome_for_result(
       result,
@@ -576,6 +593,7 @@ function progression.finalize_match(context, state, result, now)
     profile.pieces_pocketed = profile.pieces_pocketed + pocketed
     profile.queens_covered = profile.queens_covered + covered
     profile.updated_at = now
+    finalized[player.user_id] = profile
 
     writes[#writes + 1] = {
       collection = progression.PROFILE_COLLECTION,
@@ -613,11 +631,14 @@ function progression.finalize_match(context, state, result, now)
       ),
     }
 
-    write_leaderboard(player, profile, state, outcome)
   end
 
   commit(writes)
   commit(history_writes)
+
+  for _, player in ipairs(players) do
+    write_leaderboard(player, finalized[player.user_id], state, outcome)
+  end
 
   -- The launcher shows the most played title in the middle of the orbit.
   local social_ok, social = pcall(require, "moongames_social")
@@ -715,9 +736,9 @@ local function normalize_leaderboard_record(record)
   local metadata = type(record.metadata) == "table" and record.metadata or {}
   return {
     rank = number(record.rank, 0),
-    userId = record.user_id or "",
+    userId = record.owner_id or record.user_id or "",
     username = record.username or "Player",
-    rating = number(record.rating, progression.DEFAULT_RATING),
+    rating = math.floor(number(record.score, number(record.rating, progression.DEFAULT_RATING))),
     metadata = metadata,
   }
 end
@@ -732,6 +753,9 @@ function progression.leaderboard_payload(context, payload)
   if type(payload) == "table" and payload.limit ~= nil then
     limit = math.max(1, math.min(50, number(payload.limit, 10)))
   end
+  if not ensure_leaderboard() then
+    return error_payload("leaderboard_unavailable", "The rating leaderboard is not available")
+  end
 
   -- The list call also returns the number of ranked players. Reading only the
   -- first page made the total equal the number of rows shown.
@@ -744,14 +768,16 @@ function progression.leaderboard_payload(context, payload)
     0
   )
   if not ok or type(records) ~= "table" then
-    return { ok = true, entries = {}, me = nil, total = 0 }
+    return error_payload(
+      "leaderboard_unavailable",
+      "Could not load the rating leaderboard: " .. tostring(records)
+    )
   end
 
   local entries = {}
-  for index, record in ipairs(records) do
+  for _, record in ipairs(records) do
     local entry = normalize_leaderboard_record(record)
-    if entry then
-      entry.rank = index
+    if entry and is_email_account(entry.userId) then
       entries[#entries + 1] = entry
     end
   end
@@ -776,6 +802,9 @@ function progression.leaderboard_payload(context, payload)
       end
     end
     me = normalize_leaderboard_record(own_record)
+    if me ~= nil and not is_email_account(me.userId) then
+      me = nil
+    end
   end
 
   return {

@@ -177,6 +177,13 @@ the pinned key, verify the descriptor signature, and verify the ZIP before
 loading it. See [catalog/README.md](catalog/README.md) for the schema and native
 examples, and [launcher/README.md](launcher/README.md) for deployment.
 
+## Environment
+
+`Games/.env` is a tracked fallback source for the stack and setup scripts. Edit
+it to change ports, bind hosts, the watchdog port or the engine allowlist. An
+explicit shell environment variable wins over `.env`; detected machine paths
+are written to `runtime/env.sh` only when nothing else set them.
+
 ## Commands
 
 ```bash
@@ -376,8 +383,8 @@ mobile QA, and real-device build validation:
   link selects Online mode, connects, and joins the target match with the right
   role. Native hosts can forward the same query from an app deep link through
   `launchQuery`; registering the platform URL scheme remains app-side.
-- Completed games are persisted in Nakama storage. Quick matches update Elo
-  ratings (default 1200, K=32); private matches are casual and do not change
+- Completed games are persisted in Nakama storage. Quick matches update Glicko-2
+  ratings (default 1200); private matches are casual and do not change
   ratings. Ratings, wins/losses/draws, recent results (with SANs and PGN), and
   the `chess_rating` leaderboard are rendered in the web sidebar.
 - Recent games can be replayed ply-by-ply from profile history, with board
@@ -440,7 +447,7 @@ mobile QA, and real-device build validation:
   private seating, spectator join/read-only behavior/result delivery,
   player/spectator chat, moves, clock broadcasts, reconnect, state snapshots,
   resignation, matchmaker pairing, delayed quick-table fallback, draw
-  agreement, casual/rated persistence, Elo changes, history, and leaderboard
+  agreement, casual/rated persistence, rating changes, history, and leaderboard
   records.
 - Carrom is the second official title and ships as a local and online
   release (`0.3.0`, signed with `dev-1`) with the `local`, `ai`, `online`,

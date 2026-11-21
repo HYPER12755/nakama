@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "generatedAt": "2026-11-21T05:52:28.252Z",
+  "generatedAt": "2026-11-21T08:05:48.983Z",
   "games": [
     {
       "id": "chess",
@@ -39,9 +39,9 @@
       "release": {
         "version": "0.8.5",
         "minHostProtocol": 2,
-        "publishedAt": "2026-11-21T05:46:11.281Z",
-        "sha256": "3a61651ce2c9e0ec54938e34a3583127a6e6b36273da85b0da00020d268705a1",
-        "size": 4837419,
+        "publishedAt": "2026-11-21T08:05:45.167Z",
+        "sha256": "22cdffa7d167793214e64ffc1f45fe878ede18da7935be038f5c5828c3ba9cfe",
+        "size": 4837376,
         "keyId": "dev-1"
       }
     },
@@ -80,9 +80,9 @@
       "release": {
         "version": "0.1.0",
         "minHostProtocol": 2,
-        "publishedAt": "2026-11-21T05:46:14.763Z",
-        "sha256": "1913fe6713696ca5cb400fd1f1a5c142e8ca00d9ddcd9fbe2c559639ea952023",
-        "size": 13789871,
+        "publishedAt": "2026-11-21T08:05:48.818Z",
+        "sha256": "ac3ca02507fc5983b9240b4eb4f0e9588ce6c8135a34340d56b90d94bceb8189",
+        "size": 13790239,
         "keyId": "dev-1"
       }
     },
@@ -120,9 +120,9 @@
       "release": {
         "version": "0.6.0",
         "minHostProtocol": 2,
-        "publishedAt": "2026-11-21T05:46:13.143Z",
-        "sha256": "ee5b185d2f6a0b45b216e8f681fa9f160ea5457934cc2030f8adcce45a5eef7f",
-        "size": 13611185,
+        "publishedAt": "2026-11-21T08:05:47.131Z",
+        "sha256": "4369463c41541353ad0adfb286ff3e8bba624a852fa76ffb39e2e293b5628984",
+        "size": 13611416,
         "keyId": "dev-1"
       }
     },

@@ -9,6 +9,15 @@ package.path = server_dir .. "/?.lua;" .. package.path
 
 local fake_time = 1700000000000
 local storage = {}
+local leaderboard_rows = {
+  {
+    owner_id = "user-a",
+    username = "Ivory",
+    score = 1300,
+    rank = 1,
+    metadata = { games = 5 },
+  },
+}
 
 local function copy(value)
   if type(value) ~= "table" then
@@ -84,19 +93,27 @@ local fake_nk = {
   leaderboard_record_read = function()
     return {}
   end,
-  leaderboard_records_list = function(_, _, _, _, _, rank_count)
+  leaderboard_records_list = function(_, owner_ids, limit, _, _, rank_count)
     local records = {}
-    records[1] = {
-      user_id = "user-a",
-      username = "Ivory",
-      rating = 1300,
-      rank = 1,
-      metadata = { games = 5 },
-    }
-    return records, {}, 0, nil, nil, rank_count or #records
+    for index = 1, math.min(limit or #leaderboard_rows, #leaderboard_rows) do
+      records[index] = leaderboard_rows[index]
+    end
+    local owners = {}
+    if type(owner_ids) == "table" then
+      for index, record in ipairs(records) do
+        owners[index] = record
+      end
+    end
+    return records, owners, nil, nil, rank_count or #leaderboard_rows
   end,
   logger_warn = function() end,
   logger_error = function() end,
+  account_get_id = function(user_id)
+    if user_id == "guest" then
+      return { devices = { { id = "device" } } }
+    end
+    return { email = "player@example.com", devices = { { id = "device" } } }
+  end,
 }
 
 package.preload["nakama"] = function()
@@ -388,6 +405,23 @@ test("the leaderboard total counts all the ranked players", function()
   )
   assert_equal(payload.total, 1, "the total comes from the rank count")
   assert_equal(#payload.entries, 1, "only one row was asked for")
+  assert_equal(payload.entries[1].userId, "user-a", "the owner id is read from the record")
+  assert_equal(payload.entries[1].rating, 1300, "the score is read from the record")
+  assert_equal(payload.entries[1].rank, 1, "the server rank is kept")
+  assert_equal(payload.me.userId, "user-a", "the caller's own row is returned")
+  assert_equal(payload.me.rating, 1300, "the caller's rating is returned")
+end)
+
+test("guest records are not shown in the leaderboard", function()
+  local previous = leaderboard_rows
+  leaderboard_rows = {
+    { owner_id = "guest", username = "Guest", score = 1500, rank = 1 },
+    { owner_id = "user-a", username = "Ivory", score = 1300, rank = 2 },
+  }
+  local payload = progression.leaderboard_payload({ user_id = "user-a" }, { limit = 10 })
+  leaderboard_rows = previous
+  assert_equal(#payload.entries, 1, "only the email account is listed")
+  assert_equal(payload.entries[1].userId, "user-a", "the listed account")
 end)
 
 test("a player who leaves loses and the ones who stayed win", function()

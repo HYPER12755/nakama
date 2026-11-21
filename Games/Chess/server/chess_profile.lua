@@ -35,6 +35,17 @@ local function number(value, fallback)
   return parsed
 end
 
+local function is_email_account(user_id)
+  if type(nk.account_get_id) ~= "function" then
+    return true
+  end
+  local ok, account = pcall(nk.account_get_id, user_id)
+  return ok
+    and type(account) == "table"
+    and type(account.email) == "string"
+    and account.email ~= ""
+end
+
 local function player_for_color(state, color)
   for _, user_id in ipairs(state.player_order or {}) do
     local player = state.players and state.players[user_id]
@@ -348,7 +359,7 @@ local function ensure_leaderboard()
     {
       title = "MoonGames Chess Rating",
       game = "chess",
-      rating = "Glicko",
+      rating = "Glicko-2",
     },
     true
   )
@@ -367,6 +378,7 @@ local function write_leaderboard(player, value, state, outcome)
   if
     outcome == "abandoned"
     or state.rated ~= true
+    or not is_email_account(player.user_id)
     or not ensure_leaderboard()
   then
     return false
@@ -378,7 +390,7 @@ local function write_leaderboard(player, value, state, outcome)
     player.user_id,
     value.username or player.username or "Player",
     value.rating,
-    0,
+    value.wins or 0,
     {
       wins = value.wins,
       losses = value.losses,
@@ -844,8 +856,8 @@ function progression.leaderboard_payload(context, payload)
     return error_payload("unauthenticated", "A user session is required")
   end
 
-  local requested = number(payload and payload.limit, 5)
-  local limit = math.max(1, math.min(25, math.floor(requested)))
+  local requested = number(payload and payload.limit, 10)
+  local limit = math.max(1, math.min(50, math.floor(requested)))
   if not ensure_leaderboard() then
     return error_payload(
       "leaderboard_unavailable",
@@ -871,7 +883,7 @@ function progression.leaderboard_payload(context, payload)
   local entries = {}
   for _, record in ipairs(records or {}) do
     local entry = normalize_leaderboard_record(record)
-    if entry then
+    if entry and is_email_account(entry.userId) then
       entries[#entries + 1] = entry
     end
   end
@@ -896,6 +908,9 @@ function progression.leaderboard_payload(context, payload)
       end
     end
     me = normalize_leaderboard_record(own_record)
+    if me ~= nil and not is_email_account(me.userId) then
+      me = nil
+    end
   end
 
   return {

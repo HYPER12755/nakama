@@ -897,7 +897,8 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               profile={online.profile}
               history={online.history}
               leaderboard={online.leaderboard}
-              myLeaderboard={online.leaderboard.find((entry) => entry.userId === online.myUserId) ?? null}
+              leaderboardTotal={online.leaderboardTotal}
+              myLeaderboard={online.myLeaderboard}
               loading={online.profileLoading}
               error={online.profileError}
               onRefresh={() => void online.refreshProfile()}

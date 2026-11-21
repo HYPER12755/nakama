@@ -15,11 +15,11 @@
     "invite-links",
     "replay"
   ],
-  "publishedAt": "2026-11-21T05:46:11.281Z",
-  "sha256": "3a61651ce2c9e0ec54938e34a3583127a6e6b36273da85b0da00020d268705a1",
-  "size": 4837419,
+  "publishedAt": "2026-11-21T08:05:45.167Z",
+  "sha256": "22cdffa7d167793214e64ffc1f45fe878ede18da7935be038f5c5828c3ba9cfe",
+  "size": 4837376,
   "url": "chess/0.8.5/chess-0.8.5.zip",
   "keyId": "dev-1",
   "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE=",
-  "signature": "xEFMzx5bsWhgPXLD0uhS+atAFpgClyvL7wyP9uCzZhxvwu0KyzJ6pMHdzHNhgdqrkMX3P/zPF0463h/UAqvABQ=="
+  "signature": "MJk/ANSmpXu9SBpoZEZ88836CCuR5aBWxfD0yQeRuuKXzm3dTV2wM9Ly1buXx/VKcZvN4SVteLDiWiGoZj1lBg=="
 }

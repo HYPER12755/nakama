@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "generatedAt": "2026-11-21T05:46:14.853Z",
+  "generatedAt": "2026-11-21T08:05:48.915Z",
   "signers": {
     "dev-1": {
       "algorithm": "ed25519",
@@ -25,13 +25,13 @@
         "invite-links",
         "replay"
       ],
-      "publishedAt": "2026-11-21T05:46:13.143Z",
-      "sha256": "ee5b185d2f6a0b45b216e8f681fa9f160ea5457934cc2030f8adcce45a5eef7f",
-      "size": 13611185,
+      "publishedAt": "2026-11-21T08:05:47.131Z",
+      "sha256": "4369463c41541353ad0adfb286ff3e8bba624a852fa76ffb39e2e293b5628984",
+      "size": 13611416,
       "url": "carrom/0.6.0/carrom-0.6.0.zip",
       "keyId": "dev-1",
       "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE=",
-      "signature": "BOLFyabcjLNw4hAwJqQwhsQJ4NR1i6fDwVvjv6LfDjHQKpDifNGmwx5c4E3T3Y7OI6tkCDmVLrfPhiP6TgCzBQ=="
+      "signature": "ttNPEdRTulNwhChGEz0H4IiJXE5CrsWxOfhgSba8Z74FAhnkFvo/L7bWZ4nTbQ7oJwXRAgBw477iZ7NiWk/PAw=="
     },
     {
       "format": 1,
@@ -50,13 +50,13 @@
         "invite-links",
         "replay"
       ],
-      "publishedAt": "2026-11-21T05:46:11.281Z",
-      "sha256": "3a61651ce2c9e0ec54938e34a3583127a6e6b36273da85b0da00020d268705a1",
-      "size": 4837419,
+      "publishedAt": "2026-11-21T08:05:45.167Z",
+      "sha256": "22cdffa7d167793214e64ffc1f45fe878ede18da7935be038f5c5828c3ba9cfe",
+      "size": 4837376,
       "url": "chess/0.8.5/chess-0.8.5.zip",
       "keyId": "dev-1",
       "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE=",
-      "signature": "xEFMzx5bsWhgPXLD0uhS+atAFpgClyvL7wyP9uCzZhxvwu0KyzJ6pMHdzHNhgdqrkMX3P/zPF0463h/UAqvABQ=="
+      "signature": "MJk/ANSmpXu9SBpoZEZ88836CCuR5aBWxfD0yQeRuuKXzm3dTV2wM9Ly1buXx/VKcZvN4SVteLDiWiGoZj1lBg=="
     },
     {
       "format": 1,
@@ -75,13 +75,13 @@
         "invite-links",
         "replay"
       ],
-      "publishedAt": "2026-11-21T05:46:14.763Z",
-      "sha256": "1913fe6713696ca5cb400fd1f1a5c142e8ca00d9ddcd9fbe2c559639ea952023",
-      "size": 13789871,
+      "publishedAt": "2026-11-21T08:05:48.818Z",
+      "sha256": "ac3ca02507fc5983b9240b4eb4f0e9588ce6c8135a34340d56b90d94bceb8189",
+      "size": 13790239,
       "url": "ludo/0.1.0/ludo-0.1.0.zip",
       "keyId": "dev-1",
       "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE=",
-      "signature": "57Eo1loPr83av0bZpPt3y3GE63xCTOcci5DdLWUGHHZFIx5/+vjWzZujB13kLXXNvsH7rM/QG+7bNbENUFY4BQ=="
+      "signature": "AeTKnHf+dzqYqJ3HG5ZHiVTEIm/QLx6N51xbJ8sTeNGdsgbk0+TnjhzYOS0xBksf0dgwm9jzuvjtvGcfrUaeCA=="
     }
   ]
 }

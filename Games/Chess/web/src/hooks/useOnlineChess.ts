@@ -165,6 +165,7 @@ export interface OnlineChessController {
   profile: OnlineProfile | null;
   history: OnlineHistoryEntry[];
   leaderboard: OnlineLeaderboardEntry[];
+  leaderboardTotal: number;
   myLeaderboard: OnlineLeaderboardEntry | null;
   profileLoading: boolean;
   profileError: string | null;
@@ -496,6 +497,7 @@ export function useOnlineChess(
   const [profile, setProfile] = useState<OnlineProfile | null>(null);
   const [history, setHistory] = useState<OnlineHistoryEntry[]>([]);
   const [leaderboard, setLeaderboard] = useState<OnlineLeaderboardEntry[]>([]);
+  const [leaderboardTotal, setLeaderboardTotal] = useState(0);
   const [myLeaderboard, setMyLeaderboard] =
     useState<OnlineLeaderboardEntry | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -896,6 +898,7 @@ export function useOnlineChess(
     setProfile(null);
     setHistory([]);
     setLeaderboard([]);
+    setLeaderboardTotal(0);
     setMyLeaderboard(null);
     setProfileError(null);
     setProfileLoading(false);
@@ -1460,7 +1463,7 @@ export function useOnlineChess(
     void (async () => {
       const [profileResult, leaderboardResult] = await Promise.allSettled([
         client.rpc(currentSession, "chess_get_profile", {}),
-        client.rpc(currentSession, "chess_get_leaderboard", { limit: 5 }),
+        client.rpc(currentSession, "chess_get_leaderboard", { limit: 10 }),
       ]);
 
       if (cancelled) {
@@ -1493,6 +1496,7 @@ export function useOnlineChess(
           setLeaderboard(
             Array.isArray(payload.entries) ? payload.entries : [],
           );
+          setLeaderboardTotal(payload.total ?? 0);
           setMyLeaderboard(payload.me ?? null);
         } else if (nextError === null) {
           nextError =
@@ -3170,6 +3174,7 @@ export function useOnlineChess(
     profile,
     history,
     leaderboard,
+    leaderboardTotal,
     myLeaderboard,
     profileLoading,
     profileError,
