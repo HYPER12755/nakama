@@ -332,26 +332,22 @@ interface OpponentHandProps {
 }
 
 function OpponentHand({ player, zone, active, art }: OpponentHandProps) {
-  const visible = Math.min(player.count, 7);
-  const cascadeTransform = (index: number): string => {
-    const offset = index * 7;
-    if (zone === "top") return `translateX(${-offset}px)`;
-    if (zone === "left") return `translateX(${offset}px)`;
-    return `translateX(${-offset}px)`;
-  };
-  const cards = Array.from({ length: visible }, (_, index) => (
-    <img
-      key={index}
-      className="uno-opponent-card"
-      src={art("card-back")}
-      alt=""
-      style={{
-        transform: cascadeTransform(index),
-        zIndex: index + 1,
-        animationDelay: `${(index * 4 + player.seat) * 80}ms`,
-      }}
-    />
-  ));
+  const cards = Array.from({ length: player.count }, (_, index) => {
+    const fraction = player.count > 1 ? index / (player.count - 1) : 0;
+    return (
+      <img
+        key={index}
+        className="uno-opponent-card"
+        src={art("card-back")}
+        alt=""
+        style={{
+          left: `calc((100% - var(--uno-card-w)) * ${fraction})`,
+          zIndex: index + 1,
+          animationDelay: `${(index * 4 + player.seat) * 80}ms`,
+        }}
+      />
+    );
+  });
   return (
     <div
       className={`uno-opponent-hand uno-opponent-hand--${zone}${active ? " uno-opponent-hand--active" : ""}`}
@@ -363,7 +359,7 @@ function OpponentHand({ player, zone, active, art }: OpponentHandProps) {
       </div>
       <div className="uno-opponent-cards" aria-hidden="true">
         {cards}
-        {player.count > 7 && <span className="uno-seat-extra">+{player.count - 7}</span>}
+
       </div>
     </div>
   );
