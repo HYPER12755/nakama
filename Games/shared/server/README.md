@@ -25,6 +25,10 @@ Nakama loads both `Games/shared/server/` and each game's `server/` directory.
 `pnpm stack sync` and `tools/sync-nakama-modules.sh` copy both into the runtime
 module path. Restart Nakama after changing modules.
 
+`moongames_config.lua` reads values from Nakama's `runtime.env`, which setup
+fills from `Games/.env`. Lua modules call `config.get(name, fallback)` to read
+the same settings the stack and engine service use.
+
 ## Storage
 
 | Collection | Owner | Contents |

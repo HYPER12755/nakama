@@ -1,6 +1,9 @@
 local nk = require("nakama")
+local config = require("moongames_config")
 
-local CLEANUP_INTERVAL_MS = 60 * 60 * 1000
+local CLEANUP_INTERVAL_MS = tonumber(
+  config.get("MOONGAMES_CLEANUP_INTERVAL_MS", "3600000")
+) or 60 * 60 * 1000
 local BATCH_LIMIT = 200
 local GUARD_COLLECTION = "moongames_cleanup"
 local GUARD_KEY = "guest_accounts"

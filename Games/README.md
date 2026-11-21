@@ -179,10 +179,13 @@ examples, and [launcher/README.md](launcher/README.md) for deployment.
 
 ## Environment
 
-`Games/.env` is a tracked fallback source for the stack and setup scripts. Edit
-it to change ports, bind hosts, the watchdog port or the engine allowlist. An
-explicit shell environment variable wins over `.env`; detected machine paths
-are written to `runtime/env.sh` only when nothing else set them.
+`Games/.env` is a tracked fallback source for the stack, setup scripts and the
+Nakama server. Edit it to change ports, bind hosts, the watchdog port or the
+engine allowlist. Setup copies every entry into `runtime.nakama.yml` under
+`runtime.env`, where Lua modules read it through `moongames_config.get` (or
+`nk.get_context().env`). An explicit shell environment variable wins over
+`.env`; detected machine paths are written to `runtime/env.sh` only when nothing
+else set them.
 
 ## Commands
 

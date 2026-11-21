@@ -113,6 +113,14 @@ package.preload["nakama"] = function()
   return fake_nk
 end
 
+package.preload["moongames_config"] = function()
+  return {
+    get = function(name, fallback)
+      return fallback
+    end,
+  }
+end
+
 local cleanup = dofile("shared/server/moongames_guest_cleanup.lua")
 
 test("registers the manual RPC and an after-RPC runner", function()

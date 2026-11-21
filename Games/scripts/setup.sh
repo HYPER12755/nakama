@@ -267,16 +267,37 @@ ensure_postgres() {
 }
 
 generate_config() {
-  if [[ -f "$NAKAMA_CONFIG" && $FORCE -eq 0 ]]; then
-    ok "Local Nakama config already exists"
-    return
+  local password=""
+  if [[ -f "$NAKAMA_CONFIG" ]]; then
+    local line
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      case "$line" in
+        *password:*)
+          password="${line#*password:}"
+          password="${password#"${password%%[![:space:]]*}"}"
+          break
+          ;;
+      esac
+    done < "$NAKAMA_CONFIG"
   fi
-  local password
-  password="$(openssl rand -hex 12 2>/dev/null || true)"
+  if [[ -z "$password" ]]; then
+    password="$(openssl rand -hex 12 2>/dev/null || true)"
+  fi
   if [[ -z "$password" ]]; then
     password="$(tr -d '-' </proc/sys/kernel/random/uuid 2>/dev/null || true)"
   fi
   [[ -n "$password" ]] || fail "Could not generate a console password"
+
+  local runtime_env="" raw
+  if [[ -f "$GAMES_ROOT/.env" ]]; then
+    while IFS= read -r raw || [[ -n "$raw" ]]; do
+      raw="${raw%$'\r'}"
+      case "$raw" in ''|'#'*) continue ;; esac
+      [[ "$raw" == *=* ]] || continue
+      runtime_env+="    - $raw"$'\n'
+    done < "$GAMES_ROOT/.env"
+  fi
+
   mkdir -p "$NAKAMA_DIR"
   cat > "$NAKAMA_CONFIG" <<EOF
 name: moongames-local
@@ -292,9 +313,13 @@ database:
 
 session:
   token_expiry_sec: 7200
+
+runtime:
+  env:
+${runtime_env}
 EOF
   chmod 600 "$NAKAMA_CONFIG"
-  ok "Wrote $NAKAMA_CONFIG (console password generated locally)"
+  ok "Wrote $NAKAMA_CONFIG (console password preserved, .env passed to Nakama)"
 }
 
 write_env() {
