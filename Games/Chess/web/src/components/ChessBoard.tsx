@@ -51,6 +51,15 @@ function displayPosition(square: Square, flipped: boolean) {
   };
 }
 
+function squareAt(x: number, y: number): Square | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const element = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-square]");
+  const square = element?.dataset.square;
+  return square === undefined ? null : (square as Square);
+}
+
 function motionBetween(
   from: Square,
   to: Square,
@@ -94,7 +103,8 @@ export const ChessBoard = memo(function ChessBoard({
     x: number;
     y: number;
     moved: boolean;
-  }>({ square: null, x: 0, y: 0, moved: false });
+    handled: boolean;
+  }>({ square: null, x: 0, y: 0, moved: false, handled: false });
   // A drag ends with a click, and the click must not move the piece again.
   const skipClickRef = useRef(false);
   const skipClickTimerRef = useRef<number | null>(null);
@@ -143,17 +153,15 @@ export const ChessBoard = memo(function ChessBoard({
       x: event.clientX,
       y: event.clientY,
       moved: false,
+      handled: false,
     };
 
-    // The piece is picked up, so the squares it may go to are shown. A
-    // square the piece may go to is left alone, so that the piece is moved
-    // by the drop and not by the press.
     const isTarget = targets.has(square);
     if (isTarget || selected === square) {
       return;
     }
     onSquareClick(square);
-    // The click that follows the press must not undo the picking up.
+    dragRef.current.handled = true;
     skipNextClick();
   };
 
@@ -171,35 +179,48 @@ export const ChessBoard = memo(function ChessBoard({
     setDragging(drag.square);
   };
 
-  const handlePointerUp = (square: Square) => {
+  const handlePointerUp = (
+    square: Square,
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) => {
     const drag = dragRef.current;
-    dragRef.current = { square: null, x: 0, y: 0, moved: false };
+    dragRef.current = { square: null, x: 0, y: 0, moved: false, handled: false };
     setDragging(null);
 
     if (drag.square === null) {
       return;
     }
 
-    if (!drag.moved) {
-      // A tap on a destination square is a move even when the browser does
-      // not follow pointerup with a click. A later real click is ignored.
-      if (targets.has(square) && selected !== null) {
-        skipNextClick();
-        onSquareClick(square);
+    skipNextClick();
+    const dropSquare = squareAt(event.clientX, event.clientY) ?? square;
+
+    if (drag.moved) {
+      if (onMove !== undefined) {
+        onMove(drag.square, dropSquare);
       }
       return;
     }
 
-    if (onMove === undefined) {
+    if (targets.has(dropSquare) && selected !== null && dropSquare !== selected) {
+      onSquareClick(dropSquare);
       return;
     }
-    // The click that follows the drag must not move the piece a second time.
-    skipNextClick();
-    onMove(drag.square, square);
+    if (drag.handled) {
+      return;
+    }
+    if (dropSquare === selected) {
+      onSquareClick(dropSquare);
+    }
   };
 
-  const handleClick = (square: Square) => {
+  const handleClick = (
+    square: Square,
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
     if (consumeSkipClick()) {
+      return;
+    }
+    if (draggingAllowed && event.detail > 0) {
       return;
     }
     if (moveEvent === MoveEvent.Drag) {
@@ -302,16 +323,17 @@ export const ChessBoard = memo(function ChessBoard({
                 ? undefined
                 : { overflow: "visible", zIndex: 8 }
             }
-            onClick={() => handleClick(square)}
+            onClick={(event) => handleClick(square, event)}
             onPointerDown={(event) => handlePointerDown(square, event)}
             onPointerMove={handlePointerMove}
-            onPointerUp={() => handlePointerUp(square)}
+            onPointerUp={(event) => handlePointerUp(square, event)}
             onPointerCancel={() => {
-              dragRef.current = { square: null, x: 0, y: 0, moved: false };
+              dragRef.current = { square: null, x: 0, y: 0, moved: false, handled: false };
               setDragging(null);
             }}
             aria-label={label}
             aria-pressed={isSelected}
+            data-square={square}
           >
             {showFile && (
               <span className="coord coord--file" aria-hidden="true">

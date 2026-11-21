@@ -3660,6 +3660,7 @@ button {
 
 .toast {
   color: var(--text);
+  pointer-events: none;
 }
 
 @keyframes rise {

@@ -2,6 +2,7 @@ node_modules/
 .vite/
 runtime/
 .keys/
+releases/**/*.zip
 Chess/dist/
 Chess/releases/
 Carrom/dist/

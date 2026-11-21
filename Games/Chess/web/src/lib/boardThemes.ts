@@ -239,7 +239,6 @@ export function boardThemeStyle(theme: BoardTheme): Record<string, string> {
     style["--board-sheen"] = "transparent";
   } else {
     style["--board-texture"] = "none";
-    style["--board-squares"] = "var(--board-light)";
     style["--board-light"] = theme.light ?? "#e9dfcb";
     style["--board-dark"] = theme.dark ?? "#64766c";
   }

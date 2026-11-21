@@ -84,6 +84,12 @@ describe("the colouring of the board", () => {
     expect(house.light).toMatch(/^#[0-9a-f]{6}$/i);
     expect(house.dark).toMatch(/^#[0-9a-f]{6}$/i);
 
+    const houseStyle = boardThemeStyle(house);
+    expect(houseStyle["--board-texture"]).toBe("none");
+    expect(houseStyle["--board-squares"]).toBeUndefined();
+    expect(houseStyle["--board-light"]).toBe(house.light);
+    expect(houseStyle["--board-dark"]).toBe(house.dark);
+
     const style = boardThemeStyle(boardTheme("wood"));
     expect(style["--board-texture"]).toBe('url("boards/wood.jpg")');
     expect(style["--board-squares"]).toBe("transparent");
