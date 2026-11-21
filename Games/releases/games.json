@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "generatedAt": "2026-11-21T08:14:26.625Z",
+  "generatedAt": "2026-11-21T17:15:08.842Z",
   "games": [
     {
       "id": "chess",
@@ -42,6 +42,46 @@
         "publishedAt": "2026-11-21T08:14:22.956Z",
         "sha256": "22cdffa7d167793214e64ffc1f45fe878ede18da7935be038f5c5828c3ba9cfe",
         "size": 4837376,
+        "keyId": "dev-1"
+      }
+    },
+    {
+      "id": "uno",
+      "name": "Uno",
+      "tagline": "Match the colour. Empty your hand. Win.",
+      "description": "The classic colour-matching card game. Play locally or online with two to four players, with wild cards, action cards and a fullscreen table.",
+      "status": "available",
+      "minPlayers": 2,
+      "maxPlayers": 4,
+      "capabilities": [
+        "local",
+        "ai",
+        "online",
+        "private-match",
+        "spectators",
+        "invite-links",
+        "replay"
+      ],
+      "orientation": "any",
+      "tags": [
+        "cards",
+        "family",
+        "classic",
+        "local",
+        "ai"
+      ],
+      "accent": "#e8402a",
+      "icon": "cards",
+      "featured": false,
+      "sortOrder": 25,
+      "webPath": "uno/",
+      "version": "0.1.0",
+      "release": {
+        "version": "0.1.0",
+        "minHostProtocol": 2,
+        "publishedAt": "2026-11-21T17:15:08.641Z",
+        "sha256": "4521937f05beb77a82b1b571c6ac1194a81eb9eb61c3e6b850305f145b473bb8",
+        "size": 271806,
         "keyId": "dev-1"
       }
     },
@@ -125,26 +165,6 @@
         "size": 13611416,
         "keyId": "dev-1"
       }
-    },
-    {
-      "id": "cards",
-      "name": "Card Game",
-      "tagline": "A fresh social card game built around color, numbers, and bold choices.",
-      "description": "An original MoonGames card game for quick online and local rounds. The final name, artwork, and rules will be announced when the game enters preview.",
-      "status": "coming-soon",
-      "minPlayers": 2,
-      "maxPlayers": 8,
-      "capabilities": [],
-      "orientation": "any",
-      "tags": [
-        "cards",
-        "social",
-        "party"
-      ],
-      "accent": "#ff6b6b",
-      "icon": "cards",
-      "featured": false,
-      "sortOrder": 20
     }
   ]
 }

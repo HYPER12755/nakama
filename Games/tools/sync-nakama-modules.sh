@@ -6,6 +6,7 @@ GAMES_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 CHESS_DIR="$GAMES_DIR/Chess/server"
 CARROM_DIR="$GAMES_DIR/Carrom/server"
 LUDO_DIR="$GAMES_DIR/Ludo/server"
+UNO_DIR="$GAMES_DIR/Uno/server"
 SHARED_DIR="$GAMES_DIR/shared/server"
 DESTINATION="${MOONGAMES_NAKAMA_MODULES:-$GAMES_DIR/runtime/modules}"
 
@@ -59,4 +60,16 @@ for module in \
   fi
 done
 
-printf 'Synced shared, Chess, Carrom, and Ludo Lua modules to %s\n' "$DESTINATION"
+for module in \
+  uno_rules.lua \
+  uno_protocol.lua \
+  uno_match.lua \
+  uno_rpc.lua \
+  uno_glicko.lua \
+  uno_profile.lua; do
+  if [[ -f "$UNO_DIR/$module" ]]; then
+    cp "$UNO_DIR/$module" "$DESTINATION/$module"
+  fi
+done
+
+printf 'Synced shared, Chess, Carrom, Ludo, and Uno Lua modules to %s\n' "$DESTINATION"

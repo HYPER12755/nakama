@@ -28,6 +28,13 @@ Carrom/
 ├── core/                  # deterministic physics + rules engine (no UI, no network)
 └── web/                   # portable canvas board UI (React + Vite)
 
+Uno/
+├── manifest.json          # package metadata and capabilities
+├── core/                  # deterministic classic card rules (no UI, no network)
+├── web/                   # fullscreen portable card table (React + Vite)
+├── server/                # authoritative Nakama runtime logic (Lua)
+└── tests/                 # shared rules/parity vectors
+
 shared/sdk/                # bridge, manifest, protocol, catalog, and bundle contracts
 catalog/                   # public games.json metadata for menus and native apps
 launcher/                  # browser game menu (React + Vite)

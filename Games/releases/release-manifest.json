@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "generatedAt": "2026-11-21T08:14:26.561Z",
+  "generatedAt": "2026-11-21T17:15:08.755Z",
   "signers": {
     "dev-1": {
       "algorithm": "ed25519",
@@ -82,6 +82,31 @@
       "keyId": "dev-1",
       "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE=",
       "signature": "AeTKnHf+dzqYqJ3HG5ZHiVTEIm/QLx6N51xbJ8sTeNGdsgbk0+TnjhzYOS0xBksf0dgwm9jzuvjtvGcfrUaeCA=="
+    },
+    {
+      "format": 1,
+      "gameId": "uno",
+      "gameName": "Uno",
+      "version": "0.1.0",
+      "sdkVersion": "0.1.0",
+      "minHostProtocol": 2,
+      "entry": "index.html",
+      "capabilities": [
+        "local",
+        "ai",
+        "online",
+        "private-match",
+        "spectators",
+        "invite-links",
+        "replay"
+      ],
+      "publishedAt": "2026-11-21T17:15:08.641Z",
+      "sha256": "4521937f05beb77a82b1b571c6ac1194a81eb9eb61c3e6b850305f145b473bb8",
+      "size": 271806,
+      "url": "uno/0.1.0/uno-0.1.0.zip",
+      "keyId": "dev-1",
+      "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE=",
+      "signature": "dMT05d3iF2E9azDhUXJdx/aSst6brYTBuMKCY9j+FgSdY66tgoVoXrISLH90dqPrM4wAJ0orVkXnluXVWkcJCw=="
     }
   ]
 }

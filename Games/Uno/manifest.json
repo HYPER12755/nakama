@@ -1,0 +1,28 @@
+{
+  "id": "uno",
+  "name": "Uno",
+  "version": "0.1.0",
+  "sdkVersion": "0.1.0",
+  "entry": "index.html",
+  "minPlayers": 2,
+  "maxPlayers": 4,
+  "capabilities": [
+    "local",
+    "ai",
+    "online",
+    "private-match",
+    "spectators",
+    "invite-links",
+    "replay"
+  ],
+  "orientation": "any",
+  "description": "The classic colour-matching card game. Play locally or online with two to four players, with wild cards, action cards and a fullscreen table.",
+  "tagline": "Match the colour. Empty your hand. Win.",
+  "status": "available",
+  "tags": ["cards", "family", "classic", "local", "ai"],
+  "accent": "#e8402a",
+  "icon": "cards",
+  "featured": false,
+  "sortOrder": 25,
+  "webPath": "uno/"
+}

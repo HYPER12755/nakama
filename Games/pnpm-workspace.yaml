@@ -3,6 +3,7 @@ packages:
   - "Chess/*"
   - "Carrom/*"
   - "Ludo/*"
+  - "Uno/*"
   - "launcher"
   - "hosts/*"
 

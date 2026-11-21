@@ -80,6 +80,7 @@ reset_state() {
     "$GAMES_ROOT/Chess/dist" \
     "$GAMES_ROOT/Carrom/dist" \
     "$GAMES_ROOT/Ludo/dist" \
+    "$GAMES_ROOT/Uno/dist" \
     "$GAMES_ROOT/launcher/dist" \
     "$GAMES_ROOT/tools/engine-service/engine-service"
   ok "Generated state wiped"
@@ -393,7 +394,7 @@ build_engine_service() {
 
 package_releases() {
   info "Building and signing release bundles"
-  (cd "$GAMES_ROOT" && pnpm package:chess && pnpm package:carrom && pnpm package:ludo)
+  (cd "$GAMES_ROOT" && pnpm package:chess && pnpm package:carrom && pnpm package:ludo && pnpm package:uno)
   info "Generating the release manifest and catalog"
   (cd "$GAMES_ROOT" && pnpm release:manifest && pnpm catalog:generate)
 }

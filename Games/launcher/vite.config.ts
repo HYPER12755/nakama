@@ -70,6 +70,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/ludo/, "/"),
         },
+        "/uno": {
+          target: "http://127.0.0.1:5177",
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/uno/, "/"),
+        },
         "/release-manifest.json": {
           target: "http://127.0.0.1:8099",
           changeOrigin: true,

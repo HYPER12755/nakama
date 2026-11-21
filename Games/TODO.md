@@ -210,7 +210,7 @@ hosts are file-backed and should load only the single-entry subset.
 
 ## Phase 8 — Other games
 
-- [ ] Uno-style original card game (core, UI, Lua server).
+- [x] Uno-style original card game (core, UI, Lua server).
 - [x] Ludo (core, UI, Lua server): deterministic 52-square rules with seeded
   dice, captures, walls and exact finishes; authoritative Nakama match and
   RPCs with TS↔Lua parity vectors; hand-drawn canvas board; local, computer

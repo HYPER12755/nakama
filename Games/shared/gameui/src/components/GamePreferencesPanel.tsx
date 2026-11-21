@@ -108,6 +108,13 @@ export interface GamePreferencesPanelProps {
   onPreviewSound?: () => void;
   /** The name shown above the choices. */
   title?: string;
+  /** Names for the four art picker rows, when a game uses them for other things. */
+  labels?: {
+    pieceSets?: string;
+    diceSets?: string;
+    themes?: string;
+    soundSets?: string;
+  };
 }
 
 /** The group of choices a picker is showing. */
@@ -131,6 +138,7 @@ export function GamePreferencesPanel({
   features = {},
   onPreviewSound,
   title = "Look and sound",
+  labels = {},
 }: GamePreferencesPanelProps) {
   const {
     preferences,
@@ -210,7 +218,7 @@ export function GamePreferencesPanel({
               {chosenPieces?.preview ?? null}
               {chosenPieces?.previewDark ?? null}
             </span>
-            <span className="pref-row__label">Pieces</span>
+            <span className="pref-row__label">{labels.pieceSets ?? "Pieces"}</span>
             <span className="pref-row__value">
               {chosenPieces?.label ?? preferences.pieceSet}
             </span>
@@ -227,7 +235,7 @@ export function GamePreferencesPanel({
             <span className="pref-row__preview pref-row__preview--pieces">
               {chosenDice?.preview ?? null}
             </span>
-            <span className="pref-row__label">Dice</span>
+            <span className="pref-row__label">{labels.diceSets ?? "Dice"}</span>
             <span className="pref-row__value">
               {chosenDice?.label ?? preferences.diceSet}
             </span>
@@ -245,7 +253,7 @@ export function GamePreferencesPanel({
               className="pref-row__preview pref-row__preview--board"
               style={boardPreviewStyle(chosenTheme)}
             />
-            <span className="pref-row__label">Board</span>
+            <span className="pref-row__label">{labels.themes ?? "Board"}</span>
             <span className="pref-row__value">
               {chosenTheme?.label ?? preferences.boardTheme}
             </span>
@@ -264,7 +272,7 @@ export function GamePreferencesPanel({
           >
             <Icon name="volume" size={16} />
           </button>
-          <span className="pref-row__label">Sound</span>
+          <span className="pref-row__label">{labels.soundSets ?? "Sound"}</span>
           <button
             type="button"
             className="pref-row__value pref-row__value--button"
@@ -272,17 +280,19 @@ export function GamePreferencesPanel({
           >
             {chosenSounds?.label ?? preferences.soundSet}
           </button>
-          <input
-            className="pref-row__volume"
-            type="range"
-            min={0}
-            max={100}
-            aria-label="The volume of the table"
-            value={Math.round(preferences.soundVolume * 100)}
-            onChange={(event) =>
-              choose("soundVolume", Number(event.target.value) / 100)
-            }
-          />
+          {labels.soundSets === undefined ? (
+            <input
+              className="pref-row__volume"
+              type="range"
+              min={0}
+              max={100}
+              aria-label="The volume of the table"
+              value={Math.round(preferences.soundVolume * 100)}
+              onChange={(event) =>
+                choose("soundVolume", Number(event.target.value) / 100)
+              }
+            />
+          ) : null}
         </div>
 
         <label className="pref-row pref-row--toggle">
@@ -663,7 +673,7 @@ export function GamePreferencesPanel({
 
       {picker === "pieces" && (
         <PreferencePicker
-          title="Pieces"
+          title={labels.pieceSets ?? "Pieces"}
           onClose={() => setPicker(null)}
         >
           <div className="pref-picker__grid pref-picker__grid--pieces">
@@ -691,7 +701,7 @@ export function GamePreferencesPanel({
       )}
 
       {picker === "dice" && (
-        <PreferencePicker title="Dice" onClose={() => setPicker(null)}>
+        <PreferencePicker title={labels.diceSets ?? "Dice"} onClose={() => setPicker(null)}>
           <div className="pref-picker__grid">
             {diceSets.map((choice) => (
               <button
@@ -716,7 +726,7 @@ export function GamePreferencesPanel({
       )}
 
       {picker === "board" && (
-        <PreferencePicker title="Board" onClose={() => setPicker(null)}>
+        <PreferencePicker title={labels.themes ?? "Board"} onClose={() => setPicker(null)}>
           <div className="pref-picker__grid pref-picker__grid--boards">
             {themes.map((choice) => (
               <button
@@ -742,7 +752,7 @@ export function GamePreferencesPanel({
       )}
 
       {picker === "sounds" && (
-        <PreferencePicker title="Sound" onClose={() => setPicker(null)}>
+        <PreferencePicker title={labels.soundSets ?? "Sound"} onClose={() => setPicker(null)}>
           <div className="pref-picker__grid pref-picker__grid--sounds">
             {soundSets.map((choice) => (
               <button
