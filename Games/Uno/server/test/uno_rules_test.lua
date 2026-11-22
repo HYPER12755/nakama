@@ -2620,6 +2620,98 @@ test("speed pack crash draws the current pace and resets to one", function()
   assert_equal(crashed.turn, 2, "turn passed")
 end)
 
+local function all_wild_staged(hand, seats, seed)
+  local names = { "p1", "p2", "p3" }
+  local seat_list = {}
+  for index = 1, (seats or 3) do
+    seat_list[index] = { id = names[index], name = names[index] }
+  end
+  local game = rules.create_game(seed or 4242, seat_list, 0, "allWild")
+  game.turn = 1
+  game.direction = 1
+  game.current_color = "red"
+  game.drawn_card_id = nil
+  game.pending_challenge = nil
+  game.pending_stack = nil
+  game.pending_hit = nil
+  game.pending_roulette = nil
+  game.finished = false
+  game.winner = nil
+  game.events = {}
+  game.replay = {}
+  game.players[1].hand = hand
+  for index = 2, #game.players do
+    game.players[index].hand = {}
+  end
+  return game
+end
+
+test("builds the 112 card all wild deck", function()
+  local deck = rules.build_deck("allWild")
+  assert_equal(#deck, 112, "deck size")
+  local counts = {
+    awWild = 0, awReverse = 0, awSkip = 0, awSkipTwo = 0,
+    awDrawTwo = 0, awDrawFour = 0, awTargetDrawTwo = 0, awForcedSwap = 0,
+  }
+  for _, card in ipairs(deck) do
+    if counts[card.kind] ~= nil then
+      counts[card.kind] = counts[card.kind] + 1
+    end
+  end
+  assert_equal(counts.awWild, 54, "plain wild count")
+  assert_equal(counts.awReverse, 14, "reverse count")
+  assert_equal(counts.awSkip, 14, "skip count")
+  assert_equal(counts.awSkipTwo, 6, "skip two count")
+  assert_equal(counts.awDrawTwo, 10, "draw two count")
+  assert_equal(counts.awDrawFour, 6, "draw four count")
+  assert_equal(counts.awTargetDrawTwo, 4, "target draw two count")
+  assert_equal(counts.awForcedSwap, 4, "forced swap count")
+end)
+
+test("all wild skip two skips two players", function()
+  local card = { id = "aw-skiptwo-0", color = nil, kind = "awSkipTwo" }
+  local game = all_wild_staged({ card }, 3, 4242)
+  local played, ok = rules.apply_action(game, { type = "play", player_id = "p1", card_id = card.id })
+  assert_equal(ok, true, "played")
+  assert_equal(played.turn, 1, "turn")
+end)
+
+test("all wild draw four draws immediately without a challenge", function()
+  local card = { id = "aw-drawfour-0", color = nil, kind = "awDrawFour" }
+  local game = all_wild_staged({ card }, 3, 4242)
+  local before = #game.players[2].hand
+  local played, ok = rules.apply_action(game, { type = "play", player_id = "p1", card_id = card.id })
+  assert_equal(ok, true, "played")
+  assert_equal(#played.players[2].hand, before + 4, "target drew")
+  assert_equal(played.pending_challenge, nil, "no challenge")
+end)
+
+test("all wild targeted draw two draws without skipping", function()
+  local card = { id = "aw-targetdrawtwo-0", color = nil, kind = "awTargetDrawTwo" }
+  local game = all_wild_staged({ card }, 3, 4242)
+  local before = #game.players[3].hand
+  local played, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = card.id, target_id = "p3",
+  })
+  assert_equal(ok, true, "played")
+  assert_equal(#played.players[3].hand, before + 2, "target drew")
+  assert_equal(played.turn, 2, "turn")
+end)
+
+test("all wild forced swap exchanges hands", function()
+  local card = { id = "aw-forcedswap-0", color = nil, kind = "awForcedSwap" }
+  local game = all_wild_staged({
+    card, { id = "blue-2-0", color = "blue", kind = "number", value = 2 },
+  }, 3, 4242)
+  game.players[2].hand = { { id = "green-5-0", color = "green", kind = "number", value = 5 } }
+  local played, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = card.id, target_id = "p2",
+  })
+  assert_equal(ok, true, "played")
+  assert_equal(played.players[2].hand[1].id, "blue-2-0", "target holds the remaining hand")
+  assert_equal(played.turn, 2, "turn")
+end)
+
 test("scores swap pack colour actions at 20 and wild actions at 50", function()
   assert_equal(rules.score_hand({ swap_one, refresh_hand }), 40, "colour action score")
   assert_equal(rules.score_hand({ force_trade, pass_hands }), 100, "wild action score")

@@ -52,6 +52,8 @@ const REVERSE_PACK_RULE = "Reverse Pack: Reverse Draw 2 reverses and makes the n
 const STACK_PACK_RULE = "Stack Pack: Stack 1 and Stack 2 make the next player draw and add to any draw penalty; Wild Stack 3 adds 3 to any penalty; Wild Stack Number reveals a number card to set its penalty. Stack cards can chain onto other stack cards.";
 
 const SPEED_PACK_RULE = "Speed Pack: every Speed Up card raises the pace; Wild Double Speed raises it by two. Each turn you must play that many matching cards in a row, and action effects only apply on the last card. If you cannot keep up, play what you can, draw the current speed and the pace resets to one.";
+
+const ALL_WILD_RULE = "All Wild: every card is wild, so no colour or number matching is needed. Wild Reverse, Wild Skip, Wild Skip Two, Wild Draw Two and Wild Draw Four change the turn; Wild Targeted Draw Two makes a chosen player draw; Wild Forced Swap exchanges your hand with a chosen player.";
 const FLIP_RULE = "Flip: match the active colour on the current side. Draw One, Skip and Reverse sit on the light side; Draw Five, Skip Everyone and Wild Draw Color sit on the dark side. Play a Flip card to turn the whole game over and switch between red/yellow/green/blue and pink/teal/orange/purple. Wild Draw Two may be challenged: take 2, or challenge a guilty player who draws 2 and an innocent target who draws 4.";
 
 const COLOURS: Color[] = ["red", "yellow", "green", "blue"];
@@ -111,8 +113,10 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                   ? [...RULES, REVERSE_PACK_RULE]
                 : (game.rulesMode as string) === "stackPack"
                   ? [...RULES, STACK_PACK_RULE]
-                  : (game.rulesMode as string) === "speedPack"
-                    ? [...RULES, SPEED_PACK_RULE]
+                : (game.rulesMode as string) === "speedPack"
+                  ? [...RULES, SPEED_PACK_RULE]
+                  : (game.rulesMode as string) === "allWild"
+                    ? [...RULES, ALL_WILD_RULE]
                     : RULES;
   const activePlayer = game.view.players[game.view.turn];
   const winner = game.view.result?.winnerUserId == null

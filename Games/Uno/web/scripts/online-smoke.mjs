@@ -1455,6 +1455,54 @@ async function speedPackBattle() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "speed pack game over", STATE_TIMEOUT_MS);
 }
 
+async function allWildBattle() {
+  const alice = await authenticate("all-wild-alice");
+  const bob = await authenticate("all-wild-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 1,
+    rulesMode: "allWild",
+  });
+  assert(
+    created?.ok === true && created.rulesMode === "allWild" && typeof created.matchId === "string",
+    `all wild room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
+  const aliceStart = await waitState(
+    alice.socket,
+    "all wild alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "all wild bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "allWild", "all wild mode must reach alice");
+  assert(bobStart.data.rulesMode === "allWild", "all wild mode must reach bob");
+  assert(aliceStart.data.deckCount === 97, "all wild should carry 112 cards");
+  assert(
+    legalCardIds(aliceStart.data).includes("aw-drawtwo-9"),
+    "seed 1 should offer All Wild Draw Two to Alice",
+  );
+  console.log("[ok] all wild private room reports rulesMode and a 112-card setup");
+
+  const bobBefore = seatOf(bobStart.data, bob).count;
+  await send(alice, matchId, OP.PLAY_REQUEST, { cardId: "aw-drawtwo-9" });
+  const played = await waitState(
+    bob.socket,
+    "all wild draw two",
+    (state) => seatOf(state, bob)?.count === bobBefore + 2 && state.turn === 0,
+  );
+  assert(played.data.pendingChallenge == null, "All Wild Draw Four has no challenge");
+  console.log("[ok] All Wild Draw Two applies immediately on the live server");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "all wild game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -1487,6 +1535,7 @@ async function main() {
     await reversePackBattle();
     await stackPackBattle();
     await speedPackBattle();
+    await allWildBattle();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

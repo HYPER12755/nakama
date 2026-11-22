@@ -21,6 +21,8 @@ local WILD_KINDS = {
   wildForceTrade = true, wildPassHands = true,
   wildPowerReverse = true, wildNoU = true,
   wildStack3 = true, wildStackNumber = true, wildDoubleSpeed = true,
+  awWild = true, awReverse = true, awSkip = true, awSkipTwo = true,
+  awDrawTwo = true, awDrawFour = true, awTargetDrawTwo = true, awForcedSwap = true,
 }
 local WILD_COLOR_KINDS = {
   wild = true, wild4 = true, wildAttack = true, wildDraw6 = true,
@@ -293,6 +295,31 @@ local function build_reverse_pack_deck()
   return deck
 end
 
+local function build_all_wild_deck()
+  local composition = {
+    { "awWild", 54 }, { "awReverse", 14 }, { "awSkip", 14 }, { "awSkipTwo", 6 },
+    { "awDrawTwo", 10 }, { "awDrawFour", 6 }, { "awTargetDrawTwo", 4 },
+    { "awForcedSwap", 4 },
+  }
+  local deck = {}
+  local id_map = {
+    awWild = "aw-wild", awReverse = "aw-reverse", awSkip = "aw-skip",
+    awSkipTwo = "aw-skiptwo", awDrawTwo = "aw-drawtwo", awDrawFour = "aw-drawfour",
+    awTargetDrawTwo = "aw-targetdrawtwo", awForcedSwap = "aw-forcedswap",
+  }
+  for _, entry in ipairs(composition) do
+    local kind = entry[1]
+    for copy_index = 0, entry[2] - 1 do
+      deck[#deck + 1] = {
+        id = string.format("%s-%d", id_map[kind], copy_index),
+        color = nil,
+        kind = kind,
+      }
+    end
+  end
+  return deck
+end
+
 local function build_speed_pack_deck()
   local deck = {}
   local speed_values = {
@@ -346,6 +373,9 @@ local function build_stack_pack_deck()
 end
 
 function rules.build_deck(mode)
+  if mode == "allWild" then
+    return build_all_wild_deck()
+  end
   if mode == "flip" then
     return build_flip_deck()
   end
@@ -769,7 +799,8 @@ function rules.create_game(seed, players, now, mode)
       and (starter.kind == "wildPowerReverse" or starter.kind == "wildNoU"))
     or (rules_mode == "stackPack"
       and (starter.kind == "wildStack3" or starter.kind == "wildStackNumber"))
-    or (rules_mode == "speedPack" and starter.kind == "wildDoubleSpeed") then
+    or (rules_mode == "speedPack" and starter.kind == "wildDoubleSpeed")
+    or (rules_mode == "allWild" and WILD_KINDS[starter.kind] == true) then
     starter.color = most_common_color(dealt[1].hand, rules.colors_for_side("light"))
   end
 
@@ -1791,6 +1822,25 @@ function rules.apply_action(previous, action, now)
   local wild_challenge_legal = (card.kind == "wild4" or card.kind == "wildDraw2"
     or card.kind == "wildDrawColor") and not has_color_match(state, actor)
 
+  local all_wild_target
+  if state.mode == "allWild" and (card.kind == "awTargetDrawTwo" or card.kind == "awForcedSwap") then
+    local requested = action.target_id or action.targetId
+    if requested == nil or requested == "" then
+      return fail(previous, protocol.ERROR.MISSING_TARGET)
+    end
+    local found
+    for _, candidate in ipairs(state.players) do
+      if candidate.id == requested and candidate.id ~= actor.id then
+        found = candidate
+        break
+      end
+    end
+    if found == nil then
+      return fail(previous, protocol.ERROR.MISSING_TARGET)
+    end
+    all_wild_target = found
+  end
+
   local attack_target_id
   if state.mode == "attack" and card.kind == "wildAttack" then
     local requested = action.target_id or action.targetId
@@ -1960,7 +2010,56 @@ function rules.apply_action(previous, action, now)
   local stack_pack = state.mode == "stackPack"
   local next_player = state.players[target_index(state)]
   local actor_index = player_index(state, actor.id)
-  if card.kind == "stack1" or card.kind == "stack2"
+  if card.kind == "awWild" then
+    advance(state, 1)
+  elseif card.kind == "awReverse" then
+    if #rules.active_players(state) == 2 then
+      advance(state, 2)
+    else
+      state.direction = state.direction == 1 and -1 or 1
+      advance(state, 1)
+    end
+  elseif card.kind == "awSkip" then
+    advance(state, 2)
+  elseif card.kind == "awSkipTwo" then
+    advance(state, 3)
+  elseif card.kind == "awDrawTwo" or card.kind == "awDrawFour" then
+    local amount = card.kind == "awDrawTwo" and rules.DRAW_TWO_AMOUNT or rules.WILD_FOUR_AMOUNT
+    draw_cards(state, next_player, amount)
+    advance(state, 2)
+    if #actor.hand == 0 then
+      state.finished = true
+      state.winner = actor.id
+    end
+  elseif card.kind == "awTargetDrawTwo" then
+    if all_wild_target ~= nil then
+      draw_cards(state, all_wild_target, rules.DRAW_TWO_AMOUNT)
+      state.events[#state.events + 1] = {
+        type = "awTargetDrawTwo", player_id = actor.id, card_id = card.id,
+        text = all_wild_target.id, at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = actor.id, action = "awTargetDrawTwo", card_id = card.id,
+        target_id = all_wild_target.id,
+      }
+    end
+    advance(state, 1)
+  elseif card.kind == "awForcedSwap" then
+    if all_wild_target ~= nil then
+      local actor_hand = actor.hand
+      actor.hand = all_wild_target.hand
+      all_wild_target.hand = actor_hand
+      state.events[#state.events + 1] = {
+        type = "awForcedSwap", player_id = actor.id, card_id = card.id,
+        text = all_wild_target.id, at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = actor.id, action = "awForcedSwap", card_id = card.id,
+        target_id = all_wild_target.id,
+      }
+    end
+    advance(state, 1)
+  elseif card.kind == "stack1" or card.kind == "stack2"
     or card.kind == "wildStack3" or card.kind == "wildStackNumber" then
     if stack_pack then
       local amount = card.kind == "wildStackNumber"
@@ -2267,6 +2366,8 @@ function rules.score_hand(hand)
   for _, card in ipairs(hand) do
     if card.kind == "number" then
       total = total + (card.value or 0)
+    elseif card.kind == "awWild" then
+      total = total + 20
     elseif WILD_KINDS[card.kind] then
       total = total + 50
     else

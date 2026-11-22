@@ -41,6 +41,14 @@ export function cardId(card: Omit<Card, "id">): string {
   if (card.kind === "wildStackNumber") return "wildstacknumber";
   if (card.kind === "wildDoubleSpeed") return "wilddoublespeed";
   if (card.kind === "speedUp") return `${card.color}-speedup-${card.value ?? 0}`;
+  if (card.kind === "awWild") return `aw-wild`;
+  if (card.kind === "awReverse") return `aw-reverse`;
+  if (card.kind === "awSkip") return `aw-skip`;
+  if (card.kind === "awSkipTwo") return `aw-skiptwo`;
+  if (card.kind === "awDrawTwo") return `aw-drawtwo`;
+  if (card.kind === "awDrawFour") return `aw-drawfour`;
+  if (card.kind === "awTargetDrawTwo") return `aw-targetdrawtwo`;
+  if (card.kind === "awForcedSwap") return `aw-forcedswap`;
   if (card.kind === "stack1") return `${card.color}-stack1`;
   if (card.kind === "stack2") return `${card.color}-stack2`;
   if (card.kind === "reverseDraw2") return `${card.color}-reversedraw2`;
@@ -192,6 +200,26 @@ export function buildDeck(mode: GameMode = "classic"): Card[] {
     }
     for (const kind of ["wildPowerReverse", "wildNoU"] as const) {
       for (let copy = 0; copy < 4; copy += 1) {
+        const base = { color: null, kind };
+        deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+      }
+    }
+    return deck;
+  }
+  if (mode === "allWild") {
+    const composition = [
+      ["awWild", 54],
+      ["awReverse", 14],
+      ["awSkip", 14],
+      ["awSkipTwo", 6],
+      ["awDrawTwo", 10],
+      ["awDrawFour", 6],
+      ["awTargetDrawTwo", 4],
+      ["awForcedSwap", 4],
+    ] as const;
+    const deck: Card[] = [];
+    for (const [kind, count] of composition) {
+      for (let copy = 0; copy < count; copy += 1) {
         const base = { color: null, kind };
         deck.push({ id: `${cardId(base)}-${copy}`, ...base });
       }

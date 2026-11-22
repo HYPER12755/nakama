@@ -37,6 +37,14 @@ function cardScore(state: GameState, card: Card): number {
   if (card.kind === "stack1") return 94;
   if (card.kind === "wildDoubleSpeed") return 120;
   if (card.kind === "speedUp") return 110;
+  if (card.kind === "awDrawFour") return 104;
+  if (card.kind === "awTargetDrawTwo") return 102;
+  if (card.kind === "awForcedSwap") return 100;
+  if (card.kind === "awSkipTwo") return 96;
+  if (card.kind === "awDrawTwo") return 94;
+  if (card.kind === "awReverse") return 90;
+  if (card.kind === "awSkip") return 88;
+  if (card.kind === "awWild") return 40;
   if (card.kind === "reverseDraw2") return 84;
   if (card.kind === "reverseSkip") return 74;
   if (card.kind === "wild") return 90;
@@ -237,6 +245,14 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
     let usable = true;
     if ((state.mode === UNO_MODE.SEVEN_O || state.mode === UNO_MODE.NO_MERCY)
       && card.kind === "number" && card.value === 7) {
+      const target = pickTarget(state, playerId);
+      if (target === null) {
+        usable = false;
+      } else {
+        targetId = target;
+      }
+    } else if (state.mode === UNO_MODE.ALL_WILD
+      && (card.kind === "awTargetDrawTwo" || card.kind === "awForcedSwap")) {
       const target = pickTarget(state, playerId);
       if (target === null) {
         usable = false;

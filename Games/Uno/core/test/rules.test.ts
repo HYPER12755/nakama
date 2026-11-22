@@ -732,6 +732,73 @@ describe("Uno Progressive house rule", () => {
 
 });
 
+describe("Uno All Wild", () => {
+  it("builds the 112-card All Wild deck", () => {
+    const deck = buildDeck("allWild");
+    expect(deck).toHaveLength(112);
+    const expected: Record<string, number> = {
+      awWild: 54, awReverse: 14, awSkip: 14, awSkipTwo: 6,
+      awDrawTwo: 10, awDrawFour: 6, awTargetDrawTwo: 4, awForcedSwap: 4,
+    };
+    for (const [kind, count] of Object.entries(expected)) {
+      expect(deck.filter((card) => card.kind === kind)).toHaveLength(count);
+    }
+  });
+
+  it("makes every All Wild card playable without a colour", () => {
+    const game = stagedGame([], "blue", "allWild");
+    const card: Card = { id: "aw-reverse-0", color: null, kind: "awReverse" };
+    expect(canPlay(game, card)).toBe(true);
+    expect(legalMoves(createGame(9, players, 0, "allWild"), "p1").canDraw).toBe(true);
+  });
+
+  it("skips two players with Wild Skip Two", () => {
+    const game = stagedGame([{ id: "aw-skiptwo-0", color: null, kind: "awSkipTwo" }], "blue", "allWild");
+    const played = applyAction(game, { type: "play", playerId: "p1", cardId: "aw-skiptwo-0" });
+    expect(played.state.turn).toBe(0);
+  });
+
+  it("draws four immediately with Wild Draw Four", () => {
+    const game = stagedGame([{ id: "aw-drawfour-0", color: null, kind: "awDrawFour" }], "blue", "allWild");
+    const before = game.players[1].hand.length;
+    const played = applyAction(game, { type: "play", playerId: "p1", cardId: "aw-drawfour-0" });
+    expect(played.state.players[1].hand).toHaveLength(before + 4);
+    expect(played.state.pendingChallenge).toBeNull();
+    expect(played.state.turn).toBe(2);
+  });
+
+  it("lets a targeted draw choose a player without skipping them", () => {
+    const game = stagedGame([{ id: "aw-targetdrawtwo-0", color: null, kind: "awTargetDrawTwo" }], "blue", "allWild");
+    const before = game.players[2].hand.length;
+    const played = applyAction(game, {
+      type: "play", playerId: "p1", cardId: "aw-targetdrawtwo-0", targetId: "p3",
+    });
+    expect(played.state.players[2].hand).toHaveLength(before + 2);
+    expect(played.state.turn).toBe(1);
+    expect(played.state.replay.at(-1)?.action).toBe("awTargetDrawTwo");
+  });
+
+  it("forces a full hand swap with Wild Forced Swap", () => {
+    const game = stagedGame([
+      { id: "aw-forcedswap-0", color: null, kind: "awForcedSwap" },
+      { id: "blue-2-0", color: "blue", kind: "number", value: 2 },
+    ], "blue", "allWild");
+    game.players[1].hand = [{ id: "green-5-0", color: "green", kind: "number", value: 5 }];
+    const played = applyAction(game, {
+      type: "play", playerId: "p1", cardId: "aw-forcedswap-0", targetId: "p2",
+    });
+    expect(played.state.players[1].hand.map((card) => card.id)).toEqual(["blue-2-0"]);
+    expect(played.state.turn).toBe(1);
+  });
+
+  it("scores plain Wild at 20 and All Wild actions at 50", () => {
+    expect(scoreHand([
+      { id: "aw-wild-0", color: null, kind: "awWild" },
+      { id: "aw-skip-0", color: null, kind: "awSkip" },
+    ])).toBe(70);
+  });
+});
+
 describe("Uno Speed Pack", () => {
   const speedUp: Card = { id: "red-speedup-3", color: "red", kind: "speedUp", value: 3 };
   const wildDouble: Card = { id: "wilddoublespeed-0", color: null, kind: "wildDoubleSpeed" };

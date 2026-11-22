@@ -22,6 +22,7 @@ export const SWAP_PACK_MODE: RulesMode = UNO_MODE.SWAP_PACK;
 export const REVERSE_PACK_MODE: RulesMode = UNO_MODE.REVERSE_PACK;
 export const STACK_PACK_MODE: RulesMode = UNO_MODE.STACK_PACK;
 export const SPEED_PACK_MODE: RulesMode = UNO_MODE.SPEED_PACK;
+export const ALL_WILD_MODE: RulesMode = UNO_MODE.ALL_WILD;
 
 const JUMP_IN_ALIASES = ["jumpIn", "jump_in", "jump-in", "jumpin"];
 const NO_MERCY_ALIASES = ["noMercy", "no_mercy", "no-mercy", "nomercy"];
@@ -68,6 +69,9 @@ export function rulesModeLabel(mode: RulesMode | undefined): string {
   }
   if (value === SPEED_PACK_MODE) {
     return "Speed Pack";
+  }
+  if (value === ALL_WILD_MODE) {
+    return "All Wild";
   }
   return value === "sevenO" ? "Seven-O" : "Classic";
 }

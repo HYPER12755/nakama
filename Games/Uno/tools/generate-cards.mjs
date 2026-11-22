@@ -350,6 +350,29 @@ function speedPackWildCard(copy) {
 <text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">wilddoublespeed ${copy}</text>`);
 }
 
+const ALL_WILD_ART = [
+  ["awWild", "WILD"],
+  ["awReverse", "REVERSE"],
+  ["awSkip", "SKIP"],
+  ["awSkipTwo", "SKIP 2"],
+  ["awDrawTwo", "DRAW 2"],
+  ["awDrawFour", "DRAW 4"],
+  ["awTargetDrawTwo", "TARGET 2"],
+  ["awForcedSwap", "SWAP"],
+];
+
+function allWildCard(label) {
+  return frame(`<g>
+<path d="M9 23 A14 14 0 0 1 23 9 L157 9 A14 14 0 0 1 171 23 L90 135 Z" fill="${COLORS.red}"/>
+<path d="M171 23 A14 14 0 0 1 171 247 L90 135 Z" fill="${COLORS.yellow}"/>
+<path d="M171 247 A14 14 0 0 1 157 261 L23 261 A14 14 0 0 1 9 247 L90 135 Z" fill="${COLORS.green}"/>
+<path d="M9 247 A14 14 0 0 1 9 23 L90 135 Z" fill="${COLORS.blue}"/>
+</g>
+<ellipse cx="90" cy="132" rx="60" ry="78" fill="#0f172a" transform="rotate(-12 90 132)"/>
+<text x="90" y="142" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="${label.length > 5 ? 24 : 32}" fill="#ffffff">${label}</text>
+<text x="90" y="196" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="800" fill="#ffffff" stroke="#e8402a" stroke-width="4" paint-order="stroke">ALL WILD</text>`);
+}
+
 const LIGHT_PALETTE = {
   red: [COLORS.red, "#ff8a75"],
   yellow: [COLORS.yellow, "#ffe680"],
@@ -605,6 +628,10 @@ for (const [color, values] of Object.entries(SPEED_VALUES)) {
 }
 for (let copy = 0; copy < 4; copy += 1) {
   writeFileSync(path.join(OUT, `wilddoublespeed-${copy}.svg`), speedPackWildCard(copy));
+  count += 1;
+}
+for (const [kind, label] of ALL_WILD_ART) {
+  writeFileSync(path.join(OUT, `${kind}-0.svg`), allWildCard(label));
   count += 1;
 }
 for (const color of Object.keys(COLORS)) {

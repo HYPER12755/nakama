@@ -390,6 +390,47 @@ captured by the standard play entry's `color`.
   (the actor is one participant); Pass Hands and Refresh Hand need no target.
   Every new wild carries a legal `chosenColor`, so automated play never stalls.
 
+## All Wild
+
+All Wild is a standalone 112-card deck in which every card is wild. It is
+available locally and in private/quick online matches as mode string `allWild`
+(core `UNO_MODE.ALL_WILD`, Lua `RULES_MODES`). State payloads expose
+`rulesMode: "allWild"`. No new opcodes are needed.
+
+### Deck and cards
+
+| Card | Copies | Effect |
+| --- | ---: | --- |
+| Wild (`awWild`) | 54 | Discard and pass the turn. |
+| Wild Reverse (`awReverse`) | 14 | Reverse direction. With two active players this skips the opponent. |
+| Wild Skip (`awSkip`) | 14 | The next player loses their turn. |
+| Wild Skip Two (`awSkipTwo`) | 6 | The next two players lose their turns. |
+| Wild Draw Two (`awDrawTwo`) | 10 | The next player draws 2 and loses their turn. |
+| Wild Draw Four (`awDrawFour`) | 6 | The next player draws 4 and loses their turn; there is no challenge. |
+| Wild Targeted Draw Two (`awTargetDrawTwo`) | 4 | A chosen player draws 2 but keeps their next turn. |
+| Wild Forced Swap (`awForcedSwap`) | 4 | Exchange your remaining hand with a chosen player. |
+
+Every card is always playable; neither colour nor number matching applies, and
+no colour choice is required. Targeted cards require `targetId`, which the web
+board supplies with a player picker.
+
+### Scoring and events
+
+Plain Wild scores 20 points in `scoreHand`; all action cards score 50. Targeted
+Draw Two and Forced Swap emit matching events and replay entries carrying the
+chosen `targetId`. Other effects reuse the standard play event.
+
+### Integration contract
+
+- Deck: 112 cards; a wildcard starter receives the first player's most common
+  colour so the state always has a current colour, although colour never limits
+  play.
+- AI scores action cards above plain Wild cards and selects a legal target for
+  targeted actions.
+- The web board renders one purpose-built art file per All Wild card type in
+  both classic and neon sets, maps duplicate card IDs to that art, and shows a
+  target picker for targeted actions.
+
 ## Speed Pack
 
 Speed Pack keeps the classic 108-card deck and adds 16 dedicated cards for a

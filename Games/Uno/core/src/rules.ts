@@ -24,6 +24,8 @@ const NO_MERCY_WILD_KINDS: CardKind[] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4", "wildRoulette",
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands", "wildPowerReverse", "wildNoU",
   "wildStack3", "wildStackNumber", "wildDoubleSpeed",
+  "awWild", "awReverse", "awSkip", "awSkipTwo", "awDrawTwo", "awDrawFour",
+  "awTargetDrawTwo", "awForcedSwap",
 ];
 
 const WILD_COLOR_KINDS: CardKind[] = [
@@ -240,7 +242,8 @@ export function createGame(
       && (starter.kind === "wildPowerReverse" || starter.kind === "wildNoU"))
     || (rulesMode === UNO_MODE.STACK_PACK
       && (starter.kind === "wildStack3" || starter.kind === "wildStackNumber"))
-    || (rulesMode === UNO_MODE.SPEED_PACK && starter.kind === "wildDoubleSpeed")) {
+    || (rulesMode === UNO_MODE.SPEED_PACK && starter.kind === "wildDoubleSpeed")
+    || (rulesMode === UNO_MODE.ALL_WILD && NO_MERCY_WILD_KINDS.includes(starter.kind))) {
     starter.color = mostCommonColor(dealt[0].hand, colorsForSide("light"));
   }
   const color = starter.color;
@@ -1091,6 +1094,18 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
     || card.kind === "wildDrawColor") && !hasColorMatch(state, actor);
 
   let attackTargetId: string | undefined;
+  let allWildTarget: Player | undefined;
+  if (state.mode === UNO_MODE.ALL_WILD
+    && (card.kind === "awTargetDrawTwo" || card.kind === "awForcedSwap")) {
+    const requested = action.targetId ?? action.target_id;
+    if (requested === undefined || requested === "") {
+      return fail(previous, UNO_ERROR.MISSING_TARGET as "missing_target");
+    }
+    allWildTarget = state.players.find((player) => player.id === requested && player.id !== actor.id);
+    if (allWildTarget === undefined) {
+      return fail(previous, UNO_ERROR.MISSING_TARGET as "missing_target");
+    }
+  }
   if (state.mode === UNO_MODE.ATTACK && card.kind === "wildAttack") {
     const requested = action.targetId ?? action.target_id;
     if (requested === undefined || requested === "") {
@@ -1239,6 +1254,73 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
   const next = state.players[targetIndex(state)];
   const actorIndex = state.players.findIndex((player) => player.id === actor.id);
   switch (card.kind) {
+    case "awWild":
+      advance(state, 1);
+      break;
+    case "awReverse":
+      if (activePlayers(state).length === 2) {
+        advance(state, 2);
+      } else {
+        state.direction = state.direction === 1 ? -1 : 1;
+        advance(state, 1);
+      }
+      break;
+    case "awSkip":
+      advance(state, 2);
+      break;
+    case "awSkipTwo":
+      advance(state, 3);
+      break;
+    case "awDrawTwo":
+      drawCards(state, next, DEFAULT_RULES.drawTwoAmount);
+      advance(state, 2);
+      finishIfEmpty(state, actor);
+      break;
+    case "awDrawFour":
+      drawCards(state, next, DEFAULT_RULES.wildFourAmount);
+      advance(state, 2);
+      finishIfEmpty(state, actor);
+      break;
+    case "awTargetDrawTwo":
+      if (allWildTarget !== undefined) {
+        drawCards(state, allWildTarget, DEFAULT_RULES.drawTwoAmount);
+        state.events.push({
+          type: "awTargetDrawTwo",
+          playerId: actor.id,
+          cardId: card.id,
+          text: allWildTarget.id,
+          at: state.events.length,
+        });
+        state.replay.push({
+          playerId: actor.id,
+          action: "awTargetDrawTwo",
+          cardId: card.id,
+          targetId: allWildTarget.id,
+        });
+      }
+      advance(state, 1);
+      break;
+    case "awForcedSwap":
+      if (allWildTarget !== undefined) {
+        const actorHand = actor.hand;
+        actor.hand = allWildTarget.hand;
+        allWildTarget.hand = actorHand;
+        state.events.push({
+          type: "awForcedSwap",
+          playerId: actor.id,
+          cardId: card.id,
+          text: allWildTarget.id,
+          at: state.events.length,
+        });
+        state.replay.push({
+          playerId: actor.id,
+          action: "awForcedSwap",
+          cardId: card.id,
+          targetId: allWildTarget.id,
+        });
+      }
+      advance(state, 1);
+      break;
     case "stack1":
     case "stack2":
     case "wildStack3":
@@ -1545,6 +1627,8 @@ export function scoreHand(hand: Card[]): number {
   for (const card of hand) {
     if (card.kind === "number") {
       total += card.value ?? 0;
+    } else if (card.kind === "awWild") {
+      total += 20;
     } else if (NO_MERCY_WILD_KINDS.includes(card.kind)) {
       total += 50;
     } else {

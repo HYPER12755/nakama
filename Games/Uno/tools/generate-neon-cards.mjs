@@ -395,6 +395,27 @@ ${neonLabel("DOUBLE SPEED", 90, 196, 14, NEON.wild)}
 ${neonCaption(`wilddoublespeed ${copy}`, true)}`, NEON.wild);
 }
 
+const ALL_WILD_ART = [
+  ["awWild", "WILD"],
+  ["awReverse", "REVERSE"],
+  ["awSkip", "SKIP"],
+  ["awSkipTwo", "SKIP 2"],
+  ["awDrawTwo", "DRAW 2"],
+  ["awDrawFour", "DRAW 4"],
+  ["awTargetDrawTwo", "TARGET 2"],
+  ["awForcedSwap", "SWAP"],
+];
+
+function allWildCard(label) {
+  return surface(`
+<g opacity="0.9">${QUADRANT}</g>
+<ellipse cx="90" cy="132" rx="60" ry="70" fill="#0A0A0E" fill-opacity="0.62" stroke="url(#edge)" stroke-width="8" transform="rotate(-12 90 132)"/>
+<g style="filter:drop-shadow(0 0 12px #18FFFF)">
+<text x="90" y="142" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="${label.length > 5 ? 24 : 32}" fill="#ffffff">${label}</text>
+</g>
+${neonLabel("ALL WILD", 90, 196, 14, NEON.wild)}`, NEON.wild);
+}
+
 const LIGHT_PALETTE = {
   red: ["#e8402a", "#ff8a75"],
   yellow: ["#f2c600", "#ffe680"],
@@ -658,6 +679,10 @@ for (const [color, values] of Object.entries(SPEED_VALUES)) {
 }
 for (let copy = 0; copy < 4; copy += 1) {
   writeFileSync(path.join(OUT, `wilddoublespeed-${copy}.svg`), speedPackWildCard(copy));
+  count += 1;
+}
+for (const [kind, label] of ALL_WILD_ART) {
+  writeFileSync(path.join(OUT, `${kind}-0.svg`), allWildCard(label));
   count += 1;
 }
 for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {

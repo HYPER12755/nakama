@@ -72,6 +72,14 @@ function cardHint(card: Card): string | undefined {
   if (card.kind === "wildStackNumber") return "Choose a colour; a revealed number sets the draw";
   if (card.kind === "speedUp") return "Raise the speed by one";
   if (card.kind === "wildDoubleSpeed") return "Raise the speed by two and choose a colour";
+  if (card.kind === "awWild") return "Play any card";
+  if (card.kind === "awReverse") return "Reverse the direction";
+  if (card.kind === "awSkip") return "Skip the next player";
+  if (card.kind === "awSkipTwo") return "Skip the next two players";
+  if (card.kind === "awDrawTwo") return "The next player draws 2";
+  if (card.kind === "awDrawFour") return "The next player draws 4";
+  if (card.kind === "awTargetDrawTwo") return "Choose a player to draw 2";
+  if (card.kind === "awForcedSwap") return "Swap hands with a player";
   return undefined;
 }
 
@@ -173,8 +181,10 @@ export function UnoBoardStage({
   const previousCounts = useRef<Record<string, number> | null>(null);
   const lastManualFlight = useRef(0);
 
-  const art = (cardId: string): string =>
-    cardSet === "neon" ? `cards-neon/${cardId}.svg` : `cards/${cardId}.svg`;
+  const art = (cardId: string): string => {
+    const assetId = cardId.startsWith("aw") ? `${cardId.replace(/-\d+$/, "")}-0` : cardId;
+    return cardSet === "neon" ? `cards-neon/${assetId}.svg` : `cards/${assetId}.svg`;
+  };
 
   const me = view.players.find((player) => player.userId === view.myUserId);
   const hand = me?.hand ?? [];
@@ -294,6 +304,10 @@ export function UnoBoardStage({
 
   const play = (card: Card, event: MouseEvent<HTMLButtonElement>) => {
     if (!isMyTurn && !jumping) return;
+    if (card.kind === "awTargetDrawTwo" || card.kind === "awForcedSwap") {
+      setPendingTarget(card.id);
+      return;
+    }
     if (card.kind === "swap1") {
       setSwapPrompt({ cardId: card.id, targetId: null });
       return;
@@ -745,14 +759,22 @@ export function UnoBoardStage({
       {(pendingTarget !== null || (attackPrompt !== null && attackPrompt.targetId === null && pendingCard === null)) && (
         <div className="uno-overlay uno-overlay--target">
           <div className="uno-target-card" role="dialog" aria-label="Choose a target player">
-            <p className="eyebrow">{attackPrompt !== null ? "UNO Attack" : noMercy ? "No Mercy" : "Seven-O"}</p>
+            <p className="eyebrow">
+              {attackPrompt !== null ? "UNO Attack" : noMercy ? "No Mercy"
+                : hand.find((card) => card.id === pendingTarget)?.kind === "awForcedSwap" ? "All Wild"
+                  : "Seven-O"}
+            </p>
             <h2>Choose a target</h2>
             <p className="uno-overlay-copy">
               {attackPrompt !== null
                 ? attackPrompt.deflect
                   ? "Redirect the hit to the player you pick."
                   : "Send the hit to the player you pick."
-                : "Your 7 swaps hands with the player you pick."}
+                : hand.find((card) => card.id === pendingTarget)?.kind === "awForcedSwap"
+                  ? "Exchange your remaining hand with the player you pick."
+                  : hand.find((card) => card.id === pendingTarget)?.kind === "awTargetDrawTwo"
+                    ? "The player you pick draws two cards."
+                    : "Your 7 swaps hands with the player you pick."}
             </p>
             <div className="uno-target-choices">
               {targets.map((player) => (

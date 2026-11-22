@@ -21,7 +21,8 @@ export type GameMode =
   | "swapPack"
   | "reversePack"
   | "stackPack"
-  | "speedPack";
+  | "speedPack"
+  | "allWild";
 
 export type CardKind =
   | "number"
@@ -55,6 +56,14 @@ export type CardKind =
   | "wildNoU"
   | "speedUp"
   | "wildDoubleSpeed"
+  | "awWild"
+  | "awReverse"
+  | "awSkip"
+  | "awSkipTwo"
+  | "awDrawTwo"
+  | "awDrawFour"
+  | "awTargetDrawTwo"
+  | "awForcedSwap"
   | "stack1"
   | "stack2"
   | "wildStack3"
