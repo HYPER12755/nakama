@@ -1,10 +1,13 @@
 import {
+  ALL_COLORS,
   legalMoves,
   normalizeMode,
   UNO_MODE,
   UNO_MODES,
   type Card,
+  type CardKind,
   type Color,
+  type FlipSide,
   type GameMode,
   type GameState,
 } from "@moongames/uno-core";
@@ -47,6 +50,9 @@ export function rulesModeLabel(mode: RulesMode | undefined): string {
   if (value === ATTACK_MODE) {
     return "Attack";
   }
+  if (value === UNO_MODE.FLIP) {
+    return "Flip";
+  }
   return value === "sevenO" ? "Seven-O" : "Classic";
 }
 
@@ -62,6 +68,44 @@ export function normalizeRulesMode(value: unknown): RulesMode {
     return PROGRESSIVE_MODE;
   }
   return normalized;
+}
+
+export function normalizeFlipSide(value: unknown): FlipSide {
+  return value === "dark" ? "dark" : "light";
+}
+
+export interface PendingChallenge {
+  ownerId: string;
+  targetId: string;
+  legal: boolean;
+  kind?: CardKind;
+  amount?: number;
+  color?: Color;
+}
+
+export function normalizePendingChallenge(value: unknown): PendingChallenge | null {
+  const source = value as Record<string, unknown> | null | undefined;
+  if (source == null) {
+    return null;
+  }
+  const result: PendingChallenge = {
+    ownerId: String(source.ownerId ?? source.owner_id ?? ""),
+    targetId: String(source.targetId ?? source.target_id ?? ""),
+    legal: source.legal === true,
+  };
+  const kind = source.kind ?? source.cardKind ?? source.card_kind;
+  if (typeof kind === "string" && kind !== "") {
+    result.kind = kind as CardKind;
+  }
+  const amount = Number(source.amount ?? source.count ?? 0);
+  if (Number.isFinite(amount) && amount > 0) {
+    result.amount = Math.trunc(amount);
+  }
+  const color = source.color ?? source.colour ?? source.chosenColor ?? source.chosen_color;
+  if (typeof color === "string" && ALL_COLORS.includes(color as Color)) {
+    result.color = color as Color;
+  }
+  return result;
 }
 
 export interface JumpWindow {
@@ -203,10 +247,11 @@ export interface BoardView {
   chat: BoardChat[];
   topCard: Card | null;
   currentColor: Color | null;
+  flipSide: FlipSide;
   turn: number;
   direction: 1 | -1;
   deckCount: number;
-  pendingChallenge: { ownerId: string; targetId: string; legal: boolean } | null;
+  pendingChallenge: PendingChallenge | null;
   pendingStack?: PendingStack | null;
   pendingHit?: PendingHit | null;
   pendingRoulette?: PendingRoulette | null;
@@ -246,7 +291,7 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
   if (state === null) {
     return {
       players: [], spectators: [], chat: [], topCard: null, currentColor: null,
-      turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
+      flipSide: "light", turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
       pendingStack: null, pendingHit: null, pendingRoulette: null, jumpWindow: null,
       legalCards: [], canDraw: false, result: null,
       myUserId, started: false, mode: "classic", rulesMode: "classic",
@@ -267,14 +312,11 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
     chat: [],
     topCard: state.discard[state.discard.length - 1] ?? null,
     currentColor: state.currentColor,
+    flipSide: normalizeFlipSide(state.flipSide ?? (rawState.flip_side as unknown)),
     turn: state.turn,
     direction: state.direction,
     deckCount: state.drawPile.length,
-    pendingChallenge: state.pendingChallenge === null ? null : {
-      ownerId: state.pendingChallenge.ownerId,
-      targetId: state.pendingChallenge.targetId,
-      legal: state.pendingChallenge.legal,
-    },
+    pendingChallenge: normalizePendingChallenge(state.pendingChallenge ?? rawState.pending_challenge),
     pendingStack: normalizePendingStack(rawState.pendingStack ?? rawState.pending_stack),
     pendingHit: normalizePendingHit(rawState.pendingHit ?? rawState.pending_hit),
     pendingRoulette: normalizePendingRoulette(rawState.pendingRoulette ?? rawState.pending_roulette),

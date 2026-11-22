@@ -26,6 +26,7 @@ const view: BoardView = {
   chat: [],
   topCard: { id: "red-draw2-0", color: "red", kind: "draw2" },
   currentColor: "red",
+  flipSide: "light",
   turn: 0,
   direction: 1,
   deckCount: 10,

@@ -1111,6 +1111,103 @@ async function noMercyRoom() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "noMercy game over", STATE_TIMEOUT_MS);
 }
 
+async function flipRoom() {
+  const alice = await authenticate("flip-alice");
+  const bob = await authenticate("flip-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 19,
+    rulesMode: "flip",
+  });
+  if (created?.error?.code === "invalid_rules_mode") {
+    console.log(
+      `[skip] flip is not deployed on this server (${created.error.message}); skipping the battle scenario`,
+    );
+    return;
+  }
+  assert(
+    created?.ok === true && created.rulesMode === "flip" && typeof created.matchId === "string",
+    `flip room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  const resolved = await rpc(bob, "moongames_room_code_resolve", {
+    code: created.roomCode,
+    gameId: "uno",
+  });
+  assert(
+    resolved?.ok === true && resolved.matchId === matchId,
+    `flip room code failed: ${JSON.stringify(resolved)}`,
+  );
+
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
+  const aliceStart = await waitState(
+    alice.socket,
+    "flip alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "flip bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  for (const [state, label] of [[aliceStart.data, "alice"], [bobStart.data, "bob"]]) {
+    assert(state.rulesMode === "flip", `${label}: flip mode must reach the client`);
+    assert(state.flipSide === "light", `${label}: flip rooms must start on the light side`);
+    assert(state.currentColor === "yellow", `${label}: seed 19 starter colour`);
+    assert(state.topCard?.id === "light-yellow-1-1", `${label}: seed 19 starter card`);
+  }
+  assert(seatOf(aliceStart.data, alice)?.seat === 0, "the creator should hold seat 0");
+  assert(
+    legalCardIds(aliceStart.data).includes("light-yellow-9-1"),
+    "seed 19 should offer a light yellow 9 to Alice",
+  );
+  assert(
+    seatOf(bobStart.data, bob).hand.some((card) => card.id === "light-yellow-flip-0"),
+    "Bob should hold the light yellow Flip card",
+  );
+  console.log("[ok] flip private room starts on the light side on both clients");
+
+  await send(alice, matchId, OP.PLAY_REQUEST, { cardId: "light-yellow-9-1" });
+  const alicePlayed = await waitState(
+    alice.socket,
+    "flip alice played a number",
+    (state) => state.topCard?.id === "light-yellow-9-1" && state.turn === 1,
+  );
+  const bobPlayed = await waitState(
+    bob.socket,
+    "flip bob sees the number",
+    (state) => state.topCard?.id === "light-yellow-9-1" && state.turn === 1,
+  );
+  assert(alicePlayed.data.flipSide === "light", "the number play should keep the light side");
+  assert(bobPlayed.data.flipSide === "light", "the number play should keep the light side on both clients");
+  assert(
+    legalCardIds(bobPlayed.data).includes("light-yellow-flip-0"),
+    "Bob should be able to play the Flip card after Alice's number",
+  );
+  console.log("[ok] a legal light-side number is applied on both clients");
+
+  await send(bob, matchId, OP.PLAY_REQUEST, { cardId: "light-yellow-flip-0" });
+  const flipped = (state) => state.flipSide === "dark";
+  const aliceFlipped = await waitState(alice.socket, "flip alice sees dark side", flipped);
+  const bobFlipped = await waitState(bob.socket, "flip bob sees dark side", flipped);
+  for (const [state, label] of [[aliceFlipped.data, "alice"], [bobFlipped.data, "bob"]]) {
+    assert(state.currentColor === "orange", `${label}: flipping yellow should select orange`);
+    assert(state.topCard?.id === "dark-orange-1-1", `${label}: the starter should flip to dark orange`);
+    for (const player of state.players) {
+      if (player.hand === undefined) continue;
+      assert(
+        player.hand.every((card) => card.id.startsWith("dark-")),
+        `${label}: ${player.username} should hold dark-side cards after the flip`,
+      );
+    }
+  }
+  console.log("[ok] a Flip card turns both clients to the dark side");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "flip game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -1138,6 +1235,7 @@ async function main() {
     await jumpInRoom();
     await attackRoom();
     await noMercyRoom();
+    await flipRoom();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

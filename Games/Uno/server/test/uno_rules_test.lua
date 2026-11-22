@@ -1631,6 +1631,401 @@ test("scores noMercy wild variants at 50 and coloured actions at 20", function()
     "coloured action score")
 end)
 
+local function flip_staged(hand, color, seats)
+  local names = { "p1", "p2", "p3" }
+  if seats == 2 then
+    names = { "p1", "p2" }
+  end
+  local game = rules.create_game(7777, players(names), 0, "flip")
+  game.turn = 1
+  game.direction = 1
+  game.current_color = color or "red"
+  game.flip_side = "light"
+  game.drawn_card_id = nil
+  game.pending_challenge = nil
+  game.pending_stack = nil
+  game.finished = false
+  game.winner = nil
+  game.players[1].hand = hand
+  for index = 2, #game.players do
+    game.players[index].hand = {}
+  end
+  return game
+end
+
+local function dark_staged(hand, color, seats)
+  local game = flip_staged(hand, color or "pink", seats)
+  game.flip_side = "dark"
+  return game
+end
+
+local light_red_flip = { id = "light-red-flip-0", color = "red", kind = "flip" }
+local light_blue_flip = { id = "light-blue-flip-1", color = "blue", kind = "flip" }
+local light_red_one = { id = "light-red-1-0", color = "red", kind = "number", value = 1 }
+local light_yellow_two = { id = "light-yellow-2-0", color = "yellow", kind = "number", value = 2 }
+local light_green_three = { id = "light-green-3-0", color = "green", kind = "number", value = 3 }
+local light_yellow_four = { id = "light-yellow-4-0", color = "yellow", kind = "number", value = 4 }
+local light_green_five = { id = "light-green-5-0", color = "green", kind = "number", value = 5 }
+local light_wild = { id = "light-wild-0", color = nil, kind = "wild" }
+
+test("builds the exact 112-card flip deck with light-side ids", function()
+  local deck = rules.build_deck("flip")
+  assert_equal(#deck, 112, "deck size")
+  local by_id = {}
+  for _, card in ipairs(deck) do
+    by_id[card.id] = card
+    assert_equal(card.id:sub(1, 6), "light-", "light side prefix")
+  end
+  for _, id in ipairs({
+    "light-red-1-0", "light-red-1-1", "light-red-draw1-0", "light-red-reverse-0",
+    "light-red-skip-0", "light-red-flip-0", "light-wild-0", "light-wilddraw2-0",
+  }) do
+    assert_equal(by_id[id] ~= nil, true, "missing " .. id)
+  end
+  local numbers, actions, wilds, draw_twos, flips = 0, 0, 0, 0, 0
+  for _, card in ipairs(deck) do
+    if card.kind == "number" then
+      numbers = numbers + 1
+    elseif card.color ~= nil then
+      actions = actions + 1
+    end
+    if card.kind == "wild" then wilds = wilds + 1 end
+    if card.kind == "wildDraw2" then draw_twos = draw_twos + 1 end
+    if card.kind == "flip" then flips = flips + 1 end
+  end
+  assert_equal(numbers, 72, "numbers")
+  assert_equal(actions, 32, "coloured actions")
+  assert_equal(wilds, 4, "wilds")
+  assert_equal(draw_twos, 4, "wild draw twos")
+  assert_equal(flips, 8, "flip cards")
+  for _, color in ipairs(protocol.LIGHT_COLORS) do
+    local color_numbers, color_actions = 0, 0
+    for _, card in ipairs(deck) do
+      if card.color == color then
+        if card.kind == "number" then color_numbers = color_numbers + 1 else color_actions = color_actions + 1 end
+      end
+    end
+    assert_equal(color_numbers, 18, color .. " numbers")
+    assert_equal(color_actions, 8, color .. " actions")
+  end
+end)
+
+test("maps flip cards to their physical opposite sides", function()
+  assert_equal(rules.flip_color("red"), "pink", "red/pink")
+  assert_equal(rules.flip_color("pink"), "red", "pink/red")
+  assert_equal(rules.flip_color("yellow"), "orange", "yellow/orange")
+  assert_equal(rules.flip_color("green"), "teal", "green/teal")
+  assert_equal(rules.flip_color("blue"), "purple", "blue/purple")
+  local cases = {
+    { light_red_one, { id = "dark-pink-1-0", color = "pink", kind = "number", value = 1 } },
+    { { id = "light-red-draw1-0", color = "red", kind = "draw1" },
+      { id = "dark-pink-draw5-0", color = "pink", kind = "draw5" } },
+    { { id = "light-red-skip-0", color = "red", kind = "skip" },
+      { id = "dark-pink-skipeveryone-0", color = "pink", kind = "skipEveryone" } },
+    { { id = "dark-pink-skipeveryone-0", color = "pink", kind = "skipEveryone" },
+      { id = "light-red-skip-0", color = "red", kind = "skip" } },
+    { { id = "light-red-reverse-0", color = "red", kind = "reverse" },
+      { id = "dark-pink-reverse-0", color = "pink", kind = "reverse" } },
+    { light_red_flip, { id = "dark-pink-flip-0", color = "pink", kind = "flip" } },
+    { light_wild, { id = "dark-wild-0", color = nil, kind = "wild" } },
+    { { id = "light-wilddraw2-0", color = nil, kind = "wildDraw2" },
+      { id = "dark-wilddrawcolor-0", color = nil, kind = "wildDrawColor" } },
+  }
+  for _, entry in ipairs(cases) do
+    local flipped = rules.flip_card(entry[1])
+    assert_equal(flipped.id, entry[2].id, "flipped id")
+    assert_equal(tostring(flipped.color), tostring(entry[2].color), "flipped colour")
+    assert_equal(flipped.kind, entry[2].kind, "flipped kind")
+    assert_equal(tostring(flipped.value), tostring(entry[2].value), "flipped value")
+    assert_equal(rules.flip_card(entry[2]).id, entry[1].id, "flipped back")
+  end
+  for _, card in ipairs(rules.build_deck("flip")) do
+    assert_equal(rules.flip_card(rules.flip_card(card)).id, card.id, "round trip")
+  end
+end)
+
+test("exposes flip as an authoritative light-side mode", function()
+  assert_equal(protocol.is_rules_mode("flip"), true, "mode recognised")
+  assert_equal(protocol.normalize_rules_mode("flip"), "flip", "mode normalized")
+  local game = rules.create_game(99, players({ "p1", "p2", "p3" }), 0, "flip")
+  assert_equal(game.mode, "flip", "game mode")
+  assert_equal(game.flip_side, "light", "starting side")
+  for _, card in ipairs(game.draw_pile) do
+    assert_equal(card.id:sub(1, 6), "light-", "light deck")
+  end
+end)
+
+test("flips every zone and reverses both piles on a Flip card", function()
+  local game = flip_staged({ light_red_flip, light_red_one })
+  game.draw_pile = { light_yellow_two, light_green_three }
+  game.discard = { light_red_one, light_blue_flip }
+  game.players[2].hand = { light_yellow_four }
+  game.players[3].hand = { light_green_five }
+  assert_equal(rules.can_play(game, light_red_flip), true, "flip playable on another flip")
+  local state, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = light_red_flip.id,
+  })
+  assert_equal(ok, true, "flip played")
+  assert_equal(state.flip_side, "dark", "dark side")
+  assert_equal(join(ids(state.draw_pile)), "dark-teal-3-0,dark-orange-2-0", "draw pile reversed and flipped")
+  assert_equal(join(ids(state.discard)), "dark-pink-flip-0,dark-purple-flip-1,dark-pink-1-0", "discard order")
+  assert_equal(state.current_color, "pink", "new top colour")
+  assert_equal(join(ids(state.players[1].hand)), "dark-pink-1-0", "actor hand flipped")
+  assert_equal(join(ids(state.players[2].hand)), "dark-orange-4-0", "next hand flipped")
+  assert_equal(join(ids(state.players[3].hand)), "dark-teal-5-0", "third hand flipped")
+  assert_equal(state.turn, 2, "turn advanced")
+end)
+
+test("uses a chosen colour or post-flip hand when the new top is wild", function()
+  local game = flip_staged({ light_red_flip })
+  game.discard = { light_wild }
+  local supplied, supplied_ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = light_red_flip.id, chosen_color = "teal",
+  })
+  assert_equal(supplied_ok, true, "supplied play")
+  assert_equal(supplied.current_color, "teal", "chosen colour")
+  local fallback, fallback_ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = light_red_flip.id,
+  })
+  assert_equal(fallback_ok, true, "fallback play")
+  assert_equal(fallback.current_color, "pink", "post-flip hand colour")
+end)
+
+test("only allows Flip cards on a colour or another Flip card", function()
+  local game = flip_staged({ light_red_flip }, "blue")
+  game.discard = { light_yellow_four }
+  assert_equal(rules.can_play(game, light_red_flip), false, "no match")
+  game.discard = { light_blue_flip }
+  assert_equal(rules.can_play(game, light_red_flip), true, "flip on flip")
+  game.discard = { light_green_five }
+  game.current_color = "red"
+  assert_equal(rules.can_play(game, light_red_flip), true, "colour match")
+end)
+
+test("resolves light Draw One, Skip, Reverse and Wild actions", function()
+  local draw = flip_staged({
+    { id = "light-red-draw1-0", color = "red", kind = "draw1" }, light_red_one,
+  })
+  draw.draw_pile = { light_yellow_two }
+  local drawn, drawn_ok = rules.apply_action(draw, {
+    type = "play", player_id = "p1", card_id = "light-red-draw1-0",
+  })
+  assert_equal(drawn_ok, true, "draw one played")
+  assert_equal(join(ids(drawn.players[2].hand)), "light-yellow-2-0", "target drew one")
+  assert_equal(drawn.turn, 3, "target lost turn")
+
+  local skipped, skipped_ok = rules.apply_action(flip_staged({
+    { id = "light-red-skip-0", color = "red", kind = "skip" },
+  }), { type = "play", player_id = "p1", card_id = "light-red-skip-0" })
+  assert_equal(skipped_ok, true, "skip played")
+  assert_equal(skipped.turn, 3, "next skipped")
+
+  local reversed_game = flip_staged({
+    { id = "light-red-reverse-0", color = "red", kind = "reverse" },
+  })
+  local reversed, reversed_ok = rules.apply_action(reversed_game, {
+    type = "play", player_id = "p1", card_id = "light-red-reverse-0",
+  })
+  assert_equal(reversed_ok, true, "reverse played")
+  assert_equal(reversed.direction, -1, "direction reversed")
+  assert_equal(reversed.turn, 3, "new direction turn")
+
+  local two = flip_staged({
+    { id = "light-red-reverse-0", color = "red", kind = "reverse" },
+  }, "red", 2)
+  local two_result = rules.apply_action(two, {
+    type = "play", player_id = "p1", card_id = "light-red-reverse-0",
+  })
+  assert_equal(two_result.direction, 1, "two-player direction")
+  assert_equal(two_result.turn, 1, "two-player reverse skips")
+
+  local wild, wild_ok = rules.apply_action(flip_staged({ light_wild }), {
+    type = "play", player_id = "p1", card_id = light_wild.id, chosen_color = "green",
+  })
+  assert_equal(wild_ok, true, "wild played")
+  assert_equal(wild.current_color, "green", "wild colour")
+end)
+
+test("challenges a light Wild Draw Two", function()
+  local wild_draw_two = { id = "light-wilddraw2-0", color = nil, kind = "wildDraw2" }
+  local game = flip_staged({ wild_draw_two, light_red_one })
+  game.draw_pile = { light_yellow_two, light_green_three }
+  local played, played_ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = wild_draw_two.id, chosen_color = "yellow",
+  })
+  assert_equal(played_ok, true, "wild draw two played")
+  local pending = played.pending_challenge
+  assert_equal(pending.kind, "wildDraw2", "challenge kind")
+  assert_equal(pending.amount, 2, "challenge amount")
+  assert_equal(pending.color, "yellow", "challenge colour")
+  assert_equal(pending.legal, false, "guilty")
+  assert_equal(played.turn, 1, "owner keeps turn")
+  local caught, caught_ok = rules.apply_action(played, {
+    type = "challenge", player_id = "p2", accept = true,
+  })
+  assert_equal(caught_ok, true, "challenge accepted")
+  assert_equal(join(ids(caught.players[1].hand)), "light-red-1-0,light-green-3-0,light-yellow-2-0", "owner drew two")
+  assert_equal(caught.turn, 3, "target skipped")
+  local declined, declined_ok = rules.apply_action(played, {
+    type = "challenge", player_id = "p2", accept = false,
+  })
+  assert_equal(declined_ok, true, "challenge declined")
+  assert_equal(join(ids(declined.players[2].hand)), "light-green-3-0,light-yellow-2-0", "target drew two")
+
+  local innocent_game = flip_staged({ wild_draw_two, light_green_three })
+  innocent_game.draw_pile = {
+    light_yellow_two, light_green_three, light_yellow_four, light_green_five,
+  }
+  local innocent, innocent_ok = rules.apply_action(innocent_game, {
+    type = "play", player_id = "p1", card_id = wild_draw_two.id, chosen_color = "yellow",
+  })
+  assert_equal(innocent_ok, true, "innocent play")
+  assert_equal(innocent.pending_challenge.legal, true, "innocent")
+  local punished, punished_ok = rules.apply_action(innocent, {
+    type = "challenge", player_id = "p2", accept = true,
+  })
+  assert_equal(punished_ok, true, "challenge resolved")
+  assert_equal(#punished.players[2].hand, 4, "challenger drew four")
+end)
+
+test("resolves dark Draw Five, Skip Everyone and Reverse", function()
+  local draw = dark_staged({ { id = "dark-pink-draw5-0", color = "pink", kind = "draw5" } })
+  draw.draw_pile = {
+    { id = "dark-teal-1-0", color = "teal", kind = "number", value = 1 },
+    { id = "dark-teal-2-0", color = "teal", kind = "number", value = 2 },
+    { id = "dark-teal-3-0", color = "teal", kind = "number", value = 3 },
+    { id = "dark-teal-4-0", color = "teal", kind = "number", value = 4 },
+    { id = "dark-teal-5-0", color = "teal", kind = "number", value = 5 },
+  }
+  local drawn, drawn_ok = rules.apply_action(draw, {
+    type = "play", player_id = "p1", card_id = "dark-pink-draw5-0",
+  })
+  assert_equal(drawn_ok, true, "draw five played")
+  assert_equal(#drawn.players[2].hand, 5, "target drew five")
+  assert_equal(drawn.turn, 3, "target lost turn")
+
+  local skipped, skipped_ok = rules.apply_action(dark_staged({
+    { id = "dark-pink-skipeveryone-0", color = "pink", kind = "skipEveryone" },
+  }), { type = "play", player_id = "p1", card_id = "dark-pink-skipeveryone-0" })
+  assert_equal(skipped_ok, true, "skip everyone played")
+  assert_equal(skipped.turn, 1, "actor acts again")
+
+  local two = dark_staged({
+    { id = "dark-pink-reverse-0", color = "pink", kind = "reverse" },
+  }, "pink", 2)
+  local reversed, reversed_ok = rules.apply_action(two, {
+    type = "play", player_id = "p1", card_id = "dark-pink-reverse-0",
+  })
+  assert_equal(reversed_ok, true, "reverse played")
+  assert_equal(reversed.turn, 1, "two-player reverse skips")
+  assert_equal(reversed.direction, 1, "direction unchanged")
+end)
+
+test("draws until the chosen colour appears and ignores wilds", function()
+  local wild_draw_color = { id = "dark-wilddrawcolor-0", color = nil, kind = "wildDrawColor" }
+  local game = dark_staged({ wild_draw_color })
+  game.draw_pile = {
+    { id = "dark-pink-1-0", color = "pink", kind = "number", value = 1 },
+    { id = "dark-pink-9-0", color = "pink", kind = "number", value = 9 },
+    { id = "dark-orange-9-0", color = "orange", kind = "number", value = 9 },
+    { id = "dark-teal-3-0", color = "teal", kind = "number", value = 3 },
+    light_wild,
+    { id = "dark-orange-2-0", color = "orange", kind = "number", value = 2 },
+  }
+  local played, played_ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = wild_draw_color.id, chosen_color = "teal",
+  })
+  assert_equal(played_ok, true, "wild draw colour played")
+  assert_equal(played.pending_challenge.kind, "wildDrawColor", "challenge kind")
+  assert_equal(played.pending_challenge.color, "teal", "challenge colour")
+  assert_equal(played.pending_challenge.legal, true, "innocent")
+  local taken, taken_ok = rules.apply_action(played, {
+    type = "challenge", player_id = "p2", accept = false,
+  })
+  assert_equal(taken_ok, true, "challenge declined")
+  assert_equal(join(ids(taken.players[2].hand)),
+    "dark-orange-2-0,light-wild-0,dark-teal-3-0", "drew until teal, wilds ignored")
+  assert_equal(join(ids(taken.draw_pile)), "dark-pink-1-0,dark-pink-9-0,dark-orange-9-0", "draw pile remainder")
+  assert_equal(taken.turn, 3, "target skipped")
+  local accepted, accepted_ok = rules.apply_action(played, {
+    type = "challenge", player_id = "p2", accept = true,
+  })
+  assert_equal(accepted_ok, true, "challenge accepted")
+  assert_equal(#accepted.players[2].hand, 5, "challenger drew two extra")
+
+  local guilty_game = dark_staged({
+    wild_draw_color, { id = "dark-pink-2-0", color = "pink", kind = "number", value = 2 },
+  })
+  guilty_game.draw_pile = {
+    { id = "dark-pink-1-0", color = "pink", kind = "number", value = 1 },
+    { id = "dark-teal-4-0", color = "teal", kind = "number", value = 4 },
+    { id = "dark-orange-2-0", color = "orange", kind = "number", value = 2 },
+  }
+  local guilty, guilty_ok = rules.apply_action(guilty_game, {
+    type = "play", player_id = "p1", card_id = wild_draw_color.id, chosen_color = "teal",
+  })
+  assert_equal(guilty_ok, true, "guilty play")
+  assert_equal(guilty.pending_challenge.legal, false, "guilty")
+  local caught, caught_ok = rules.apply_action(guilty, {
+    type = "challenge", player_id = "p2", accept = true,
+  })
+  assert_equal(caught_ok, true, "guilty challenge")
+  assert_equal(join(ids(caught.players[1].hand)),
+    "dark-pink-2-0,dark-orange-2-0,dark-teal-4-0", "owner drew until colour")
+  assert_equal(#caught.players[2].hand, 0, "challenger drew nothing")
+end)
+
+test("resolves final-card effects before declaring a flip winner", function()
+  local draw = flip_staged({ { id = "light-red-draw1-0", color = "red", kind = "draw1" } })
+  draw.draw_pile = { light_yellow_two }
+  local drawn, drawn_ok = rules.apply_action(draw, {
+    type = "play", player_id = "p1", card_id = "light-red-draw1-0",
+  })
+  assert_equal(drawn_ok, true, "final draw one")
+  assert_equal(drawn.finished, true, "winner declared")
+  assert_equal(join(ids(drawn.players[2].hand)), "light-yellow-2-0", "target drew first")
+
+  local flip = flip_staged({ light_red_flip })
+  flip.discard = { light_red_one, light_blue_flip }
+  local flipped, flipped_ok = rules.apply_action(flip, {
+    type = "play", player_id = "p1", card_id = light_red_flip.id,
+  })
+  assert_equal(flipped_ok, true, "final flip")
+  assert_equal(flipped.finished, true, "flip winner")
+  assert_equal(flipped.winner, "p1", "winner id")
+  assert_equal(flipped.flip_side, "dark", "side flipped on win")
+
+  local wild_draw_two = { id = "light-wilddraw2-0", color = nil, kind = "wildDraw2" }
+  local challenge_game = flip_staged({ wild_draw_two })
+  challenge_game.draw_pile = {
+    light_yellow_two, light_green_three, light_yellow_four, light_green_five,
+  }
+  local played, played_ok = rules.apply_action(challenge_game, {
+    type = "play", player_id = "p1", card_id = wild_draw_two.id, chosen_color = "yellow",
+  })
+  assert_equal(played_ok, true, "final wild draw two")
+  assert_equal(played.finished, false, "win deferred")
+  local resolved, resolved_ok = rules.apply_action(played, {
+    type = "challenge", player_id = "p2", accept = false,
+  })
+  assert_equal(resolved_ok, true, "challenge resolved")
+  assert_equal(resolved.finished, true, "winner after resolution")
+  assert_equal(resolved.winner, "p1", "winner id")
+end)
+
+test("scores flip wild variants at 50 and flip actions at 20", function()
+  assert_equal(rules.score_hand({
+    { id = "light-wild-0", color = nil, kind = "wild" },
+    { id = "light-wilddraw2-0", color = nil, kind = "wildDraw2" },
+    { id = "dark-wilddrawcolor-0", color = nil, kind = "wildDrawColor" },
+  }), 150, "wild score")
+  assert_equal(rules.score_hand({
+    light_red_flip,
+    { id = "light-red-draw1-0", color = "red", kind = "draw1" },
+    { id = "dark-pink-draw5-0", color = "pink", kind = "draw5" },
+  }), 60, "action score")
+end)
+
 if failures > 0 then
   io.stderr:write(failures .. " Uno rules test(s) failed\n")
   os.exit(1)

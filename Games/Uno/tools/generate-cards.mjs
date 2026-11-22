@@ -182,6 +182,167 @@ ${wheel}
 <text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">wildroulette ${copy}</text>`);
 }
 
+const LIGHT_PALETTE = {
+  red: [COLORS.red, "#ff8a75"],
+  yellow: [COLORS.yellow, "#ffe680"],
+  green: [COLORS.green, "#6ee7a8"],
+  blue: [COLORS.blue, "#8ab6ff"],
+};
+const DARK_PALETTE = {
+  pink: ["#c2185b", "#ff5c9a"],
+  teal: ["#00796b", "#2de1c2"],
+  orange: ["#d95400", "#ff9e40"],
+  purple: ["#6a1b9a", "#c471ed"],
+};
+
+function darkFrame(inner, pair) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 270" width="180" height="270" role="img">
+<defs>
+<radialGradient id="dglow"><stop offset="0" stop-color="${pair[1]}" stop-opacity="0.45"/><stop offset="1" stop-color="${pair[1]}" stop-opacity="0"/></radialGradient>
+</defs>
+<rect x="3" y="3" width="174" height="264" rx="18" fill="#08080c" stroke="#000000" stroke-width="5"/>
+<rect x="9" y="9" width="162" height="252" rx="14" fill="url(#dglow)" stroke="#000000" stroke-width="2"/>
+${inner}
+</svg>`;
+}
+
+function lightCorner(pair, label) {
+  return `<g fill="${pair[0]}" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="22">
+<text x="22" y="34">${label}</text>
+<text x="158" y="246" text-anchor="end" transform="rotate(180 158 246)">${label}</text>
+</g>`;
+}
+
+function darkCorner(pair, label) {
+  return `<g fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="20" style="filter:drop-shadow(0 0 6px ${pair[1]})">
+<text x="22" y="34">${label}</text>
+<text x="158" y="246" text-anchor="end" transform="rotate(180 158 246)">${label}</text>
+</g>`;
+}
+
+function classicLabel(text, x, y, size, stroke) {
+  return `<text x="${x}" y="${y}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="${size}" fill="#ffffff" stroke="${stroke}" stroke-width="2" paint-order="stroke">${text}</text>`;
+}
+
+function classicCaption(text, dark) {
+  return `<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="${dark ? "#94a3b8" : "#64748b"}">${text}</text>`;
+}
+
+const THEMES = {
+  light: {
+    colors: LIGHT_PALETTE,
+    frame: (inner) => frame(inner),
+    corner: lightCorner,
+    stroke: "#111827",
+    dark: false,
+    wildColors: [LIGHT_PALETTE.red[0], LIGHT_PALETTE.yellow[0], LIGHT_PALETTE.green[0], LIGHT_PALETTE.blue[0]],
+  },
+  dark: {
+    colors: DARK_PALETTE,
+    frame: (inner, pair) => darkFrame(inner, pair),
+    corner: darkCorner,
+    stroke: "#000000",
+    dark: true,
+    wildColors: [DARK_PALETTE.pink[0], DARK_PALETTE.teal[0], DARK_PALETTE.orange[0], DARK_PALETTE.purple[0]],
+  },
+};
+
+function quadrants(colors) {
+  return `<g>
+<path d="M9 23 A14 14 0 0 1 23 9 L157 9 A14 14 0 0 1 171 23 L90 135 Z" fill="${colors[0]}"/>
+<path d="M171 23 A14 14 0 0 1 171 247 L90 135 Z" fill="${colors[1]}"/>
+<path d="M171 247 A14 14 0 0 1 157 261 L23 261 A14 14 0 0 1 9 247 L90 135 Z" fill="${colors[2]}"/>
+<path d="M9 247 A14 14 0 0 1 9 23 L90 135 Z" fill="${colors[3]}"/>
+</g>`;
+}
+
+function flipSymbol(pair, stroke) {
+  return `<g>
+<circle cx="90" cy="132" r="52" fill="${pair[0]}" stroke="${stroke}" stroke-width="3"/>
+<path d="M90 80 A52 52 0 0 1 90 184 Z" fill="${pair[1]}"/>
+<path d="M56 108 A40 40 0 0 1 116 104" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+<polygon points="120,98 124,116 104,112" fill="#ffffff"/>
+<path d="M124 156 A40 40 0 0 1 64 160" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+<polygon points="60,166 56,148 76,152" fill="#ffffff"/>
+</g>`;
+}
+
+function colorWheel(colors, cx, cy, r, stroke) {
+  return `<g>
+<path d="M${cx} ${cy} L${cx} ${cy - r} A${r} ${r} 0 0 1 ${cx + r} ${cy} Z" fill="${colors[0]}"/>
+<path d="M${cx} ${cy} L${cx + r} ${cy} A${r} ${r} 0 0 1 ${cx} ${cy + r} Z" fill="${colors[1]}"/>
+<path d="M${cx} ${cy} L${cx} ${cy + r} A${r} ${r} 0 0 1 ${cx - r} ${cy} Z" fill="${colors[2]}"/>
+<path d="M${cx} ${cy} L${cx - r} ${cy} A${r} ${r} 0 0 1 ${cx} ${cy - r} Z" fill="${colors[3]}"/>
+<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${stroke}" stroke-width="3"/>
+<circle cx="${cx}" cy="${cy}" r="8" fill="${stroke}" stroke="#ffffff" stroke-width="2"/>
+</g>`;
+}
+
+function flipNumber(theme, color, value, copy) {
+  const pair = theme.colors[color];
+  const inner = `${theme.corner(pair, String(value))}
+<ellipse cx="90" cy="135" rx="62" ry="78" fill="${pair[0]}" transform="rotate(-18 90 135)"/>
+${classicLabel(String(value), 90, 158, 86, theme.stroke)}
+${classicCaption(`${theme.dark ? "dark" : "light"} ${color} ${value} ${copy}`, theme.dark)}`;
+  return theme.frame(inner, pair);
+}
+
+function flipAction(theme, color, cornerText, text, glyph, kind, copy) {
+  const pair = theme.colors[color];
+  const inner = `${theme.corner(pair, cornerText)}
+<ellipse cx="90" cy="135" rx="62" ry="78" fill="${pair[0]}" transform="rotate(-18 90 135)"/>
+${classicLabel(glyph, 90, 146, 56, theme.stroke)}
+${classicLabel(text, 90, 186, 16, theme.stroke)}
+${classicCaption(`${theme.dark ? "dark" : "light"} ${color} ${kind} ${copy}`, theme.dark)}`;
+  return theme.frame(inner, pair);
+}
+
+function flipFlip(theme, color, copy) {
+  const pair = theme.colors[color];
+  const inner = `${theme.corner(pair, "FLIP")}
+${flipSymbol(pair, theme.stroke)}
+${classicLabel("FLIP", 90, 214, 20, theme.stroke)}
+${classicCaption(`${theme.dark ? "dark" : "light"} ${color} flip ${copy}`, theme.dark)}`;
+  return theme.frame(inner, pair);
+}
+
+function flipWild(theme, kind, text, copy, colors) {
+  const pair = theme.dark ? DARK_PALETTE.purple : LIGHT_PALETTE.red;
+  const inner = `${theme.corner(pair, "WILD")}
+${quadrants(colors)}
+<ellipse cx="90" cy="135" rx="60" ry="74" fill="${theme.dark ? "#050509" : "#0f172a"}" transform="rotate(-18 90 135)"/>
+${classicLabel("W", 90, 150, 64, theme.stroke)}
+${classicLabel(text, 90, 188, 16, theme.stroke)}
+${classicCaption(`${theme.dark ? "dark" : "light"} ${kind} ${copy}`, theme.dark)}`;
+  return theme.frame(inner, pair);
+}
+
+function flipWildDraw(theme, kind, text, glyph, copy, colors) {
+  const pair = theme.dark ? DARK_PALETTE.purple : LIGHT_PALETTE.red;
+  const isColor = kind === "wilddrawcolor";
+  const center = isColor ? colorWheel(colors, 90, 118, 40, theme.stroke) : classicLabel(glyph, 90, 142, 64, theme.stroke);
+  const inner = `${theme.corner(pair, isColor ? "WDC" : "+2")}
+${quadrants(colors)}
+<ellipse cx="90" cy="135" rx="60" ry="74" fill="${theme.dark ? "#050509" : "#0f172a"}" transform="rotate(-18 90 135)"/>
+${center}
+${classicLabel(text, 90, isColor ? 196 : 188, isColor ? 14 : 16, theme.stroke)}
+${classicCaption(`${theme.dark ? "dark" : "light"} ${kind} ${copy}`, theme.dark)}`;
+  return theme.frame(inner, pair);
+}
+
+const FLIP_ACTIONS = {
+  light: [
+    ["draw1", "DRAW1", "DRAW 1", "+1"],
+    ["reverse", "REV", "REVERSE", "↻"],
+    ["skip", "SKIP", "SKIP", "⊘"],
+  ],
+  dark: [
+    ["draw5", "+5", "DRAW 5", "+5"],
+    ["reverse", "REV", "REVERSE", "↻"],
+    ["skipeveryone", "SKIP", "SKIP ALL", "⊘"],
+  ],
+};
+
 mkdirSync(OUT, { recursive: true });
 
 writeFileSync(path.join(OUT, "card-back.svg"), frame(`<g>
@@ -246,5 +407,33 @@ for (let copy = 0; copy < 8; copy += 1) {
   writeFileSync(path.join(OUT, `wildreverse4-${copy}.svg`), wildReverse4Card(copy));
   writeFileSync(path.join(OUT, `wildroulette-${copy}.svg`), wildRouletteCard(copy));
   count += 2;
+}
+for (const side of ["light", "dark"]) {
+  const theme = THEMES[side];
+  for (const color of Object.keys(theme.colors)) {
+    for (let value = 1; value <= 9; value += 1) {
+      for (let copy = 0; copy < 2; copy += 1) {
+        writeFileSync(path.join(OUT, `${side}-${color}-${value}-${copy}.svg`), flipNumber(theme, color, value, copy));
+        count += 1;
+      }
+    }
+    for (const [kind, cornerText, text, glyph] of FLIP_ACTIONS[side]) {
+      for (let copy = 0; copy < 2; copy += 1) {
+        writeFileSync(path.join(OUT, `${side}-${color}-${kind}-${copy}.svg`), flipAction(theme, color, cornerText, text, glyph, kind, copy));
+        count += 1;
+      }
+    }
+    for (let copy = 0; copy < 2; copy += 1) {
+      writeFileSync(path.join(OUT, `${side}-${color}-flip-${copy}.svg`), flipFlip(theme, color, copy));
+      count += 1;
+    }
+  }
+  for (let copy = 0; copy < 4; copy += 1) {
+    writeFileSync(path.join(OUT, `${side}-wild-${copy}.svg`), flipWild(theme, "wild", "WILD", copy, theme.wildColors));
+    const drawKind = side === "light" ? "wilddraw2" : "wilddrawcolor";
+    const drawText = side === "light" ? "WILD DRAW 2" : "WILD DRAW COLOR";
+    writeFileSync(path.join(OUT, `${side}-${drawKind}-${copy}.svg`), flipWildDraw(theme, drawKind, drawText, "+2", copy, theme.wildColors));
+    count += 2;
+  }
 }
 console.log(`wrote ${count} card SVGs to ${OUT}`);

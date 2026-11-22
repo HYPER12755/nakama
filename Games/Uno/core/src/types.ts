@@ -1,6 +1,23 @@
-export type Color = "red" | "yellow" | "green" | "blue";
+export type Color =
+  | "red"
+  | "yellow"
+  | "green"
+  | "blue"
+  | "pink"
+  | "teal"
+  | "orange"
+  | "purple";
 
-export type GameMode = "classic" | "sevenO" | "progressive" | "jumpIn" | "attack" | "noMercy";
+export type FlipSide = "light" | "dark";
+
+export type GameMode =
+  | "classic"
+  | "sevenO"
+  | "progressive"
+  | "jumpIn"
+  | "attack"
+  | "noMercy"
+  | "flip";
 
 export type CardKind =
   | "number"
@@ -18,7 +35,12 @@ export type CardKind =
   | "wildDraw6"
   | "wildDraw10"
   | "wildReverse4"
-  | "wildRoulette";
+  | "wildRoulette"
+  | "draw1"
+  | "flip"
+  | "draw5"
+  | "wildDraw2"
+  | "wildDrawColor";
 
 export interface Card {
   id: string;
@@ -64,6 +86,9 @@ export interface PendingChallenge {
   ownerId: string;
   targetId: string;
   legal: boolean;
+  kind?: CardKind;
+  amount?: number;
+  color?: Color;
 }
 
 export type StackKind = "draw2" | "wild4" | "draw4" | "wildReverse4" | "wildDraw6" | "wildDraw10";
@@ -114,6 +139,7 @@ export interface GameState {
   turn: number;
   direction: 1 | -1;
   currentColor: Color;
+  flipSide: FlipSide;
   drawnCardId: string | null;
   pendingChallenge: PendingChallenge | null;
   pendingStack: PendingStack | null;
@@ -146,7 +172,29 @@ export interface LegalMoves {
   canDraw: boolean;
 }
 
-export const COLORS: Color[] = ["red", "yellow", "green", "blue"];
+export const LIGHT_COLORS: Color[] = ["red", "yellow", "green", "blue"];
+export const DARK_COLORS: Color[] = ["pink", "teal", "orange", "purple"];
+export const ALL_COLORS: Color[] = [...LIGHT_COLORS, ...DARK_COLORS];
+export const COLORS: Color[] = LIGHT_COLORS;
+
+const FLIP_COLOR_MAP: Record<string, Color> = {
+  red: "pink",
+  pink: "red",
+  yellow: "orange",
+  orange: "yellow",
+  green: "teal",
+  teal: "green",
+  blue: "purple",
+  purple: "blue",
+};
+
+export function flipColor(color: Color): Color {
+  return FLIP_COLOR_MAP[color] ?? color;
+}
+
+export function colorsForSide(side: FlipSide): readonly Color[] {
+  return side === "dark" ? DARK_COLORS : LIGHT_COLORS;
+}
 
 export const DEFAULT_RULES = {
   handSize: 7,

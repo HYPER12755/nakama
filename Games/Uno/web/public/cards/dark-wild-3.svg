@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 270" width="180" height="270" role="img">
+<defs>
+<radialGradient id="dglow"><stop offset="0" stop-color="#c471ed" stop-opacity="0.45"/><stop offset="1" stop-color="#c471ed" stop-opacity="0"/></radialGradient>
+</defs>
+<rect x="3" y="3" width="174" height="264" rx="18" fill="#08080c" stroke="#000000" stroke-width="5"/>
+<rect x="9" y="9" width="162" height="252" rx="14" fill="url(#dglow)" stroke="#000000" stroke-width="2"/>
+<g fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="20" style="filter:drop-shadow(0 0 6px #c471ed)">
+<text x="22" y="34">WILD</text>
+<text x="158" y="246" text-anchor="end" transform="rotate(180 158 246)">WILD</text>
+</g>
+<g>
+<path d="M9 23 A14 14 0 0 1 23 9 L157 9 A14 14 0 0 1 171 23 L90 135 Z" fill="#c2185b"/>
+<path d="M171 23 A14 14 0 0 1 171 247 L90 135 Z" fill="#00796b"/>
+<path d="M171 247 A14 14 0 0 1 157 261 L23 261 A14 14 0 0 1 9 247 L90 135 Z" fill="#d95400"/>
+<path d="M9 247 A14 14 0 0 1 9 23 L90 135 Z" fill="#6a1b9a"/>
+</g>
+<ellipse cx="90" cy="135" rx="60" ry="74" fill="#050509" transform="rotate(-18 90 135)"/>
+<text x="90" y="150" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="64" fill="#ffffff" stroke="#000000" stroke-width="2" paint-order="stroke">W</text>
+<text x="90" y="188" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="16" fill="#ffffff" stroke="#000000" stroke-width="2" paint-order="stroke">WILD</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#94a3b8">dark wild 3</text>
+</svg>

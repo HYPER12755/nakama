@@ -39,6 +39,10 @@
   --card-yellow: #f2c600;
   --card-green: #1fa45b;
   --card-blue: #2464d6;
+  --card-pink: #ef4f9b;
+  --card-teal: #16a8a2;
+  --card-orange: #ee8a24;
+  --card-purple: #8d5bd6;
   --danger: #fb7185;
   --success: #34d399;
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
@@ -380,6 +384,22 @@ input:focus-visible {
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
+}
+
+.turn-side {
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(31, 164, 91, 0.16);
+  color: #69f0ae;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.turn-side--dark {
+  background: rgba(160, 107, 255, 0.18);
+  color: #d4b4ff;
 }
 
 .turn-connection {
@@ -1988,6 +2008,48 @@ html[data-moonperf="lite"] .die--rolling {
     linear-gradient(160deg, #123b2d, #0a1e16);
 }
 
+.board-stage .uno-table-surface.uno-table-surface--dark-side {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(146, 84, 214, 0.26), transparent 62%),
+    linear-gradient(160deg, #2b1740, #130a1e);
+}
+
+.uno-side-badge {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(5, 18, 12, 0.55);
+  color: #d8f7e5;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.uno-side-badge__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #69f0ae;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.uno-side-badge--dark {
+  background: rgba(28, 9, 43, 0.62);
+  color: #f0d9ff;
+}
+
+.uno-side-badge--dark .uno-side-badge__dot {
+  background: #c084fc;
+}
+
 .uno-center {
   display: flex;
   align-items: center;
@@ -2117,11 +2179,19 @@ html[data-moonperf="lite"] .die--rolling {
 .uno-colour--yellow { background: var(--card-yellow); }
 .uno-colour--green { background: var(--card-green); }
 .uno-colour--blue { background: var(--card-blue); }
+.uno-colour--pink { background: var(--card-pink); }
+.uno-colour--teal { background: var(--card-teal); }
+.uno-colour--orange { background: var(--card-orange); }
+.uno-colour--purple { background: var(--card-purple); }
 
 .uno-disc--red { background: var(--card-red); }
 .uno-disc--yellow { background: var(--card-yellow); }
 .uno-disc--green { background: var(--card-green); }
 .uno-disc--blue { background: var(--card-blue); }
+.uno-disc--pink { background: var(--card-pink); }
+.uno-disc--teal { background: var(--card-teal); }
+.uno-disc--orange { background: var(--card-orange); }
+.uno-disc--purple { background: var(--card-purple); }
 
 .app--board-only .board-stage .uno-table-surface {
   min-height: min(86vh, 860px);
@@ -2542,6 +2612,10 @@ html[data-moonperf="lite"] .die--rolling {
 .uno-colour--yellow { background: radial-gradient(circle at 34% 28%, #ffe98a, var(--card-yellow) 62%, #b78600); }
 .uno-colour--green { background: radial-gradient(circle at 34% 28%, #7ee2a9, var(--card-green) 62%, #0e6b3c); }
 .uno-colour--blue { background: radial-gradient(circle at 34% 28%, #8bb8ff, var(--card-blue) 62%, #123d8a); }
+.uno-colour--pink { background: radial-gradient(circle at 34% 28%, #ff9ccc, var(--card-pink) 62%, #8c1e54); }
+.uno-colour--teal { background: radial-gradient(circle at 34% 28%, #7ce5df, var(--card-teal) 62%, #075c59); }
+.uno-colour--orange { background: radial-gradient(circle at 34% 28%, #ffc27a, var(--card-orange) 62%, #9c4d08); }
+.uno-colour--purple { background: radial-gradient(circle at 34% 28%, #cfabff, var(--card-purple) 62%, #4d2596); }
 
 @keyframes uno-fly {
   0% { transform: translate(0, 0) scale(1) rotate(0); opacity: 1; }

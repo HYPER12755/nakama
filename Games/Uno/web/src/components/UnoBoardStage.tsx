@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
-import { UNO_MODE, drawCardValue, type Card, type Color } from "@moongames/uno-core";
-import type { BoardView, RulesMode } from "../lib/view";
+import { UNO_MODE, colorsForSide, drawCardValue, type Card, type Color } from "@moongames/uno-core";
+import { normalizeFlipSide, type BoardView, type RulesMode } from "../lib/view";
 
-const COLORS: Color[] = ["red", "yellow", "green", "blue"];
 const COLOUR_HEX: Record<Color, string> = {
   red: "#ff5252", yellow: "#ffd740", green: "#69f0ae", blue: "#448aff",
+  pink: "#ff5fa8", teal: "#26c6c0", orange: "#f59b35", purple: "#a06bff",
 };
 
 interface Flight {
@@ -27,7 +27,47 @@ const COLOUR_STACK_KINDS = new Set<Card["kind"]>([
 ]);
 
 function isWild(card: Card): boolean {
-  return card.id === "wild" || card.id.startsWith("wild");
+  return card.kind.startsWith("wild");
+}
+
+function cardHint(card: Card): string | undefined {
+  if (card.kind === "flip") return "Flips every card to the other side";
+  if (card.kind === "draw1") return "The next player draws 1";
+  if (card.kind === "draw5") return "The next player draws 5";
+  if (card.kind === "skipEveryone") return "Skips every other player";
+  if (card.kind === "wildDraw2") return "The next player takes 2 or challenges";
+  if (card.kind === "wildDrawColor") return "The next player draws until the chosen colour";
+  return undefined;
+}
+
+interface ChallengeInfo {
+  eyebrow: string;
+  copy: string;
+  takeLabel: string;
+}
+
+function challengeInfo(challenge: NonNullable<BoardView["pendingChallenge"]>): ChallengeInfo {
+  if (challenge.kind === "wildDraw2") {
+    const amount = challenge.amount ?? 2;
+    return {
+      eyebrow: "Wild Draw Two",
+      copy: `Take ${amount} cards, or accuse the player of holding a matching colour; if guilty they draw ${amount}, if innocent you draw ${amount * 2}.`,
+      takeLabel: `Take ${amount}`,
+    };
+  }
+  if (challenge.kind === "wildDrawColor") {
+    const color = challenge.color ?? "chosen";
+    return {
+      eyebrow: "Wild Draw Color",
+      copy: `Take until a card of the chosen colour (${color}) appears, or challenge. If guilty the player draws until that colour; if innocent you draw until it appears.`,
+      takeLabel: `Take until ${color}`,
+    };
+  }
+  return {
+    eyebrow: "Wild Draw Four",
+    copy: "Take four cards, or accuse the player of holding a matching colour.",
+    takeLabel: "Take 4",
+  };
 }
 
 export function isSevenCard(card: Card): boolean {
@@ -92,6 +132,8 @@ export function UnoBoardStage({
   const pendingRoulette = view.pendingRoulette ?? null;
   const effectiveMode = view.rulesMode ?? view.mode ?? rulesMode;
   const noMercy = effectiveMode === UNO_MODE.NO_MERCY;
+  const flipSide = normalizeFlipSide(view.flipSide);
+  const sideColors = colorsForSide(flipSide);
   const jumpWindow = view.jumpWindow ?? null;
   const jumpOpen = jumpWindow !== null;
   const jumping = jumpWindow !== null && jumpWindow.ownerId !== view.myUserId;
@@ -108,6 +150,7 @@ export function UnoBoardStage({
     view.players[view.turn]?.userId === view.myUserId;
   const challengeTarget =
     view.pendingChallenge !== null && view.pendingChallenge.targetId === view.myUserId;
+  const info = view.pendingChallenge === null ? null : challengeInfo(view.pendingChallenge);
   const legal = new Set(view.legalCards);
   const stackCards = !stackTarget || pendingStack === null
     ? []
@@ -261,10 +304,14 @@ export function UnoBoardStage({
 
   return (
     <div
-      className={`uno-table-surface uno-highlight--${highlight} uno-pile--${pileStyle}${dealt ? " uno--dealt" : ""}`}
+      className={`uno-table-surface uno-highlight--${highlight} uno-pile--${pileStyle}${flipSide === "dark" ? " uno-table-surface--dark-side" : ""}${dealt ? " uno--dealt" : ""}`}
       ref={surfaceRef}
       style={{ ["--uno-active" as string]: activeColor === null ? "transparent" : COLOUR_HEX[activeColor] }}
     >
+      <div className={`uno-side-badge uno-side-badge--${flipSide}`} aria-label={`${flipSide === "dark" ? "Dark" : "Light"} side`}>
+        <span className="uno-side-badge__dot" aria-hidden="true" />
+        {flipSide === "dark" ? "Dark side" : "Light side"}
+      </div>
       <div className="uno-direction" key={direction} aria-hidden="true">{direction === 1 ? "↻" : "↺"}</div>
 
       {jumpOpen ? (
@@ -385,7 +432,7 @@ export function UnoBoardStage({
                     onClick={(event) => play(card, event)}
                     disabled={!playable}
                     aria-label={`Play ${card.id}`}
-                    title={playable ? (jumping && !isMyTurn ? "Jump in with this card" : "Play this card") : card.id}
+                    title={playable ? (jumping && !isMyTurn ? "Jump in with this card" : cardHint(card) ?? "Play this card") : card.id}
                     style={{ ["--uno-deal-delay" as string]: `${index * 4 * 80}ms` }}
                   >
                     <img src={art(card.id)} alt={card.id} />
@@ -412,14 +459,14 @@ export function UnoBoardStage({
         />
       ))}
 
-      {challengeTarget && pendingStack === null && (
+      {challengeTarget && pendingStack === null && info !== null && (
         <div className="uno-overlay">
           <div className="uno-overlay-card">
-            <p className="eyebrow">Wild Draw Four</p>
+            <p className="eyebrow">{info.eyebrow}</p>
             <h2>Challenge the play?</h2>
-            <p className="uno-overlay-copy">Take four cards, or accuse the player of holding a matching colour.</p>
+            <p className="uno-overlay-copy">{info.copy}</p>
             <div className="uno-overlay-actions">
-              <button type="button" className="button button--ghost" onClick={() => resolveChallenge(false)}>Take 4</button>
+              <button type="button" className="button button--ghost" onClick={() => resolveChallenge(false)}>{info.takeLabel}</button>
               <button type="button" className="button button--primary" onClick={() => resolveChallenge(true)}>Challenge</button>
             </div>
           </div>
@@ -526,7 +573,7 @@ export function UnoBoardStage({
               <h2>Choose a colour</h2>
               <p className="uno-overlay-copy">Keep drawing until a card of the colour you pick appears.</p>
               <div className="uno-colour-choices">
-                {COLORS.map((color, index) => (
+                {sideColors.map((color, index) => (
                   <button
                     type="button"
                     key={color}
@@ -572,7 +619,7 @@ export function UnoBoardStage({
               <h2>Choose a colour</h2>
               <p className="uno-overlay-copy">The next card must match the colour you pick.</p>
               <div className="uno-colour-choices">
-                {COLORS.map((color, index) => (
+                {sideColors.map((color, index) => (
                   <button
                     type="button"
                     key={color}

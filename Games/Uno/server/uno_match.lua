@@ -73,11 +73,21 @@ local function public_pending_challenge(game)
   if pending == nil then
     return nil
   end
-  return {
+  local result = {
     ownerId = pending.owner_id,
     targetId = pending.target_id,
     legal = pending.legal,
   }
+  if pending.kind ~= nil then
+    result.kind = pending.kind
+  end
+  if pending.amount ~= nil then
+    result.amount = pending.amount
+  end
+  if pending.color ~= nil then
+    result.color = pending.color
+  end
+  return result
 end
 
 local function public_pending_hit(game)
@@ -163,6 +173,7 @@ local function state_payload(state, viewer_id)
     turn = game ~= nil and game.turn - 1 or 0,
     direction = game ~= nil and game.direction or 1,
     currentColor = game ~= nil and game.current_color or nil,
+    flipSide = game ~= nil and game.flip_side or "light",
     topCard = game ~= nil and game.discard[#game.discard] or nil,
     pendingChallenge = public_pending_challenge(game),
     pendingStack = public_pending_stack(game),
@@ -585,8 +596,11 @@ local function timeout_action(state)
       if card.id == game.drawn_card_id then
         local chosen_color = nil
         if card.kind == "wild" or card.kind == "wild4" or card.kind == "wildAttack"
-          or card.kind == "wildDraw6" or card.kind == "wildDraw10" or card.kind == "wildReverse4" then
-          chosen_color = rules.most_common_color(game.players[index].hand)
+          or card.kind == "wildDraw6" or card.kind == "wildDraw10" or card.kind == "wildReverse4"
+          or card.kind == "wildDraw2" or card.kind == "wildDrawColor" then
+          local colors = game.mode == "flip" and game.flip_side == "dark"
+            and protocol.DARK_COLORS or protocol.COLORS
+          chosen_color = rules.most_common_color(game.players[index].hand, colors)
         end
         local target_id = nil
         if (game.mode == "sevenO" or game.mode == "noMercy")

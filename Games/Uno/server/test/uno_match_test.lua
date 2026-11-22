@@ -930,6 +930,76 @@ test("a pending roulette timeout auto-chooses a colour instead of stalling", fun
   assert_equal(timed_out, true, "auto colour choice broadcast")
 end)
 
+test("propagates flip mode, flipSide and pending challenge fields", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "flip",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  assert_equal(state.rules_mode, "flip", "stored rules mode")
+  assert_equal(state.game.mode, "flip", "game rules mode")
+  assert_equal(state.game.flip_side, "light", "game starts on light side")
+  local started = nil
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.MATCH_STARTED then
+      started = require("json").decode(message.data)
+    end
+  end
+  assert_equal(started.rulesMode, "flip", "match started payload")
+  local payload = require("json").decode(select(2, MATCH.match_signal({}, dispatcher_obj, 1, state, "")))
+  assert_equal(payload.rulesMode, "flip", "state payload mode")
+  assert_equal(payload.flipSide, "light", "state payload side")
+  state.game.pending_challenge = {
+    owner_id = "u1",
+    target_id = "u2",
+    legal = true,
+    kind = "wildDrawColor",
+    amount = 0,
+    color = "teal",
+  }
+  payload = require("json").decode(select(2, MATCH.match_signal({}, dispatcher_obj, 1, state, "")))
+  assert_equal(payload.pendingChallenge.kind, "wildDrawColor", "challenge kind published")
+  assert_equal(payload.pendingChallenge.amount, 0, "challenge amount published")
+  assert_equal(payload.pendingChallenge.color, "teal", "challenge colour published")
+end)
+
+test("broadcasts flip plays through the match lifecycle", function()
+  local state = MATCH.match_init({ match_id = "m2" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "flip",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  local rules = require("uno_rules")
+  state.game.players[1].hand = {
+    { id = "light-red-flip-0", color = "red", kind = "flip" },
+  }
+  state.game.current_color = "red"
+  state.game.turn = 1
+  local before = #dispatcher_obj.messages
+  MATCH.match_loop({}, dispatcher_obj, 3, state, {
+    {
+      op_code = OP.PLAY_REQUEST,
+      presence = presence("u1", "Alice"),
+      data = json_encode({ cardId = "light-red-flip-0" }),
+    },
+  })
+  assert_equal(state.game.flip_side, "dark", "match flipped to dark")
+  local moved = false
+  for index = before + 1, #dispatcher_obj.messages do
+    if dispatcher_obj.messages[index].op == OP.MOVE then
+      local payload = require("json").decode(dispatcher_obj.messages[index].data)
+      moved = payload.action.type == "play" and payload.action.card_id == "light-red-flip-0"
+    end
+  end
+  assert_equal(moved, true, "flip play broadcast")
+  local payload = require("json").decode(select(2, MATCH.match_signal({}, dispatcher_obj, 1, state, "")))
+  assert_equal(payload.flipSide, "dark", "state payload side updated")
+end)
+
 if failures > 0 then
   io.stderr:write(failures .. " Uno match test(s) failed\n")
   os.exit(1)

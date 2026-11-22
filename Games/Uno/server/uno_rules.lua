@@ -17,11 +17,64 @@ rules.JUMP_WINDOW_MS = protocol.JUMP_WINDOW_MS
 local WILD_KINDS = {
   wild = true, wild4 = true, wildAttack = true, wildDraw6 = true,
   wildDraw10 = true, wildReverse4 = true, wildRoulette = true,
+  wildDraw2 = true, wildDrawColor = true,
 }
 local WILD_COLOR_KINDS = {
   wild = true, wild4 = true, wildAttack = true, wildDraw6 = true,
-  wildDraw10 = true, wildReverse4 = true,
+  wildDraw10 = true, wildReverse4 = true, wildDraw2 = true, wildDrawColor = true,
 }
+
+local FLIP_COLOR_MAP = {
+  red = "pink", pink = "red",
+  yellow = "orange", orange = "yellow",
+  green = "teal", teal = "green",
+  blue = "purple", purple = "blue",
+}
+local FLIP_KIND = {
+  draw1 = "draw5", draw5 = "draw1",
+  skip = "skipEveryone", skipEveryone = "skip",
+  reverse = "reverse", flip = "flip", wild = "wild",
+  wildDraw2 = "wildDrawColor", wildDrawColor = "wildDraw2",
+}
+local FLIP_KIND_ID = {
+  draw1 = "draw1", draw5 = "draw5", skip = "skip", skipEveryone = "skipeveryone",
+  reverse = "reverse", flip = "flip", wild = "wild",
+  wildDraw2 = "wilddraw2", wildDrawColor = "wilddrawcolor",
+}
+
+function rules.flip_color(color)
+  return FLIP_COLOR_MAP[color] or color
+end
+
+function rules.colors_for_side(side)
+  return side == "dark" and protocol.DARK_COLORS or protocol.LIGHT_COLORS
+end
+
+function rules.flip_card(card)
+  local side
+  if card.id:sub(1, 6) == "light-" then
+    side = "dark"
+  elseif card.id:sub(1, 5) == "dark-" then
+    side = "light"
+  else
+    return card
+  end
+  local kind = FLIP_KIND[card.kind] or card.kind
+  local color
+  if card.color ~= nil and not kind:find("^wild") then
+    color = rules.flip_color(card.color)
+  end
+  local copy = tonumber(card.id:match("([^%-]+)$")) or 0
+  local kind_id = card.kind == "number" and tostring(card.value or 0) or (FLIP_KIND_ID[kind] or kind)
+  local id = color == nil
+    and string.format("%s-%s-%d", side, kind_id, copy)
+    or string.format("%s-%s-%s-%d", side, color, kind_id, copy)
+  local result = { id = id, color = color, kind = kind }
+  if card.value ~= nil then
+    result.value = card.value
+  end
+  return result
+end
 
 function rules.draw_card_value(kind)
   if kind == "draw2" then return rules.DRAW_TWO_AMOUNT end
@@ -172,7 +225,40 @@ local function build_no_mercy_deck()
   return deck
 end
 
+local function build_flip_deck()
+  local deck = {}
+  for _, color in ipairs(protocol.LIGHT_COLORS) do
+    for value = 1, 9 do
+      for copy_index = 0, 1 do
+        deck[#deck + 1] = {
+          id = string.format("light-%s-%d-%d", color, value, copy_index),
+          color = color,
+          kind = "number",
+          value = value,
+        }
+      end
+    end
+    for _, kind in ipairs({ "draw1", "reverse", "skip", "flip" }) do
+      for copy_index = 0, 1 do
+        deck[#deck + 1] = {
+          id = string.format("light-%s-%s-%d", color, kind, copy_index),
+          color = color,
+          kind = kind,
+        }
+      end
+    end
+  end
+  for copy_index = 0, 3 do
+    deck[#deck + 1] = { id = string.format("light-wild-%d", copy_index), color = nil, kind = "wild" }
+    deck[#deck + 1] = { id = string.format("light-wilddraw2-%d", copy_index), color = nil, kind = "wildDraw2" }
+  end
+  return deck
+end
+
 function rules.build_deck(mode)
+  if mode == "flip" then
+    return build_flip_deck()
+  end
   if mode == "attack" then
     return build_attack_deck()
   end
@@ -254,6 +340,16 @@ function rules.can_play(state, card)
     return card.value == top.value
   end
   return card.kind == top.kind
+end
+
+local function valid_color(state, color)
+  local colors = state.mode == "flip" and protocol.ALL_COLORS or protocol.COLORS
+  for _, candidate in ipairs(colors) do
+    if candidate == color then
+      return true
+    end
+  end
+  return false
 end
 
 local function has_color_match(state, player)
@@ -393,9 +489,10 @@ function rules.clear_jump_window(state, now)
   return next_state
 end
 
-local function most_common_color(hand)
+local function most_common_color(hand, options)
+  local colors = options or protocol.COLORS
   local counts = {}
-  for _, color in ipairs(protocol.COLORS) do
+  for _, color in ipairs(colors) do
     counts[color] = 0
   end
   for _, card in ipairs(hand) do
@@ -403,9 +500,9 @@ local function most_common_color(hand)
       counts[card.color] = (counts[card.color] or 0) + 1
     end
   end
-  local best = protocol.COLORS[1]
+  local best = colors[1]
   local best_count = -1
-  for _, color in ipairs(protocol.COLORS) do
+  for _, color in ipairs(colors) do
     if (counts[color] or 0) > best_count then
       best = color
       best_count = counts[color] or 0
@@ -439,8 +536,9 @@ function rules.create_game(seed, players, now, mode)
     state_seed = rules.next_seed(state_seed)
     starter = table.remove(deck)
   end
-  if starter.kind == "wild" or starter.kind == "wildAttack" then
-    starter.color = most_common_color(dealt[1].hand)
+  if starter.kind == "wild" or starter.kind == "wildAttack"
+    or (rules_mode == "flip" and starter.kind:find("^wild") ~= nil) then
+    starter.color = most_common_color(dealt[1].hand, rules.colors_for_side("light"))
   end
 
   local starting_rule = {
@@ -476,6 +574,7 @@ function rules.create_game(seed, players, now, mode)
     turn = starting_rule.turn,
     direction = starting_rule.direction,
     current_color = starter.color,
+    flip_side = "light",
     drawn_card_id = nil,
     pending_challenge = nil,
     pending_stack = nil,
@@ -552,6 +651,58 @@ local function draw_cards(state, player, count)
   check_mercy(state)
 end
 
+local function draw_until_color(state, player, color)
+  local budget = #state.draw_pile + #state.discard + 1
+  while budget > 0 do
+    budget = budget - 1
+    recycle_draw_pile(state)
+    local card = table.remove(state.draw_pile)
+    if card == nil then
+      break
+    end
+    player.hand[#player.hand + 1] = card
+    if card.color == color then
+      break
+    end
+  end
+  check_mercy(state)
+end
+
+local function apply_flip(state, actor, chosen_color)
+  for index, card in ipairs(state.draw_pile) do
+    state.draw_pile[index] = rules.flip_card(card)
+  end
+  for index, card in ipairs(state.discard) do
+    state.discard[index] = rules.flip_card(card)
+  end
+  for _, player in ipairs(state.players) do
+    for index, card in ipairs(player.hand) do
+      player.hand[index] = rules.flip_card(card)
+    end
+  end
+  local reversed_draw = {}
+  for index = #state.draw_pile, 1, -1 do
+    reversed_draw[#reversed_draw + 1] = state.draw_pile[index]
+  end
+  state.draw_pile = reversed_draw
+  local reversed_discard = {}
+  for index = #state.discard, 1, -1 do
+    reversed_discard[#reversed_discard + 1] = state.discard[index]
+  end
+  state.discard = reversed_discard
+  state.flip_side = state.flip_side == "light" and "dark" or "light"
+  local new_top = rules.top_card(state)
+  if new_top == nil then
+    return
+  end
+  if new_top.color ~= nil then
+    state.current_color = new_top.color
+  else
+    state.current_color = chosen_color
+      or most_common_color(actor.hand, rules.colors_for_side(state.flip_side))
+  end
+end
+
 function rules.active_players(state)
   local result = {}
   for _, player in ipairs(state.players) do
@@ -591,25 +742,8 @@ local function fail(state, code)
   return state, false, code
 end
 
-function rules.most_common_color(hand)
-  local counts = {}
-  for _, color in ipairs(protocol.COLORS) do
-    counts[color] = 0
-  end
-  for _, card in ipairs(hand) do
-    if card.color ~= nil then
-      counts[card.color] = (counts[card.color] or 0) + 1
-    end
-  end
-  local best = protocol.COLORS[1]
-  local best_count = -1
-  for _, color in ipairs(protocol.COLORS) do
-    if (counts[color] or 0) > best_count then
-      best = color
-      best_count = counts[color] or 0
-    end
-  end
-  return best
+function rules.most_common_color(hand, options)
+  return most_common_color(hand, options)
 end
 
 function rules.pick_target(state, player_id)
@@ -810,7 +944,7 @@ function rules.apply_action(previous, action, now)
       return fail(previous, protocol.ERROR.NOT_YOUR_TURN)
     end
     local color = action.colour or action.color or action.chosen_color
-    if not protocol.is_color(color) then
+    if not valid_color(state, color) then
       return fail(previous, protocol.ERROR.MISSING_COLOR)
     end
     local budget = #state.draw_pile + #state.discard + 1
@@ -1063,15 +1197,31 @@ function rules.apply_action(previous, action, now)
       return fail(previous, protocol.ERROR.BAD_CHALLENGE)
     end
     state.pending_challenge = nil
-    if action.accept then
-      if pending.legal then
-        draw_cards(state, target, rules.CHALLENGE_PENALTY)
+    local challenge_kind = pending.kind or "wild4"
+    local amount = pending.amount
+      or (challenge_kind == "wildDraw2" and rules.DRAW_TWO_AMOUNT or rules.WILD_FOUR_AMOUNT)
+    if challenge_kind == "wildDrawColor" then
+      local color = pending.color or state.current_color
+      if action.accept then
+        if pending.legal then
+          draw_until_color(state, target, color)
+          draw_cards(state, target, 2)
+        else
+          draw_until_color(state, owner, color)
+        end
       else
-        draw_cards(state, owner, rules.WILD_FOUR_AMOUNT)
+        draw_until_color(state, target, color)
+      end
+      advance(state, 2)
+    elseif action.accept then
+      if pending.legal then
+        draw_cards(state, target, amount + 2)
+      else
+        draw_cards(state, owner, amount)
       end
       advance(state, 2)
     else
-      draw_cards(state, target, rules.WILD_FOUR_AMOUNT)
+      draw_cards(state, target, amount)
       advance(state, 2)
     end
     state.events[#state.events + 1] = {
@@ -1192,7 +1342,8 @@ function rules.apply_action(previous, action, now)
   if WILD_COLOR_KINDS[card.kind] and action.chosen_color == nil then
     return fail(previous, protocol.ERROR.MISSING_COLOR)
   end
-  local wild_four_legal = card.kind == "wild4" and not has_color_match(state, actor)
+  local wild_challenge_legal = (card.kind == "wild4" or card.kind == "wildDraw2"
+    or card.kind == "wildDrawColor") and not has_color_match(state, actor)
 
   local attack_target_id
   if state.mode == "attack" and card.kind == "wildAttack" then
@@ -1304,7 +1455,7 @@ function rules.apply_action(previous, action, now)
       advance(state, 1)
     end
   elseif card.kind == "skipEveryone" then
-    if not no_mercy then
+    if not no_mercy and state.mode ~= "flip" then
       advance(state, 1)
     end
   elseif card.kind == "draw2" then
@@ -1329,6 +1480,16 @@ function rules.apply_action(previous, action, now)
         state.winner = actor.id
       end
     end
+  elseif card.kind == "draw1" or card.kind == "draw5" then
+    draw_cards(state, next_player, card.kind == "draw1" and 1 or 5)
+    advance(state, 2)
+    if #actor.hand == 0 then
+      state.finished = true
+      state.winner = actor.id
+    end
+  elseif card.kind == "flip" then
+    apply_flip(state, actor, action.chosen_color)
+    advance(state, 1)
   elseif card.kind == "draw4" or card.kind == "wildDraw6" or card.kind == "wildDraw10"
     or card.kind == "wildReverse4" then
     if no_mercy then
@@ -1366,11 +1527,29 @@ function rules.apply_action(previous, action, now)
     advance(state, 1)
   elseif card.kind == "wild" then
     advance(state, 1)
+  elseif card.kind == "wildDraw2" then
+    state.pending_challenge = {
+      owner_id = actor.id,
+      target_id = next_player.id,
+      legal = wild_challenge_legal,
+      kind = "wildDraw2",
+      amount = rules.DRAW_TWO_AMOUNT,
+      color = action.chosen_color,
+    }
+  elseif card.kind == "wildDrawColor" then
+    state.pending_challenge = {
+      owner_id = actor.id,
+      target_id = next_player.id,
+      legal = wild_challenge_legal,
+      kind = "wildDrawColor",
+      amount = 0,
+      color = action.chosen_color,
+    }
   elseif card.kind == "wild4" then
     state.pending_challenge = {
       owner_id = actor.id,
       target_id = next_player.id,
-      legal = wild_four_legal,
+      legal = wild_challenge_legal,
     }
     if state.mode == "progressive" then
       state.pending_stack = {
@@ -1378,7 +1557,7 @@ function rules.apply_action(previous, action, now)
         amount = rules.WILD_FOUR_AMOUNT,
         owner_id = actor.id,
         target_id = next_player.id,
-        legal = wild_four_legal,
+        legal = wild_challenge_legal,
         color = action.chosen_color,
       }
       if #actor.hand == 0 then

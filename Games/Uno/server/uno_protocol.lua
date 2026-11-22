@@ -34,7 +34,7 @@ protocol.ERROR = {
   BAD_JUMP = "bad_jump",
 }
 
-protocol.RULES_MODES = { "classic", "sevenO", "progressive", "jumpIn", "attack", "noMercy" }
+protocol.RULES_MODES = { "classic", "sevenO", "progressive", "jumpIn", "attack", "noMercy", "flip" }
 
 protocol.JUMP_WINDOW_MS = 1800
 
@@ -54,7 +54,10 @@ function protocol.normalize_rules_mode(value)
   return "classic"
 end
 
-protocol.COLORS = { "red", "yellow", "green", "blue" }
+protocol.LIGHT_COLORS = { "red", "yellow", "green", "blue" }
+protocol.DARK_COLORS = { "pink", "teal", "orange", "purple" }
+protocol.ALL_COLORS = { "red", "yellow", "green", "blue", "pink", "teal", "orange", "purple" }
+protocol.COLORS = protocol.LIGHT_COLORS
 protocol.MIN_SEATS = 2
 protocol.MAX_SEATS = 4
 protocol.MAX_CHAT_LENGTH = 240
@@ -74,7 +77,7 @@ function protocol.clamp_seats(value)
 end
 
 function protocol.is_color(value)
-  for _, color in ipairs(protocol.COLORS) do
+  for _, color in ipairs(protocol.ALL_COLORS) do
     if color == value then
       return true
     end

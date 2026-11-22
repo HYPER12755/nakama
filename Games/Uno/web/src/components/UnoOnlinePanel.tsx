@@ -51,6 +51,7 @@ export function UnoOnlinePanel({
   const jumpIn = effectiveMode === JUMP_IN_MODE;
   const attack = effectiveMode === UNO_MODE.ATTACK;
   const noMercy = effectiveMode === UNO_MODE.NO_MERCY;
+  const flip = effectiveMode === UNO_MODE.FLIP;
 
   async function joinRoom() {
     const code = roomId.trim();
@@ -131,6 +132,9 @@ export function UnoOnlinePanel({
               ) : null}
               {noMercy ? (
                 <p className="online-mode-hint">No Mercy is on: draw until playable, stack equal or higher +2/+4/+6/+10, and drop out at 25 cards.</p>
+              ) : null}
+              {flip ? (
+                <p className="online-mode-hint">Flip is on: a Flip card turns the table over to the dark side, swapping the colours to pink/teal/orange/purple and the actions to Draw Five, Skip Everyone and Wild Draw Color.</p>
               ) : null}
               <div className="online-size">
                 <span className="online-size__label">Players</span>
@@ -230,6 +234,9 @@ export function UnoOnlinePanel({
           ) : null}
           {noMercy ? (
             <p className="online-mode-hint">No Mercy is on: stack draw cards, choose colours for Wild Roulette, and survive to 25 cards.</p>
+          ) : null}
+          {flip ? (
+            <p className="online-mode-hint">Flip is on: the {controller.view.flipSide === "dark" ? "dark" : "light"} side is active; Flip cards turn every card over.</p>
           ) : null}
           {controller.error !== null ? (
             <p className="online-feedback online-feedback--error" role="alert">{controller.error}</p>

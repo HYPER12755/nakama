@@ -9,9 +9,15 @@ function signature(state: GameState): string {
     state.turn,
     state.direction,
     state.currentColor,
+    state.flipSide,
     state.drawnCardId,
     state.seed,
-    state.pendingChallenge?.targetId ?? "",
+    state.pendingChallenge === null ? "" : [
+      state.pendingChallenge.targetId,
+      state.pendingChallenge.kind ?? "",
+      state.pendingChallenge.amount ?? "",
+      state.pendingChallenge.color ?? "",
+    ].join(","),
     state.pendingHit === null ? "" : [
       state.pendingHit.amount,
       state.pendingHit.ownerId,
@@ -111,5 +117,9 @@ describe("Uno stress simulation", () => {
 
   it("finishes 100 seeds across 2, 3 and 4 seats in noMercy mode", async () => {
     await runMode("noMercy");
+  }, 60000);
+
+  it("finishes 100 seeds across 2, 3 and 4 seats in flip mode", async () => {
+    await runMode("flip");
   }, 60000);
 });

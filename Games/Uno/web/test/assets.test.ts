@@ -9,7 +9,7 @@ describe("Uno card assets", () => {
     for (const set of ["cards", "cards-neon"]) {
       const dir = path.resolve(path.dirname(new URL(import.meta.url).pathname), `../public/${set}`);
       const files = readdirSync(dir).filter((name) => name.endsWith(".svg"));
-      expect(files, `${set} count`).toHaveLength(177);
+      expect(files, `${set} count`).toHaveLength(401);
       expect(files, `${set} back`).toContain("card-back.svg");
       expect(files, `${set} number`).toContain("red-0-0.svg");
       expect(files, `${set} action`).toContain("blue-draw2-1.svg");
@@ -58,6 +58,38 @@ describe("Uno card assets", () => {
       expected.push(`wildroulette-${copy}.svg`);
     }
     expect(expected).toHaveLength(44);
+    for (const set of ["cards", "cards-neon"]) {
+      const dir = path.resolve(path.dirname(new URL(import.meta.url).pathname), `../public/${set}`);
+      const files = readdirSync(dir).filter((name) => name.endsWith(".svg"));
+      for (const name of expected) {
+        expect(files, `${set}/${name}`).toContain(name);
+      }
+    }
+  });
+
+  it("ships Uno Flip light and dark card art in both sets", () => {
+    const expected: string[] = [];
+    for (const side of ["light", "dark"]) {
+      const colors = side === "light" ? ["red", "yellow", "green", "blue"] : ["pink", "teal", "orange", "purple"];
+      for (const color of colors) {
+        for (let value = 1; value <= 9; value += 1) {
+          for (let copy = 0; copy < 2; copy += 1) {
+            expected.push(`${side}-${color}-${value}-${copy}.svg`);
+          }
+        }
+        const kinds = side === "light" ? ["draw1", "reverse", "skip", "flip"] : ["draw5", "reverse", "skipeveryone", "flip"];
+        for (const kind of kinds) {
+          for (let copy = 0; copy < 2; copy += 1) {
+            expected.push(`${side}-${color}-${kind}-${copy}.svg`);
+          }
+        }
+      }
+      for (let copy = 0; copy < 4; copy += 1) {
+        expected.push(`${side}-wild-${copy}.svg`);
+        expected.push(`${side}-${side === "light" ? "wilddraw2" : "wilddrawcolor"}-${copy}.svg`);
+      }
+    }
+    expect(expected).toHaveLength(224);
     for (const set of ["cards", "cards-neon"]) {
       const dir = path.resolve(path.dirname(new URL(import.meta.url).pathname), `../public/${set}`);
       const files = readdirSync(dir).filter((name) => name.endsWith(".svg"));

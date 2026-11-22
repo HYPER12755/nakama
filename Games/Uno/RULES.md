@@ -229,3 +229,75 @@ never start a hand.
 - MOVE broadcasts include `action` (with its `type`), `chosenColor` and
   `targetId`. The Lua server stores these internally as `pending_stack.value`,
   `pending_roulette` and `player.out` and publishes the camelCase shape above.
+
+## Flip (optional mode, official Mattel UNO Flip! rules)
+
+Flip is **off by default**: games created without an explicit mode use classic
+rules. The mode is authoritative state, is included in state payloads, and all
+matchmaker tickets for a game must agree on it. Everything not described here
+behaves as in classic UNO.
+
+**Physical deck (112 two-sided cards).** A card has a light side and a dark side.
+Light colours are red, yellow, green and blue; dark colours are pink, teal,
+orange and purple. Each side has the numbers 1-9 twice per colour (72 cards),
+Draw One / Reverse / Skip / Flip twice per colour (32 cards), four Wild cards and
+four Wild Draw Two (light) / Wild Draw Color (dark) cards. There is no 0 and no
+classic Draw Two or Wild Draw Four. A visible-side card ID encodes the side:
+`light-red-1-0`, `light-red-draw1-0`, `light-red-flip-0`, `light-wild-0`,
+`light-wilddraw2-0`, `dark-pink-1-0`, `dark-pink-draw5-0`,
+`dark-pink-skipeveryone-0`, `dark-pink-flip-0`, `dark-wild-0`,
+`dark-wilddrawcolor-0`, and so on.
+
+`flipCard(card)` maps a visible card to the opposite physical side: red↔pink,
+yellow↔orange, green↔teal, blue↔purple; number values and copies are preserved;
+Draw One↔Draw Five, Skip↔Skip Everyone, Reverse↔Reverse, Flip↔Flip, Wild↔Wild and
+Wild Draw Two↔Wild Draw Color. Wild cards always have no colour. `flipColor`
+exposes the colour pairing, and `LIGHT_COLORS` / `DARK_COLORS` list the side
+colours. `buildDeck("flip")` returns the 112 light-side visible cards.
+
+- **Flip card.** Playable only on a matching colour or on another Flip card. When
+  played, every card in the draw pile, discard pile and every hand is replaced by
+  its opposite side; the draw pile order is reversed; the discard pile order is
+  reversed so the just-played card becomes the bottom; `flipSide` changes to the
+  opposite side. The continuing colour becomes the colour of the new top card,
+  except that a wild new top uses `chosenColor` from the play if supplied, or the
+  most common colour of the actor's post-flip hand. The new top card's action is
+  not triggered. Play then advances one seat.
+- **Light actions.** Draw One: the next player draws one and loses their turn.
+  Skip: the next player loses their turn. Reverse: direction flips, and with two
+  players it acts like Skip. Wild: the player chooses the continuing colour.
+  Wild Draw Two: the player chooses a colour, the next player draws two and loses
+  their turn; it is legal only with no card of the current colour in the actor's
+  hand. A challenged guilty play makes the owner draw two; an innocent play makes
+  the challenger draw four; declining makes the target draw two.
+- **Dark actions.** Draw Five: the next player draws five and loses their turn.
+  Skip Everyone: all other players lose their turn and the actor plays again.
+  Reverse and Wild behave as on the light side. Wild Draw Color: the player
+  chooses a colour; the target draws from the draw pile until a card of that
+  colour appears (wilds do not count), keeps every revealed card and loses the
+  turn. It is legal only with no card of the current colour in the actor's hand.
+  A challenged guilty play makes the owner draw until the colour; an innocent
+  play makes the challenger do so plus two extra cards; declining makes the
+  target draw until the colour. A normal draw is always a single card.
+- **Matching.** A card matches by colour, by number against another number of
+  the same value, or by the same symbol/kind. Wild cards always match. An action
+  on a player's final card resolves before the win is declared, including Flip
+  and Wild Draw Two / Wild Draw Color challenges.
+
+### Flip integration contract
+
+- Mode string: `flip` (core `UNO_MODE.FLIP`, Lua `RULES_MODES`).
+- State field: `flipSide` is `"light"` or `"dark"` (Lua internal `flip_side`).
+  It is included in every core state and Lua state payload.
+- `PendingChallenge` gains optional `kind`, `amount` and `color` for Wild Draw
+  Two / Wild Draw Color challenges (`kind: "wildDraw2" | "wildDrawColor"`;
+  `amount: 2` for Wild Draw Two, `0` for Wild Draw Color; `color` is the chosen
+  colour). The Lua server stores this as `pending_challenge.kind` / `.amount` /
+  `.color` and publishes it in camelCase under `pendingChallenge`.
+- Wild cards require `chosenColor` on play (aliases `chooseColor`, `chosenColor`
+  and `color` are accepted); the Lua internal action uses `chosen_color`.
+- No new protocol opcodes are needed: plays use the normal play request, draws
+  the normal draw request and challenges the normal challenge request.
+- AI uses the active side's colours for wild colour choices and avoids Flip card
+  loops by preferring other legal cards. Score handling keeps wild variants at
+  50 points and other action cards at 20.

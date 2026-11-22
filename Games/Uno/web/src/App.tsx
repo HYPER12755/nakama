@@ -45,9 +45,12 @@ const ATTACK_RULE = "Attack: Hit cards make the target take the launcher, or def
 
 const NO_MERCY_RULE = "No Mercy: draw until you can play, stack +2/+4/+6/+10 with equal or higher cards, and drop out at 25 cards. Coloured +4, Skip Everyone, Discard All, Wild Reverse +4 and Wild Colour Roulette apply.";
 
+const FLIP_RULE = "Flip: match the active colour on the current side. Draw One, Skip and Reverse sit on the light side; Draw Five, Skip Everyone and Wild Draw Color sit on the dark side. Play a Flip card to turn the whole game over and switch between red/yellow/green/blue and pink/teal/orange/purple. Wild Draw Two may be challenged: take 2, or challenge a guilty player who draws 2 and an innocent target who draws 4.";
+
 const COLOURS: Color[] = ["red", "yellow", "green", "blue"];
 const COLOUR_HEX: Record<Color, string> = {
   red: "#e8402a", yellow: "#f2c600", green: "#1fa45b", blue: "#2464d6",
+  pink: "#ef4f9b", teal: "#16a8a2", orange: "#ee8a24", purple: "#8d5bd6",
 };
 
 export default function App({ bridge }: { bridge: GameBridge }) {
@@ -93,7 +96,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
           ? [...RULES, ATTACK_RULE]
           : game.rulesMode === UNO_MODE.NO_MERCY
             ? [...RULES, NO_MERCY_RULE]
-            : RULES;
+            : game.rulesMode === UNO_MODE.FLIP
+              ? [...RULES, FLIP_RULE]
+              : RULES;
   const activePlayer = game.view.players[game.view.turn];
   const winner = game.view.result?.winnerUserId == null
     ? null
@@ -247,6 +252,11 @@ export default function App({ bridge }: { bridge: GameBridge }) {
             </div>
             {onlineMode ? (
               <span className={`turn-connection turn-connection--${game.connection}`}>{game.connection}</span>
+            ) : null}
+            {game.rulesMode === UNO_MODE.FLIP ? (
+              <span className={`turn-side turn-side--${game.view.flipSide}`}>
+                {game.view.flipSide === "dark" ? "Dark side" : "Light side"}
+              </span>
             ) : null}
             <span className="turn-strip__meta">{modeLabel}</span>
           </div>

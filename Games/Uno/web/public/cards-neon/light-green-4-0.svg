@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 270" width="180" height="270" role="img">
+<defs>
+<linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1fa45b"/><stop offset="1" stop-color="#69f0ae"/></linearGradient>
+<radialGradient id="glow"><stop offset="0" stop-color="#69f0ae" stop-opacity="0.4"/><stop offset="1" stop-color="#69f0ae" stop-opacity="0"/></radialGradient>
+<filter id="soft"><feGaussianBlur stdDeviation="6"/></filter>
+</defs>
+<rect x="3" y="3" width="174" height="264" rx="14" fill="#ffffff" stroke="#ffffff" stroke-width="4"/>
+<rect x="9" y="9" width="162" height="252" rx="10" fill="#f8fafc" stroke="url(#edge)" stroke-width="2"/>
+<rect x="12" y="12" width="156" height="246" rx="8" fill="url(#glow)"/>
+<g font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="18" fill="#1fa45b" style="filter:drop-shadow(0 0 4px #69f0ae)">
+<text x="14" y="26">4</text>
+<text x="166" y="252" text-anchor="end" transform="rotate(180 166 252)">4</text>
+</g>
+<g transform="rotate(-18 90 135)">
+<ellipse cx="90" cy="135" rx="62" ry="78" fill="none" stroke="url(#edge)" stroke-width="9" filter="url(#soft)" opacity="0.6"/>
+<ellipse cx="90" cy="135" rx="62" ry="78" fill="none" stroke="url(#edge)" stroke-width="7"/>
+</g>
+<text x="90" y="158" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="86" fill="#1fa45b" style="filter:drop-shadow(0 0 10px #69f0ae)">4</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700" font-style="italic" fill="#64748b">light green 4 0</text>
+</svg>

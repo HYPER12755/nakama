@@ -1,9 +1,11 @@
-import { buildDeck, isActionCard, shuffle } from "./deck";
+import { buildDeck, flipCard, isActionCard, shuffle } from "./deck";
 import { nextSeed, normalizeSeed, randomInt } from "./rng";
 import { JUMP_WINDOW_MS, UNO_ERROR, UNO_MODE, normalizeMode } from "./protocol";
 import {
+  ALL_COLORS,
   COLORS,
   DEFAULT_RULES,
+  colorsForSide,
   type Action,
   type Card,
   type CardKind,
@@ -20,10 +22,12 @@ import {
 
 const NO_MERCY_WILD_KINDS: CardKind[] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4", "wildRoulette",
+  "wildDraw2", "wildDrawColor",
 ];
 
 const WILD_COLOR_KINDS: CardKind[] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4",
+  "wildDraw2", "wildDrawColor",
 ];
 
 export function drawCardValue(kind: CardKind): number {
@@ -195,8 +199,9 @@ export function createGame(
     starter = next;
   }
 
-  if (starter.kind === "wild" || starter.kind === "wildAttack") {
-    starter.color = mostCommonColor(dealt[0].hand);
+  if (starter.kind === "wild" || starter.kind === "wildAttack"
+    || (rulesMode === UNO_MODE.FLIP && starter.kind.startsWith("wild"))) {
+    starter.color = mostCommonColor(dealt[0].hand, colorsForSide("light"));
   }
   const color = starter.color;
   if (color === null) {
@@ -239,6 +244,7 @@ export function createGame(
     turn: startingRule.turn,
     direction: startingRule.direction,
     currentColor: color,
+    flipSide: "light",
     drawnCardId: null,
     pendingChallenge: null,
     pendingStack: null,
@@ -277,6 +283,43 @@ function drawCards(state: GameState, player: Player, count: number): void {
     player.hand.push(card);
   }
   checkMercy(state);
+}
+
+function drawUntilColor(state: GameState, player: Player, color: Color): void {
+  let budget = state.drawPile.length + state.discard.length + 1;
+  while (budget > 0) {
+    budget -= 1;
+    recycleDrawPile(state);
+    const card = state.drawPile.pop();
+    if (card === undefined) {
+      break;
+    }
+    player.hand.push(card);
+    if (card.color === color) {
+      break;
+    }
+  }
+  checkMercy(state);
+}
+
+function applyFlip(state: GameState, actor: Player, chosenColor?: Color): void {
+  state.drawPile = state.drawPile.map(flipCard);
+  state.discard = state.discard.map(flipCard);
+  for (const player of state.players) {
+    player.hand = player.hand.map(flipCard);
+  }
+  state.drawPile.reverse();
+  state.discard.reverse();
+  state.flipSide = state.flipSide === "light" ? "dark" : "light";
+  const newTop = topCard(state);
+  if (newTop === undefined) {
+    return;
+  }
+  if (newTop.color !== null) {
+    state.currentColor = newTop.color;
+  } else {
+    state.currentColor = chosenColor ?? mostCommonColor(actor.hand, colorsForSide(state.flipSide));
+  }
 }
 
 export function activePlayers(state: GameState): Player[] {
@@ -429,9 +472,9 @@ function applyStackResolution(state: GameState, stack: PendingStack, accept: boo
   finishDeferredWinner(state, pendingWinnerId);
 }
 
-export function mostCommonColor(hand: Card[]): Color {
+export function mostCommonColor(hand: Card[], options: readonly Color[] = COLORS): Color {
   const counts = new Map<Color, number>();
-  for (const color of COLORS) {
+  for (const color of options) {
     counts.set(color, 0);
   }
   for (const card of hand) {
@@ -439,9 +482,9 @@ export function mostCommonColor(hand: Card[]): Color {
       counts.set(card.color, (counts.get(card.color) ?? 0) + 1);
     }
   }
-  let best: Color = COLORS[0];
+  let best: Color = options[0] ?? COLORS[0];
   let bestCount = -1;
-  for (const color of COLORS) {
+  for (const color of options) {
     const count = counts.get(color) ?? 0;
     if (count > bestCount) {
       best = color;
@@ -508,7 +551,7 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
       return fail(previous, UNO_ERROR.NOT_YOUR_TURN as "not_your_turn");
     }
     const color = action.color ?? action.colour ?? action.chosenColor;
-    if (color === undefined || !COLORS.includes(color)) {
+    if (color === undefined || !(state.mode === UNO_MODE.FLIP ? ALL_COLORS : COLORS).includes(color)) {
       return fail(previous, UNO_ERROR.MISSING_COLOR as "missing_color");
     }
     let budget = state.drawPile.length + state.discard.length + 1;
@@ -726,15 +769,30 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
       return fail(previous, UNO_ERROR.BAD_CHALLENGE as "bad_challenge");
     }
     state.pendingChallenge = null;
-    if (action.accept) {
-      if (pending.legal) {
-        drawCards(state, target, DEFAULT_RULES.challengePenalty);
+    const challengeKind = pending.kind ?? "wild4";
+    const amount = pending.amount ?? (challengeKind === "wildDraw2" ? DEFAULT_RULES.drawTwoAmount : DEFAULT_RULES.wildFourAmount);
+    if (challengeKind === "wildDrawColor") {
+      const color = pending.color ?? state.currentColor;
+      if (action.accept) {
+        if (pending.legal) {
+          drawUntilColor(state, target, color);
+          drawCards(state, target, 2);
+        } else {
+          drawUntilColor(state, owner, color);
+        }
       } else {
-        drawCards(state, owner, DEFAULT_RULES.wildFourAmount);
+        drawUntilColor(state, target, color);
+      }
+      advance(state, 2);
+    } else if (action.accept) {
+      if (pending.legal) {
+        drawCards(state, target, amount + 2);
+      } else {
+        drawCards(state, owner, amount);
       }
       advance(state, 2);
     } else {
-      drawCards(state, target, DEFAULT_RULES.wildFourAmount);
+      drawCards(state, target, amount);
       advance(state, 2);
     }
     state.events.push({ type: "challenge", playerId: action.playerId, at: state.events.length });
@@ -825,7 +883,8 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
   if (WILD_COLOR_KINDS.includes(card.kind) && action.chosenColor === undefined) {
     return fail(previous, UNO_ERROR.MISSING_COLOR as "missing_color");
   }
-  const wildFourLegal = card.kind === "wild4" && !hasColorMatch(state, actor);
+  const wildChallengeLegal = (card.kind === "wild4" || card.kind === "wildDraw2"
+    || card.kind === "wildDrawColor") && !hasColorMatch(state, actor);
 
   let attackTargetId: string | undefined;
   if (state.mode === UNO_MODE.ATTACK && card.kind === "wildAttack") {
@@ -938,6 +997,16 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
         finishIfEmpty(state, actor);
       }
       break;
+    case "draw1":
+    case "draw5":
+      drawCards(state, next, card.kind === "draw1" ? 1 : 5);
+      advance(state, 2);
+      finishIfEmpty(state, actor);
+      break;
+    case "flip":
+      applyFlip(state, actor, action.chosenColor);
+      advance(state, 1);
+      break;
     case "draw4":
     case "wildDraw6":
     case "wildDraw10":
@@ -984,11 +1053,31 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
     case "wild":
       advance(state, 1);
       break;
+    case "wildDraw2":
+      state.pendingChallenge = {
+        ownerId: actor.id,
+        targetId: next.id,
+        legal: wildChallengeLegal,
+        kind: "wildDraw2",
+        amount: DEFAULT_RULES.drawTwoAmount,
+        color: action.chosenColor,
+      };
+      break;
+    case "wildDrawColor":
+      state.pendingChallenge = {
+        ownerId: actor.id,
+        targetId: next.id,
+        legal: wildChallengeLegal,
+        kind: "wildDrawColor",
+        amount: 0,
+        color: action.chosenColor,
+      };
+      break;
     case "wild4":
       state.pendingChallenge = {
         ownerId: actor.id,
         targetId: next.id,
-        legal: wildFourLegal,
+        legal: wildChallengeLegal,
       };
       if (state.mode === UNO_MODE.PROGRESSIVE) {
         state.pendingStack = {
@@ -996,7 +1085,7 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
           amount: DEFAULT_RULES.wildFourAmount,
           ownerId: actor.id,
           targetId: next.id,
-          legal: wildFourLegal,
+          legal: wildChallengeLegal,
           color: action.chosenColor,
           ...(actor.hand.length === 0 ? { pendingWinnerId: actor.id } : {}),
         };

@@ -33,8 +33,10 @@ import {
 } from "@moongames/uno-core";
 import {
   isJumpCandidate,
+  normalizeFlipSide,
   normalizeJumpWindow,
   normalizeList,
+  normalizePendingChallenge,
   normalizePendingHit,
   normalizePendingRoulette,
   normalizePendingStack,
@@ -105,18 +107,6 @@ function normalizeResult(value: unknown): BoardView["result"] {
     status: String(source.status ?? "finished"),
     winnerUserId: winner == null ? null : String(winner),
     reason: source.reason == null ? undefined : String(source.reason),
-  };
-}
-
-function normalizePendingChallenge(value: unknown): BoardView["pendingChallenge"] {
-  const source = value as Record<string, unknown> | null | undefined;
-  if (source == null) {
-    return null;
-  }
-  return {
-    ownerId: String(source.ownerId ?? source.owner_id ?? ""),
-    targetId: String(source.targetId ?? source.target_id ?? ""),
-    legal: source.legal === true,
   };
 }
 
@@ -207,6 +197,7 @@ export function normalizeView(payload: Record<string, unknown>, myUserId: string
     chat,
     topCard: (payload.topCard as BoardView["topCard"]) ?? null,
     currentColor: (payload.currentColor as Color | null) ?? null,
+    flipSide: normalizeFlipSide(payload.flipSide ?? payload.flip_side),
     turn: Number(payload.turn ?? 0),
     direction: payload.direction === -1 ? -1 : 1,
     deckCount: Number(payload.deckCount ?? 0),
@@ -251,7 +242,7 @@ export function buildPlayPayload(
 function emptyView(myUserId: string | null): BoardView {
   return {
     players: [], spectators: [], chat: [], topCard: null, currentColor: null,
-    turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
+    flipSide: "light", turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
     pendingStack: null, pendingHit: null, pendingRoulette: null, jumpWindow: null,
     legalCards: [], canDraw: false, result: null,
     myUserId, started: false, mode: "classic", rulesMode: "classic",

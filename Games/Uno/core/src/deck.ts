@@ -1,5 +1,29 @@
-import { COLORS, type Card, type Color, type GameMode } from "./types";
+import { COLORS, flipColor, LIGHT_COLORS, type Card, type CardKind, type Color, type GameMode } from "./types";
 import { nextSeed, randomInt } from "./rng";
+
+const FLIP_KIND: Partial<Record<CardKind, CardKind>> = {
+  draw1: "draw5",
+  draw5: "draw1",
+  skip: "skipEveryone",
+  skipEveryone: "skip",
+  reverse: "reverse",
+  flip: "flip",
+  wild: "wild",
+  wildDraw2: "wildDrawColor",
+  wildDrawColor: "wildDraw2",
+};
+
+const FLIP_KIND_ID: Partial<Record<CardKind, string>> = {
+  draw1: "draw1",
+  draw5: "draw5",
+  skip: "skip",
+  skipEveryone: "skipeveryone",
+  reverse: "reverse",
+  flip: "flip",
+  wild: "wild",
+  wildDraw2: "wilddraw2",
+  wildDrawColor: "wilddrawcolor",
+};
 
 export function cardId(card: Omit<Card, "id">): string {
   if (card.kind === "wild") return "wild";
@@ -15,7 +39,47 @@ export function cardId(card: Omit<Card, "id">): string {
   return `${card.color}-${card.kind === "number" ? card.value : card.kind}`;
 }
 
+export function flipCard(card: Card): Card {
+  const side = card.id.startsWith("light-") ? "dark" : card.id.startsWith("dark-") ? "light" : null;
+  if (side === null) {
+    return card;
+  }
+  const kind = FLIP_KIND[card.kind] ?? card.kind;
+  const color = kind.startsWith("wild") || card.color === null ? null : flipColor(card.color);
+  const copy = Number(card.id.slice(card.id.lastIndexOf("-") + 1));
+  const kindId = card.kind === "number" ? String(card.value ?? 0) : FLIP_KIND_ID[kind] ?? kind;
+  const id = color === null
+    ? `${side}-${kindId}-${copy}`
+    : `${side}-${color}-${kindId}-${copy}`;
+  return {
+    id,
+    color,
+    kind,
+    ...(card.value === undefined ? {} : { value: card.value }),
+  };
+}
+
 export function buildDeck(mode: GameMode = "classic"): Card[] {
+  if (mode === "flip") {
+    const deck: Card[] = [];
+    for (const color of LIGHT_COLORS) {
+      for (let value = 1; value <= 9; value += 1) {
+        for (let copy = 0; copy < 2; copy += 1) {
+          deck.push({ id: `light-${color}-${value}-${copy}`, color, kind: "number", value });
+        }
+      }
+      for (const kind of ["draw1", "reverse", "skip", "flip"] as const) {
+        for (let copy = 0; copy < 2; copy += 1) {
+          deck.push({ id: `light-${color}-${kind}-${copy}`, color, kind });
+        }
+      }
+    }
+    for (let copy = 0; copy < 4; copy += 1) {
+      deck.push({ id: `light-wild-${copy}`, color: null, kind: "wild" });
+      deck.push({ id: `light-wilddraw2-${copy}`, color: null, kind: "wildDraw2" });
+    }
+    return deck;
+  }
   if (mode === "noMercy") {
     const deck: Card[] = [];
     for (const color of COLORS) {

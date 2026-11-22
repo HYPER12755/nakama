@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 270" width="180" height="270" role="img">
+<defs>
+<linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e8402a"/><stop offset="1" stop-color="#ff8a75"/></linearGradient>
+<radialGradient id="glow"><stop offset="0" stop-color="#ff8a75" stop-opacity="0.4"/><stop offset="1" stop-color="#ff8a75" stop-opacity="0"/></radialGradient>
+<filter id="soft"><feGaussianBlur stdDeviation="6"/></filter>
+</defs>
+<rect x="3" y="3" width="174" height="264" rx="14" fill="#ffffff" stroke="#ffffff" stroke-width="4"/>
+<rect x="9" y="9" width="162" height="252" rx="10" fill="#f8fafc" stroke="url(#edge)" stroke-width="2"/>
+<rect x="12" y="12" width="156" height="246" rx="8" fill="url(#glow)"/>
+<g font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="18" fill="#e8402a" style="filter:drop-shadow(0 0 4px #ff8a75)">
+<text x="14" y="26">+2</text>
+<text x="166" y="252" text-anchor="end" transform="rotate(180 166 252)">+2</text>
+</g>
+<g opacity="0.85">
+<path d="M9 23 A14 14 0 0 1 23 9 L157 9 A14 14 0 0 1 171 23 L90 135 Z" fill="#e8402a"/>
+<path d="M171 23 A14 14 0 0 1 171 247 L90 135 Z" fill="#f2c600"/>
+<path d="M171 247 A14 14 0 0 1 157 261 L23 261 A14 14 0 0 1 9 247 L90 135 Z" fill="#1fa45b"/>
+<path d="M9 247 A14 14 0 0 1 9 23 L90 135 Z" fill="#2464d6"/>
+</g>
+<ellipse cx="90" cy="135" rx="60" ry="74" fill="#0A0A0E" fill-opacity="0.6" transform="rotate(-18 90 135)"/>
+<ellipse cx="90" cy="135" rx="60" ry="74" fill="none" stroke="url(#edge)" stroke-width="8" transform="rotate(-18 90 135)"/>
+<text x="90" y="142" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="64" fill="#e8402a" style="filter:drop-shadow(0 0 10px #ff8a75)">+2</text>
+<text x="90" y="188" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-style="italic" font-size="15" fill="#e8402a" style="filter:drop-shadow(0 0 10px #ff8a75)">WILD DRAW 2</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700" font-style="italic" fill="#64748b">light wilddraw2 1</text>
+</svg>

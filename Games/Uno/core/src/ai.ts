@@ -1,10 +1,16 @@
 import { UNO_MODE } from "./protocol";
 import { canPlay, drawCardValue, legalMoves, mostCommonColor } from "./rules";
-import type { Action, Card, Color, GameState, Player } from "./types";
+import { colorsForSide, type Action, type Card, type Color, type GameState, type Player } from "./types";
 
 const WILD_KINDS: Card["kind"][] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4",
+  "wildDraw2", "wildDrawColor",
 ];
+
+function preferredColor(state: GameState, hand: Card[]): Color {
+  const side = state.mode === "flip" ? state.flipSide : "light";
+  return mostCommonColor(hand, colorsForSide(side));
+}
 
 function cardScore(state: GameState, card: Card): number {
   if (card.kind === "discardAll") return 120;
@@ -16,7 +22,10 @@ function cardScore(state: GameState, card: Card): number {
   if (card.kind === "wild4") return 100;
   if (card.kind === "wildReverse4") return 98;
   if (card.kind === "wildRoulette") return 96;
+  if (card.kind === "wildDrawColor") return 94;
+  if (card.kind === "wildDraw2") return 92;
   if (card.kind === "wild") return 90;
+  if (card.kind === "flip") return 10;
   if (card.kind === "skipEveryone") return 88;
   if (card.kind === "draw4") return 85;
   if (card.kind === "draw2") return 80;
@@ -65,7 +74,7 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
     if (state.pendingRoulette.chooserId !== playerId) {
       return null;
     }
-    return { type: "chooseColour", playerId, color: mostCommonColor(actor.hand) };
+    return { type: "chooseColour", playerId, color: preferredColor(state, actor.hand) };
   }
   if (state.pendingHit !== null) {
     if (state.pendingHit.targetId !== playerId) {
@@ -89,7 +98,7 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
       type: "play",
       playerId,
       cardId: deflection.id,
-      chosenColor: mostCommonColor(target.hand),
+      chosenColor: preferredColor(state, target.hand),
       ...(redirect === null ? {} : { targetId: redirect }),
     };
   }
@@ -113,7 +122,7 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
             type: "play",
             playerId,
             cardId: matching.id,
-            ...(WILD_KINDS.includes(matching.kind) ? { chosenColor: mostCommonColor(stackPlayer.hand) } : {}),
+            ...(WILD_KINDS.includes(matching.kind) ? { chosenColor: preferredColor(state, stackPlayer.hand) } : {}),
           };
         }
       }
@@ -122,7 +131,7 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
     const matching = stackPlayer.hand.find((card) => card.kind === stack.kind);
     if (matching !== undefined) {
       const chosenColor: Color | undefined = matching.kind === "wild4"
-        ? mostCommonColor(stackPlayer.hand)
+        ? preferredColor(state, stackPlayer.hand)
         : undefined;
       return {
         type: "play",
@@ -182,7 +191,7 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
     return moves.canDraw ? { type: "draw", playerId } : null;
   }
   const chosenColor: Color | undefined = WILD_KINDS.includes(best.kind)
-    ? mostCommonColor(player.hand)
+    ? preferredColor(state, player.hand)
     : undefined;
   return {
     type: "play",
