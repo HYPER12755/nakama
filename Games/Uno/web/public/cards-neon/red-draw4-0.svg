@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 270" width="180" height="270" role="img">
+<defs>
+<linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF1744"/><stop offset="1" stop-color="#FF5252"/></linearGradient>
+<radialGradient id="glow"><stop offset="0" stop-color="#FF1744" stop-opacity="0.42"/><stop offset="1" stop-color="#FF1744" stop-opacity="0"/></radialGradient>
+<filter id="soft"><feGaussianBlur stdDeviation="8"/></filter>
+</defs>
+<rect x="3" y="3" width="174" height="264" rx="10" fill="#0A0A0E" stroke="url(#edge)" stroke-width="4"/>
+<rect x="6" y="6" width="168" height="258" rx="8" fill="none" stroke="#FF003C" stroke-opacity="0.65" stroke-width="0.8"/>
+<rect x="9" y="9" width="162" height="252" rx="7" fill="url(#glow)"/>
+
+<g transform="translate(90 126)">
+<rect x="-46" y="-26" width="48" height="72" rx="6" fill="none" stroke="url(#edge)" stroke-width="3" transform="rotate(-20 -22 0)"/>
+<rect x="-30" y="-30" width="48" height="72" rx="6" fill="none" stroke="url(#edge)" stroke-width="3" transform="rotate(-7 -6 0)"/>
+<rect x="-12" y="-30" width="48" height="72" rx="6" fill="none" stroke="url(#edge)" stroke-width="3" transform="rotate(7 12 0)"/>
+<rect x="4" y="-26" width="48" height="72" rx="6" fill="none" stroke="url(#edge)" stroke-width="3" transform="rotate(20 28 0)"/>
+</g>
+<text x="90" y="206" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 16px #FF1744)">+4</text>
+<g font-family="Arial, Helvetica, sans-serif" font-weight="800" font-style="italic" fill="#fff" font-size="17">
+<text x="14" y="26">+4</text>
+<text x="166" y="252" text-anchor="end" transform="rotate(180 166 252)">+4</text>
+</g>
+</svg>

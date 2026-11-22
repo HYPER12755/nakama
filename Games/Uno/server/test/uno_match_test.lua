@@ -813,6 +813,123 @@ test("a pending hit timeout auto-takes the hits for a disconnected target", func
   assert_equal(moves > 0, true, "launcher draw broadcast")
 end)
 
+test("propagates noMercy from match params into the game and state payload", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "noMercy",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  assert_equal(state.rules_mode, "noMercy", "stored rules mode")
+  assert_equal(state.game.mode, "noMercy", "game rules mode")
+  local started = nil
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.MATCH_STARTED then
+      started = require("json").decode(message.data)
+    end
+  end
+  assert_equal(started.rulesMode, "noMercy", "match started payload")
+  local payload = require("json").decode(select(2, MATCH.match_signal({}, dispatcher_obj, 1, state, "")))
+  assert_equal(payload.rulesMode, "noMercy", "state payload mode")
+  assert_equal(payload.pendingRoulette, nil, "no pending roulette at start")
+  assert_equal(payload.players[1].out, false, "players start active")
+  assert_equal(payload.players[2].out, false, "all seats active")
+end)
+
+test("exposes stack value, pending roulette and out flags in the state payload", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "noMercy",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  state.game.pending_stack = {
+    kind = "wildDraw6",
+    amount = 6,
+    value = 6,
+    owner_id = "u1",
+    target_id = "u2",
+    color = "green",
+  }
+  state.game.pending_roulette = { chooser_id = "u2", owner_id = "u1" }
+  state.game.players[2].out = true
+  local payload = require("json").decode(select(2, MATCH.match_signal({}, dispatcher_obj, 1, state, "")))
+  assert_equal(payload.pendingStack.value, 6, "stack value")
+  assert_equal(payload.pendingStack.amount, 6, "stack amount")
+  assert_equal(payload.pendingRoulette.chooserId, "u2", "roulette chooser")
+  assert_equal(payload.pendingRoulette.ownerId, "u1", "roulette owner")
+  assert_equal(payload.players[2].out, true, "eliminated seat published")
+  assert_equal(payload.players[1].out, false, "active seat published")
+end)
+
+test("forwards a colour choice through opcode 108", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "noMercy",
+    turnSeconds = 0,
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  state.game.turn = 2
+  state.game.pending_roulette = { chooser_id = "u2", owner_id = "u1" }
+  state.game.players[2].hand = {}
+  state.game.draw_pile = {
+    { id = "red-1-0", color = "red", kind = "number", value = 1 },
+  }
+  local before = #dispatcher_obj.messages
+  MATCH.match_loop({}, dispatcher_obj, 3, state, {
+    {
+      op_code = OP.COLOR_CHOOSE,
+      presence = presence("u2", "Bob"),
+      data = json_encode({ colour = "red" }),
+    },
+  })
+  assert_equal(state.game.pending_roulette, nil, "roulette cleared")
+  assert_equal(#state.game.players[2].hand, 1, "matching card revealed")
+  local forwarded = false
+  for index = before + 1, #dispatcher_obj.messages do
+    if dispatcher_obj.messages[index].op == OP.MOVE then
+      local payload = require("json").decode(dispatcher_obj.messages[index].data)
+      forwarded = payload.action.type == "choose_colour"
+        and payload.chosenColor == "red"
+    end
+  end
+  assert_equal(forwarded, true, "colour choice broadcast")
+end)
+
+test("a pending roulette timeout auto-chooses a colour instead of stalling", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "noMercy",
+    turnSeconds = 1,
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  state.game.turn = 2
+  state.game.pending_roulette = { chooser_id = "u2", owner_id = "u1" }
+  state.game.players[2].hand = {}
+  state.game.draw_pile = {
+    { id = "red-1-0", color = "red", kind = "number", value = 1 },
+  }
+  local before = #dispatcher_obj.messages
+  local saved = now
+  now = now + 2000
+  MATCH.match_loop({}, dispatcher_obj, 6, state, {})
+  now = saved
+  assert_equal(state.game.pending_roulette, nil, "roulette resolved by timeout")
+  local timed_out = false
+  for index = before + 1, #dispatcher_obj.messages do
+    if dispatcher_obj.messages[index].op == OP.MOVE then
+      timed_out = require("json").decode(dispatcher_obj.messages[index].data).action.type == "choose_colour"
+    end
+  end
+  assert_equal(timed_out, true, "auto colour choice broadcast")
+end)
+
 if failures > 0 then
   io.stderr:write(failures .. " Uno match test(s) failed\n")
   os.exit(1)

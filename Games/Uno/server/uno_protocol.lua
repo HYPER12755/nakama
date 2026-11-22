@@ -19,6 +19,7 @@ protocol.OP = {
   REQUEST_STATE = 105,
   RESIGN = 106,
   PING = 107,
+  COLOR_CHOOSE = 108,
 }
 
 protocol.ERROR = {
@@ -33,7 +34,7 @@ protocol.ERROR = {
   BAD_JUMP = "bad_jump",
 }
 
-protocol.RULES_MODES = { "classic", "sevenO", "progressive", "jumpIn", "attack" }
+protocol.RULES_MODES = { "classic", "sevenO", "progressive", "jumpIn", "attack", "noMercy" }
 
 protocol.JUMP_WINDOW_MS = 1800
 

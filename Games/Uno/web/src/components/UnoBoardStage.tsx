@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
-import type { Card, Color } from "@moongames/uno-core";
+import { UNO_MODE, drawCardValue, type Card, type Color } from "@moongames/uno-core";
 import type { BoardView, RulesMode } from "../lib/view";
 
 const COLORS: Color[] = ["red", "yellow", "green", "blue"];
@@ -22,6 +22,10 @@ interface AttackPrompt {
   targetId: string | null;
 }
 
+const COLOUR_STACK_KINDS = new Set<Card["kind"]>([
+  "wild4", "wildDraw6", "wildDraw10", "wildReverse4",
+]);
+
 function isWild(card: Card): boolean {
   return card.id === "wild" || card.id.startsWith("wild");
 }
@@ -30,8 +34,17 @@ export function isSevenCard(card: Card): boolean {
   return card.kind === "number" && card.value === 7;
 }
 
+function stackKindLabel(kind: string): string {
+  if (kind === "wild4") return "Wild Four";
+  if (kind === "draw4") return "Draw Four";
+  if (kind === "wildDraw6") return "Wild Six";
+  if (kind === "wildDraw10") return "Wild Ten";
+  if (kind === "wildReverse4") return "Wild Reverse Four";
+  return "Draw Two";
+}
+
 export function targetCandidates(view: BoardView): BoardView["players"] {
-  return view.players.filter((player) => player.userId !== view.myUserId);
+  return view.players.filter((player) => player.userId !== view.myUserId && player.out !== true);
 }
 
 export interface UnoBoardStageProps {
@@ -44,6 +57,8 @@ export interface UnoBoardStageProps {
   pileStyle: "stack" | "fan" | "tower";
   rulesMode?: RulesMode;
   onPlay: (cardId: string, chosenColor?: Color, targetId?: string) => void;
+  onChooseColour?: (color: Color) => void;
+  onChooseColor?: (color: Color) => void;
   onDraw: () => void;
   onChallenge: (accept: boolean) => void;
   onUno: () => void;
@@ -51,7 +66,7 @@ export interface UnoBoardStageProps {
 
 export function UnoBoardStage({
   view, cardSet, dealKey, activeColor, direction, highlight, pileStyle,
-  rulesMode = "classic", onPlay, onDraw, onChallenge, onUno,
+  rulesMode = "classic", onPlay, onChooseColour, onChooseColor, onDraw, onChallenge, onUno,
 }: UnoBoardStageProps) {
   const [pendingCard, setPendingCard] = useState<string | null>(null);
   const [pendingTarget, setPendingTarget] = useState<string | null>(null);
@@ -74,6 +89,9 @@ export function UnoBoardStage({
   const hand = me?.hand ?? [];
   const pendingStack = view.pendingStack ?? null;
   const pendingHit = view.pendingHit ?? null;
+  const pendingRoulette = view.pendingRoulette ?? null;
+  const effectiveMode = view.rulesMode ?? view.mode ?? rulesMode;
+  const noMercy = effectiveMode === UNO_MODE.NO_MERCY;
   const jumpWindow = view.jumpWindow ?? null;
   const jumpOpen = jumpWindow !== null;
   const jumping = jumpWindow !== null && jumpWindow.ownerId !== view.myUserId;
@@ -91,12 +109,19 @@ export function UnoBoardStage({
   const challengeTarget =
     view.pendingChallenge !== null && view.pendingChallenge.targetId === view.myUserId;
   const legal = new Set(view.legalCards);
-  const stackCard = pendingStack === null
-    ? undefined
-    : hand.find((card) => pendingStack.kind === "draw2" ? card.kind === "draw2" : card.kind === "wild4");
+  const stackCards = !stackTarget || pendingStack === null
+    ? []
+    : hand.filter((card) => noMercy
+      ? drawCardValue(card.kind) > 0 && drawCardValue(card.kind) >= (pendingStack.value ?? 0)
+      : pendingStack.kind === "wild4" ? card.kind === "wild4" : card.kind === "draw2");
 
-  const opponents = targetCandidates(view);
-  const isSevenO = (view.mode ?? rulesMode) === "sevenO";
+  const opponents = view.players.filter((player) => player.userId !== view.myUserId);
+  const targets = targetCandidates(view);
+  const sevenTargetMode = effectiveMode === "sevenO" || noMercy;
+  const rouletteChooser = pendingRoulette !== null && pendingRoulette.chooserId === view.myUserId;
+  const rouletteChooserName = view.players.find(
+    (player) => player.userId === pendingRoulette?.chooserId,
+  )?.username ?? "The next player";
   const seatZone = (seat: number): "top" | "left" | "right" => {
     const count = view.players.length;
     const mySeat = me?.seat ?? 0;
@@ -166,11 +191,17 @@ export function UnoBoardStage({
       setAttackPrompt({ cardId: card.id, deflect: false, targetId: null });
       return;
     }
+    if (card.kind === "wildRoulette") {
+      fly(card.id, event.currentTarget.getBoundingClientRect(), discardRef.current?.getBoundingClientRect() ?? null);
+      lastManualFlight.current = Date.now();
+      onPlay(card.id);
+      return;
+    }
     if (isWild(card)) {
       setPendingCard(card.id);
       return;
     }
-    if (isSevenO && isSevenCard(card)) {
+    if (sevenTargetMode && isSevenCard(card)) {
       setPendingTarget(card.id);
       return;
     }
@@ -214,21 +245,18 @@ export function UnoBoardStage({
     onPlay(card.id);
   };
 
-  const stackDraw = () => {
-    if (stackCard === undefined) {
-      return;
-    }
-    if (pendingStack?.kind === "wild4") {
-      setPendingCard(stackCard.id);
+  const stackDraw = (card: Card) => {
+    if (COLOUR_STACK_KINDS.has(card.kind)) {
+      setPendingCard(card.id);
       return;
     }
     fly(
-      stackCard.id,
+      card.id,
       handRef.current?.querySelector("img")?.getBoundingClientRect() ?? null,
       discardRef.current?.getBoundingClientRect() ?? null,
     );
     lastManualFlight.current = Date.now();
-    onPlay(stackCard.id);
+    onPlay(card.id);
   };
 
   return (
@@ -401,25 +429,46 @@ export function UnoBoardStage({
       {stackTarget && pendingCard === null && (
         <div className="uno-overlay uno-overlay--stack">
           <div className="uno-overlay-card uno-stack-card" role="dialog" aria-label="Pending draw stack">
-            <p className="eyebrow">{pendingStack?.kind === "wild4" ? "Wild Four" : "Draw Two"} chain</p>
+            <p className="eyebrow">{stackKindLabel(pendingStack?.kind ?? "draw2")} chain</p>
             <h2>Incoming stack</h2>
             <div className="uno-stack-count">
               <strong>{pendingStack?.count ?? 0}</strong>
               <span>cards</span>
             </div>
+            {pendingStack?.value !== undefined ? (
+              <p className="uno-stack-minimum" data-required-value={pendingStack.value}>
+                Minimum to stack: <strong>{pendingStack.value}</strong>
+              </p>
+            ) : null}
             <p className="uno-overlay-copy">
-              Take the accumulated cards, play a matching card to pass the stack on
+              Take the accumulated cards, play a card of at least this value to pass the stack on
               {challengeTarget ? ", or challenge the Wild Four play" : ""}.
             </p>
+            {stackCards.length > 0 ? (
+              <div className="uno-stack-options">
+                {stackCards.map((card) => (
+                  <button
+                    type="button"
+                    key={card.id}
+                    className="uno-stack-option"
+                    aria-label={`Stack ${card.id}`}
+                    onClick={() => stackDraw(card)}
+                  >
+                    <img src={art(card.id)} alt={card.id} />
+                    <span>{noMercy ? `Stack +${drawCardValue(card.kind)}` : `Stack ${stackKindLabel(card.kind)}`}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="uno-overlay-actions">
-              <button type="button" className="button button--ghost" onClick={takeStack}>
+              <button
+                type="button"
+                className="button button--ghost"
+                aria-label={`Take ${pendingStack?.count ?? 0}`}
+                onClick={takeStack}
+              >
                 Take {pendingStack?.count ?? 0}
               </button>
-              {stackCard !== undefined ? (
-                <button type="button" className="button button--primary" onClick={stackDraw}>
-                  Stack {pendingStack?.kind === "wild4" ? "Wild Four" : "Draw Two"}
-                </button>
-              ) : null}
               {challengeTarget ? (
                 <button type="button" className="button" onClick={() => resolveChallenge(true)}>
                   Challenge
@@ -462,6 +511,52 @@ export function UnoBoardStage({
           </div>
         </div>
       )}
+
+      {pendingRoulette !== null && pendingCard === null && rouletteChooser ? (
+        <div className="uno-overlay uno-overlay--colour uno-overlay--roulette">
+          <div className="uno-colour-card" role="dialog" aria-label="Choose a colour" data-roulette="true">
+            <div className="uno-colour-card__art" aria-hidden="true">
+              <span className="uno-colour-card__wild">ROULETTE</span>
+              <span className="uno-colour-card__spark uno-colour-card__spark--one" />
+              <span className="uno-colour-card__spark uno-colour-card__spark--two" />
+              <span className="uno-colour-card__spark uno-colour-card__spark--three" />
+            </div>
+            <div className="uno-colour-card__body">
+              <p className="eyebrow">Wild Colour Roulette</p>
+              <h2>Choose a colour</h2>
+              <p className="uno-overlay-copy">Keep drawing until a card of the colour you pick appears.</p>
+              <div className="uno-colour-choices">
+                {COLORS.map((color, index) => (
+                  <button
+                    type="button"
+                    key={color}
+                    className={`uno-colour uno-colour--${color}`}
+                    style={{ animationDelay: `${index * 55}ms` }}
+                    onClick={() => {
+                      onChooseColour?.(color);
+                      onChooseColor?.(color);
+                    }}
+                    aria-label={`Choose ${color}`}
+                  >
+                    <span className="uno-colour__ring" aria-hidden="true" />
+                    <span className="uno-colour__label">{color}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingRoulette !== null && pendingCard === null && !rouletteChooser ? (
+        <div className="uno-overlay uno-overlay--roulette-wait" role="status" aria-label="Wild Colour Roulette">
+          <div className="uno-overlay-card">
+            <p className="eyebrow">Wild Colour Roulette</p>
+            <h2>Waiting for a colour</h2>
+            <p className="uno-overlay-copy">{rouletteChooserName} is picking the colour for the draw.</p>
+          </div>
+        </div>
+      ) : null}
 
       {pendingCard !== null && (
         <div className="uno-overlay uno-overlay--colour">
@@ -508,7 +603,7 @@ export function UnoBoardStage({
       {(pendingTarget !== null || (attackPrompt !== null && attackPrompt.targetId === null && pendingCard === null)) && (
         <div className="uno-overlay uno-overlay--target">
           <div className="uno-target-card" role="dialog" aria-label="Choose a target player">
-            <p className="eyebrow">{attackPrompt !== null ? "UNO Attack" : "Seven-O"}</p>
+            <p className="eyebrow">{attackPrompt !== null ? "UNO Attack" : noMercy ? "No Mercy" : "Seven-O"}</p>
             <h2>Choose a target</h2>
             <p className="uno-overlay-copy">
               {attackPrompt !== null
@@ -518,7 +613,7 @@ export function UnoBoardStage({
                 : "Your 7 swaps hands with the player you pick."}
             </p>
             <div className="uno-target-choices">
-              {opponents.map((player) => (
+              {targets.map((player) => (
                 <button
                   type="button"
                   key={player.userId}
@@ -588,16 +683,17 @@ function OpponentHand({ player, zone, active, art }: OpponentHandProps) {
   });
   return (
     <div
-      className={`uno-opponent-hand uno-opponent-hand--${zone}${active ? " uno-opponent-hand--active" : ""}`}
+      className={`uno-opponent-hand uno-opponent-hand--${zone}${active ? " uno-opponent-hand--active" : ""}${player.out === true ? " uno-opponent-hand--out" : ""}`}
       data-seat-user={player.userId}
     >
       <div className="uno-opponent-label">
         <strong>{player.username}</strong>
-        <span>{player.count} cards</span>
+        <span>{player.out === true ? "OUT" : `${player.count} cards`}</span>
       </div>
       <div className="uno-opponent-cards" aria-hidden="true">
-        {cards}
-
+        {player.out === true ? (
+          <img className="uno-opponent-card uno-opponent-card--out" src={art("card-back")} alt="" />
+        ) : cards}
       </div>
     </div>
   );

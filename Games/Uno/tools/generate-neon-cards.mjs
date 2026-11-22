@@ -120,6 +120,80 @@ function wildAttackCard() {
 ${corner("ATK!")}`, NEON.wild);
 }
 
+function draw4Card(color, amount) {
+  const c = NEON[color];
+  const label = `+${amount}`;
+  return surface(`
+<g transform="translate(90 126)">
+<rect x="-46" y="-26" width="48" height="72" rx="6" fill="none" stroke="url(#edge)" stroke-width="3" transform="rotate(-20 -22 0)"/>
+<rect x="-30" y="-30" width="48" height="72" rx="6" fill="none" stroke="url(#edge)" stroke-width="3" transform="rotate(-7 -6 0)"/>
+<rect x="-12" y="-30" width="48" height="72" rx="6" fill="none" stroke="url(#edge)" stroke-width="3" transform="rotate(7 12 0)"/>
+<rect x="4" y="-26" width="48" height="72" rx="6" fill="none" stroke="url(#edge)" stroke-width="3" transform="rotate(20 28 0)"/>
+</g>
+<text x="90" y="206" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 16px ${c[0]})">${label}</text>
+${corner(label)}`, c);
+}
+
+function skipEveryoneCard(color) {
+  const c = NEON[color];
+  return surface(`
+<g transform="translate(90 118)" fill="none" stroke="url(#edge)" stroke-width="3">
+<circle cx="-32" cy="-6" r="9"/>
+<rect x="-44" y="6" width="24" height="30" rx="10"/>
+<circle cx="0" cy="-6" r="9"/>
+<rect x="-12" y="6" width="24" height="30" rx="10"/>
+<circle cx="32" cy="-6" r="9"/>
+<rect x="20" y="6" width="24" height="30" rx="10"/>
+</g>
+<path d="M40 86 L140 154" stroke="#fff" stroke-width="9" stroke-linecap="round" filter="url(#soft)" opacity="0.8"/>
+<path d="M40 86 L140 154" stroke="${c[0]}" stroke-width="5" stroke-linecap="round"/>
+<text x="90" y="210" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 10px ${c[0]})">SKIP ALL</text>
+${corner("SKIP")}`, c);
+}
+
+function wildDrawCard(amount) {
+  const label = `+${amount}`;
+  const size = amount === 10 ? 56 : 68;
+  return surface(`
+<g opacity="0.9">${QUADRANT}</g>
+<circle cx="90" cy="135" r="66" fill="#0A0A0E" fill-opacity="0.5"/>
+<circle cx="90" cy="135" r="66" fill="none" stroke="url(#edge)" stroke-width="12" filter="url(#soft)" opacity="0.7"/>
+<circle cx="90" cy="135" r="66" fill="none" stroke="url(#edge)" stroke-width="10"/>
+<circle cx="90" cy="135" r="66" fill="none" stroke="#fff" stroke-opacity="0.9" stroke-width="3"/>
+<text x="90" y="158" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="${size}" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 20px #E040FB)">${label}</text>
+${corner(label)}`, NEON.wild);
+}
+
+function wildReverse4Card() {
+  return surface(`
+<g opacity="0.9">${QUADRANT}</g>
+<circle cx="90" cy="135" r="66" fill="#0A0A0E" fill-opacity="0.6"/>
+<circle cx="90" cy="135" r="66" fill="none" stroke="url(#edge)" stroke-width="12" filter="url(#soft)" opacity="0.7"/>
+<circle cx="90" cy="135" r="66" fill="none" stroke="url(#edge)" stroke-width="10"/>
+<circle cx="90" cy="135" r="66" fill="none" stroke="#fff" stroke-opacity="0.9" stroke-width="3"/>
+<text x="90" y="148" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="62" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 18px #18FFFF)">↻</text>
+<text x="90" y="192" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 10px #E040FB)">REVERSE +4</text>
+${corner("REV+4")}`, NEON.wild);
+}
+
+function wildRouletteCard() {
+  const wheel = `
+<path d="M90 126 L90 70 A56 56 0 0 1 146 126 Z" fill="${FOUR[0]}"/>
+<path d="M90 126 L146 126 A56 56 0 0 1 90 182 Z" fill="${FOUR[1]}"/>
+<path d="M90 126 L90 182 A56 56 0 0 1 34 126 Z" fill="${FOUR[2]}"/>
+<path d="M90 126 L34 126 A56 56 0 0 1 90 70 Z" fill="${FOUR[3]}"/>
+<circle cx="90" cy="126" r="56" fill="none" stroke="#fff" stroke-width="3"/>
+<circle cx="90" cy="126" r="10" fill="#0A0A0E" stroke="#fff" stroke-width="2"/>
+<polygon points="90,58 83,74 97,74" fill="#fff"/>`;
+  return surface(`
+<g opacity="0.5">${QUADRANT}</g>
+<circle cx="90" cy="128" r="64" fill="#0A0A0E" fill-opacity="0.6"/>
+<circle cx="90" cy="128" r="64" fill="none" stroke="url(#edge)" stroke-width="9" filter="url(#soft)" opacity="0.8"/>
+${wheel}
+<text x="90" y="212" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 10px #E040FB)">ROULETTE</text>
+${corner("RLT")}`, NEON.wild);
+}
+
 function back() {
   return surface(`
 <g transform="rotate(-20 90 135)">
@@ -157,6 +231,13 @@ for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
     writeFileSync(path.join(OUT, `${color}-discardall-${copy}.svg`), discardAllCard(color));
     count += 1;
   }
+  for (let copy = 0; copy < 2; copy += 1) {
+    writeFileSync(path.join(OUT, `${color}-draw4-${copy}.svg`), draw4Card(color, 4));
+    writeFileSync(path.join(OUT, `${color}-skipeveryone-${copy}.svg`), skipEveryoneCard(color));
+    count += 2;
+  }
+  writeFileSync(path.join(OUT, `${color}-discardall-2.svg`), discardAllCard(color));
+  count += 1;
 }
 for (const kind of ["wild", "wild4"]) {
   for (let copy = 0; copy < 4; copy += 1) {
@@ -167,5 +248,15 @@ for (const kind of ["wild", "wild4"]) {
 for (let copy = 0; copy < 4; copy += 1) {
   writeFileSync(path.join(OUT, `wildattack-${copy}.svg`), wildAttackCard());
   count += 1;
+}
+for (let copy = 0; copy < 4; copy += 1) {
+  writeFileSync(path.join(OUT, `wilddraw6-${copy}.svg`), wildDrawCard(6));
+  writeFileSync(path.join(OUT, `wilddraw10-${copy}.svg`), wildDrawCard(10));
+  count += 2;
+}
+for (let copy = 0; copy < 8; copy += 1) {
+  writeFileSync(path.join(OUT, `wildreverse4-${copy}.svg`), wildReverse4Card());
+  writeFileSync(path.join(OUT, `wildroulette-${copy}.svg`), wildRouletteCard());
+  count += 2;
 }
 console.log(`wrote ${count} neon card SVGs to ${OUT}`);

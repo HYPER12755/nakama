@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 270" width="180" height="270" role="img">
+<defs>
+<linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF1744"/><stop offset="1" stop-color="#FF5252"/></linearGradient>
+<radialGradient id="glow"><stop offset="0" stop-color="#FF1744" stop-opacity="0.42"/><stop offset="1" stop-color="#FF1744" stop-opacity="0"/></radialGradient>
+<filter id="soft"><feGaussianBlur stdDeviation="8"/></filter>
+</defs>
+<rect x="3" y="3" width="174" height="264" rx="10" fill="#0A0A0E" stroke="url(#edge)" stroke-width="4"/>
+<rect x="6" y="6" width="168" height="258" rx="8" fill="none" stroke="#FF003C" stroke-opacity="0.65" stroke-width="0.8"/>
+<rect x="9" y="9" width="162" height="252" rx="7" fill="url(#glow)"/>
+
+<g transform="translate(90 118)" fill="none" stroke="url(#edge)" stroke-width="3">
+<circle cx="-32" cy="-6" r="9"/>
+<rect x="-44" y="6" width="24" height="30" rx="10"/>
+<circle cx="0" cy="-6" r="9"/>
+<rect x="-12" y="6" width="24" height="30" rx="10"/>
+<circle cx="32" cy="-6" r="9"/>
+<rect x="20" y="6" width="24" height="30" rx="10"/>
+</g>
+<path d="M40 86 L140 154" stroke="#fff" stroke-width="9" stroke-linecap="round" filter="url(#soft)" opacity="0.8"/>
+<path d="M40 86 L140 154" stroke="#FF1744" stroke-width="5" stroke-linecap="round"/>
+<text x="90" y="210" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 10px #FF1744)">SKIP ALL</text>
+<g font-family="Arial, Helvetica, sans-serif" font-weight="800" font-style="italic" fill="#fff" font-size="17">
+<text x="14" y="26">SKIP</text>
+<text x="166" y="252" text-anchor="end" transform="rotate(180 166 252)">SKIP</text>
+</g>
+</svg>

@@ -13,9 +13,11 @@ export type RulesMode = GameMode;
 
 const PROGRESSIVE_MODE: RulesMode = "progressive";
 export const JUMP_IN_MODE: RulesMode = "jumpIn";
+export const NO_MERCY_MODE: RulesMode = UNO_MODE.NO_MERCY;
 const ATTACK_MODE: RulesMode = UNO_MODE.ATTACK;
 
 const JUMP_IN_ALIASES = ["jumpIn", "jump_in", "jump-in", "jumpin"];
+const NO_MERCY_ALIASES = ["noMercy", "no_mercy", "no-mercy", "nomercy"];
 
 export const RULES_MODES: RulesMode[] = (() => {
   const modes = [...UNO_MODES] as RulesMode[];
@@ -32,21 +34,28 @@ function isJumpInValue(value: unknown): boolean {
 }
 
 export function rulesModeLabel(mode: RulesMode | undefined): string {
-  if (isJumpInValue(mode)) {
+  const value = String(mode ?? "");
+  if (NO_MERCY_ALIASES.includes(value)) {
+    return "No Mercy";
+  }
+  if (isJumpInValue(value)) {
     return "Jump-In";
   }
-  if ((mode as string | undefined) === PROGRESSIVE_MODE) {
+  if (value === PROGRESSIVE_MODE) {
     return "Progressive";
   }
-  if (mode === ATTACK_MODE) {
+  if (value === ATTACK_MODE) {
     return "Attack";
   }
-  return mode === "sevenO" ? "Seven-O" : "Classic";
+  return value === "sevenO" ? "Seven-O" : "Classic";
 }
 
 export function normalizeRulesMode(value: unknown): RulesMode {
   if (isJumpInValue(value)) {
     return JUMP_IN_MODE;
+  }
+  if (typeof value === "string" && NO_MERCY_ALIASES.includes(value)) {
+    return NO_MERCY_MODE;
   }
   const normalized = normalizeMode(value);
   if (normalized === ("classic" as RulesMode) && value === PROGRESSIVE_MODE) {
@@ -75,11 +84,35 @@ export function normalizeJumpWindow(value: unknown): JumpWindow | null {
   return { cardId, ownerId, expiresAt: Math.trunc(expiresAt) };
 }
 
+export type PendingStackKind =
+  | "draw2" | "wild4" | "draw4" | "wildDraw6" | "wildDraw10" | "wildReverse4";
+
 export interface PendingStack {
   ownerId: string;
   targetId: string;
-  kind: "draw2" | "wild4";
+  kind: PendingStackKind;
   count: number;
+  value?: number;
+}
+
+function normalizeStackKind(value: unknown): PendingStackKind {
+  const raw = String(value ?? "").toLowerCase();
+  if (raw === "wild4" || raw === "wild_four") {
+    return "wild4";
+  }
+  if (raw === "draw4" || raw === "draw_four") {
+    return "draw4";
+  }
+  if (raw === "wilddraw6" || raw === "wild_draw6") {
+    return "wildDraw6";
+  }
+  if (raw === "wilddraw10" || raw === "wild_draw10") {
+    return "wildDraw10";
+  }
+  if (raw === "wildreverse4" || raw === "wild_reverse4") {
+    return "wildReverse4";
+  }
+  return "draw2";
 }
 
 export function normalizePendingStack(value: unknown): PendingStack | null {
@@ -87,22 +120,40 @@ export function normalizePendingStack(value: unknown): PendingStack | null {
   if (source == null) {
     return null;
   }
-  const rawKind = String(source.kind ?? source.stackKind ?? source.type ?? "draw2");
-  const kind: PendingStack["kind"] = rawKind === "wild4" || rawKind === "wild_four"
-    ? "wild4"
-    : "draw2";
+  const kind = normalizeStackKind(source.kind ?? source.stackKind ?? source.type);
   const rawCount = source.count ?? source.amount ?? source.value ?? source.size
     ?? (Array.isArray(source.cards) ? source.cards.length : undefined);
   const count = Number(rawCount ?? 0);
   if (!Number.isFinite(count) || count <= 0) {
     return null;
   }
+  const rawValue = source.value ?? source.minimum ?? source.required ?? source.stackValue;
+  const minimum = Number(rawValue ?? 0);
   return {
     ownerId: String(source.ownerId ?? source.owner_id ?? ""),
     targetId: String(source.targetId ?? source.target_id ?? ""),
     kind,
     count: Math.trunc(count),
+    ...(Number.isFinite(minimum) && minimum > 0 ? { value: Math.trunc(minimum) } : {}),
   };
+}
+
+export interface PendingRoulette {
+  chooserId: string;
+  ownerId: string;
+}
+
+export function normalizePendingRoulette(value: unknown): PendingRoulette | null {
+  const source = value as Record<string, unknown> | null | undefined;
+  if (source == null) {
+    return null;
+  }
+  const chooserId = String(source.chooserId ?? source.chooser_id ?? "");
+  const ownerId = String(source.ownerId ?? source.owner_id ?? "");
+  if (chooserId === "" && ownerId === "") {
+    return null;
+  }
+  return { chooserId, ownerId };
 }
 
 export interface PendingHit {
@@ -133,6 +184,7 @@ export interface BoardPlayer {
   username: string;
   connected: boolean;
   count: number;
+  out?: boolean;
   hand?: Card[];
 }
 
@@ -157,6 +209,7 @@ export interface BoardView {
   pendingChallenge: { ownerId: string; targetId: string; legal: boolean } | null;
   pendingStack?: PendingStack | null;
   pendingHit?: PendingHit | null;
+  pendingRoulette?: PendingRoulette | null;
   jumpWindow?: JumpWindow | null;
   legalCards: string[];
   canDraw: boolean;
@@ -164,6 +217,7 @@ export interface BoardView {
   myUserId: string | null;
   started: boolean;
   mode?: GameMode;
+  rulesMode?: RulesMode;
 }
 
 export function isJumpCandidate(view: BoardView, cardId: string): boolean {
@@ -193,8 +247,9 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
     return {
       players: [], spectators: [], chat: [], topCard: null, currentColor: null,
       turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
-      pendingStack: null, pendingHit: null, jumpWindow: null, legalCards: [], canDraw: false, result: null,
-      myUserId, started: false, mode: "classic",
+      pendingStack: null, pendingHit: null, pendingRoulette: null, jumpWindow: null,
+      legalCards: [], canDraw: false, result: null,
+      myUserId, started: false, mode: "classic", rulesMode: "classic",
     };
   }
   const rawState = state as unknown as Record<string, unknown>;
@@ -205,6 +260,7 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
       username: player.name,
       connected: true,
       count: player.hand.length,
+      out: player.out === true,
       hand: player.id === myUserId ? player.hand : undefined,
     })),
     spectators: [],
@@ -221,6 +277,7 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
     },
     pendingStack: normalizePendingStack(rawState.pendingStack ?? rawState.pending_stack),
     pendingHit: normalizePendingHit(rawState.pendingHit ?? rawState.pending_hit),
+    pendingRoulette: normalizePendingRoulette(rawState.pendingRoulette ?? rawState.pending_roulette),
     jumpWindow: normalizeJumpWindow(rawState.jumpWindow ?? rawState.jump_window),
     legalCards: myUserId === null ? [] : legalMoves(state, myUserId, Date.now()).cards,
     canDraw: myUserId !== null && legalMoves(state, myUserId, Date.now()).canDraw,
@@ -230,6 +287,7 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
     myUserId,
     started: state.started,
     mode: normalizeRulesMode(state.mode),
+    rulesMode: normalizeRulesMode(state.mode),
   };
 }
 

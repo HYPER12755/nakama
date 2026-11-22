@@ -50,6 +50,7 @@ export function UnoOnlinePanel({
   const effectiveMode = controller.view.mode ?? controller.rulesMode;
   const jumpIn = effectiveMode === JUMP_IN_MODE;
   const attack = effectiveMode === UNO_MODE.ATTACK;
+  const noMercy = effectiveMode === UNO_MODE.NO_MERCY;
 
   async function joinRoom() {
     const code = roomId.trim();
@@ -127,6 +128,9 @@ export function UnoOnlinePanel({
               ) : null}
               {attack ? (
                 <p className="online-mode-hint">Attack is on: Hit cards make the target take the launcher or deflect; Wild Attack redirects the hit.</p>
+              ) : null}
+              {noMercy ? (
+                <p className="online-mode-hint">No Mercy is on: draw until playable, stack equal or higher +2/+4/+6/+10, and drop out at 25 cards.</p>
               ) : null}
               <div className="online-size">
                 <span className="online-size__label">Players</span>
@@ -224,6 +228,9 @@ export function UnoOnlinePanel({
           {attack ? (
             <p className="online-mode-hint">Attack is on: take the hit or deflect with a Hit or Wild Attack card.</p>
           ) : null}
+          {noMercy ? (
+            <p className="online-mode-hint">No Mercy is on: stack draw cards, choose colours for Wild Roulette, and survive to 25 cards.</p>
+          ) : null}
           {controller.error !== null ? (
             <p className="online-feedback online-feedback--error" role="alert">{controller.error}</p>
           ) : null}
@@ -265,14 +272,14 @@ export function UnoOnlinePanel({
             {controller.view.players.map((player) => (
               <div
                 key={player.userId || player.seat}
-                className={`online-seat${player.connected === false ? " online-seat--away" : ""}`}
+                className={`online-seat${player.connected === false ? " online-seat--away" : ""}${player.out === true ? " online-seat--out" : ""}`}
               >
                 <span className="online-seat__name">
                   {player.username}
                   {player.userId === controller.myUserId ? <small>you</small> : null}
                 </span>
                 <span className="online-seat__state">
-                  {player.connected === false ? "away" : `${player.count} cards`}
+                  {player.out === true ? "OUT" : player.connected === false ? "away" : `${player.count} cards`}
                 </span>
               </div>
             ))}

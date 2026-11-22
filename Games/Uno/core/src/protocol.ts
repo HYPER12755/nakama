@@ -6,6 +6,7 @@ export const UNO_MODE = {
   PROGRESSIVE: "progressive",
   JUMP_IN: "jumpIn",
   ATTACK: "attack",
+  NO_MERCY: "noMercy",
 } as const;
 
 export const UNO_MODES: readonly GameMode[] = [
@@ -14,6 +15,7 @@ export const UNO_MODES: readonly GameMode[] = [
   UNO_MODE.PROGRESSIVE,
   UNO_MODE.JUMP_IN,
   UNO_MODE.ATTACK,
+  UNO_MODE.NO_MERCY,
 ];
 
 export const JUMP_WINDOW_MS = 1800;
@@ -46,6 +48,12 @@ export const UNO_OP = {
   RESIGN: 106,
   PING: 107,
 } as const;
+
+export const UNO_CLIENT_OP = {
+  COLOR_CHOOSE: 108,
+} as const;
+
+export const UNO_COLOR_CHOOSE_OP = UNO_CLIENT_OP.COLOR_CHOOSE;
 
 export const UNO_ERROR = {
   NOT_YOUR_TURN: "not_your_turn",

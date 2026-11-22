@@ -24,6 +24,7 @@ const OP = {
   REQUEST_STATE: 105,
   RESIGN: 106,
   PING: 107,
+  COLOR_CHOOSE: 108,
 };
 
 const ERROR_CODE = {
@@ -657,10 +658,8 @@ async function sevenOBattle() {
     `sevenO room code failed: ${JSON.stringify(resolved)}`,
   );
 
-  await Promise.all([
-    alice.socket.joinMatch(matchId),
-    bob.socket.joinMatch(matchId),
-  ]);
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
   const aliceStart = await waitState(
     alice.socket,
     "sevenO alice start",
@@ -749,10 +748,8 @@ async function progressiveRoom() {
     `progressive room code failed: ${JSON.stringify(resolved)}`,
   );
 
-  await Promise.all([
-    alice.socket.joinMatch(matchId),
-    bob.socket.joinMatch(matchId),
-  ]);
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
   const aliceStart = await waitState(
     alice.socket,
     "progressive alice start",
@@ -840,10 +837,8 @@ async function jumpInRoom() {
     `jumpIn room code failed: ${JSON.stringify(resolved)}`,
   );
 
-  await Promise.all([
-    alice.socket.joinMatch(matchId),
-    bob.socket.joinMatch(matchId),
-  ]);
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
   const aliceStart = await waitState(
     alice.socket,
     "jumpIn alice start",
@@ -924,10 +919,8 @@ async function attackRoom() {
     `attack room code failed: ${JSON.stringify(resolved)}`,
   );
 
-  await Promise.all([
-    alice.socket.joinMatch(matchId),
-    bob.socket.joinMatch(matchId),
-  ]);
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
   const aliceStart = await waitState(
     alice.socket,
     "attack alice start",
@@ -1016,6 +1009,108 @@ async function attackRoom() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "attack game over", STATE_TIMEOUT_MS);
 }
 
+async function noMercyRoom() {
+  const alice = await authenticate("no-mercy-alice");
+  const bob = await authenticate("no-mercy-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 13,
+    rulesMode: "noMercy",
+  });
+  if (created?.error?.code === "invalid_rules_mode") {
+    console.log(
+      `[skip] noMercy is not deployed on this server (${created.error.message}); skipping the battle scenario`,
+    );
+    return;
+  }
+  assert(
+    created?.ok === true && created.rulesMode === "noMercy" && typeof created.matchId === "string",
+    `noMercy room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  const resolved = await rpc(bob, "moongames_room_code_resolve", {
+    code: created.roomCode,
+    gameId: "uno",
+  });
+  assert(
+    resolved?.ok === true && resolved.matchId === matchId,
+    `noMercy room code failed: ${JSON.stringify(resolved)}`,
+  );
+
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
+  const aliceStart = await waitState(
+    alice.socket,
+    "noMercy alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "noMercy bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "noMercy", "noMercy mode must reach alice");
+  assert(bobStart.data.rulesMode === "noMercy", "noMercy mode must reach bob");
+  assert(
+    aliceStart.data.deckCount === 153,
+    `noMercy deck should hold 153 cards after dealing 14 and flipping a starter, got ${aliceStart.data.deckCount}`,
+  );
+  assert(aliceStart.data.topCard?.id === "yellow-2-0", "seed 13 starter should be a yellow 2");
+  assert(legalCardIds(aliceStart.data).includes("wilddraw6-1"), "seed 13 should offer Wild Draw Six");
+  assert(legalCardIds(aliceStart.data).includes("wildroulette-3"), "seed 13 should offer Wild Roulette");
+  assert(
+    aliceStart.data.players.every((player) => player.out === false),
+    "no seat starts out",
+  );
+  console.log("[ok] No Mercy private room reports rulesMode and a 168-card setup");
+
+  await send(alice, matchId, OP.PLAY_REQUEST, {
+    cardId: "wilddraw6-1",
+    chosenColor: "red",
+  });
+  const stackPredicate = (state) =>
+    state.pendingStack?.kind === "wildDraw6" &&
+    state.pendingStack.amount === 6 && state.pendingStack.value === 6;
+  const aliceStack = await waitState(alice.socket, "noMercy alice stack", stackPredicate);
+  const bobStack = await waitState(bob.socket, "noMercy bob stack", stackPredicate);
+  for (const [state, label] of [[aliceStack.data, "alice"], [bobStack.data, "bob"]]) {
+    assert(state.pendingStack.targetId === bob.session.user_id, `${label}: +6 stack should target Bob`);
+    assert(state.pendingStack.ownerId === alice.session.user_id, `${label}: Alice should own the +6 stack`);
+    assert(state.currentColor === "red", `${label}: the chosen colour should apply`);
+  }
+  console.log("[ok] No Mercy Wild Draw Six opens an authoritative stack with value 6");
+
+  const bobBefore = seatOf(bobStack.data, bob).count;
+  await send(bob, matchId, OP.DRAW_REQUEST, {});
+  const taken = await waitState(
+    alice.socket,
+    "noMercy stack taken",
+    (state) => state.pendingStack == null && seatOf(state, bob)?.count === bobBefore + 6,
+  );
+  assert(taken.data.turn === 0, "taking the stack should return the turn to Alice");
+  console.log("[ok] No Mercy stack resolves with the accumulated six cards");
+
+  await send(alice, matchId, OP.PLAY_REQUEST, { cardId: "wildroulette-3" });
+  const roulettePredicate = (state) => state.pendingRoulette?.chooserId === bob.session.user_id;
+  const aliceRoulette = await waitState(alice.socket, "noMercy alice roulette", roulettePredicate);
+  const bobRoulette = await waitState(bob.socket, "noMercy bob roulette", roulettePredicate);
+  assert(
+    aliceRoulette.data.pendingRoulette.ownerId === alice.session.user_id,
+    "Alice should own the roulette card",
+  );
+  assert(bobRoulette.data.turn === 1, "the chooser should hold the turn during roulette");
+  console.log("[ok] No Mercy Wild Colour Roulette opens with the next player as chooser");
+
+  await send(bob, matchId, OP.COLOR_CHOOSE, { colour: "yellow" });
+  const rouletteDone = (state) => state.pendingRoulette == null && state.turn === 0;
+  await waitState(alice.socket, "noMercy alice roulette resolved", rouletteDone);
+  await waitState(bob.socket, "noMercy bob roulette resolved", rouletteDone);
+  console.log("[ok] opcode 108 resolves Wild Colour Roulette on both clients");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "noMercy game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -1042,6 +1137,7 @@ async function main() {
     await progressiveRoom();
     await jumpInRoom();
     await attackRoom();
+    await noMercyRoom();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

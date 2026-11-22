@@ -8,6 +8,12 @@ const COLORS = {
   green: "#1fa45b",
   blue: "#2464d6",
 };
+const WILD_QUADRANTS = `<g>
+<path d="M9 23 A14 14 0 0 1 23 9 L157 9 A14 14 0 0 1 171 23 L90 135 Z" fill="${COLORS.red}"/>
+<path d="M171 23 A14 14 0 0 1 171 247 L90 135 Z" fill="${COLORS.yellow}"/>
+<path d="M171 247 A14 14 0 0 1 157 261 L23 261 A14 14 0 0 1 9 247 L90 135 Z" fill="${COLORS.green}"/>
+<path d="M9 247 A14 14 0 0 1 9 23 L90 135 Z" fill="${COLORS.blue}"/>
+</g>`;
 
 function burstPoints(cx, cy, spikes, outer, inner, rotation = 0) {
   const points = [];
@@ -106,6 +112,76 @@ function wildAttackCard(copy) {
 <text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">wildattack ${copy}</text>`);
 }
 
+function draw4Card(color, copy) {
+  const fill = COLORS[color];
+  const stack = `<g transform="translate(90 130)">
+<rect x="-46" y="-26" width="48" height="72" rx="6" fill="#ffffff" stroke="#111827" stroke-width="2" transform="rotate(-20 -22 0)"/>
+<rect x="-30" y="-30" width="48" height="72" rx="6" fill="#ffffff" stroke="#111827" stroke-width="2" transform="rotate(-7 -6 0)"/>
+<rect x="-12" y="-30" width="48" height="72" rx="6" fill="#ffffff" stroke="#111827" stroke-width="2" transform="rotate(7 12 0)"/>
+<rect x="4" y="-26" width="48" height="72" rx="6" fill="${fill}" stroke="#111827" stroke-width="2" transform="rotate(20 28 0)"/>
+</g>`;
+  return frame(`${corner(fill, "+4")}
+<ellipse cx="90" cy="132" rx="64" ry="80" fill="${fill}" transform="rotate(-18 90 132)"/>
+${stack}
+<text x="90" y="198" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="28" fill="#ffffff" stroke="#111827" stroke-width="2" paint-order="stroke">+4</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">${color} draw4 ${copy}</text>`);
+}
+
+function skipEveryoneCard(color, copy) {
+  const fill = COLORS[color];
+  const people = `<g transform="translate(90 118)" fill="#ffffff" stroke="#111827" stroke-width="1.5">
+<circle cx="-32" cy="-6" r="9"/>
+<rect x="-44" y="6" width="24" height="30" rx="10"/>
+<circle cx="0" cy="-6" r="9"/>
+<rect x="-12" y="6" width="24" height="30" rx="10"/>
+<circle cx="32" cy="-6" r="9"/>
+<rect x="20" y="6" width="24" height="30" rx="10"/>
+</g>`;
+  return frame(`${corner(fill, "SKIP")}
+<ellipse cx="90" cy="132" rx="64" ry="80" fill="${fill}" transform="rotate(18 90 132)"/>
+${people}
+<path d="M40 84 L140 152" stroke="#111827" stroke-width="7" stroke-linecap="round"/>
+<text x="90" y="206" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="800" fill="#ffffff" stroke="#111827" stroke-width="1.5" paint-order="stroke">SKIP ALL</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">${color} skipeveryone ${copy}</text>`);
+}
+
+function wildDrawCard(amount, copy) {
+  const label = `+${amount}`;
+  const size = amount === 10 ? 56 : 68;
+  return frame(`${corner(COLORS.red, label)}
+${WILD_QUADRANTS}
+<ellipse cx="90" cy="135" rx="60" ry="74" fill="#0f172a" transform="rotate(-18 90 135)"/>
+<text x="90" y="150" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="${size}" fill="#ffffff">${label}</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">wilddraw${amount} ${copy}</text>`);
+}
+
+function wildReverse4Card(copy) {
+  return frame(`${corner(COLORS.red, "REV +4")}
+${WILD_QUADRANTS}
+<ellipse cx="90" cy="135" rx="60" ry="74" fill="#0f172a" transform="rotate(-18 90 135)"/>
+<text x="90" y="140" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="64" fill="#ffffff">↻</text>
+<text x="90" y="184" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="800" fill="#ffffff" stroke="#111827" stroke-width="1.5" paint-order="stroke">REVERSE +4</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">wildreverse4 ${copy}</text>`);
+}
+
+function wildRouletteCard(copy) {
+  const wheel = `<g>
+<path d="M90 126 L90 70 A56 56 0 0 1 146 126 Z" fill="${COLORS.red}"/>
+<path d="M90 126 L146 126 A56 56 0 0 1 90 182 Z" fill="${COLORS.yellow}"/>
+<path d="M90 126 L90 182 A56 56 0 0 1 34 126 Z" fill="${COLORS.green}"/>
+<path d="M90 126 L34 126 A56 56 0 0 1 90 70 Z" fill="${COLORS.blue}"/>
+<circle cx="90" cy="126" r="56" fill="none" stroke="#111827" stroke-width="3"/>
+<circle cx="90" cy="126" r="10" fill="#0f172a" stroke="#ffffff" stroke-width="2"/>
+<polygon points="90,58 83,74 97,74" fill="#111827"/>
+</g>`;
+  return frame(`${corner(COLORS.red, "RLT")}
+${WILD_QUADRANTS}
+<ellipse cx="90" cy="138" rx="64" ry="74" fill="#0f172a" transform="rotate(-12 90 138)"/>
+${wheel}
+<text x="90" y="212" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="800" fill="#ffffff" stroke="#111827" stroke-width="1.5" paint-order="stroke">ROULETTE</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">wildroulette ${copy}</text>`);
+}
+
 mkdirSync(OUT, { recursive: true });
 
 writeFileSync(path.join(OUT, "card-back.svg"), frame(`<g>
@@ -143,6 +219,13 @@ for (const color of Object.keys(COLORS)) {
     writeFileSync(path.join(OUT, `${color}-discardall-${copy}.svg`), discardAllCard(color, copy));
     count += 1;
   }
+  for (let copy = 0; copy < 2; copy += 1) {
+    writeFileSync(path.join(OUT, `${color}-draw4-${copy}.svg`), draw4Card(color, copy));
+    writeFileSync(path.join(OUT, `${color}-skipeveryone-${copy}.svg`), skipEveryoneCard(color, copy));
+    count += 2;
+  }
+  writeFileSync(path.join(OUT, `${color}-discardall-2.svg`), discardAllCard(color, 2));
+  count += 1;
 }
 for (const kind of ["wild", "wild4"]) {
   for (let copy = 0; copy < 4; copy += 1) {
@@ -153,5 +236,15 @@ for (const kind of ["wild", "wild4"]) {
 for (let copy = 0; copy < 4; copy += 1) {
   writeFileSync(path.join(OUT, `wildattack-${copy}.svg`), wildAttackCard(copy));
   count += 1;
+}
+for (let copy = 0; copy < 4; copy += 1) {
+  writeFileSync(path.join(OUT, `wilddraw6-${copy}.svg`), wildDrawCard(6, copy));
+  writeFileSync(path.join(OUT, `wilddraw10-${copy}.svg`), wildDrawCard(10, copy));
+  count += 2;
+}
+for (let copy = 0; copy < 8; copy += 1) {
+  writeFileSync(path.join(OUT, `wildreverse4-${copy}.svg`), wildReverse4Card(copy));
+  writeFileSync(path.join(OUT, `wildroulette-${copy}.svg`), wildRouletteCard(copy));
+  count += 2;
 }
 console.log(`wrote ${count} card SVGs to ${OUT}`);

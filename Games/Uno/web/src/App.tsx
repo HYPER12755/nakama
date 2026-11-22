@@ -43,6 +43,8 @@ const JUMP_IN_RULE = "Jump-In: after a number card is played, anyone holding the
 
 const ATTACK_RULE = "Attack: Hit cards make the target take the launcher, or deflect with a Hit or Wild Attack card. Wild Attack picks a target and a colour; Discard All drops every card of that colour.";
 
+const NO_MERCY_RULE = "No Mercy: draw until you can play, stack +2/+4/+6/+10 with equal or higher cards, and drop out at 25 cards. Coloured +4, Skip Everyone, Discard All, Wild Reverse +4 and Wild Colour Roulette apply.";
+
 const COLOURS: Color[] = ["red", "yellow", "green", "blue"];
 const COLOUR_HEX: Record<Color, string> = {
   red: "#e8402a", yellow: "#f2c600", green: "#1fa45b", blue: "#2464d6",
@@ -89,7 +91,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
         ? [...RULES, JUMP_IN_RULE]
         : game.rulesMode === UNO_MODE.ATTACK
           ? [...RULES, ATTACK_RULE]
-          : RULES;
+          : game.rulesMode === UNO_MODE.NO_MERCY
+            ? [...RULES, NO_MERCY_RULE]
+            : RULES;
   const activePlayer = game.view.players[game.view.turn];
   const winner = game.view.result?.winnerUserId == null
     ? null
@@ -259,6 +263,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 pileStyle={pileStyle}
                 rulesMode={game.rulesMode}
                 onPlay={play}
+                onChooseColour={game.chooseColour}
                 onDraw={game.draw}
                 onChallenge={game.challenge}
                 onUno={() => setToast("UNO! One card left.")}
@@ -349,13 +354,13 @@ export default function App({ bridge }: { bridge: GameBridge }) {
             </div>
             <div className="race-list">
               {game.view.players.map((player) => (
-                <div key={player.userId} className={`race-row${player.seat === game.view.turn ? " race-row--active" : ""}`}>
+                <div key={player.userId} className={`race-row${player.seat === game.view.turn ? " race-row--active" : ""}${player.out === true ? " race-row--out" : ""}`}>
                   <span className="race-disc" style={{ background: COLOUR_HEX[COLOURS[player.seat] ?? "red"] }} />
                   <div className="race-name">
                     {player.username}
                     <span className="race-sub">{onlineMode ? "ONLINE" : player.seat === 0 ? "YOU" : "COMPUTER"}</span>
                   </div>
-                  <b className="race-count">{player.count}</b>
+                  <b className="race-count">{player.out === true ? "OUT" : player.count}</b>
                 </div>
               ))}
             </div>

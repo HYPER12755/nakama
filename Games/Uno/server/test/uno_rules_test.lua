@@ -1260,6 +1260,377 @@ test("attack mode always allows a draw and treats two player Reverse as Skip", f
   assert_equal(reversed.direction, 1, "direction unchanged")
 end)
 
+local nm_red_five = { id = "red-5-0", color = "red", kind = "number", value = 5 }
+local nm_red_one = { id = "red-1-0", color = "red", kind = "number", value = 1 }
+local nm_blue_zero = { id = "blue-0-0", color = "blue", kind = "number", value = 0 }
+local nm_blue_draw_two = { id = "blue-draw2-0", color = "blue", kind = "draw2" }
+local nm_red_draw_two = { id = "red-draw2-0", color = "red", kind = "draw2" }
+local nm_green_draw_two = { id = "green-draw2-0", color = "green", kind = "draw2" }
+local nm_red_draw_four = { id = "red-draw4-0", color = "red", kind = "draw4" }
+local nm_blue_draw_four = { id = "blue-draw4-0", color = "blue", kind = "draw4" }
+local nm_red_skip_everyone = { id = "red-skipeveryone-0", color = "red", kind = "skipEveryone" }
+local nm_red_discard_all = { id = "red-discardall-0", color = "red", kind = "discardAll" }
+local nm_red_seven = { id = "red-7-0", color = "red", kind = "number", value = 7 }
+local nm_red_zero = { id = "red-0-0", color = "red", kind = "number", value = 0 }
+local nm_red_reverse = { id = "red-reverse-0", color = "red", kind = "reverse" }
+local nm_wild_draw6 = { id = "wilddraw6-0", color = nil, kind = "wildDraw6" }
+local nm_wild_draw10 = { id = "wilddraw10-0", color = nil, kind = "wildDraw10" }
+local nm_wild_reverse4 = { id = "wildreverse4-0", color = nil, kind = "wildReverse4" }
+local nm_wild_roulette = { id = "wildroulette-0", color = nil, kind = "wildRoulette" }
+local nm_wild = { id = "wild-0", color = nil, kind = "wild" }
+
+local function nm_players(count)
+  local ids = { "p1", "p2", "p3" }
+  if count == 2 then
+    ids = { "p1", "p2" }
+  end
+  return players(ids)
+end
+
+local function nm_game(hand, color, seat_count)
+  local game = rules.create_game(4242, nm_players(seat_count), 0, "noMercy")
+  game.turn = 1
+  game.direction = 1
+  game.current_color = color or "red"
+  game.discard = { nm_red_five }
+  game.drawn_card_id = nil
+  game.pending_challenge = nil
+  game.pending_stack = nil
+  game.pending_hit = nil
+  game.pending_roulette = nil
+  game.finished = false
+  game.winner = nil
+  for _, player in ipairs(game.players) do
+    player.hand = {}
+    player.out = false
+  end
+  game.players[1].hand = hand
+  return game
+end
+
+local function nm_filler(index)
+  return { id = "blue-" .. index .. "-0", color = "blue", kind = "number", value = index % 10 }
+end
+
+test("exposes noMercy as an authoritative mode with a 168 card deck", function()
+  assert_equal(protocol.is_rules_mode("noMercy"), true, "protocol accepts mode")
+  assert_equal(protocol.normalize_rules_mode("noMercy"), "noMercy", "protocol normalizes mode")
+  assert_equal(protocol.OP.COLOR_CHOOSE, 108, "colour opcode")
+  local game = rules.create_game(7, nm_players(3), 0, "noMercy")
+  assert_equal(game.mode, "noMercy", "game mode")
+  assert_equal(game.pending_roulette, nil, "no pending roulette at creation")
+  assert_equal(game.players[1].out, false, "players start active")
+  local deck = rules.build_deck("noMercy")
+  assert_equal(#deck, 168, "deck size")
+  assert_equal(kind_count(deck, "number"), 80, "number cards")
+  assert_equal(kind_count(deck, "skip"), 12, "skip cards")
+  assert_equal(kind_count(deck, "reverse"), 12, "reverse cards")
+  assert_equal(kind_count(deck, "draw2"), 12, "draw two cards")
+  assert_equal(kind_count(deck, "draw4"), 8, "coloured draw four cards")
+  assert_equal(kind_count(deck, "discardAll"), 12, "discard all cards")
+  assert_equal(kind_count(deck, "skipEveryone"), 8, "skip everyone cards")
+  assert_equal(kind_count(deck, "wildReverse4"), 8, "wild reverse four cards")
+  assert_equal(kind_count(deck, "wildRoulette"), 8, "wild roulette cards")
+  assert_equal(kind_count(deck, "wildDraw6"), 4, "wild draw six cards")
+  assert_equal(kind_count(deck, "wildDraw10"), 4, "wild draw ten cards")
+  assert_equal(kind_count(deck, "wild"), 0, "no plain wild")
+  assert_equal(kind_count(deck, "wild4"), 0, "no classic wild four")
+  local unique = {}
+  for _, card in ipairs(deck) do
+    assert_equal(unique[card.id] == nil, true, "unique id " .. card.id)
+    unique[card.id] = true
+  end
+  for _, id in ipairs({
+    "red-draw4-0", "blue-skipeveryone-1", "green-discardall-2", "wilddraw6-3",
+    "wilddraw10-3", "wildreverse4-7", "wildroulette-7",
+  }) do
+    assert_equal(unique[id] == true, true, "documented id " .. id)
+  end
+  assert_equal(rules.draw_card_value("draw2"), 2, "draw two value")
+  assert_equal(rules.draw_card_value("draw4"), 4, "draw four value")
+  assert_equal(rules.draw_card_value("wildReverse4"), 4, "wild reverse four value")
+  assert_equal(rules.draw_card_value("wildDraw6"), 6, "wild draw six value")
+  assert_equal(rules.draw_card_value("wildDraw10"), 10, "wild draw ten value")
+end)
+
+test("always flips a number card as the noMercy starter", function()
+  for seed = 1, 120 do
+    local game = rules.create_game(seed, nm_players(3), 0, "noMercy")
+    assert_equal(game.discard[1].kind, "number", "number starter for seed " .. seed)
+    assert_equal(game.starting_rule.kind, "number", "starting rule for seed " .. seed)
+  end
+end)
+
+test("draws one card at a time until a playable card is drawn", function()
+  local game = nm_game({}, "red")
+  game.draw_pile = { nm_red_one, nm_blue_zero }
+  local drawn, ok = rules.apply_action(game, { type = "draw", player_id = "p1" })
+  assert_equal(ok, true, "draw accepted")
+  assert_equal(drawn.turn, 1, "turn stays on actor")
+  assert_equal(join(ids(drawn.players[1].hand)), nm_blue_zero.id .. "," .. nm_red_one.id, "drawn cards")
+  assert_equal(drawn.drawn_card_id, nm_red_one.id, "playable card pending")
+  local moves = rules.legal_moves(drawn, "p1")
+  assert_equal(join(moves.cards), nm_red_one.id, "only drawn card playable")
+  assert_equal(moves.can_draw, false, "no second draw")
+  local played, played_ok = rules.apply_action(drawn, { type = "play", player_id = "p1", card_id = nm_red_one.id })
+  assert_equal(played_ok, true, "drawn card played")
+  assert_equal(played.turn, 2, "turn advanced")
+end)
+
+test("reshuffles the discard keeping the top without stalling", function()
+  local game = nm_game({}, "red")
+  game.draw_pile = { nm_blue_zero }
+  game.discard = {
+    { id = "blue-1-0", color = "blue", kind = "number", value = 1 },
+    nm_blue_zero,
+    nm_red_five,
+  }
+  local drawn, ok = rules.apply_action(game, { type = "draw", player_id = "p1" })
+  assert_equal(ok, true, "draw accepted")
+  assert_equal(drawn.drawn_card_id, nil, "no playable card")
+  assert_equal(drawn.turn, 2, "turn passed")
+  assert_equal(#drawn.players[1].hand, 3, "all cards drawn")
+  assert_equal(join(ids(drawn.discard)), nm_red_five.id, "top card kept")
+end)
+
+test("stacks equal or higher draw cards regardless of colour", function()
+  local game = nm_game({ nm_red_draw_four }, "red")
+  game.players[2].hand = { nm_blue_draw_two }
+  local first, first_ok = rules.apply_action(game, { type = "play", player_id = "p1", card_id = nm_red_draw_four.id })
+  assert_equal(first_ok, true, "first draw played")
+  assert_equal(first.pending_stack.amount, 4, "initial amount")
+  assert_equal(first.pending_stack.value, 4, "initial value")
+  local moves = rules.legal_moves(first, "p2")
+  assert_equal(#moves.cards, 0, "lower card not stackable")
+  assert_equal(moves.can_draw, true, "take available")
+  local rejected, rejected_ok, rejected_code = rules.apply_action(first, {
+    type = "play", player_id = "p2", card_id = nm_blue_draw_two.id,
+  })
+  assert_equal(rejected_ok, false, "lower stack refused")
+  assert_equal(rejected_code, protocol.ERROR.ILLEGAL_CARD, "illegal card code")
+  assert_equal(rejected == first, true, "state untouched")
+
+  game = nm_game({ nm_blue_draw_two }, "blue")
+  game.discard = { nm_blue_draw_two }
+  game.players[2].hand = { nm_red_draw_four }
+  game.players[3].hand = { nm_wild_draw6 }
+  local started = rules.apply_action(game, { type = "play", player_id = "p1", card_id = nm_blue_draw_two.id })
+  local stacked = rules.apply_action(started, { type = "play", player_id = "p2", card_id = nm_red_draw_four.id })
+  assert_equal(stacked.pending_stack.amount, 6, "accumulated amount")
+  assert_equal(stacked.pending_stack.value, 4, "new value")
+  local stacked_again = rules.apply_action(stacked, {
+    type = "play", player_id = "p3", card_id = nm_wild_draw6.id, chosen_color = "green",
+  })
+  assert_equal(stacked_again.pending_stack.amount, 12, "wild draw six added")
+  assert_equal(stacked_again.current_color, "green", "chosen colour")
+  local before = #stacked_again.players[1].hand
+  local taken = rules.apply_action(stacked_again, { type = "draw", player_id = "p1" })
+  assert_equal(#taken.players[1].hand, before + 12, "target drew the full stack")
+  assert_equal(taken.pending_stack, nil, "stack cleared")
+end)
+
+test("eliminates a player at 25 cards and declares the last active player the winner", function()
+  local game = nm_game({ nm_blue_draw_two }, "blue", 2)
+  for index = 1, 24 do
+    game.players[2].hand[index] = nm_filler(index)
+  end
+  local played = rules.apply_action(game, { type = "play", player_id = "p1", card_id = nm_blue_draw_two.id })
+  local state, ok = rules.apply_action(played, { type = "draw", player_id = "p2" })
+  assert_equal(ok, true, "stack taken")
+  assert_equal(#state.players[2].hand, 26, "target drew two")
+  assert_equal(state.players[2].out, true, "target eliminated")
+  assert_equal(#state.players, 2, "seat kept")
+  assert_equal(state.finished, true, "hand finished")
+  assert_equal(state.winner, "p1", "survivor wins")
+end)
+
+test("refuses an action from an eliminated seat", function()
+  local game = nm_game({ nm_red_one }, "red")
+  game.players[1].out = true
+  local state, ok, error_code = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = nm_red_one.id,
+  })
+  assert_equal(ok, false, "eliminated actor refused")
+  assert_equal(error_code, protocol.ERROR.NOT_YOUR_TURN, "not your turn code")
+  assert_equal(state == game, true, "state untouched")
+end)
+
+test("skips eliminated seats and rotates only active hands on zero", function()
+  local game = nm_game({ nm_red_zero }, "red")
+  game.players[1].out = false
+  game.players[2].hand = { nm_blue_zero }
+  game.players[3].hand = { nm_green_draw_two }
+  game.players[2].out = true
+  local state, ok = rules.apply_action(game, { type = "play", player_id = "p1", card_id = nm_red_zero.id })
+  assert_equal(ok, true, "zero played")
+  assert_equal(join(ids(state.players[1].hand)), nm_green_draw_two.id, "p1 received p3 hand")
+  assert_equal(join(ids(state.players[2].hand)), nm_blue_zero.id, "eliminated hand untouched")
+  assert_equal(#state.players[3].hand, 0, "p3 received empty hand")
+  assert_equal(rules.legal_moves(state, "p2").can_draw, false, "eliminated player cannot act")
+end)
+
+test("swaps hands on a seven with a valid active target", function()
+  local game = nm_game({ nm_red_seven, nm_red_one }, "red")
+  game.players[2].hand = { nm_blue_zero }
+  local missing, missing_ok, missing_code = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = nm_red_seven.id,
+  })
+  assert_equal(missing_ok, false, "target required")
+  assert_equal(missing_code, protocol.ERROR.MISSING_TARGET, "missing target code")
+  assert_equal(missing == game, true, "state untouched")
+  game.players[2].out = true
+  local refused, refused_ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = nm_red_seven.id, target_id = "p2",
+  })
+  assert_equal(refused_ok, false, "eliminated target refused")
+  assert_equal(refused == game, true, "state untouched")
+  game.players[2].out = false
+  local state, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = nm_red_seven.id, target_id = "p2",
+  })
+  assert_equal(ok, true, "seven played")
+  assert_equal(join(ids(state.players[1].hand)), nm_blue_zero.id, "actor took target hand")
+  assert_equal(join(ids(state.players[2].hand)), nm_red_one.id, "target took actor hand")
+end)
+
+test("plays a coloured Draw Four on another Draw Four without a colour change", function()
+  local game = nm_game({ nm_red_draw_four, nm_red_one }, "green")
+  game.discard = { nm_blue_draw_four }
+  local state, ok = rules.apply_action(game, { type = "play", player_id = "p1", card_id = nm_red_draw_four.id })
+  assert_equal(ok, true, "draw four played")
+  assert_equal(state.current_color, "green", "colour unchanged")
+  assert_equal(state.pending_challenge, nil, "no challenge")
+  assert_equal(state.pending_stack.kind, "draw4", "stack kind")
+  local challenged, challenge_ok, challenge_code = rules.apply_action(state, {
+    type = "challenge", player_id = "p2", accept = true,
+  })
+  assert_equal(challenge_ok, false, "no challenge accepted")
+  assert_equal(challenge_code, protocol.ERROR.BAD_CHALLENGE, "bad challenge code")
+  assert_equal(challenged == state, true, "state untouched")
+end)
+
+test("requires a colour for Wild Draw Six and Wild Draw Ten", function()
+  for _, entry in ipairs({
+    { card = nm_wild_draw6, amount = 6 },
+    { card = nm_wild_draw10, amount = 10 },
+  }) do
+    local game = nm_game({ entry.card, nm_red_one }, "red")
+    local missing, missing_ok, missing_code = rules.apply_action(game, {
+      type = "play", player_id = "p1", card_id = entry.card.id,
+    })
+    assert_equal(missing_ok, false, "colour required")
+    assert_equal(missing_code, protocol.ERROR.MISSING_COLOR, "missing colour code")
+    assert_equal(missing == game, true, "state untouched")
+    local state, ok = rules.apply_action(game, {
+      type = "play", player_id = "p1", card_id = entry.card.id, chosen_color = "yellow",
+    })
+    assert_equal(ok, true, "wild draw played")
+    assert_equal(state.current_color, "yellow", "chosen colour")
+    assert_equal(state.pending_stack.amount, entry.amount, "stack amount")
+    assert_equal(state.pending_stack.value, entry.amount, "stack value")
+  end
+end)
+
+test("reverses before drawing with Wild Reverse Draw Four", function()
+  local game = nm_game({ nm_wild_reverse4 }, "red")
+  local state, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = nm_wild_reverse4.id, chosen_color = "blue",
+  })
+  assert_equal(ok, true, "wild reverse four played")
+  assert_equal(state.direction, -1, "direction reversed")
+  assert_equal(state.pending_stack.target_id, "p3", "new direction target")
+  assert_equal(state.pending_stack.amount, 4, "four pending")
+
+  local two = nm_game({ nm_wild_reverse4 }, "red", 2)
+  local self_target, self_ok = rules.apply_action(two, {
+    type = "play", player_id = "p1", card_id = nm_wild_reverse4.id, chosen_color = "blue",
+  })
+  assert_equal(self_ok, true, "two player wild reverse four played")
+  assert_equal(self_target.pending_stack.target_id, "p1", "targets the actor")
+  local taken, taken_ok = rules.apply_action(self_target, { type = "draw", player_id = "p1" })
+  assert_equal(taken_ok, true, "actor took the stack")
+  assert_equal(#taken.players[1].hand, 4, "actor drew four")
+  assert_equal(taken.turn, 2, "turn passed")
+end)
+
+test("resolves Wild Colour Roulette with an authoritative chooser", function()
+  local game = nm_game({ nm_wild_roulette, nm_red_one }, "red")
+  game.draw_pile = { nm_red_one, nm_wild, { id = "blue-9-0", color = "blue", kind = "number", value = 9 } }
+  local played, ok = rules.apply_action(game, { type = "play", player_id = "p1", card_id = nm_wild_roulette.id })
+  assert_equal(ok, true, "roulette played")
+  assert_equal(played.pending_roulette.chooser_id, "p2", "chooser stored")
+  assert_equal(played.pending_roulette.owner_id, "p1", "owner stored")
+  assert_equal(played.turn, 2, "chooser acts")
+  local moves = rules.legal_moves(played, "p2")
+  assert_equal(#moves.cards, 0, "no cards to play")
+  assert_equal(moves.can_draw, false, "no draw")
+  local wrong, wrong_ok, wrong_code = rules.apply_action(played, {
+    type = "choose_colour", player_id = "p1", colour = "red",
+  })
+  assert_equal(wrong_ok, false, "wrong chooser refused")
+  assert_equal(wrong_code, protocol.ERROR.NOT_YOUR_TURN, "not your turn code")
+  local invalid, invalid_ok, invalid_code = rules.apply_action(played, {
+    type = "choose_colour", player_id = "p2", colour = "purple",
+  })
+  assert_equal(invalid_ok, false, "invalid colour refused")
+  assert_equal(invalid_code, protocol.ERROR.MISSING_COLOR, "missing colour code")
+  assert_equal(invalid == played, true, "state untouched")
+  local chosen, chosen_ok = rules.apply_action(played, {
+    type = "choose_colour", player_id = "p2", colour = "red",
+  })
+  assert_equal(chosen_ok, true, "colour chosen")
+  assert_equal(chosen.pending_roulette, nil, "roulette cleared")
+  assert_equal(join(ids(chosen.players[2].hand)), "blue-9-0," .. nm_wild.id .. "," .. nm_red_one.id,
+    "wilds revealed but did not stop the reveal")
+  assert_equal(chosen.turn, 3, "turn passed after reveal")
+
+  local final = nm_game({ nm_wild_roulette }, "red")
+  local won, won_ok = rules.apply_action(final, { type = "play", player_id = "p1", card_id = nm_wild_roulette.id })
+  assert_equal(won_ok, true, "final roulette played")
+  assert_equal(won.finished, true, "hand finished")
+  assert_equal(won.winner, "p1", "winner")
+  assert_equal(won.pending_roulette, nil, "no pending roulette")
+end)
+
+test("plays Discard All and Skip Everyone in noMercy", function()
+  local discard = nm_game({ nm_red_discard_all, nm_red_one }, "red")
+  discard.players[1].hand[3] = nm_blue_zero
+  local discarded, discarded_ok = rules.apply_action(discard, {
+    type = "play", player_id = "p1", card_id = nm_red_discard_all.id,
+  })
+  assert_equal(discarded_ok, true, "discard all played")
+  assert_equal(join(ids(discarded.players[1].hand)), nm_blue_zero.id, "other colour kept")
+  local final = nm_game({ nm_red_discard_all, nm_red_one }, "red")
+  local won, won_ok = rules.apply_action(final, {
+    type = "play", player_id = "p1", card_id = nm_red_discard_all.id,
+  })
+  assert_equal(won_ok, true, "final discard all played")
+  assert_equal(won.finished, true, "hand finished")
+  assert_equal(won.winner, "p1", "winner")
+
+  local skip = nm_game({ nm_red_skip_everyone, nm_red_one }, "red")
+  local skipped, skip_ok = rules.apply_action(skip, {
+    type = "play", player_id = "p1", card_id = nm_red_skip_everyone.id,
+  })
+  assert_equal(skip_ok, true, "skip everyone played")
+  assert_equal(skipped.turn, 1, "actor acts again")
+  assert_equal(skipped.current_color, "red", "colour updated")
+  assert_equal(#rules.legal_moves(skipped, "p2").cards, 0, "other seats skipped")
+
+  local two = nm_game({ nm_red_reverse, nm_red_one }, "red", 2)
+  local reverse, reverse_ok = rules.apply_action(two, { type = "play", player_id = "p1", card_id = nm_red_reverse.id })
+  assert_equal(reverse_ok, true, "reverse played")
+  assert_equal(reverse.turn, 1, "reverse skips with two players")
+  assert_equal(reverse.direction, 1, "direction unchanged")
+end)
+
+test("scores noMercy wild variants at 50 and coloured actions at 20", function()
+  assert_equal(rules.score_hand({ nm_wild_draw6, nm_wild_draw10, nm_wild_reverse4, nm_wild_roulette }), 200,
+    "wild variant score")
+  assert_equal(rules.score_hand({ nm_red_draw_four, nm_red_skip_everyone, nm_red_discard_all }), 60,
+    "coloured action score")
+end)
+
 if failures > 0 then
   io.stderr:write(failures .. " Uno rules test(s) failed\n")
   os.exit(1)

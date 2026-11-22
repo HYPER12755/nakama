@@ -20,9 +20,15 @@ function signature(state: GameState): string {
     state.pendingStack === null ? "" : [
       state.pendingStack.kind,
       state.pendingStack.amount,
+      state.pendingStack.value ?? "",
       state.pendingStack.ownerId,
       state.pendingStack.targetId,
     ].join(","),
+    state.pendingRoulette === null ? "" : [
+      state.pendingRoulette.chooserId,
+      state.pendingRoulette.ownerId,
+    ].join(","),
+    state.players.map((player) => (player.out ? "1" : "0")).join(""),
     state.jumpWindow === null ? "" : [
       state.jumpWindow.cardId,
       state.jumpWindow.ownerId,
@@ -35,8 +41,9 @@ function signature(state: GameState): string {
 }
 
 function actorFor(state: GameState): string {
-  return state.pendingHit?.targetId ?? state.pendingStack?.targetId
-    ?? state.pendingChallenge?.targetId ?? state.players[state.turn].id;
+  return state.pendingRoulette?.chooserId ?? state.pendingHit?.targetId
+    ?? state.pendingStack?.targetId ?? state.pendingChallenge?.targetId
+    ?? state.players[state.turn].id;
 }
 
 async function runMode(mode: GameMode): Promise<void> {
@@ -100,5 +107,9 @@ describe("Uno stress simulation", () => {
 
   it("finishes 100 seeds across 2, 3 and 4 seats in attack mode", async () => {
     await runMode("attack");
+  }, 60000);
+
+  it("finishes 100 seeds across 2, 3 and 4 seats in noMercy mode", async () => {
+    await runMode("noMercy");
   }, 60000);
 });

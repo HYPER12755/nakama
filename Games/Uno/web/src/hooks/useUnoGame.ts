@@ -20,6 +20,7 @@ import type {
   OnlineAuthAccount,
 } from "@moongames/game-ui";
 import {
+  UNO_CLIENT_OP,
   UNO_OP,
   applyAction,
   chooseAction,
@@ -35,6 +36,7 @@ import {
   normalizeJumpWindow,
   normalizeList,
   normalizePendingHit,
+  normalizePendingRoulette,
   normalizePendingStack,
   normalizeRulesMode,
   rulesModeLabel,
@@ -173,6 +175,7 @@ export function normalizeView(payload: Record<string, unknown>, myUserId: string
       username: String(player.username ?? "Player"),
       connected: player.connected !== false,
       count: Number(player.count ?? 0),
+      out: player.out === true || player.out === "true",
       hand: Array.isArray(player.hand) ? (player.hand as BoardView["players"][number]["hand"]) : undefined,
     };
   });
@@ -210,6 +213,7 @@ export function normalizeView(payload: Record<string, unknown>, myUserId: string
     pendingChallenge: normalizePendingChallenge(payload.pendingChallenge ?? payload.pending_challenge),
     pendingStack: normalizePendingStack(payload.pendingStack ?? payload.pending_stack),
     pendingHit: normalizePendingHit(payload.pendingHit ?? payload.pending_hit),
+    pendingRoulette: normalizePendingRoulette(payload.pendingRoulette ?? payload.pending_roulette),
     jumpWindow: normalizeJumpWindow(payload.jumpWindow ?? payload.jump_window),
     legalCards: normalizeList(payload.legalCards).map(String),
     canDraw: payload.canDraw === true,
@@ -217,7 +221,12 @@ export function normalizeView(payload: Record<string, unknown>, myUserId: string
     myUserId,
     started: payload.started === true,
     mode: normalizeRulesMode(payload.rulesMode ?? payload.mode),
+    rulesMode: normalizeRulesMode(payload.rulesMode ?? payload.mode),
   };
+}
+
+export function buildColourChoosePayload(color: Color): Record<string, unknown> {
+  return { colour: color };
 }
 
 export function buildPlayPayload(
@@ -243,8 +252,9 @@ function emptyView(myUserId: string | null): BoardView {
   return {
     players: [], spectators: [], chat: [], topCard: null, currentColor: null,
     turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
-    pendingStack: null, pendingHit: null, jumpWindow: null, legalCards: [], canDraw: false, result: null,
-    myUserId, started: false, mode: "classic",
+    pendingStack: null, pendingHit: null, pendingRoulette: null, jumpWindow: null,
+    legalCards: [], canDraw: false, result: null,
+    myUserId, started: false, mode: "classic", rulesMode: "classic",
   };
 }
 
@@ -302,6 +312,7 @@ export interface UnoController {
   joinByCode: (code: string, spectator?: boolean) => Promise<void>;
   leave: () => Promise<void>;
   play: (cardId: string, chosenColor?: Color, targetId?: string) => void;
+  chooseColour: (color: Color) => void;
   draw: () => void;
   challenge: (accept: boolean) => void;
   sendChat: (text: string) => void;
@@ -675,8 +686,9 @@ export function useUnoGame(enabled = true): UnoController {
     if (jumpWindow !== null) {
       const jumpers = localGame.players.filter((player) =>
         player.id !== "local" && player.id !== jumpWindow.ownerId);
+      const jumpNow = Date.now();
       const hasJumper = jumpers.some((player) => {
-        const action = chooseAction(localGame, player.id, Date.now());
+        const action = chooseAction(localGame, player.id, jumpNow);
         return action !== null && action.type === "play" && action.jump === true;
       });
       if (!hasJumper) {
@@ -712,6 +724,7 @@ export function useUnoGame(enabled = true): UnoController {
     }
     const actorId = localGame.pendingHit?.targetId
       ?? localGame.pendingChallenge?.targetId
+      ?? localGame.pendingRoulette?.chooserId
       ?? localGame.players[localGame.turn].id;
     const actor = localGame.players.find((player) => player.id === actorId);
     if (actor === undefined || actor.id === "local") {
@@ -1144,6 +1157,26 @@ export function useUnoGame(enabled = true): UnoController {
     send(UNO_OP.PLAY_REQUEST, buildPlayPayload(view, cardId, chosenColor, targetId));
   }, [localGame, mode, send, view]);
 
+  const chooseColour = useCallback((color: Color) => {
+    if (mode === "local") {
+      if (localGame === null || localGame.pendingRoulette === null) {
+        return;
+      }
+      const result = applyAction(localGame, {
+        type: "chooseColour",
+        playerId: "local",
+        color,
+      }, Date.now());
+      if (result.ok) {
+        setLocalGame(result.state);
+      } else {
+        setError("That colour cannot be chosen.");
+      }
+      return;
+    }
+    send(UNO_CLIENT_OP.COLOR_CHOOSE, buildColourChoosePayload(color));
+  }, [localGame, mode, send]);
+
   const draw = useCallback(() => {
     if (mode === "local") {
       if (localGame === null) {
@@ -1241,6 +1274,7 @@ export function useUnoGame(enabled = true): UnoController {
     joinByCode,
     leave,
     play,
+    chooseColour,
     draw,
     challenge,
     sendChat,

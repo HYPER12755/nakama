@@ -1,6 +1,6 @@
 export type Color = "red" | "yellow" | "green" | "blue";
 
-export type GameMode = "classic" | "sevenO" | "progressive" | "jumpIn" | "attack";
+export type GameMode = "classic" | "sevenO" | "progressive" | "jumpIn" | "attack" | "noMercy";
 
 export type CardKind =
   | "number"
@@ -12,7 +12,13 @@ export type CardKind =
   | "hit1"
   | "hit2"
   | "discardAll"
-  | "wildAttack";
+  | "wildAttack"
+  | "draw4"
+  | "skipEveryone"
+  | "wildDraw6"
+  | "wildDraw10"
+  | "wildReverse4"
+  | "wildRoulette";
 
 export interface Card {
   id: string;
@@ -51,6 +57,7 @@ export interface Player {
   id: string;
   name: string;
   hand: Card[];
+  out: boolean;
 }
 
 export interface PendingChallenge {
@@ -59,9 +66,12 @@ export interface PendingChallenge {
   legal: boolean;
 }
 
+export type StackKind = "draw2" | "wild4" | "draw4" | "wildReverse4" | "wildDraw6" | "wildDraw10";
+
 export interface PendingStack {
-  kind: "draw2" | "wild4";
+  kind: StackKind;
   amount: number;
+  value?: number;
   ownerId: string;
   targetId: string;
   legal?: boolean;
@@ -73,6 +83,11 @@ export interface PendingHit {
   amount: number;
   ownerId: string;
   targetId: string;
+}
+
+export interface PendingRoulette {
+  chooserId: string;
+  ownerId: string;
 }
 
 export interface JumpWindow {
@@ -103,6 +118,7 @@ export interface GameState {
   pendingChallenge: PendingChallenge | null;
   pendingStack: PendingStack | null;
   pendingHit: PendingHit | null;
+  pendingRoulette: PendingRoulette | null;
   jumpWindow: JumpWindow | null;
   startingRule: StartingRule | null;
   started: boolean;
@@ -116,7 +132,8 @@ export interface GameState {
 export type Action =
   | { type: "play"; playerId: string; cardId: string; chosenColor?: Color; targetId?: string; target_id?: string; jump?: boolean }
   | { type: "draw"; playerId: string }
-  | { type: "challenge"; playerId: string; accept: boolean };
+  | { type: "challenge"; playerId: string; accept: boolean }
+  | { type: "chooseColour" | "chooseColor"; playerId: string; color?: Color; colour?: Color; chosenColor?: Color };
 
 export interface MoveResult {
   state: GameState;
@@ -138,4 +155,9 @@ export const DEFAULT_RULES = {
   drawTwoAmount: 2,
   wildFourAmount: 4,
   challengePenalty: 6,
+  mercyLimit: 25,
+  drawFourAmount: 4,
+  wildDrawSixAmount: 6,
+  wildDrawTenAmount: 10,
+  wildReverseFourAmount: 4,
 } as const;

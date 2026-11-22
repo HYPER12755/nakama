@@ -1832,6 +1832,11 @@ html[data-moonperf="lite"] .die--rolling {
   opacity: 0.55;
 }
 
+.online-seat--out {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
 .online-seat--empty {
   color: var(--muted);
   font-weight: 600;
@@ -2717,6 +2722,11 @@ html[data-moonperf="lite"] .die--rolling {
 .uno-opponent-label strong { max-width: 116px; overflow: hidden; font-size: 11px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .uno-opponent-label span { color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
 .uno-opponent-hand--active .uno-opponent-label { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), 0 0 20px var(--accent-glow); }
+.uno-opponent-hand--out { filter: grayscale(1); opacity: 0.5; }
+.uno-opponent-hand--out .uno-opponent-label { border-style: dashed; }
+.uno-opponent-card--out { filter: grayscale(1); opacity: 0.55; }
+.race-row--out { filter: grayscale(1); opacity: 0.5; }
+.race-row--out .race-count { color: var(--muted); }
 
 .uno-centre {
   gap: clamp(12px, 2.4vw, 26px);
@@ -3673,6 +3683,70 @@ body {
 .uno-stack-card .uno-overlay-actions {
   flex-wrap: wrap;
   margin-top: 18px;
+}
+
+.uno-stack-minimum {
+  margin: -6px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.uno-stack-minimum strong {
+  color: var(--accent);
+  font-size: 16px;
+}
+
+.uno-stack-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.uno-stack-option {
+  display: flex;
+  min-width: 84px;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel-raised);
+  color: inherit;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.uno-stack-option:hover,
+.uno-stack-option:focus-visible {
+  border-color: var(--accent);
+  transform: translateY(-4px);
+}
+
+.uno-stack-option img {
+  width: 46px;
+  height: auto;
+  border-radius: 5px;
+}
+
+.uno-overlay--roulette {
+  padding: 18px;
+  background: rgba(3, 10, 8, 0.78);
+}
+
+.uno-overlay--roulette-wait {
+  background: rgba(3, 10, 8, 0.5);
+  backdrop-filter: blur(3px);
+}
+
+.uno-overlay--roulette-wait .uno-overlay-card {
+  pointer-events: none;
 }
 
 .uno-overlay--hit {
