@@ -25,13 +25,13 @@ const NO_MERCY_WILD_KINDS: CardKind[] = [
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands", "wildPowerReverse", "wildNoU",
   "wildStack3", "wildStackNumber", "wildDoubleSpeed",
   "awWild", "awReverse", "awSkip", "awSkipTwo", "awDrawTwo", "awDrawFour",
-  "awTargetDrawTwo", "awForcedSwap",
+  "awTargetDrawTwo", "awForcedSwap", "wildDare",
 ];
 
 const WILD_COLOR_KINDS: CardKind[] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4",
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands", "wildPowerReverse", "wildNoU",
-  "wildStack3", "wildStackNumber", "wildDoubleSpeed",
+  "wildStack3", "wildStackNumber", "wildDoubleSpeed", "wildDare",
 ];
 
 const STACK_PACK_KINDS: CardKind[] = ["stack1", "stack2", "wildStack3", "wildStackNumber"];
@@ -956,6 +956,31 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
       return fail(previous, UNO_ERROR.BAD_CHALLENGE as "bad_challenge");
     }
     const pending = state.pendingChallenge;
+    if (state.mode === UNO_MODE.DARE && (pending.kind === "dare" || pending.kind === "wildDare")) {
+      const amount = pending.amount ?? DEFAULT_RULES.drawTwoAmount;
+      state.pendingChallenge = null;
+      if (action.accept) {
+        state.events.push({
+          type: "dareAccepted",
+          playerId: action.playerId,
+          text: pending.kind,
+          at: state.events.length,
+        });
+        state.replay.push({ playerId: action.playerId, action: "dareAccepted" });
+      } else {
+        drawCards(state, actor, amount);
+        state.events.push({
+          type: "dareDraw",
+          playerId: action.playerId,
+          text: String(amount),
+          at: state.events.length,
+        });
+        state.replay.push({ playerId: action.playerId, action: "dareDraw" });
+      }
+      state.turn = state.players.findIndex((player) => player.id === pending.ownerId);
+      advance(state, 2);
+      return { state, ok: true };
+    }
     const owner = state.players.find((player) => player.id === pending.ownerId);
     const target = state.players.find((player) => player.id === pending.targetId);
     if (owner === undefined || target === undefined) {
@@ -1254,6 +1279,26 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
   const next = state.players[targetIndex(state)];
   const actorIndex = state.players.findIndex((player) => player.id === actor.id);
   switch (card.kind) {
+    case "dare":
+      state.pendingChallenge = {
+        ownerId: actor.id,
+        targetId: next.id,
+        legal: true,
+        kind: "dare",
+        amount: DEFAULT_RULES.drawTwoAmount,
+        color: card.color ?? undefined,
+      };
+      break;
+    case "wildDare":
+      state.pendingChallenge = {
+        ownerId: actor.id,
+        targetId: next.id,
+        legal: true,
+        kind: "wildDare",
+        amount: DEFAULT_RULES.drawTwoAmount,
+        color: action.chosenColor,
+      };
+      break;
     case "awWild":
       advance(state, 1);
       break;
@@ -1627,7 +1672,7 @@ export function scoreHand(hand: Card[]): number {
   for (const card of hand) {
     if (card.kind === "number") {
       total += card.value ?? 0;
-    } else if (card.kind === "awWild") {
+    } else if (card.kind === "awWild" || card.kind === "dare") {
       total += 20;
     } else if (NO_MERCY_WILD_KINDS.includes(card.kind)) {
       total += 50;

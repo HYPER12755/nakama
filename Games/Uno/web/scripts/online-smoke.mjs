@@ -1503,6 +1503,63 @@ async function allWildBattle() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "all wild game over", STATE_TIMEOUT_MS);
 }
 
+async function dareBattle() {
+  const alice = await authenticate("dare-alice");
+  const bob = await authenticate("dare-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 2,
+    rulesMode: "dare",
+  });
+  assert(
+    created?.ok === true && created.rulesMode === "dare" && typeof created.matchId === "string",
+    `dare room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
+  const aliceStart = await waitState(
+    alice.socket,
+    "dare alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "dare bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "dare", "dare mode must reach alice");
+  assert(bobStart.data.rulesMode === "dare", "dare mode must reach bob");
+  assert(aliceStart.data.deckCount === 93, "dare should carry 108 cards");
+  assert(
+    legalCardIds(aliceStart.data).includes("wilddare-4"),
+    "seed 2 should offer Wild Dare to Alice",
+  );
+  console.log("[ok] dare private room reports rulesMode and a 108-card setup");
+
+  await send(alice, matchId, OP.PLAY_REQUEST, { cardId: "wilddare-4", chosenColor: "green" });
+  const offered = await waitState(
+    bob.socket,
+    "dare offered",
+    (state) => state.pendingChallenge?.kind === "wildDare" && state.pendingChallenge.amount === 2,
+  );
+  assert(offered.data.currentColor === "green", "Wild Dare colour reaches the target");
+  console.log("[ok] Wild Dare opens a take-or-dare choice on the live server");
+
+  const before = seatOf(bobStart.data, bob).count;
+  await send(bob, matchId, OP.CHALLENGE_REQUEST, { accept: false });
+  const taken = await waitState(
+    alice.socket,
+    "dare taken",
+    (state) => state.pendingChallenge == null && seatOf(state, bob)?.count === before + 2,
+  );
+  assert(taken.data.pendingChallenge == null, "taking the dare clears the choice");
+  console.log("[ok] the Dare draw penalty resolves authoritatively");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "dare game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -1536,6 +1593,7 @@ async function main() {
     await stackPackBattle();
     await speedPackBattle();
     await allWildBattle();
+    await dareBattle();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

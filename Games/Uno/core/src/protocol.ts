@@ -13,6 +13,7 @@ export const UNO_MODE = {
   STACK_PACK: "stackPack",
   SPEED_PACK: "speedPack",
   ALL_WILD: "allWild",
+  DARE: "dare",
 } as const;
 
 export const UNO_MODES: readonly GameMode[] = [
@@ -28,6 +29,7 @@ export const UNO_MODES: readonly GameMode[] = [
   UNO_MODE.STACK_PACK,
   UNO_MODE.SPEED_PACK,
   UNO_MODE.ALL_WILD,
+  UNO_MODE.DARE,
 ];
 
 export const JUMP_WINDOW_MS = 1800;

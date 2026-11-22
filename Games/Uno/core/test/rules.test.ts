@@ -732,6 +732,49 @@ describe("Uno Progressive house rule", () => {
 
 });
 
+describe("Uno Dare", () => {
+  const dare: Card = { id: "red-dare-0", color: "red", kind: "dare" };
+  const wildDare: Card = { id: "wilddare-0", color: null, kind: "wildDare" };
+
+  it("builds the Dare deck with eight Dare and eight Wild Dare cards", () => {
+    const deck = buildDeck("dare");
+    expect(deck).toHaveLength(108);
+    expect(deck.filter((card) => card.kind === "dare")).toHaveLength(8);
+    expect(deck.filter((card) => card.kind === "wildDare")).toHaveLength(8);
+  });
+
+  it("offers the next player a draw or dare after a Dare card", () => {
+    const game = stagedGame([dare], "blue", "dare");
+    const played = applyAction(game, { type: "play", playerId: "p1", cardId: dare.id });
+    expect(played.state.pendingChallenge).toMatchObject({
+      kind: "dare", amount: 2, targetId: "p2",
+    });
+    const before = played.state.players[1].hand.length;
+    const taken = applyAction(played.state, { type: "challenge", playerId: "p2", accept: false });
+    expect(taken.state.players[1].hand).toHaveLength(before + 2);
+    expect(taken.state.events.at(-1)?.type).toBe("dareDraw");
+  });
+
+  it("lets the target complete a Wild Dare without drawing", () => {
+    const game = stagedGame([wildDare], "blue", "dare");
+    const played = applyAction(game, {
+      type: "play", playerId: "p1", cardId: wildDare.id, chosenColor: "green",
+    });
+    expect(played.state.pendingChallenge).toMatchObject({
+      kind: "wildDare", amount: 2, color: "green",
+    });
+    const before = played.state.players[1].hand.length;
+    const accepted = applyAction(played.state, { type: "challenge", playerId: "p2", accept: true });
+    expect(accepted.state.players[1].hand).toHaveLength(before);
+    expect(accepted.state.pendingChallenge).toBeNull();
+    expect(accepted.state.events.at(-1)?.type).toBe("dareAccepted");
+  });
+
+  it("scores Dare at 20 and Wild Dare at 50", () => {
+    expect(scoreHand([dare, wildDare])).toBe(70);
+  });
+});
+
 describe("Uno All Wild", () => {
   it("builds the 112-card All Wild deck", () => {
     const deck = buildDeck("allWild");

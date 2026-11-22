@@ -390,6 +390,42 @@ captured by the standard play entry's `color`.
   (the actor is one participant); Pass Hands and Refresh Hand need no target.
   Every new wild carries a legal `chosenColor`, so automated play never stalls.
 
+## Dare
+
+Dare uses a 108-card playable deck: 76 numbered cards, eight Reverse, eight
+Skip, eight Dare and eight Wild Dare. Four printed Dare List cards are reference
+cards and are not part of the playable pile. It is available locally and in
+private/quick online matches as mode string `dare` (core `UNO_MODE.DARE`, Lua
+`RULES_MODES`). No new opcodes are needed.
+
+### Dare cards
+
+- **Dare** (`dare`, `red-dare-0`): eight coloured copies, two per colour.
+  Playable on a matching colour or another Dare. The next player chooses to
+  draw 2 or accept the dare shown on the selected Dare List card.
+- **Wild Dare** (`wildDare`, `wilddare-0`): eight wild copies. Always playable;
+  the actor chooses the continuing colour. The next player gets the same
+  draw-or-dare choice.
+
+The digital game models the choice authoritatively: declining draws 2 and
+skips the target's turn; accepting declares the dare complete with no penalty.
+Players can agree socially what counts as completing the dare, as with the
+physical game.
+
+### Resolution and events
+
+Both cards open a `pendingChallenge` with `kind` set to `dare` or `wildDare`,
+`amount` 2 and the chosen colour for Wild Dare. The target answers with the
+existing challenge request. Accepting emits `dareAccepted`; taking the penalty
+emits `dareDraw` and makes the target draw 2. Either way the next player after
+the target takes the turn.
+
+### Scoring and integration
+
+Number cards score face value; Reverse, Skip and Dare score 20; Wild Dare
+scores 50. The web board renders all Dare card art in both sets and relabels the
+challenge overlay as a draw-or-dare choice. AI declines dares by default.
+
 ## All Wild
 
 All Wild is a standalone 112-card deck in which every card is wild. It is

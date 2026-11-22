@@ -34,7 +34,7 @@ protocol.ERROR = {
   BAD_JUMP = "bad_jump",
 }
 
-protocol.RULES_MODES = { "classic", "sevenO", "progressive", "jumpIn", "attack", "noMercy", "flip", "swapPack", "reversePack", "stackPack", "speedPack", "allWild" }
+protocol.RULES_MODES = { "classic", "sevenO", "progressive", "jumpIn", "attack", "noMercy", "flip", "swapPack", "reversePack", "stackPack", "speedPack", "allWild", "dare" }
 
 protocol.JUMP_WINDOW_MS = 1800
 

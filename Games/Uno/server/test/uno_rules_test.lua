@@ -2712,6 +2712,72 @@ test("all wild forced swap exchanges hands", function()
   assert_equal(played.turn, 2, "turn")
 end)
 
+local function dare_staged(hand, color, seats, seed)
+  local names = { "p1", "p2", "p3" }
+  local seat_list = {}
+  for index = 1, (seats or 3) do
+    seat_list[index] = { id = names[index], name = names[index] }
+  end
+  local game = rules.create_game(seed or 4242, seat_list, 0, "dare")
+  game.turn = 1
+  game.direction = 1
+  game.current_color = color or "red"
+  game.drawn_card_id = nil
+  game.pending_challenge = nil
+  game.pending_stack = nil
+  game.pending_hit = nil
+  game.pending_roulette = nil
+  game.finished = false
+  game.winner = nil
+  game.events = {}
+  game.replay = {}
+  game.players[1].hand = hand
+  for index = 2, #game.players do
+    game.players[index].hand = {}
+  end
+  return game
+end
+
+local dare_card = { id = "red-dare-0", color = "red", kind = "dare" }
+local wild_dare = { id = "wilddare-0", color = nil, kind = "wildDare" }
+
+test("builds a dare deck with eight dare and eight wild dare cards", function()
+  local deck = rules.build_deck("dare")
+  assert_equal(#deck, 108, "deck size")
+  local dares = 0
+  local wild_dares = 0
+  for _, card in ipairs(deck) do
+    if card.kind == "dare" then dares = dares + 1 end
+    if card.kind == "wildDare" then wild_dares = wild_dares + 1 end
+  end
+  assert_equal(dares, 8, "dare count")
+  assert_equal(wild_dares, 8, "wild dare count")
+end)
+
+test("dare card offers a draw or dare choice", function()
+  local game = dare_staged({ dare_card }, "red", 3, 4242)
+  local played, ok = rules.apply_action(game, { type = "play", player_id = "p1", card_id = dare_card.id })
+  assert_equal(ok, true, "played")
+  assert_equal(played.pending_challenge ~= nil, true, "pending dare")
+  assert_equal(played.pending_challenge.kind, "dare", "dare kind")
+  local before = #played.players[2].hand
+  local taken, taken_ok = rules.apply_action(played, { type = "challenge", player_id = "p2", accept = false })
+  assert_equal(taken_ok, true, "dare taken")
+  assert_equal(#taken.players[2].hand, before + 2, "target drew")
+end)
+
+test("wild dare can be completed without drawing", function()
+  local game = dare_staged({ wild_dare }, "blue", 3, 4242)
+  local played, _ = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = wild_dare.id, chosen_color = "green",
+  })
+  local before = #played.players[2].hand
+  local accepted, ok = rules.apply_action(played, { type = "challenge", player_id = "p2", accept = true })
+  assert_equal(ok, true, "dare accepted")
+  assert_equal(#accepted.players[2].hand, before, "no draw")
+  assert_equal(accepted.pending_challenge, nil, "challenge cleared")
+end)
+
 test("scores swap pack colour actions at 20 and wild actions at 50", function()
   assert_equal(rules.score_hand({ swap_one, refresh_hand }), 40, "colour action score")
   assert_equal(rules.score_hand({ force_trade, pass_hands }), 100, "wild action score")

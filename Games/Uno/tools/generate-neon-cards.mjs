@@ -395,6 +395,32 @@ ${neonLabel("DOUBLE SPEED", 90, 196, 14, NEON.wild)}
 ${neonCaption(`wilddoublespeed ${copy}`, true)}`, NEON.wild);
 }
 
+function dareCard(color, copy) {
+  const c = NEON[color];
+  return surface(`
+<g transform="rotate(-12 90 128)">
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="9" filter="url(#soft)" opacity="0.7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="#fff" stroke-opacity="0.85" stroke-width="2"/>
+</g>
+<g style="filter:drop-shadow(0 0 10px ${c[0]})">
+<text x="90" y="150" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="58" fill="#ffffff">?</text>
+</g>
+${neonLabel("DARE", 90, 214, 16, c)}
+${neonCaption(`${color} dare ${copy}`, true)}`, c);
+}
+
+function wildDareCard(copy) {
+  return surface(`
+<g opacity="0.9">${QUADRANT}</g>
+<ellipse cx="90" cy="132" rx="60" ry="70" fill="#0A0A0E" fill-opacity="0.62" stroke="url(#edge)" stroke-width="8" transform="rotate(-12 90 132)"/>
+<g style="filter:drop-shadow(0 0 12px #18FFFF)">
+<text x="90" y="142" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="54" fill="#ffffff">?</text>
+</g>
+${neonLabel("WILD DARE", 90, 216, 15, NEON.wild)}
+${neonCaption(`wilddare ${copy}`, true)}`, NEON.wild);
+}
+
 const ALL_WILD_ART = [
   ["awWild", "WILD"],
   ["awReverse", "REVERSE"],
@@ -683,6 +709,14 @@ for (let copy = 0; copy < 4; copy += 1) {
 }
 for (const [kind, label] of ALL_WILD_ART) {
   writeFileSync(path.join(OUT, `${kind}-0.svg`), allWildCard(label));
+  count += 1;
+}
+for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
+  writeFileSync(path.join(OUT, `${color}-dare-0.svg`), dareCard(color, 0));
+  count += 1;
+}
+for (let copy = 0; copy < 4; copy += 1) {
+  writeFileSync(path.join(OUT, `wilddare-${copy}.svg`), wildDareCard(copy));
   count += 1;
 }
 for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {

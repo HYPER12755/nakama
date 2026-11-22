@@ -49,6 +49,9 @@ export function cardId(card: Omit<Card, "id">): string {
   if (card.kind === "awDrawFour") return `aw-drawfour`;
   if (card.kind === "awTargetDrawTwo") return `aw-targetdrawtwo`;
   if (card.kind === "awForcedSwap") return `aw-forcedswap`;
+  if (card.kind === "dare") return `${card.color}-dare`;
+  if (card.kind === "wildDare") return "wilddare";
+  if (card.kind === "dareList") return "darelist";
   if (card.kind === "stack1") return `${card.color}-stack1`;
   if (card.kind === "stack2") return `${card.color}-stack2`;
   if (card.kind === "reverseDraw2") return `${card.color}-reversedraw2`;
@@ -203,6 +206,29 @@ export function buildDeck(mode: GameMode = "classic"): Card[] {
         const base = { color: null, kind };
         deck.push({ id: `${cardId(base)}-${copy}`, ...base });
       }
+    }
+    return deck;
+  }
+  if (mode === "dare") {
+    const deck: Card[] = [];
+    for (const color of COLORS) {
+      for (let value = 0; value <= 9; value += 1) {
+        const count = value === 0 ? 1 : 2;
+        for (let copy = 0; copy < count; copy += 1) {
+          const base = { color, kind: "number" as const, value };
+          deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+        }
+      }
+      for (const kind of ["reverse", "skip", "dare"] as const) {
+        for (let copy = 0; copy < 2; copy += 1) {
+          const base = { color, kind };
+          deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+        }
+      }
+    }
+    for (let copy = 0; copy < 8; copy += 1) {
+      const base = { color: null, kind: "wildDare" as const };
+      deck.push({ id: `${cardId(base)}-${copy}`, ...base });
     }
     return deck;
   }

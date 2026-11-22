@@ -80,6 +80,8 @@ function cardHint(card: Card): string | undefined {
   if (card.kind === "awDrawFour") return "The next player draws 4";
   if (card.kind === "awTargetDrawTwo") return "Choose a player to draw 2";
   if (card.kind === "awForcedSwap") return "Swap hands with a player";
+  if (card.kind === "dare") return "Choose: draw 2 or do the dare";
+  if (card.kind === "wildDare") return "Choose a colour and present a dare";
   return undefined;
 }
 
@@ -90,6 +92,14 @@ interface ChallengeInfo {
 }
 
 function challengeInfo(challenge: NonNullable<BoardView["pendingChallenge"]>): ChallengeInfo {
+  if (challenge.kind === "dare" || challenge.kind === "wildDare") {
+    const amount = challenge.amount ?? 2;
+    return {
+      eyebrow: challenge.kind === "wildDare" ? "Wild Dare" : "Dare",
+      copy: `Take ${amount} cards, or accept the dare and try to complete it before your next turn.`,
+      takeLabel: `Take ${amount}`,
+    };
+  }
   if (challenge.kind === "wildDraw2") {
     const amount = challenge.amount ?? 2;
     return {
@@ -560,7 +570,11 @@ export function UnoBoardStage({
             <p className="uno-overlay-copy">{info.copy}</p>
             <div className="uno-overlay-actions">
               <button type="button" className="button button--ghost" onClick={() => resolveChallenge(false)}>{info.takeLabel}</button>
-              <button type="button" className="button button--primary" onClick={() => resolveChallenge(true)}>Challenge</button>
+              <button type="button" className="button button--primary" onClick={() => resolveChallenge(true)}>
+                {view.pendingChallenge?.kind === "dare" || view.pendingChallenge?.kind === "wildDare"
+                  ? "Do the dare"
+                  : "Challenge"}
+              </button>
               {legalNoUCards.length > 0 ? (
                 <button type="button" className="button" onClick={() => setPendingCard(legalNoUCards[0].id)}>NO U!</button>
               ) : null}

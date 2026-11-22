@@ -17,6 +17,7 @@ describe("Uno rules mode", () => {
     expect(rulesModeLabel("stackPack")).toBe("Stack Pack");
     expect(rulesModeLabel("speedPack")).toBe("Speed Pack");
     expect(rulesModeLabel("allWild")).toBe("All Wild");
+    expect(rulesModeLabel("dare")).toBe("Dare");
     expect(rulesModeLabel(undefined)).toBe("Classic");
   });
 
@@ -30,6 +31,7 @@ describe("Uno rules mode", () => {
     expect(RULES_MODES as string[]).toContain("stackPack");
     expect(RULES_MODES as string[]).toContain("speedPack");
     expect(RULES_MODES as string[]).toContain("allWild");
+    expect(RULES_MODES as string[]).toContain("dare");
     expect(new Set(RULES_MODES).size).toBe(RULES_MODES.length);
   });
 
@@ -121,6 +123,16 @@ describe("Uno rules mode", () => {
       { id: "ai1", name: "Computer" },
     ], 0, "allWild");
     expect(viewFromCore(state, "local").rulesMode).toBe("allWild");
+  });
+
+  it("normalizes and reads Dare", () => {
+    expect(normalizeView({ rulesMode: "dare" }, null).mode).toBe("dare");
+    expect(normalizeView({ mode: "dare" }, null).mode).toBe("dare");
+    const state = createGame(7, [
+      { id: "local", name: "You" },
+      { id: "ai1", name: "Computer" },
+    ], 0, "dare");
+    expect(viewFromCore(state, "local").rulesMode).toBe("dare");
   });
 
   it("exposes the controller rules shape and forwards a target", () => {

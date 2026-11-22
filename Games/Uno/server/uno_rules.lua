@@ -23,13 +23,14 @@ local WILD_KINDS = {
   wildStack3 = true, wildStackNumber = true, wildDoubleSpeed = true,
   awWild = true, awReverse = true, awSkip = true, awSkipTwo = true,
   awDrawTwo = true, awDrawFour = true, awTargetDrawTwo = true, awForcedSwap = true,
+  wildDare = true,
 }
 local WILD_COLOR_KINDS = {
   wild = true, wild4 = true, wildAttack = true, wildDraw6 = true,
   wildDraw10 = true, wildReverse4 = true, wildDraw2 = true, wildDrawColor = true,
   wildForceTrade = true, wildPassHands = true,
   wildPowerReverse = true, wildNoU = true,
-  wildStack3 = true, wildStackNumber = true, wildDoubleSpeed = true,
+  wildStack3 = true, wildStackNumber = true, wildDoubleSpeed = true, wildDare = true,
 }
 
 local STACK_PACK_KINDS = {
@@ -372,9 +373,41 @@ local function build_stack_pack_deck()
   return deck
 end
 
+local function build_dare_deck()
+  local deck = {}
+  for _, color in ipairs(protocol.COLORS) do
+    for value = 0, 9 do
+      local copies = value == 0 and 1 or 2
+      for copy_index = 0, copies - 1 do
+        deck[#deck + 1] = {
+          id = string.format("%s-%d-%d", color, value, copy_index),
+          color = color, kind = "number", value = value,
+        }
+      end
+    end
+    for _, kind in ipairs({ "reverse", "skip", "dare" }) do
+      for copy_index = 0, 1 do
+        deck[#deck + 1] = {
+          id = string.format("%s-%s-%d", color, kind, copy_index),
+          color = color, kind = kind,
+        }
+      end
+    end
+  end
+  for copy_index = 0, 7 do
+    deck[#deck + 1] = {
+      id = string.format("wilddare-%d", copy_index), color = nil, kind = "wildDare",
+    }
+  end
+  return deck
+end
+
 function rules.build_deck(mode)
   if mode == "allWild" then
     return build_all_wild_deck()
+  end
+  if mode == "dare" then
+    return build_dare_deck()
   end
   if mode == "flip" then
     return build_flip_deck()
@@ -800,7 +833,8 @@ function rules.create_game(seed, players, now, mode)
     or (rules_mode == "stackPack"
       and (starter.kind == "wildStack3" or starter.kind == "wildStackNumber"))
     or (rules_mode == "speedPack" and starter.kind == "wildDoubleSpeed")
-    or (rules_mode == "allWild" and WILD_KINDS[starter.kind] == true) then
+    or (rules_mode == "allWild" and WILD_KINDS[starter.kind] == true)
+    or (rules_mode == "dare" and starter.kind == "wildDare") then
     starter.color = most_common_color(dealt[1].hand, rules.colors_for_side("light"))
   end
 
@@ -1649,6 +1683,31 @@ function rules.apply_action(previous, action, now)
       return fail(previous, protocol.ERROR.BAD_CHALLENGE)
     end
     local pending = state.pending_challenge
+    if state.mode == "dare" and (pending.kind == "dare" or pending.kind == "wildDare") then
+      local amount = pending.amount or rules.DRAW_TWO_AMOUNT
+      state.pending_challenge = nil
+      if action.accept then
+        state.events[#state.events + 1] = {
+          type = "dareAccepted", player_id = action.player_id,
+          text = pending.kind, at = #state.events,
+        }
+        state.replay[#state.replay + 1] = {
+          player_id = action.player_id, action = "dareAccepted",
+        }
+      else
+        draw_cards(state, actor, amount)
+        state.events[#state.events + 1] = {
+          type = "dareDraw", player_id = action.player_id,
+          text = tostring(amount), at = #state.events,
+        }
+        state.replay[#state.replay + 1] = {
+          player_id = action.player_id, action = "dareDraw",
+        }
+      end
+      state.turn = player_index(state, pending.owner_id)
+      advance(state, 2)
+      return state, true
+    end
     local owner, target
     for _, player in ipairs(state.players) do
       if player.id == pending.owner_id then
@@ -2010,7 +2069,25 @@ function rules.apply_action(previous, action, now)
   local stack_pack = state.mode == "stackPack"
   local next_player = state.players[target_index(state)]
   local actor_index = player_index(state, actor.id)
-  if card.kind == "awWild" then
+  if card.kind == "dare" then
+    state.pending_challenge = {
+      owner_id = actor.id,
+      target_id = next_player.id,
+      legal = true,
+      kind = "dare",
+      amount = rules.DRAW_TWO_AMOUNT,
+      color = card.color,
+    }
+  elseif card.kind == "wildDare" then
+    state.pending_challenge = {
+      owner_id = actor.id,
+      target_id = next_player.id,
+      legal = true,
+      kind = "wildDare",
+      amount = rules.DRAW_TWO_AMOUNT,
+      color = action.chosen_color,
+    }
+  elseif card.kind == "awWild" then
     advance(state, 1)
   elseif card.kind == "awReverse" then
     if #rules.active_players(state) == 2 then
