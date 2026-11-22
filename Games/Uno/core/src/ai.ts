@@ -35,6 +35,8 @@ function cardScore(state: GameState, card: Card): number {
   if (card.kind === "wildStack3") return 114;
   if (card.kind === "stack2") return 96;
   if (card.kind === "stack1") return 94;
+  if (card.kind === "wildDoubleSpeed") return 120;
+  if (card.kind === "speedUp") return 110;
   if (card.kind === "reverseDraw2") return 84;
   if (card.kind === "reverseSkip") return 74;
   if (card.kind === "wild") return 90;

@@ -21,6 +21,7 @@ const ATTACK_MODE: RulesMode = UNO_MODE.ATTACK;
 export const SWAP_PACK_MODE: RulesMode = UNO_MODE.SWAP_PACK;
 export const REVERSE_PACK_MODE: RulesMode = UNO_MODE.REVERSE_PACK;
 export const STACK_PACK_MODE: RulesMode = UNO_MODE.STACK_PACK;
+export const SPEED_PACK_MODE: RulesMode = UNO_MODE.SPEED_PACK;
 
 const JUMP_IN_ALIASES = ["jumpIn", "jump_in", "jump-in", "jumpin"];
 const NO_MERCY_ALIASES = ["noMercy", "no_mercy", "no-mercy", "nomercy"];
@@ -64,6 +65,9 @@ export function rulesModeLabel(mode: RulesMode | undefined): string {
   }
   if (value === STACK_PACK_MODE) {
     return "Stack Pack";
+  }
+  if (value === SPEED_PACK_MODE) {
+    return "Speed Pack";
   }
   return value === "sevenO" ? "Seven-O" : "Classic";
 }
@@ -273,6 +277,9 @@ export interface BoardView {
   pendingHit?: PendingHit | null;
   pendingRoulette?: PendingRoulette | null;
   jumpWindow?: JumpWindow | null;
+  speedLevel?: number;
+  speedPlayed?: number;
+  speedTarget?: number;
   legalCards: string[];
   canDraw: boolean;
   result: { status: string; winnerUserId: string | null; reason?: string } | null;
@@ -310,6 +317,7 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
       players: [], spectators: [], chat: [], topCard: null, currentColor: null,
       flipSide: "light", turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
       pendingStack: null, pendingHit: null, pendingRoulette: null, jumpWindow: null,
+      speedLevel: 1, speedPlayed: 0, speedTarget: 1,
       legalCards: [], canDraw: false, result: null,
       myUserId, started: false, mode: "classic", rulesMode: "classic",
     };
@@ -338,6 +346,9 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
     pendingHit: normalizePendingHit(rawState.pendingHit ?? rawState.pending_hit),
     pendingRoulette: normalizePendingRoulette(rawState.pendingRoulette ?? rawState.pending_roulette),
     jumpWindow: normalizeJumpWindow(rawState.jumpWindow ?? rawState.jump_window),
+    speedLevel: Number(rawState.speedLevel ?? 1) || 1,
+    speedPlayed: Number(rawState.speedPlayed ?? 0) || 0,
+    speedTarget: Number(rawState.speedTarget ?? 1) || 1,
     legalCards: myUserId === null ? [] : legalMoves(state, myUserId, Date.now()).cards,
     canDraw: myUserId !== null && legalMoves(state, myUserId, Date.now()).canDraw,
     result: state.finished

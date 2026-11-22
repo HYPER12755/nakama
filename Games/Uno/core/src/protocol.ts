@@ -11,6 +11,7 @@ export const UNO_MODE = {
   SWAP_PACK: "swapPack",
   REVERSE_PACK: "reversePack",
   STACK_PACK: "stackPack",
+  SPEED_PACK: "speedPack",
 } as const;
 
 export const UNO_MODES: readonly GameMode[] = [
@@ -24,6 +25,7 @@ export const UNO_MODES: readonly GameMode[] = [
   UNO_MODE.SWAP_PACK,
   UNO_MODE.REVERSE_PACK,
   UNO_MODE.STACK_PACK,
+  UNO_MODE.SPEED_PACK,
 ];
 
 export const JUMP_WINDOW_MS = 1800;

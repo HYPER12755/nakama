@@ -39,6 +39,8 @@ export function cardId(card: Omit<Card, "id">): string {
   if (card.kind === "wildNoU") return "wildnou";
   if (card.kind === "wildStack3") return "wildstack3";
   if (card.kind === "wildStackNumber") return "wildstacknumber";
+  if (card.kind === "wildDoubleSpeed") return "wilddoublespeed";
+  if (card.kind === "speedUp") return `${card.color}-speedup-${card.value ?? 0}`;
   if (card.kind === "stack1") return `${card.color}-stack1`;
   if (card.kind === "stack2") return `${card.color}-stack2`;
   if (card.kind === "reverseDraw2") return `${card.color}-reversedraw2`;
@@ -193,6 +195,22 @@ export function buildDeck(mode: GameMode = "classic"): Card[] {
         const base = { color: null, kind };
         deck.push({ id: `${cardId(base)}-${copy}`, ...base });
       }
+    }
+    return deck;
+  }
+  if (mode === "speedPack") {
+    const speedValues: Record<string, number[]> = {
+      red: [3, 4, 5], yellow: [1, 2, 3], green: [7, 8, 9], blue: [5, 6, 7],
+    };
+    for (const color of COLORS) {
+      for (const value of speedValues[color] ?? []) {
+        const base = { color, kind: "speedUp" as const, value };
+        deck.push({ id: cardId(base), ...base });
+      }
+    }
+    for (let copy = 0; copy < 4; copy += 1) {
+      const base = { color: null, kind: "wildDoubleSpeed" as const };
+      deck.push({ id: `${cardId(base)}-${copy}`, ...base });
     }
     return deck;
   }

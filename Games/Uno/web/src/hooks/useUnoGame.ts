@@ -206,6 +206,9 @@ export function normalizeView(payload: Record<string, unknown>, myUserId: string
     pendingHit: normalizePendingHit(payload.pendingHit ?? payload.pending_hit),
     pendingRoulette: normalizePendingRoulette(payload.pendingRoulette ?? payload.pending_roulette),
     jumpWindow: normalizeJumpWindow(payload.jumpWindow ?? payload.jump_window),
+    speedLevel: Number(payload.speedLevel ?? payload.speed_level ?? 1),
+    speedPlayed: Number(payload.speedPlayed ?? payload.speed_played ?? 0),
+    speedTarget: Number(payload.speedTarget ?? payload.speed_target ?? 1),
     legalCards: normalizeList(payload.legalCards).map(String),
     canDraw: payload.canDraw === true,
     result: normalizeResult(payload.result),
@@ -256,6 +259,7 @@ function emptyView(myUserId: string | null): BoardView {
     players: [], spectators: [], chat: [], topCard: null, currentColor: null,
     flipSide: "light", turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
     pendingStack: null, pendingHit: null, pendingRoulette: null, jumpWindow: null,
+    speedLevel: 1, speedPlayed: 0, speedTarget: 1,
     legalCards: [], canDraw: false, result: null,
     myUserId, started: false, mode: "classic", rulesMode: "classic",
   };

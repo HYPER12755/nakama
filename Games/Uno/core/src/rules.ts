@@ -23,13 +23,13 @@ import {
 const NO_MERCY_WILD_KINDS: CardKind[] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4", "wildRoulette",
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands", "wildPowerReverse", "wildNoU",
-  "wildStack3", "wildStackNumber",
+  "wildStack3", "wildStackNumber", "wildDoubleSpeed",
 ];
 
 const WILD_COLOR_KINDS: CardKind[] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4",
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands", "wildPowerReverse", "wildNoU",
-  "wildStack3", "wildStackNumber",
+  "wildStack3", "wildStackNumber", "wildDoubleSpeed",
 ];
 
 const STACK_PACK_KINDS: CardKind[] = ["stack1", "stack2", "wildStack3", "wildStackNumber"];
@@ -178,7 +178,7 @@ export function legalMoves(state: GameState, playerId: string, now = 0): LegalMo
   const cards = state.mode === UNO_MODE.ATTACK || state.drawnCardId === null
     ? player.hand.filter(playable).map((card) => card.id)
     : player.hand.filter((card) => card.id === state.drawnCardId && playable(card)).map((card) => card.id);
-  const canDraw = state.mode === UNO_MODE.ATTACK
+  const canDraw = state.mode === UNO_MODE.ATTACK || state.mode === UNO_MODE.SPEED_PACK
     || (state.drawnCardId === null
       && (cards.length === 0 || state.mode !== UNO_MODE.NO_MERCY));
   return { cards, canDraw };
@@ -239,7 +239,8 @@ export function createGame(
     || (rulesMode === UNO_MODE.REVERSE_PACK
       && (starter.kind === "wildPowerReverse" || starter.kind === "wildNoU"))
     || (rulesMode === UNO_MODE.STACK_PACK
-      && (starter.kind === "wildStack3" || starter.kind === "wildStackNumber"))) {
+      && (starter.kind === "wildStack3" || starter.kind === "wildStackNumber"))
+    || (rulesMode === UNO_MODE.SPEED_PACK && starter.kind === "wildDoubleSpeed")) {
     starter.color = mostCommonColor(dealt[0].hand, colorsForSide("light"));
   }
   const color = starter.color;
@@ -290,6 +291,9 @@ export function createGame(
     pendingHit: null,
     pendingRoulette: null,
     jumpWindow: null,
+    speedLevel: 1,
+    speedPlayed: 0,
+    speedTarget: 1,
     startingRule,
     started: true,
     finished: false,
@@ -383,6 +387,10 @@ function advance(state: GameState, steps: number): void {
   }
   for (let step = 0; step < steps; step += 1) {
     state.turn = nextActiveIndex(state, state.turn);
+  }
+  if (state.mode === UNO_MODE.SPEED_PACK && !state.finished) {
+    state.speedPlayed = 0;
+    state.speedTarget = state.speedLevel;
   }
 }
 
@@ -988,6 +996,20 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
   }
 
   if (action.type === "draw") {
+    if (state.mode === UNO_MODE.SPEED_PACK) {
+      const crashLevel = state.speedLevel;
+      drawCards(state, actor, crashLevel);
+      state.speedLevel = 1;
+      state.events.push({
+        type: "speedCrash",
+        playerId: actor.id,
+        text: String(crashLevel),
+        at: state.events.length,
+      });
+      state.replay.push({ playerId: actor.id, action: "speedCrash", count: crashLevel });
+      advance(state, 1);
+      return { state, ok: true };
+    }
     if (state.mode === UNO_MODE.ATTACK) {
       const launcherCount = pressLauncher(state);
       for (let index = 0; index < launcherCount; index += 1) {
@@ -1160,6 +1182,46 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
     cardId: card.id,
     color: action.chosenColor,
   });
+
+  if (state.mode === UNO_MODE.SPEED_PACK) {
+    const gain = card.kind === "wildDoubleSpeed" ? 2 : card.kind === "speedUp" ? 1 : 0;
+    if (gain > 0) {
+      state.speedLevel += gain;
+      state.events.push({
+        type: "speedUp",
+        playerId: actor.id,
+        cardId: card.id,
+        text: String(state.speedLevel),
+        at: state.events.length,
+      });
+      state.replay.push({
+        playerId: actor.id,
+        action: "speedUp",
+        cardId: card.id,
+        count: gain,
+      });
+    }
+    state.speedPlayed += 1;
+    if (state.speedPlayed < state.speedTarget) {
+      state.drawnCardId = null;
+      if (actor.hand.length === 0) {
+        const crashLevel = state.speedLevel;
+        drawCards(state, actor, crashLevel);
+        state.speedLevel = 1;
+        state.events.push({
+          type: "speedCrash",
+          playerId: actor.id,
+          text: String(crashLevel),
+          at: state.events.length,
+        });
+        state.replay.push({ playerId: actor.id, action: "speedCrash", count: crashLevel });
+        advance(state, 1);
+      }
+      return { state, ok: true };
+    }
+    state.speedPlayed = 0;
+    state.speedTarget = state.speedLevel;
+  }
 
   if (sevenOActive && card.kind === "number") {
     if (card.value === 7 && swapTarget !== undefined) {

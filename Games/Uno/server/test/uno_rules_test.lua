@@ -2515,6 +2515,111 @@ test("stack pack stack card clears a wild four challenge", function()
   assert_equal(stacked.pending_stack.amount, 5, "combined amount")
 end)
 
+local function speed_staged(hand, color, seats, seed)
+  local names = { "p1", "p2", "p3" }
+  local seat_list = {}
+  for index = 1, (seats or 3) do
+    seat_list[index] = { id = names[index], name = names[index] }
+  end
+  local game = rules.create_game(seed or 4242, seat_list, 0, "speedPack")
+  game.turn = 1
+  game.direction = 1
+  game.seed = seed or 4242
+  game.current_color = color or "red"
+  game.drawn_card_id = nil
+  game.pending_challenge = nil
+  game.pending_stack = nil
+  game.pending_hit = nil
+  game.pending_roulette = nil
+  game.finished = false
+  game.winner = nil
+  game.events = {}
+  game.replay = {}
+  game.players[1].hand = hand
+  for index = 2, #game.players do
+    game.players[index].hand = {}
+  end
+  return game
+end
+
+local speed_up = { id = "red-speedup-3", color = "red", kind = "speedUp", value = 3 }
+local wild_double_speed = { id = "wilddoublespeed-0", color = nil, kind = "wildDoubleSpeed" }
+
+test("builds a speed pack deck with sixteen added cards", function()
+  local deck = rules.build_deck("speedPack")
+  assert_equal(#deck, 124, "deck size")
+  local speed_ups = 0
+  local doubles = 0
+  for _, card in ipairs(deck) do
+    if card.kind == "speedUp" then speed_ups = speed_ups + 1 end
+    if card.kind == "wildDoubleSpeed" then doubles = doubles + 1 end
+  end
+  assert_equal(speed_ups, 12, "speed up count")
+  assert_equal(doubles, 4, "double speed count")
+end)
+
+test("speed pack raises the pace and keeps the turn until the target is met", function()
+  local game = speed_staged({
+    speed_up, { id = "red-4-0", color = "red", kind = "number", value = 4 },
+    { id = "blue-2-0", color = "blue", kind = "number", value = 2 },
+  }, "red", 3, 4242)
+  game.speed_level = 2
+  game.speed_target = 2
+  local played, ok = rules.apply_action(game, { type = "play", player_id = "p1", card_id = speed_up.id })
+  assert_equal(ok, true, "played")
+  assert_equal(played.speed_level, 3, "speed level")
+  assert_equal(played.speed_played, 1, "cards played")
+  assert_equal(played.turn, 1, "turn retained")
+  local finished, finished_ok = rules.apply_action(played, {
+    type = "play", player_id = "p1", card_id = "red-4-0",
+  })
+  assert_equal(finished_ok, true, "second play")
+  assert_equal(finished.turn, 2, "turn passed")
+  assert_equal(finished.speed_target, 3, "next target")
+end)
+
+test("speed pack action effects only apply on the final card", function()
+  local draw_two = { id = "red-draw2-0", color = "red", kind = "draw2" }
+  local game = speed_staged({
+    speed_up, draw_two, { id = "blue-2-0", color = "blue", kind = "number", value = 2 },
+  }, "red", 3, 4242)
+  game.speed_level = 2
+  game.speed_target = 2
+  local played, _ = rules.apply_action(game, { type = "play", player_id = "p1", card_id = speed_up.id })
+  assert_equal(played.pending_stack, nil, "no stack mid-turn")
+  local before = #played.players[2].hand
+  local finished, ok = rules.apply_action(played, { type = "play", player_id = "p1", card_id = draw_two.id })
+  assert_equal(ok, true, "final play")
+  assert_equal(#finished.players[2].hand, before + 2, "draw two applied")
+end)
+
+test("wild double speed raises the pace by two", function()
+  local game = speed_staged({
+    wild_double_speed, { id = "blue-2-0", color = "blue", kind = "number", value = 2 },
+  }, "red", 3, 4242)
+  game.speed_level = 2
+  game.speed_target = 2
+  local played, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = wild_double_speed.id, chosen_color = "green",
+  })
+  assert_equal(ok, true, "played")
+  assert_equal(played.speed_level, 4, "speed level")
+  assert_equal(played.speed_played, 1, "cards played")
+  assert_equal(played.current_color, "green", "colour")
+end)
+
+test("speed pack crash draws the current pace and resets to one", function()
+  local game = speed_staged({ { id = "blue-1-0", color = "blue", kind = "number", value = 1 } }, "red", 3, 4242)
+  game.speed_level = 3
+  game.speed_target = 3
+  local crashed, ok = rules.apply_action(game, { type = "draw", player_id = "p1" })
+  assert_equal(ok, true, "draw")
+  assert_equal(#crashed.players[1].hand, 4, "drew three")
+  assert_equal(crashed.speed_level, 1, "speed reset")
+  assert_equal(crashed.speed_target, 1, "target reset")
+  assert_equal(crashed.turn, 2, "turn passed")
+end)
+
 test("scores swap pack colour actions at 20 and wild actions at 50", function()
   assert_equal(rules.score_hand({ swap_one, refresh_hand }), 40, "colour action score")
   assert_equal(rules.score_hand({ force_trade, pass_hands }), 100, "wild action score")

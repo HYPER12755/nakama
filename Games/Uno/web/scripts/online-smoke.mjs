@@ -1392,6 +1392,69 @@ async function stackPackBattle() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "stack pack game over", STATE_TIMEOUT_MS);
 }
 
+async function speedPackBattle() {
+  const alice = await authenticate("speed-pack-alice");
+  const bob = await authenticate("speed-pack-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 2,
+    rulesMode: "speedPack",
+  });
+  assert(
+    created?.ok === true && created.rulesMode === "speedPack" && typeof created.matchId === "string",
+    `speed pack room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
+  const aliceStart = await waitState(
+    alice.socket,
+    "speed pack alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "speed pack bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "speedPack", "speed pack mode must reach alice");
+  assert(bobStart.data.rulesMode === "speedPack", "speed pack mode must reach bob");
+  assert(aliceStart.data.deckCount === 109, "speed pack should carry 124 cards");
+  assert(aliceStart.data.speedLevel === 1, "speed pack should start at level one");
+  assert(
+    legalCardIds(aliceStart.data).includes("yellow-speedup-3"),
+    "seed 2 should offer Speed Up to Alice",
+  );
+  console.log("[ok] speed pack private room reports rulesMode, level one and a 124-card setup");
+
+  await send(alice, matchId, OP.PLAY_REQUEST, { cardId: "yellow-speedup-3" });
+  const aliceRaised = await waitState(
+    alice.socket,
+    "speed pack alice raises speed",
+    (state) => state.speedLevel === 2,
+  );
+  const bobRaised = await waitState(
+    bob.socket,
+    "speed pack bob sees speed",
+    (state) => state.speedLevel === 2,
+  );
+  assert(aliceRaised.data.turn === 1 && bobRaised.data.turn === 1,
+    "Speed Up ends the level-one turn and raises the next player's pace");
+  console.log("[ok] Speed Up raises the pace for both clients");
+
+  await send(bob, matchId, OP.DRAW_REQUEST, {});
+  const crashed = await waitState(
+    alice.socket,
+    "speed pack crash",
+    (state) => state.speedLevel === 1 && state.turn === 0,
+  );
+  assert(crashed.data.speedLevel === 1, "crashing resets the pace");
+  console.log("[ok] a Speed Pack crash resets the pace on the live server");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "speed pack game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -1423,6 +1486,7 @@ async function main() {
     await swapPackBattle();
     await reversePackBattle();
     await stackPackBattle();
+    await speedPackBattle();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

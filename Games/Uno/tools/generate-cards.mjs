@@ -328,6 +328,28 @@ function stackPackWildCard(kind, copy) {
 <text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">${numbered ? "wildstacknumber" : "wildstack3"} ${copy}</text>`);
 }
 
+function speedPackColoredCard(color, value, copy) {
+  const fill = COLORS[color];
+  return frame(`${corner(fill, ">")}
+<ellipse cx="90" cy="132" rx="64" ry="80" fill="${fill}" transform="rotate(-14 90 132)"/>
+<text x="90" y="122" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="66" fill="#ffffff" stroke="#111827" stroke-width="3" paint-order="stroke">${value}</text>
+<text x="90" y="174" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="900" fill="#ffffff" stroke="#111827" stroke-width="2" paint-order="stroke">SPEED +1</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">${color} speedup ${value} ${copy}</text>`);
+}
+
+function speedPackWildCard(copy) {
+  return frame(`<g>
+<path d="M9 23 A14 14 0 0 1 23 9 L157 9 A14 14 0 0 1 171 23 L90 135 Z" fill="${COLORS.red}"/>
+<path d="M171 23 A14 14 0 0 1 171 247 L90 135 Z" fill="${COLORS.yellow}"/>
+<path d="M171 247 A14 14 0 0 1 157 261 L23 261 A14 14 0 0 1 9 247 L90 135 Z" fill="${COLORS.green}"/>
+<path d="M9 247 A14 14 0 0 1 9 23 L90 135 Z" fill="${COLORS.blue}"/>
+</g>
+<ellipse cx="90" cy="132" rx="60" ry="78" fill="#0f172a" transform="rotate(-12 90 132)"/>
+<text x="90" y="130" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="50" fill="#ffffff">+2</text>
+<text x="90" y="176" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="900" fill="#ffffff" stroke="#e8402a" stroke-width="4" paint-order="stroke">DOUBLE SPEED</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">wilddoublespeed ${copy}</text>`);
+}
+
 const LIGHT_PALETTE = {
   red: [COLORS.red, "#ff8a75"],
   yellow: [COLORS.yellow, "#ffe680"],
@@ -573,6 +595,17 @@ for (let copy = 0; copy < 4; copy += 1) {
   writeFileSync(path.join(OUT, `wildstack3-${copy}.svg`), stackPackWildCard("wildStack3", copy));
   writeFileSync(path.join(OUT, `wildstacknumber-${copy}.svg`), stackPackWildCard("wildStackNumber", copy));
   count += 2;
+}
+const SPEED_VALUES = { red: [3, 4, 5], yellow: [1, 2, 3], green: [7, 8, 9], blue: [5, 6, 7] };
+for (const [color, values] of Object.entries(SPEED_VALUES)) {
+  for (const value of values) {
+    writeFileSync(path.join(OUT, `${color}-speedup-${value}.svg`), speedPackColoredCard(color, value, 0));
+    count += 1;
+  }
+}
+for (let copy = 0; copy < 4; copy += 1) {
+  writeFileSync(path.join(OUT, `wilddoublespeed-${copy}.svg`), speedPackWildCard(copy));
+  count += 1;
 }
 for (const color of Object.keys(COLORS)) {
   writeFileSync(path.join(OUT, `${color}-swap1-0.svg`), swap1Card(color, 0));

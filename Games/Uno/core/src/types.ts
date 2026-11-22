@@ -20,7 +20,8 @@ export type GameMode =
   | "flip"
   | "swapPack"
   | "reversePack"
-  | "stackPack";
+  | "stackPack"
+  | "speedPack";
 
 export type CardKind =
   | "number"
@@ -52,6 +53,8 @@ export type CardKind =
   | "reverseSkip"
   | "wildPowerReverse"
   | "wildNoU"
+  | "speedUp"
+  | "wildDoubleSpeed"
   | "stack1"
   | "stack2"
   | "wildStack3"
@@ -176,6 +179,9 @@ export interface GameState {
   pendingHit: PendingHit | null;
   pendingRoulette: PendingRoulette | null;
   jumpWindow: JumpWindow | null;
+  speedLevel: number;
+  speedPlayed: number;
+  speedTarget: number;
   startingRule: StartingRule | null;
   started: boolean;
   finished: boolean;

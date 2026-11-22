@@ -9,7 +9,7 @@ describe("Uno card assets", () => {
     for (const set of ["cards", "cards-neon"]) {
       const dir = path.resolve(path.dirname(new URL(import.meta.url).pathname), `../public/${set}`);
       const files = readdirSync(dir).filter((name) => name.endsWith(".svg"));
-      expect(files, `${set} count`).toHaveLength(449);
+      expect(files, `${set} count`).toHaveLength(465);
       expect(files, `${set} back`).toContain("card-back.svg");
       expect(files, `${set} number`).toContain("red-0-0.svg");
       expect(files, `${set} action`).toContain("blue-draw2-1.svg");
@@ -177,6 +177,35 @@ describe("Uno card assets", () => {
         ["blue-stack2-0.svg", "STACK +2"],
         ["wildstack3-0.svg", "STACK +3"],
         ["wildstacknumber-0.svg", "STACK #"],
+      ]) {
+        expect(readFileSync(path.join(dir, name), "utf8"), `${set}/${name} label`).toContain(label);
+      }
+    }
+  });
+
+  it("ships Speed Pack card art in both sets", () => {
+    const expected: string[] = [];
+    const values: Record<string, number[]> = {
+      red: [3, 4, 5], yellow: [1, 2, 3], green: [7, 8, 9], blue: [5, 6, 7],
+    };
+    for (const [color, list] of Object.entries(values)) {
+      for (const value of list) {
+        expected.push(`${color}-speedup-${value}.svg`);
+      }
+    }
+    for (let copy = 0; copy < 4; copy += 1) {
+      expected.push(`wilddoublespeed-${copy}.svg`);
+    }
+    expect(expected).toHaveLength(16);
+    for (const set of ["cards", "cards-neon"]) {
+      const dir = path.resolve(path.dirname(new URL(import.meta.url).pathname), `../public/${set}`);
+      const files = readdirSync(dir).filter((name) => name.endsWith(".svg"));
+      for (const name of expected) {
+        expect(files, `${set}/${name}`).toContain(name);
+      }
+      for (const [name, label] of [
+        ["red-speedup-3.svg", "SPEED +1"],
+        ["wilddoublespeed-0.svg", "DOUBLE SPEED"],
       ]) {
         expect(readFileSync(path.join(dir, name), "utf8"), `${set}/${name} label`).toContain(label);
       }

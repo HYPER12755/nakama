@@ -20,14 +20,14 @@ local WILD_KINDS = {
   wildDraw2 = true, wildDrawColor = true,
   wildForceTrade = true, wildPassHands = true,
   wildPowerReverse = true, wildNoU = true,
-  wildStack3 = true, wildStackNumber = true,
+  wildStack3 = true, wildStackNumber = true, wildDoubleSpeed = true,
 }
 local WILD_COLOR_KINDS = {
   wild = true, wild4 = true, wildAttack = true, wildDraw6 = true,
   wildDraw10 = true, wildReverse4 = true, wildDraw2 = true, wildDrawColor = true,
   wildForceTrade = true, wildPassHands = true,
   wildPowerReverse = true, wildNoU = true,
-  wildStack3 = true, wildStackNumber = true,
+  wildStack3 = true, wildStackNumber = true, wildDoubleSpeed = true,
 }
 
 local STACK_PACK_KINDS = {
@@ -293,6 +293,34 @@ local function build_reverse_pack_deck()
   return deck
 end
 
+local function build_speed_pack_deck()
+  local deck = {}
+  local speed_values = {
+    red = { 3, 4, 5 },
+    yellow = { 1, 2, 3 },
+    green = { 7, 8, 9 },
+    blue = { 5, 6, 7 },
+  }
+  for _, color in ipairs(protocol.COLORS) do
+    for _, value in ipairs(speed_values[color] or {}) do
+      deck[#deck + 1] = {
+        id = string.format("%s-speedup-%d", color, value),
+        color = color,
+        kind = "speedUp",
+        value = value,
+      }
+    end
+  end
+  for copy_index = 0, 3 do
+    deck[#deck + 1] = {
+      id = string.format("wilddoublespeed-%d", copy_index),
+      color = nil,
+      kind = "wildDoubleSpeed",
+    }
+  end
+  return deck
+end
+
 local function build_stack_pack_deck()
   local deck = {}
   for _, color in ipairs(protocol.COLORS) do
@@ -320,6 +348,45 @@ end
 function rules.build_deck(mode)
   if mode == "flip" then
     return build_flip_deck()
+  end
+  if mode == "speedPack" then
+    local deck = {}
+    for _, color in ipairs(protocol.COLORS) do
+      for value = 0, 9 do
+        local copies = value == 0 and 1 or 2
+        for copy_index = 0, copies - 1 do
+          deck[#deck + 1] = {
+            id = string.format("%s-%d-%d", color, value, copy_index),
+            color = color,
+            kind = "number",
+            value = value,
+          }
+        end
+      end
+      for _, kind in ipairs({ "skip", "reverse", "draw2" }) do
+        for copy_index = 0, 1 do
+          deck[#deck + 1] = {
+            id = string.format("%s-%s-%d", color, kind, copy_index),
+            color = color,
+            kind = kind,
+          }
+        end
+      end
+    end
+    for _, kind in ipairs({ "wild", "wild4" }) do
+      for copy_index = 0, 3 do
+        deck[#deck + 1] = {
+          id = string.format("%s-%d", kind, copy_index),
+          color = nil,
+          kind = kind,
+        }
+      end
+    end
+    local pack = build_speed_pack_deck()
+    for _, card in ipairs(pack) do
+      deck[#deck + 1] = card
+    end
+    return deck
   end
   if mode == "reversePack" or mode == "stackPack" then
     local deck = {}
@@ -701,7 +768,8 @@ function rules.create_game(seed, players, now, mode)
     or (rules_mode == "reversePack"
       and (starter.kind == "wildPowerReverse" or starter.kind == "wildNoU"))
     or (rules_mode == "stackPack"
-      and (starter.kind == "wildStack3" or starter.kind == "wildStackNumber")) then
+      and (starter.kind == "wildStack3" or starter.kind == "wildStackNumber"))
+    or (rules_mode == "speedPack" and starter.kind == "wildDoubleSpeed") then
     starter.color = most_common_color(dealt[1].hand, rules.colors_for_side("light"))
   end
 
@@ -731,6 +799,9 @@ function rules.create_game(seed, players, now, mode)
   return {
     version = rules.VERSION,
     mode = rules_mode,
+    speed_level = 1,
+    speed_played = 0,
+    speed_target = 1,
     seed = state_seed,
     draw_pile = deck,
     discard = { starter },
@@ -895,6 +966,10 @@ local function advance(state, steps)
   end
   for _ = 1, steps do
     state.turn = next_active_index(state, state.turn)
+  end
+  if state.mode == "speedPack" and not state.finished then
+    state.speed_played = 0
+    state.speed_target = state.speed_level
   end
 end
 
@@ -1604,6 +1679,19 @@ function rules.apply_action(previous, action, now)
   end
 
   if action.type == "draw" then
+    if state.mode == "speedPack" then
+      local crash_level = state.speed_level
+      draw_cards(state, actor, crash_level)
+      state.speed_level = 1
+      state.events[#state.events + 1] = {
+        type = "speedCrash", player_id = actor.id, text = tostring(crash_level), at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = actor.id, action = "speedCrash", count = crash_level,
+      }
+      advance(state, 1)
+      return state, true
+    end
     if state.mode == "attack" then
       for _ = 1, press_launcher(state) do
         draw_cards(state, actor, 1)
@@ -1822,6 +1910,40 @@ function rules.apply_action(previous, action, now)
     card_id = card.id,
     color = action.chosen_color,
   }
+
+  if state.mode == "speedPack" then
+    local gain = card.kind == "wildDoubleSpeed" and 2 or card.kind == "speedUp" and 1 or 0
+    if gain > 0 then
+      state.speed_level = state.speed_level + gain
+      state.events[#state.events + 1] = {
+        type = "speedUp", player_id = actor.id, card_id = card.id,
+        text = tostring(state.speed_level), at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = actor.id, action = "speedUp", card_id = card.id, count = gain,
+      }
+    end
+    state.speed_played = state.speed_played + 1
+    if state.speed_played < state.speed_target then
+      state.drawn_card_id = nil
+      if #actor.hand == 0 then
+        local crash_level = state.speed_level
+        draw_cards(state, actor, crash_level)
+        state.speed_level = 1
+        state.events[#state.events + 1] = {
+          type = "speedCrash", player_id = actor.id, text = tostring(crash_level),
+          at = #state.events,
+        }
+        state.replay[#state.replay + 1] = {
+          player_id = actor.id, action = "speedCrash", count = crash_level,
+        }
+        advance(state, 1)
+      end
+      return state, true
+    end
+    state.speed_played = 0
+    state.speed_target = state.speed_level
+  end
 
   if seven_o_active and card.kind == "number" then
     if card.value == 7 and swap_target ~= nil then

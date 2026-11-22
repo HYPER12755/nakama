@@ -390,6 +390,53 @@ captured by the standard play entry's `color`.
   (the actor is one participant); Pass Hands and Refresh Hand need no target.
   Every new wild carries a legal `chosenColor`, so automated play never stalls.
 
+## Speed Pack
+
+Speed Pack keeps the classic 108-card deck and adds 16 dedicated cards for a
+124-card deck. It is available locally and in private/quick online matches as
+mode string `speedPack` (core `UNO_MODE.SPEED_PACK`, Lua `RULES_MODES`). State
+payloads expose `rulesMode: "speedPack"`, `speedLevel`, `speedPlayed` and
+`speedTarget`. No new opcodes are needed.
+
+### Added cards
+
+- **Speed Up** (`speedUp`, `red-speedup-3`): twelve coloured copies, three per
+  colour, each carrying one Speed Up icon and a printed number. It is played by
+  matching colour or another Speed Up card and raises the pace by one level.
+- **Wild Double Speed** (`wildDoubleSpeed`, `wilddoublespeed-0`): four wild
+  copies. Always playable; choosing a colour raises the pace by two levels.
+
+### Turn sequence
+
+- The game starts at speed level 1. When a player finishes a turn, every player
+  must play that many cards on their next turn, in sequence. Each card must
+  match the previously played card.
+- A Speed Up icon raises `speedLevel` immediately, but the increase applies to
+  the next player. The current turn still ends after `speedTarget` cards.
+- Action cards only take effect when they are the last card of a speed turn. A
+  Draw Two played before the target is reached simply continues the chain; one
+  played last makes the next player draw two.
+- If a player cannot play enough cards, they play what they can and then draw
+  cards equal to the current speed level. The speed resets to 1, `speedPlayed`
+  and `speedTarget` reset, and the next player takes a normal single-card turn.
+  Using the Draw button intentionally triggers the same crash.
+
+### Events and replay
+
+Each Speed Up card emits a `speedUp` event and replay entry with the gain and
+the resulting level. A crash emits `speedCrash` with the number of cards drawn.
+The chosen colour of a Wild Double Speed is recorded by the standard play
+entry.
+
+### Integration contract
+
+- Deck: 124 cards; a Wild Double Speed starter receives the first player's most
+  common colour.
+- AI scores Speed Up cards highly and plays them as part of its normal move
+  selection; the existing loop naturally continues multi-card turns.
+- The web board shows the current speed and `played/target` progress, renders
+  all 16 new cards in both art sets, and exposes the new mode label and rules.
+
 ## Stack Pack
 
 Stack Pack keeps the classic 108-card deck and adds 16 dedicated cards for a

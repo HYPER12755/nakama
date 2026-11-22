@@ -70,6 +70,8 @@ function cardHint(card: Card): string | undefined {
   if (card.kind === "stack2") return "Make the next player draw 2 and lose a turn";
   if (card.kind === "wildStack3") return "Choose a colour and make the next player draw 3";
   if (card.kind === "wildStackNumber") return "Choose a colour; a revealed number sets the draw";
+  if (card.kind === "speedUp") return "Raise the speed by one";
+  if (card.kind === "wildDoubleSpeed") return "Raise the speed by two and choose a colour";
   return undefined;
 }
 
@@ -490,6 +492,13 @@ export function UnoBoardStage({
           <div className={`uno-turn-pill${isMyTurn ? " uno-turn-pill--live" : ""}`}>
             {view.pendingChallenge !== null ? "CHALLENGE" : isMyTurn ? "YOUR TURN" : "WAITING…"}
           </div>
+          {effectiveMode === UNO_MODE.SPEED_PACK ? (
+            <div className="uno-turn-pill" title="Cards required this turn">
+              SPEED {view.speedLevel ?? 1}
+              {" · "}
+              {Math.min(view.speedPlayed ?? 0, view.speedTarget ?? 1)}/{(view.speedTarget ?? 1)}
+            </div>
+          ) : null}
           <div className="uno-hand-scroll">
             <div className="uno-hand-row" ref={handRef} key={dealKey}>
               {hand.map((card, index) => {

@@ -732,6 +732,76 @@ describe("Uno Progressive house rule", () => {
 
 });
 
+describe("Uno Speed Pack", () => {
+  const speedUp: Card = { id: "red-speedup-3", color: "red", kind: "speedUp", value: 3 };
+  const wildDouble: Card = { id: "wilddoublespeed-0", color: null, kind: "wildDoubleSpeed" };
+
+  it("builds a Speed Pack deck with sixteen added cards", () => {
+    const deck = buildDeck("speedPack");
+    expect(deck).toHaveLength(124);
+    expect(deck.filter((card) => card.kind === "speedUp")).toHaveLength(12);
+    expect(deck.filter((card) => card.kind === "wildDoubleSpeed")).toHaveLength(4);
+  });
+
+  it("raises the speed and requires another matching card on the same turn", () => {
+    const game = stagedGame([
+      speedUp,
+      { id: "red-4-0", color: "red", kind: "number", value: 4 },
+      { id: "blue-2-0", color: "blue", kind: "number", value: 2 },
+    ], "red", "speedPack");
+    game.speedLevel = 2;
+    game.speedTarget = 2;
+    const played = applyAction(game, { type: "play", playerId: "p1", cardId: speedUp.id });
+    expect(played.state.speedLevel).toBe(3);
+    expect(played.state.speedPlayed).toBe(1);
+    expect(played.state.turn).toBe(0);
+    expect(played.state.events.at(-1)?.type).toBe("speedUp");
+    expect(legalMoves(played.state, "p1").cards).toContain("red-4-0");
+    const finished = applyAction(played.state, { type: "play", playerId: "p1", cardId: "red-4-0" });
+    expect(finished.state.turn).toBe(1);
+    expect(finished.state.speedTarget).toBe(3);
+    expect(finished.state.speedPlayed).toBe(0);
+  });
+
+  it("applies action effects only on the final card of a speed turn", () => {
+    const drawTwo: Card = { id: "red-draw2-0", color: "red", kind: "draw2" };
+    const game = stagedGame([speedUp, drawTwo, { id: "blue-2-0", color: "blue", kind: "number", value: 2 }], "red", "speedPack");
+    game.speedLevel = 2;
+    game.speedTarget = 2;
+    const played = applyAction(game, { type: "play", playerId: "p1", cardId: speedUp.id });
+    expect(played.state.pendingStack).toBeNull();
+    const targetBefore = played.state.players[1].hand.length;
+    const finished = applyAction(played.state, { type: "play", playerId: "p1", cardId: drawTwo.id });
+    expect(finished.state.pendingStack).toBeNull();
+    expect(finished.state.players[1].hand).toHaveLength(targetBefore + 2);
+  });
+
+  it("lets Wild Double Speed raise the pace by two", () => {
+    const game = stagedGame([wildDouble, { id: "blue-2-0", color: "blue", kind: "number", value: 2 }], "red", "speedPack");
+    game.speedLevel = 2;
+    game.speedTarget = 2;
+    const played = applyAction(game, {
+      type: "play", playerId: "p1", cardId: wildDouble.id, chosenColor: "green",
+    });
+    expect(played.state.speedLevel).toBe(4);
+    expect(played.state.speedPlayed).toBe(1);
+    expect(played.state.currentColor).toBe("green");
+    expect(played.state.turn).toBe(0);
+  });
+
+  it("crashes and resets the speed when the player draws", () => {
+    const game = stagedGame([{ id: "blue-1-0", color: "blue", kind: "number", value: 1 }], "red", "speedPack");
+    game.speedLevel = 3;
+    game.speedTarget = 3;
+    const crashed = applyAction(game, { type: "draw", playerId: "p1" });
+    expect(crashed.state.players[0].hand).toHaveLength(4);
+    expect(crashed.state.speedLevel).toBe(1);
+    expect(crashed.state.speedTarget).toBe(1);
+    expect(crashed.state.turn).toBe(1);
+    expect(crashed.state.events.at(-1)?.type).toBe("speedCrash");
+  });
+});
+
 describe("Uno Stack Pack", () => {
   const stackOne: Card = { id: "blue-stack1-0", color: "blue", kind: "stack1" };
   const redStackOne: Card = { id: "red-stack1-0", color: "red", kind: "stack1" };
