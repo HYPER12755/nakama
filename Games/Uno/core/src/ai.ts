@@ -45,6 +45,8 @@ function cardScore(state: GameState, card: Card): number {
   if (card.kind === "awReverse") return 90;
   if (card.kind === "awSkip") return 88;
   if (card.kind === "awWild") return 40;
+  if (card.kind === "wildShowdown") return 106;
+  if (card.kind === "showdownNumber") return 60 + (card.value ?? 0);
   if (card.kind === "reverseDraw2") return 84;
   if (card.kind === "reverseSkip") return 74;
   if (card.kind === "wild") return 90;
@@ -245,6 +247,13 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
     let usable = true;
     if ((state.mode === UNO_MODE.SEVEN_O || state.mode === UNO_MODE.NO_MERCY)
       && card.kind === "number" && card.value === 7) {
+      const target = pickTarget(state, playerId);
+      if (target === null) {
+        usable = false;
+      } else {
+        targetId = target;
+      }
+    } else if (state.mode === UNO_MODE.SHOWDOWN && card.kind === "wildShowdown") {
       const target = pickTarget(state, playerId);
       if (target === null) {
         usable = false;

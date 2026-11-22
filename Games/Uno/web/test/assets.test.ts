@@ -9,7 +9,7 @@ describe("Uno card assets", () => {
     for (const set of ["cards", "cards-neon"]) {
       const dir = path.resolve(path.dirname(new URL(import.meta.url).pathname), `../public/${set}`);
       const files = readdirSync(dir).filter((name) => name.endsWith(".svg"));
-      expect(files, `${set} count`).toHaveLength(481);
+      expect(files, `${set} count`).toHaveLength(486);
       expect(files, `${set} back`).toContain("card-back.svg");
       expect(files, `${set} number`).toContain("red-0-0.svg");
       expect(files, `${set} action`).toContain("blue-draw2-1.svg");
@@ -239,6 +239,21 @@ describe("Uno card assets", () => {
         expect(files, `${set}/${name}`).toContain(name);
       }
       expect(readFileSync(path.join(dir, "wilddare-0.svg"), "utf8")).toContain("WILD DARE");
+    }
+  });
+
+  it("ships Showdown card art in both sets", () => {
+    const expected = [
+      "red-showdown-0.svg", "yellow-showdown-0.svg", "green-showdown-0.svg",
+      "blue-showdown-0.svg", "wildshowdown-0.svg",
+    ];
+    for (const set of ["cards", "cards-neon"]) {
+      const dir = path.resolve(path.dirname(new URL(import.meta.url).pathname), `../public/${set}`);
+      const files = readdirSync(dir).filter((name) => name.endsWith(".svg"));
+      for (const name of expected) {
+        expect(files, `${set}/${name}`).toContain(name);
+      }
+      expect(readFileSync(path.join(dir, "wildshowdown-0.svg"), "utf8")).toContain("WILD SHOWDOWN");
     }
   });
 

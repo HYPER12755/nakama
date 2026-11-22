@@ -103,7 +103,7 @@ describe("Uno Seven-O target picker", () => {
     await act(async () => {
       choices[1]?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
     });
-    expect(onPlay).toHaveBeenCalledWith("red-7-0", undefined, "b");
+    expect(onPlay).toHaveBeenCalledWith("red-7-0", undefined, "b", undefined);
 
     await act(async () => {
       root.unmount();

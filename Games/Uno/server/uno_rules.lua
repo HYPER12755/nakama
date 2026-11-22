@@ -23,7 +23,7 @@ local WILD_KINDS = {
   wildStack3 = true, wildStackNumber = true, wildDoubleSpeed = true,
   awWild = true, awReverse = true, awSkip = true, awSkipTwo = true,
   awDrawTwo = true, awDrawFour = true, awTargetDrawTwo = true, awForcedSwap = true,
-  wildDare = true,
+  wildDare = true, wildShowdown = true,
 }
 local WILD_COLOR_KINDS = {
   wild = true, wild4 = true, wildAttack = true, wildDraw6 = true,
@@ -31,6 +31,7 @@ local WILD_COLOR_KINDS = {
   wildForceTrade = true, wildPassHands = true,
   wildPowerReverse = true, wildNoU = true,
   wildStack3 = true, wildStackNumber = true, wildDoubleSpeed = true, wildDare = true,
+  wildShowdown = true,
 }
 
 local STACK_PACK_KINDS = {
@@ -373,6 +374,45 @@ local function build_stack_pack_deck()
   return deck
 end
 
+local function build_showdown_deck()
+  local deck = {}
+  for _, color in ipairs(protocol.COLORS) do
+    for value = 0, 9 do
+      local copies = value == 0 and 1 or 2
+      for copy_index = 0, copies - 1 do
+        if value >= 1 and value <= 5 and copy_index == 0 then
+          deck[#deck + 1] = {
+            id = string.format("%s-showdown-%d-0", color, value),
+            color = color, kind = "showdownNumber", value = value,
+          }
+        else
+          deck[#deck + 1] = {
+            id = string.format("%s-%d-%d", color, value, copy_index),
+            color = color, kind = "number", value = value,
+          }
+        end
+      end
+    end
+    for _, kind in ipairs({ "skip", "reverse", "draw2" }) do
+      for copy_index = 0, 1 do
+        deck[#deck + 1] = {
+          id = string.format("%s-%s-%d", color, kind, copy_index),
+          color = color, kind = kind,
+        }
+      end
+    end
+  end
+  for _, kind in ipairs({ "wild", "wild4", "wildShowdown" }) do
+    for copy_index = 0, 3 do
+      local kind_id = kind == "wildShowdown" and "wildshowdown" or kind
+      deck[#deck + 1] = {
+        id = string.format("%s-%d", kind_id, copy_index), color = nil, kind = kind,
+      }
+    end
+  end
+  return deck
+end
+
 local function build_dare_deck()
   local deck = {}
   for _, color in ipairs(protocol.COLORS) do
@@ -408,6 +448,9 @@ function rules.build_deck(mode)
   end
   if mode == "dare" then
     return build_dare_deck()
+  end
+  if mode == "showdown" then
+    return build_showdown_deck()
   end
   if mode == "flip" then
     return build_flip_deck()
@@ -600,6 +643,13 @@ function rules.can_play(state, card)
     return true
   end
   if card.kind == "number" and top.kind == "number" then
+    return card.value == top.value
+  end
+  if state.mode == "showdown" and card.kind == "showdownNumber"
+    and (top.kind == "showdownNumber" or top.kind == "number") then
+    return card.value == top.value
+  end
+  if state.mode == "showdown" and top.kind == "showdownNumber" and card.kind == "number" then
     return card.value == top.value
   end
   return card.kind == top.kind
@@ -834,7 +884,8 @@ function rules.create_game(seed, players, now, mode)
       and (starter.kind == "wildStack3" or starter.kind == "wildStackNumber"))
     or (rules_mode == "speedPack" and starter.kind == "wildDoubleSpeed")
     or (rules_mode == "allWild" and WILD_KINDS[starter.kind] == true)
-    or (rules_mode == "dare" and starter.kind == "wildDare") then
+    or (rules_mode == "dare" and starter.kind == "wildDare")
+    or (rules_mode == "showdown" and starter.kind == "wildShowdown") then
     starter.color = most_common_color(dealt[1].hand, rules.colors_for_side("light"))
   end
 
@@ -1133,6 +1184,22 @@ local function stack_response_amount(state, card)
     return reveal_stack_number(state)
   end
   return rules.draw_card_value(card.kind)
+end
+
+local function resolve_showdown(state, owner, target, amount, card_id)
+  local roll = rules.random_int(state.seed, 2)
+  state.seed = rules.next_seed(state.seed)
+  local winner = roll == 0 and owner or target
+  local loser = roll == 0 and target or owner
+  draw_cards(state, loser, amount)
+  state.events[#state.events + 1] = {
+    type = "showdown", player_id = owner.id, card_id = card_id,
+    text = winner.id .. ":" .. tostring(amount), at = #state.events,
+  }
+  state.replay[#state.replay + 1] = {
+    player_id = owner.id, action = "showdown", card_id = card_id,
+    target_id = target.id, count = amount,
+  }
 end
 
 local function finish_deferred_winner(state, pending_winner_id)
@@ -1882,6 +1949,25 @@ function rules.apply_action(previous, action, now)
     or card.kind == "wildDrawColor") and not has_color_match(state, actor)
 
   local all_wild_target
+  local showdown_target
+  local showdown_amount = 1
+  if state.mode == "showdown" and card.kind == "wildShowdown" then
+    local requested = action.target_id or action.targetId
+    if requested == nil or requested == "" then
+      return fail(previous, protocol.ERROR.MISSING_TARGET)
+    end
+    for _, candidate in ipairs(state.players) do
+      if candidate.id == requested and candidate.id ~= actor.id then
+        showdown_target = candidate
+        break
+      end
+    end
+    if showdown_target == nil then
+      return fail(previous, protocol.ERROR.MISSING_TARGET)
+    end
+    local requested_amount = action.showdown_amount or action.showdownAmount or 1
+    showdown_amount = math.max(1, math.min(3, math.floor(requested_amount)))
+  end
   if state.mode == "allWild" and (card.kind == "awTargetDrawTwo" or card.kind == "awForcedSwap") then
     local requested = action.target_id or action.targetId
     if requested == nil or requested == "" then
@@ -2069,7 +2155,17 @@ function rules.apply_action(previous, action, now)
   local stack_pack = state.mode == "stackPack"
   local next_player = state.players[target_index(state)]
   local actor_index = player_index(state, actor.id)
-  if card.kind == "dare" then
+  if card.kind == "showdownNumber" then
+    if state.mode == "showdown" then
+      resolve_showdown(state, actor, next_player, card.value or 1, card.id)
+    end
+    advance(state, 1)
+  elseif card.kind == "wildShowdown" then
+    if state.mode == "showdown" and showdown_target ~= nil then
+      resolve_showdown(state, actor, showdown_target, showdown_amount, card.id)
+    end
+    advance(state, 1)
+  elseif card.kind == "dare" then
     state.pending_challenge = {
       owner_id = actor.id,
       target_id = next_player.id,
@@ -2422,6 +2518,11 @@ function rules.apply_action(previous, action, now)
   else
     advance(state, 1)
   end
+  if state.mode == "showdown" and (card.kind == "showdownNumber" or card.kind == "wildShowdown")
+    and #actor.hand == 0 and not state.finished then
+    state.finished = true
+    state.winner = actor.id
+  end
   if state.pending_challenge == nil and state.pending_stack == nil and state.pending_hit == nil
     and state.pending_roulette == nil and #actor.hand == 0 then
     state.finished = true
@@ -2443,8 +2544,12 @@ function rules.score_hand(hand)
   for _, card in ipairs(hand) do
     if card.kind == "number" then
       total = total + (card.value or 0)
-    elseif card.kind == "awWild" then
+    elseif card.kind == "awWild" or card.kind == "dare" then
       total = total + 20
+    elseif card.kind == "showdownNumber" then
+      total = total + (card.value or 0)
+    elseif card.kind == "wildShowdown" then
+      total = total + 40
     elseif WILD_KINDS[card.kind] then
       total = total + 50
     else

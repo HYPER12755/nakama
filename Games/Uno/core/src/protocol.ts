@@ -14,6 +14,7 @@ export const UNO_MODE = {
   SPEED_PACK: "speedPack",
   ALL_WILD: "allWild",
   DARE: "dare",
+  SHOWDOWN: "showdown",
 } as const;
 
 export const UNO_MODES: readonly GameMode[] = [
@@ -30,6 +31,7 @@ export const UNO_MODES: readonly GameMode[] = [
   UNO_MODE.SPEED_PACK,
   UNO_MODE.ALL_WILD,
   UNO_MODE.DARE,
+  UNO_MODE.SHOWDOWN,
 ];
 
 export const JUMP_WINDOW_MS = 1800;

@@ -226,6 +226,7 @@ export function buildColourChoosePayload(color: Color): Record<string, unknown> 
 export interface PlayExtras {
   giveCardId?: string;
   tradeWithId?: string;
+  showdownAmount?: number;
 }
 
 export function buildPlayPayload(
@@ -247,6 +248,9 @@ export function buildPlayPayload(
   }
   if (extras.tradeWithId !== undefined) {
     payload.tradeWithId = extras.tradeWithId;
+  }
+  if (extras.showdownAmount !== undefined) {
+    payload.showdownAmount = extras.showdownAmount;
   }
   if (isJumpCandidate(view, cardId)) {
     payload.jump = true;

@@ -23,7 +23,8 @@ export type GameMode =
   | "stackPack"
   | "speedPack"
   | "allWild"
-  | "dare";
+  | "dare"
+  | "showdown";
 
 export type CardKind =
   | "number"
@@ -68,6 +69,8 @@ export type CardKind =
   | "dare"
   | "wildDare"
   | "dareList"
+  | "showdownNumber"
+  | "wildShowdown"
   | "stack1"
   | "stack2"
   | "wildStack3"
@@ -214,6 +217,8 @@ export type Action =
       target_id?: string;
       giveCardId?: string;
       give_card_id?: string;
+      showdownAmount?: number;
+      showdown_amount?: number;
       tradeWithId?: string;
       trade_with_id?: string;
       jump?: boolean;

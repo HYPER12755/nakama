@@ -1560,6 +1560,59 @@ async function dareBattle() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "dare game over", STATE_TIMEOUT_MS);
 }
 
+async function showdownBattle() {
+  const alice = await authenticate("showdown-alice");
+  const bob = await authenticate("showdown-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 2,
+    rulesMode: "showdown",
+  });
+  assert(
+    created?.ok === true && created.rulesMode === "showdown" && typeof created.matchId === "string",
+    `showdown room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
+  const aliceStart = await waitState(
+    alice.socket,
+    "showdown alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "showdown bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "showdown", "showdown mode must reach alice");
+  assert(bobStart.data.rulesMode === "showdown", "showdown mode must reach bob");
+  assert(aliceStart.data.deckCount === 97, "showdown should carry 112 cards");
+  const card = legalCardIds(aliceStart.data).find((id) => id.includes("showdown"));
+  assert(card !== undefined, "seed 2 should offer a Showdown card to Alice");
+  console.log("[ok] showdown private room reports rulesMode and a 112-card setup");
+
+  const aliceBefore = seatOf(aliceStart.data, alice).count;
+  const bobBefore = seatOf(bobStart.data, bob).count;
+  await send(alice, matchId, OP.PLAY_REQUEST, { cardId: card });
+  const duel = await waitState(
+    bob.socket,
+    "showdown duel",
+    (state) => state.players.some((player) => player.count > 7),
+  );
+  const aliceAfter = seatOf(duel.data, alice).count;
+  const bobAfter = seatOf(duel.data, bob).count;
+  const amount = Number(card.match(/showdown-(\d+)/)?.[1] ?? 1);
+  assert(
+    aliceAfter + bobAfter === aliceBefore + bobBefore - 1 + amount,
+    "showdown draws the icon value as the penalty",
+  );
+  console.log("[ok] Showdown resolves authoritatively on the live server");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "showdown game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -1594,6 +1647,7 @@ async function main() {
     await speedPackBattle();
     await allWildBattle();
     await dareBattle();
+    await showdownBattle();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

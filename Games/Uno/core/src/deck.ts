@@ -52,6 +52,8 @@ export function cardId(card: Omit<Card, "id">): string {
   if (card.kind === "dare") return `${card.color}-dare`;
   if (card.kind === "wildDare") return "wilddare";
   if (card.kind === "dareList") return "darelist";
+  if (card.kind === "showdownNumber") return `${card.color}-showdown-${card.value ?? 0}`;
+  if (card.kind === "wildShowdown") return "wildshowdown";
   if (card.kind === "stack1") return `${card.color}-stack1`;
   if (card.kind === "stack2") return `${card.color}-stack2`;
   if (card.kind === "reverseDraw2") return `${card.color}-reversedraw2`;
@@ -202,6 +204,36 @@ export function buildDeck(mode: GameMode = "classic"): Card[] {
       }
     }
     for (const kind of ["wildPowerReverse", "wildNoU"] as const) {
+      for (let copy = 0; copy < 4; copy += 1) {
+        const base = { color: null, kind };
+        deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+      }
+    }
+    return deck;
+  }
+  if (mode === "showdown") {
+    const deck: Card[] = [];
+    for (const color of COLORS) {
+      for (let value = 0; value <= 9; value += 1) {
+        const count = value === 0 ? 1 : 2;
+        for (let copy = 0; copy < count; copy += 1) {
+          if (value >= 1 && value <= 5 && copy === 0) {
+            const base = { color, kind: "showdownNumber" as const, value };
+            deck.push({ id: `${cardId(base)}-0`, ...base });
+          } else {
+            const base = { color, kind: "number" as const, value };
+            deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+          }
+        }
+      }
+      for (const kind of ["skip", "reverse", "draw2"] as const) {
+        for (let copy = 0; copy < 2; copy += 1) {
+          const base = { color, kind };
+          deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+        }
+      }
+    }
+    for (const kind of ["wild", "wild4", "wildShowdown"] as const) {
       for (let copy = 0; copy < 4; copy += 1) {
         const base = { color: null, kind };
         deck.push({ id: `${cardId(base)}-${copy}`, ...base });

@@ -390,6 +390,40 @@ captured by the standard play entry's `color`.
   (the actor is one participant); Pass Hands and Refresh Hand need no target.
   Every new wild carries a legal `chosenColor`, so automated play never stalls.
 
+## Showdown
+
+Showdown keeps the classic matching rules with a 112-card deck. Twenty coloured
+number cards carry a Showdown icon; four Wild Showdown cards let the actor pick
+the opponent and the stakes. It is available locally and in private/quick
+online matches as mode string `showdown` (core `UNO_MODE.SHOWDOWN`, Lua
+`RULES_MODES`).
+
+### Cards
+
+- **Showdown Number** (`showdownNumber`, `red-showdown-3-0`): five per colour,
+  one each for values 1-5, replacing one copy of those numbers. The icon does
+  not affect matching: the card still matches by colour or number only.
+- **Wild Showdown** (`wildShowdown`, `wildshowdown-0`): four wild copies.
+  Always playable; requires `targetId`, `showdownAmount` from 1 to 3 and
+  `chosenColor`.
+
+### Duel resolution
+
+Playing a Showdown card triggers an immediate head-to-head between the actor
+and the next player in turn order, or the chosen target for Wild Showdown. A
+server-owned seeded coin flip decides the winner; the loser draws a number of
+cards equal to the icon value or the chosen amount. This is the authoritative
+digital equivalent of the physical reaction timer and paddle unit. The result
+is emitted as a `showdown` event and replay entry carrying the winner and
+amount. A final Showdown card only wins the round if its actor wins the duel.
+
+### Scoring and integration
+
+Number cards and Showdown Numbers score face value; Wild Showdown scores 40.
+The web board renders one art file per Showdown colour plus the Wild Showdown
+card in both sets, lets the actor choose the target and 1-3 card penalty, and
+reports the mode label and rules.
+
 ## Dare
 
 Dare uses a 108-card playable deck: 76 numbered cards, eight Reverse, eight

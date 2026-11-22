@@ -732,6 +732,56 @@ describe("Uno Progressive house rule", () => {
 
 });
 
+describe("Uno Showdown", () => {
+  const showdownNumber: Card = { id: "red-showdown-3-0", color: "red", kind: "showdownNumber", value: 3 };
+  const wildShowdown: Card = { id: "wildshowdown-0", color: null, kind: "wildShowdown" };
+
+  it("builds the 112-card Showdown deck", () => {
+    const deck = buildDeck("showdown");
+    expect(deck).toHaveLength(112);
+    expect(deck.filter((card) => card.kind === "showdownNumber")).toHaveLength(20);
+    expect(deck.filter((card) => card.kind === "wildShowdown")).toHaveLength(4);
+  });
+
+  it("matches Showdown number cards by number across colours", () => {
+    const game = stagedGame([], "blue", "showdown");
+    game.discard = [{ id: "red-showdown-3-0", color: "red", kind: "showdownNumber", value: 3 }];
+    expect(canPlay(game, { id: "blue-3-0", color: "blue", kind: "number", value: 3 })).toBe(true);
+    expect(canPlay(game, showdownNumber)).toBe(true);
+  });
+
+  it("makes one player draw the Showdown penalty", () => {
+    const game = stagedGame([showdownNumber], "red", "showdown");
+    const beforeP1 = game.players[0].hand.length;
+    const beforeP2 = game.players[1].hand.length;
+    const played = applyAction(game, { type: "play", playerId: "p1", cardId: showdownNumber.id });
+    expect(played.state.events.at(-1)?.type).toBe("showdown");
+    const p1Change = played.state.players[0].hand.length - (beforeP1 - 1);
+    const p2Change = played.state.players[1].hand.length - beforeP2;
+    expect(Math.max(p1Change, p2Change)).toBe(3);
+    expect(Math.min(p1Change, p2Change)).toBe(0);
+  });
+
+  it("lets Wild Showdown choose a target and penalty from 1 to 3", () => {
+    const game = stagedGame([wildShowdown], "red", "showdown");
+    const before = game.players[2].hand.length;
+    const played = applyAction(game, {
+      type: "play", playerId: "p1", cardId: wildShowdown.id,
+      targetId: "p3", showdownAmount: 3, chosenColor: "green",
+    });
+    expect(played.ok).toBe(true);
+    expect(played.state.currentColor).toBe("green");
+    const event = played.state.events.find((entry) => entry.type === "showdown");
+    expect(event?.text).toBe("p3:3");
+    expect(played.state.players[2].hand.length + played.state.players[0].hand.length)
+      .toBe(before + 3);
+  });
+
+  it("scores Showdown cards correctly", () => {
+    expect(scoreHand([showdownNumber, wildShowdown])).toBe(43);
+  });
+});
+
 describe("Uno Dare", () => {
   const dare: Card = { id: "red-dare-0", color: "red", kind: "dare" };
   const wildDare: Card = { id: "wilddare-0", color: null, kind: "wildDare" };

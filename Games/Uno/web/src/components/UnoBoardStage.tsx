@@ -25,6 +25,7 @@ interface AttackPrompt {
 interface PlayExtras {
   giveCardId?: string;
   tradeWithId?: string;
+  showdownAmount?: number;
 }
 
 interface SwapPrompt {
@@ -82,6 +83,8 @@ function cardHint(card: Card): string | undefined {
   if (card.kind === "awForcedSwap") return "Swap hands with a player";
   if (card.kind === "dare") return "Choose: draw 2 or do the dare";
   if (card.kind === "wildDare") return "Choose a colour and present a dare";
+  if (card.kind === "showdownNumber") return "Trigger a head-to-head showdown";
+  if (card.kind === "wildShowdown") return "Choose a target, penalty and colour";
   return undefined;
 }
 
@@ -176,6 +179,7 @@ export function UnoBoardStage({
 }: UnoBoardStageProps) {
   const [pendingCard, setPendingCard] = useState<string | null>(null);
   const [pendingTarget, setPendingTarget] = useState<string | null>(null);
+  const [showdownAmount, setShowdownAmount] = useState(1);
   const [attackPrompt, setAttackPrompt] = useState<AttackPrompt | null>(null);
   const [swapPrompt, setSwapPrompt] = useState<SwapPrompt | null>(null);
   const [tradePrompt, setTradePrompt] = useState<TradePrompt | null>(null);
@@ -192,7 +196,10 @@ export function UnoBoardStage({
   const lastManualFlight = useRef(0);
 
   const art = (cardId: string): string => {
-    const assetId = cardId.startsWith("aw") ? `${cardId.replace(/-\d+$/, "")}-0` : cardId;
+    const assetId = cardId.startsWith("aw") ? `${cardId.replace(/-\d+$/, "")}-0`
+      : cardId.startsWith("wildshowdown-") ? "wildshowdown-0"
+        : cardId.includes("-showdown-") ? `${cardId.slice(0, cardId.indexOf("-showdown-"))}-showdown-0`
+          : cardId;
     return cardSet === "neon" ? `cards-neon/${assetId}.svg` : `cards/${assetId}.svg`;
   };
 
@@ -314,8 +321,9 @@ export function UnoBoardStage({
 
   const play = (card: Card, event: MouseEvent<HTMLButtonElement>) => {
     if (!isMyTurn && !jumping) return;
-    if (card.kind === "awTargetDrawTwo" || card.kind === "awForcedSwap") {
+    if (card.kind === "awTargetDrawTwo" || card.kind === "awForcedSwap" || card.kind === "wildShowdown") {
       setPendingTarget(card.id);
+      setShowdownAmount(1);
       return;
     }
     if (card.kind === "swap1") {
@@ -779,6 +787,20 @@ export function UnoBoardStage({
                   : "Seven-O"}
             </p>
             <h2>Choose a target</h2>
+            {hand.find((card) => card.id === pendingTarget)?.kind === "wildShowdown" ? (
+              <div className="uno-stack-options" aria-label="Showdown penalty">
+                {[1, 2, 3].map((amount) => (
+                  <button
+                    type="button"
+                    key={amount}
+                    className={`button${showdownAmount === amount ? " button--primary" : " button--ghost"}`}
+                    onClick={() => setShowdownAmount(amount)}
+                  >
+                    {amount} card{amount === 1 ? "" : "s"}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <p className="uno-overlay-copy">
               {attackPrompt !== null
                 ? attackPrompt.deflect
@@ -809,7 +831,9 @@ export function UnoBoardStage({
                       return;
                     }
                     fly(pendingTarget, source, destination);
-                    onPlay(pendingTarget, undefined, player.userId);
+                    const wildShowdown = hand.find((card) => card.id === pendingTarget)?.kind === "wildShowdown";
+                    onPlay(pendingTarget, undefined, player.userId,
+                      wildShowdown ? { showdownAmount } : undefined);
                     setPendingTarget(null);
                   }}
                 >

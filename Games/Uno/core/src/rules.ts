@@ -25,13 +25,13 @@ const NO_MERCY_WILD_KINDS: CardKind[] = [
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands", "wildPowerReverse", "wildNoU",
   "wildStack3", "wildStackNumber", "wildDoubleSpeed",
   "awWild", "awReverse", "awSkip", "awSkipTwo", "awDrawTwo", "awDrawFour",
-  "awTargetDrawTwo", "awForcedSwap", "wildDare",
+  "awTargetDrawTwo", "awForcedSwap", "wildDare", "wildShowdown",
 ];
 
 const WILD_COLOR_KINDS: CardKind[] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4",
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands", "wildPowerReverse", "wildNoU",
-  "wildStack3", "wildStackNumber", "wildDoubleSpeed", "wildDare",
+  "wildStack3", "wildStackNumber", "wildDoubleSpeed", "wildDare", "wildShowdown",
 ];
 
 const STACK_PACK_KINDS: CardKind[] = ["stack1", "stack2", "wildStack3", "wildStackNumber"];
@@ -90,6 +90,14 @@ export function canPlay(state: GameState, card: Card): boolean {
     return true;
   }
   if (card.kind === "number" && top.kind === "number") {
+    return card.value === top.value;
+  }
+  if (state.mode === UNO_MODE.SHOWDOWN && card.kind === "showdownNumber") {
+    if (top.kind === "showdownNumber" || top.kind === "number") {
+      return card.value === top.value;
+    }
+  }
+  if (state.mode === UNO_MODE.SHOWDOWN && top.kind === "showdownNumber" && card.kind === "number") {
     return card.value === top.value;
   }
   return card.kind === top.kind;
@@ -512,6 +520,28 @@ function revealStackNumber(state: GameState): number {
 
 function stackResponseAmount(state: GameState, card: Card): number {
   return card.kind === "wildStackNumber" ? revealStackNumber(state) : drawCardValue(card.kind);
+}
+
+function resolveShowdown(state: GameState, owner: Player, target: Player, amount: number, cardId: string): void {
+  const roll = randomInt(state.seed, 2);
+  state.seed = nextSeed(state.seed);
+  const winner = roll === 0 ? owner : target;
+  const loser = roll === 0 ? target : owner;
+  drawCards(state, loser, amount);
+  state.events.push({
+    type: "showdown",
+    playerId: owner.id,
+    cardId,
+    text: `${winner.id}:${amount}`,
+    at: state.events.length,
+  });
+  state.replay.push({
+    playerId: owner.id,
+    action: "showdown",
+    cardId,
+    targetId: target.id,
+    count: amount,
+  });
 }
 
 function applyStackResolution(state: GameState, stack: PendingStack, accept: boolean | undefined): void {
@@ -1120,6 +1150,20 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
 
   let attackTargetId: string | undefined;
   let allWildTarget: Player | undefined;
+  let showdownTarget: Player | undefined;
+  let showdownAmount = 1;
+  if (state.mode === UNO_MODE.SHOWDOWN && card.kind === "wildShowdown") {
+    const requested = action.targetId ?? action.target_id;
+    if (requested === undefined || requested === "") {
+      return fail(previous, UNO_ERROR.MISSING_TARGET as "missing_target");
+    }
+    showdownTarget = state.players.find((player) => player.id === requested && player.id !== actor.id);
+    if (showdownTarget === undefined) {
+      return fail(previous, UNO_ERROR.MISSING_TARGET as "missing_target");
+    }
+    const requestedAmount = action.showdownAmount ?? action.showdown_amount ?? 1;
+    showdownAmount = Math.max(1, Math.min(3, Math.trunc(requestedAmount)));
+  }
   if (state.mode === UNO_MODE.ALL_WILD
     && (card.kind === "awTargetDrawTwo" || card.kind === "awForcedSwap")) {
     const requested = action.targetId ?? action.target_id;
@@ -1298,6 +1342,18 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
         amount: DEFAULT_RULES.drawTwoAmount,
         color: action.chosenColor,
       };
+      break;
+    case "showdownNumber":
+      if (state.mode === UNO_MODE.SHOWDOWN) {
+        resolveShowdown(state, actor, next, card.value ?? 1, card.id);
+      }
+      advance(state, 1);
+      break;
+    case "wildShowdown":
+      if (state.mode === UNO_MODE.SHOWDOWN && showdownTarget !== undefined) {
+        resolveShowdown(state, actor, showdownTarget, showdownAmount, card.id);
+      }
+      advance(state, 1);
       break;
     case "awWild":
       advance(state, 1);
@@ -1660,6 +1716,11 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
     && state.pendingHit === null && state.pendingRoulette === null) {
     finishIfEmpty(state, actor);
   }
+  if (state.mode === UNO_MODE.SHOWDOWN && (card.kind === "showdownNumber" || card.kind === "wildShowdown")
+    && actor.hand.length === 0 && !state.finished) {
+    state.finished = true;
+    state.winner = actor.id;
+  }
   if (state.mode === UNO_MODE.JUMP_IN && card.kind === "number" && !state.finished) {
     state.jumpWindow = { cardId: card.id, ownerId: actor.id, expiresAt: now + JUMP_WINDOW_MS };
   }
@@ -1674,6 +1735,10 @@ export function scoreHand(hand: Card[]): number {
       total += card.value ?? 0;
     } else if (card.kind === "awWild" || card.kind === "dare") {
       total += 20;
+    } else if (card.kind === "showdownNumber") {
+      total += card.value ?? 0;
+    } else if (card.kind === "wildShowdown") {
+      total += 40;
     } else if (NO_MERCY_WILD_KINDS.includes(card.kind)) {
       total += 50;
     } else {

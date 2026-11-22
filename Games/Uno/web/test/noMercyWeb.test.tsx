@@ -304,7 +304,7 @@ describe("Uno No Mercy mode integration", () => {
     const choices = Array.from(dialog?.querySelectorAll(".uno-target-choice") ?? []);
     expect(choices.map((choice) => choice.textContent)).toEqual(["Ana3 cards"]);
     await click(choices[0]);
-    expect(onPlay).toHaveBeenCalledWith("red-7-0", undefined, "a");
+    expect(onPlay).toHaveBeenCalledWith("red-7-0", undefined, "a", undefined);
 
     await act(async () => {
       root.unmount();

@@ -395,6 +395,32 @@ ${neonLabel("DOUBLE SPEED", 90, 196, 14, NEON.wild)}
 ${neonCaption(`wilddoublespeed ${copy}`, true)}`, NEON.wild);
 }
 
+function showdownNumberCard(color, value, copy) {
+  const c = NEON[color];
+  return surface(`
+<g transform="rotate(-12 90 128)">
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="9" filter="url(#soft)" opacity="0.7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="#fff" stroke-opacity="0.85" stroke-width="2"/>
+</g>
+<g style="filter:drop-shadow(0 0 10px ${c[0]})">
+<text x="90" y="140" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="62" fill="#ffffff">${value}</text>
+</g>
+${neonLabel("SHOWDOWN", 90, 195, 14, c)}
+${neonCaption(`${color} showdown ${value} ${copy}`, true)}`, c);
+}
+
+function wildShowdownCard(copy) {
+  return surface(`
+<g opacity="0.9">${QUADRANT}</g>
+<ellipse cx="90" cy="132" rx="60" ry="70" fill="#0A0A0E" fill-opacity="0.62" stroke="url(#edge)" stroke-width="8" transform="rotate(-12 90 132)"/>
+<g style="filter:drop-shadow(0 0 12px #18FFFF)">
+<text x="90" y="140" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="46" fill="#ffffff">S</text>
+</g>
+${neonLabel("WILD SHOWDOWN", 90, 196, 13, NEON.wild)}
+${neonCaption(`wildshowdown ${copy}`, true)}`, NEON.wild);
+}
+
 function dareCard(color, copy) {
   const c = NEON[color];
   return surface(`
@@ -719,6 +745,12 @@ for (let copy = 0; copy < 4; copy += 1) {
   writeFileSync(path.join(OUT, `wilddare-${copy}.svg`), wildDareCard(copy));
   count += 1;
 }
+for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
+  writeFileSync(path.join(OUT, `${color}-showdown-0.svg`), showdownNumberCard(color, 0, 0));
+  count += 1;
+}
+writeFileSync(path.join(OUT, "wildshowdown-0.svg"), wildShowdownCard(0));
+count += 1;
 for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
   writeFileSync(path.join(OUT, `${color}-swap1-0.svg`), swap1Card(color, 0));
   writeFileSync(path.join(OUT, `${color}-refreshhand-0.svg`), refreshHandCard(color, 0));

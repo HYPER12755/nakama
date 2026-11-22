@@ -2778,6 +2778,75 @@ test("wild dare can be completed without drawing", function()
   assert_equal(accepted.pending_challenge, nil, "challenge cleared")
 end)
 
+local function showdown_staged(hand, color, seats, seed)
+  local names = { "p1", "p2", "p3" }
+  local seat_list = {}
+  for index = 1, (seats or 3) do
+    seat_list[index] = { id = names[index], name = names[index] }
+  end
+  local game = rules.create_game(seed or 4242, seat_list, 0, "showdown")
+  game.turn = 1
+  game.direction = 1
+  game.current_color = color or "red"
+  game.drawn_card_id = nil
+  game.pending_challenge = nil
+  game.pending_stack = nil
+  game.pending_hit = nil
+  game.pending_roulette = nil
+  game.finished = false
+  game.winner = nil
+  game.events = {}
+  game.replay = {}
+  game.players[1].hand = hand
+  for index = 2, #game.players do
+    game.players[index].hand = {}
+  end
+  return game
+end
+
+local showdown_number = { id = "red-showdown-3-0", color = "red", kind = "showdownNumber", value = 3 }
+local wild_showdown = { id = "wildshowdown-0", color = nil, kind = "wildShowdown" }
+
+test("builds a 112 card showdown deck", function()
+  local deck = rules.build_deck("showdown")
+  assert_equal(#deck, 112, "deck size")
+  local showdowns = 0
+  local wild_showdowns = 0
+  for _, card in ipairs(deck) do
+    if card.kind == "showdownNumber" then showdowns = showdowns + 1 end
+    if card.kind == "wildShowdown" then wild_showdowns = wild_showdowns + 1 end
+  end
+  assert_equal(showdowns, 20, "showdown number count")
+  assert_equal(wild_showdowns, 4, "wild showdown count")
+end)
+
+test("showdown number makes one player draw the penalty", function()
+  local game = showdown_staged({ showdown_number }, "red", 3, 4242)
+  local played, ok = rules.apply_action(game, { type = "play", player_id = "p1", card_id = showdown_number.id })
+  assert_equal(ok, true, "played")
+  local event = played.events[#played.events]
+  assert_equal(event.type, "showdown", "showdown event")
+  local p1_change = #played.players[1].hand - 0
+  local p2_change = #played.players[2].hand
+  assert_equal(math.max(p1_change, p2_change), 3, "penalty")
+end)
+
+test("wild showdown chooses a target and penalty", function()
+  local game = showdown_staged({ wild_showdown }, "red", 3, 4242)
+  local played, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = wild_showdown.id,
+    target_id = "p3", showdown_amount = 3, chosen_color = "green",
+  })
+  assert_equal(ok, true, "played")
+  assert_equal(played.current_color, "green", "colour")
+  local event
+  for _, entry in ipairs(played.events) do
+    if entry.type == "showdown" then event = entry end
+  end
+  assert_equal(event ~= nil, true, "showdown event")
+  assert_equal(event.text, "p3:3", "event text")
+end)
+
 test("scores swap pack colour actions at 20 and wild actions at 50", function()
   assert_equal(rules.score_hand({ swap_one, refresh_hand }), 40, "colour action score")
   assert_equal(rules.score_hand({ force_trade, pass_hands }), 100, "wild action score")
