@@ -304,6 +304,30 @@ function reversePackWildCard(kind, copy) {
 <text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">${power ? "wildpowerreverse" : "wildnou"} ${copy}</text>`);
 }
 
+function stackPackColoredCard(color, kind, copy) {
+  const fill = COLORS[color];
+  const value = kind === "stack1" ? 1 : 2;
+  return frame(`${corner(fill, `+${value}`)}
+<ellipse cx="90" cy="132" rx="64" ry="80" fill="${fill}" transform="rotate(-14 90 132)"/>
+<text x="90" y="142" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="40" fill="#ffffff" stroke="#111827" stroke-width="2.5" paint-order="stroke">STACK +${value}</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">${color} ${kind} ${copy}</text>`);
+}
+
+function stackPackWildCard(kind, copy) {
+  const numbered = kind === "wildStackNumber";
+  const label = numbered ? "STACK #" : "STACK +3";
+  return frame(`<g>
+<path d="M9 23 A14 14 0 0 1 23 9 L157 9 A14 14 0 0 1 171 23 L90 135 Z" fill="${COLORS.red}"/>
+<path d="M171 23 A14 14 0 0 1 171 247 L90 135 Z" fill="${COLORS.yellow}"/>
+<path d="M171 247 A14 14 0 0 1 157 261 L23 261 A14 14 0 0 1 9 247 L90 135 Z" fill="${COLORS.green}"/>
+<path d="M9 247 A14 14 0 0 1 9 23 L90 135 Z" fill="${COLORS.blue}"/>
+</g>
+<ellipse cx="90" cy="132" rx="60" ry="78" fill="#0f172a" transform="rotate(-12 90 132)"/>
+<text x="90" y="142" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="42" fill="#ffffff">${numbered ? "#" : "+3"}</text>
+<text x="90" y="196" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="800" fill="#ffffff" stroke="#e8402a" stroke-width="4" paint-order="stroke">${label}</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">${numbered ? "wildstacknumber" : "wildstack3"} ${copy}</text>`);
+}
+
 const LIGHT_PALETTE = {
   red: [COLORS.red, "#ff8a75"],
   yellow: [COLORS.yellow, "#ffe680"],
@@ -538,6 +562,16 @@ for (const color of Object.keys(COLORS)) {
 for (let copy = 0; copy < 4; copy += 1) {
   writeFileSync(path.join(OUT, `wildpowerreverse-${copy}.svg`), reversePackWildCard("wildPowerReverse", copy));
   writeFileSync(path.join(OUT, `wildnou-${copy}.svg`), reversePackWildCard("wildNoU", copy));
+  count += 2;
+}
+for (const color of Object.keys(COLORS)) {
+  writeFileSync(path.join(OUT, `${color}-stack1-0.svg`), stackPackColoredCard(color, "stack1", 0));
+  writeFileSync(path.join(OUT, `${color}-stack2-0.svg`), stackPackColoredCard(color, "stack2", 0));
+  count += 2;
+}
+for (let copy = 0; copy < 4; copy += 1) {
+  writeFileSync(path.join(OUT, `wildstack3-${copy}.svg`), stackPackWildCard("wildStack3", copy));
+  writeFileSync(path.join(OUT, `wildstacknumber-${copy}.svg`), stackPackWildCard("wildStackNumber", copy));
   count += 2;
 }
 for (const color of Object.keys(COLORS)) {

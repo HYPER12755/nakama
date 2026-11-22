@@ -20,12 +20,18 @@ local WILD_KINDS = {
   wildDraw2 = true, wildDrawColor = true,
   wildForceTrade = true, wildPassHands = true,
   wildPowerReverse = true, wildNoU = true,
+  wildStack3 = true, wildStackNumber = true,
 }
 local WILD_COLOR_KINDS = {
   wild = true, wild4 = true, wildAttack = true, wildDraw6 = true,
   wildDraw10 = true, wildReverse4 = true, wildDraw2 = true, wildDrawColor = true,
   wildForceTrade = true, wildPassHands = true,
   wildPowerReverse = true, wildNoU = true,
+  wildStack3 = true, wildStackNumber = true,
+}
+
+local STACK_PACK_KINDS = {
+  stack1 = true, stack2 = true, wildStack3 = true, wildStackNumber = true,
 }
 
 local FLIP_COLOR_MAP = {
@@ -87,6 +93,9 @@ function rules.draw_card_value(kind)
   end
   if kind == "wildDraw6" then return rules.WILD_DRAW_SIX_AMOUNT end
   if kind == "wildDraw10" then return rules.WILD_DRAW_TEN_AMOUNT end
+  if kind == "stack1" then return 1 end
+  if kind == "stack2" then return rules.DRAW_TWO_AMOUNT end
+  if kind == "wildStack3" then return 3 end
   return 0
 end
 rules.DEFAULT_SEED = 123456789
@@ -284,11 +293,35 @@ local function build_reverse_pack_deck()
   return deck
 end
 
+local function build_stack_pack_deck()
+  local deck = {}
+  for _, color in ipairs(protocol.COLORS) do
+    for _, kind in ipairs({ "stack1", "stack2" }) do
+      deck[#deck + 1] = {
+        id = string.format("%s-%s-0", color, kind),
+        color = color,
+        kind = kind,
+      }
+    end
+  end
+  for _, kind in ipairs({ "wildStack3", "wildStackNumber" }) do
+    local kind_id = kind == "wildStack3" and "wildstack3" or "wildstacknumber"
+    for copy_index = 0, 3 do
+      deck[#deck + 1] = {
+        id = string.format("%s-%d", kind_id, copy_index),
+        color = nil,
+        kind = kind,
+      }
+    end
+  end
+  return deck
+end
+
 function rules.build_deck(mode)
   if mode == "flip" then
     return build_flip_deck()
   end
-  if mode == "reversePack" then
+  if mode == "reversePack" or mode == "stackPack" then
     local deck = {}
     for _, color in ipairs(protocol.COLORS) do
       for value = 0, 9 do
@@ -321,7 +354,7 @@ function rules.build_deck(mode)
         }
       end
     end
-    local pack = build_reverse_pack_deck()
+    local pack = mode == "stackPack" and build_stack_pack_deck() or build_reverse_pack_deck()
     for _, card in ipairs(pack) do
       deck[#deck + 1] = card
     end
@@ -549,6 +582,11 @@ function rules.legal_moves(state, player_id, now)
       local eligible = false
       if state.mode == "reversePack" then
         eligible = card.kind == "wildNoU"
+      elseif state.mode == "stackPack" then
+        eligible = STACK_PACK_KINDS[card.kind] == true
+          and (WILD_COLOR_KINDS[card.kind] == true
+            or STACK_PACK_KINDS[state.pending_stack.kind] == true
+            or card.color == state.pending_stack.color)
       elseif state.mode == "noMercy" then
         eligible = rules.draw_card_value(card.kind) >= (state.pending_stack.value or 0)
       else
@@ -661,7 +699,9 @@ function rules.create_game(seed, players, now, mode)
     or (rules_mode == "swapPack"
       and (starter.kind == "wildForceTrade" or starter.kind == "wildPassHands"))
     or (rules_mode == "reversePack"
-      and (starter.kind == "wildPowerReverse" or starter.kind == "wildNoU")) then
+      and (starter.kind == "wildPowerReverse" or starter.kind == "wildNoU"))
+    or (rules_mode == "stackPack"
+      and (starter.kind == "wildStack3" or starter.kind == "wildStackNumber")) then
     starter.color = most_common_color(dealt[1].hand, rules.colors_for_side("light"))
   end
 
@@ -919,7 +959,40 @@ player_index = function(state, player_id)
 end
 
 local function stack_amount(kind)
-  return kind == "draw2" and rules.DRAW_TWO_AMOUNT or rules.WILD_FOUR_AMOUNT
+  if kind == "draw2" then return rules.DRAW_TWO_AMOUNT end
+  if kind == "stack1" then return 1 end
+  if kind == "stack2" then return rules.DRAW_TWO_AMOUNT end
+  if kind == "wildStack3" then return 3 end
+  return rules.WILD_FOUR_AMOUNT
+end
+
+local function reveal_stack_number(state)
+  local revealed = {}
+  local budget = #state.draw_pile + #state.discard + 1
+  while budget > 0 do
+    budget = budget - 1
+    recycle_draw_pile(state)
+    local card = table.remove(state.draw_pile)
+    if card == nil then break end
+    revealed[#revealed + 1] = card
+    if card.kind == "number" and card.value ~= nil then
+      for index = #revealed, 1, -1 do
+        table.insert(state.discard, 1, revealed[index])
+      end
+      return math.max(1, card.value)
+    end
+  end
+  for index = #revealed, 1, -1 do
+    table.insert(state.discard, 1, revealed[index])
+  end
+  return 1
+end
+
+local function stack_response_amount(state, card)
+  if card.kind == "wildStackNumber" then
+    return reveal_stack_number(state)
+  end
+  return rules.draw_card_value(card.kind)
 end
 
 local function finish_deferred_winner(state, pending_winner_id)
@@ -975,7 +1048,8 @@ local function apply_stack_resolution(state, stack, accept)
     if not state.finished then
       state.turn = turn_before
     end
-    advance(state, (state.mode == "noMercy" or stack.kind == "draw2") and 1 or 2)
+    advance(state, (state.mode == "noMercy" or stack.kind == "draw2"
+      or (state.mode == "stackPack" and stack.kind ~= "wild4")) and 1 or 2)
     state.events[#state.events + 1] = {
       type = "draw",
       player_id = target.id,
@@ -1248,6 +1322,49 @@ function rules.apply_action(previous, action, now)
     local stack_card = actor.hand[stack_index]
     local no_mercy = state.mode == "noMercy"
     local card_value = rules.draw_card_value(stack_card.kind)
+    if state.mode == "stackPack" then
+      local stackable = STACK_PACK_KINDS[stack_card.kind] == true
+        and (WILD_COLOR_KINDS[stack_card.kind] == true
+          or STACK_PACK_KINDS[stack.kind] == true
+          or stack_card.color == stack.color)
+      if not stackable then
+        return fail(previous, protocol.ERROR.ILLEGAL_CARD)
+      end
+      if WILD_COLOR_KINDS[stack_card.kind] == true and action.chosen_color == nil then
+        return fail(previous, protocol.ERROR.MISSING_COLOR)
+      end
+      local actor_index = player_index(state, actor.id)
+      local target_id = state.players[next_active_index(state, actor_index)].id
+      local amount = stack_response_amount(state, stack_card)
+      table.remove(actor.hand, stack_index)
+      state.discard[#state.discard + 1] = stack_card
+      state.drawn_card_id = nil
+      state.current_color = action.chosen_color or stack_card.color or state.current_color
+      stack.kind = stack_card.kind
+      stack.amount = stack.amount + amount
+      stack.color = state.current_color
+      stack.owner_id = actor.id
+      stack.target_id = target_id
+      state.pending_challenge = nil
+      state.turn = player_index(state, target_id)
+      if #actor.hand == 0 and stack.pending_winner_id == nil then
+        stack.pending_winner_id = actor.id
+      end
+      state.events[#state.events + 1] = {
+        type = "stack",
+        player_id = actor.id,
+        card_id = stack_card.id,
+        text = tostring(amount),
+        at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = actor.id,
+        action = "stack",
+        card_id = stack_card.id,
+        count = amount,
+      }
+      return state, true
+    end
     if state.mode == "reversePack" then
       if stack_card.kind ~= "wildNoU" then
         return fail(previous, protocol.ERROR.ILLEGAL_CARD)
@@ -1718,9 +1835,42 @@ function rules.apply_action(previous, action, now)
 
   local no_mercy = state.mode == "noMercy"
   local reverse_pack = state.mode == "reversePack"
+  local stack_pack = state.mode == "stackPack"
   local next_player = state.players[target_index(state)]
   local actor_index = player_index(state, actor.id)
-  if card.kind == "reverseDraw2" then
+  if card.kind == "stack1" or card.kind == "stack2"
+    or card.kind == "wildStack3" or card.kind == "wildStackNumber" then
+    if stack_pack then
+      local amount = card.kind == "wildStackNumber"
+        and reveal_stack_number(state)
+        or rules.draw_card_value(card.kind)
+      state.pending_stack = {
+        kind = card.kind,
+        amount = amount,
+        color = card.color or action.chosen_color,
+        owner_id = actor.id,
+        target_id = next_player.id,
+      }
+      if #actor.hand == 0 then
+        state.pending_stack.pending_winner_id = actor.id
+      end
+      state.events[#state.events + 1] = {
+        type = card.kind == "wildStackNumber" and "stackNumber" or "stack",
+        player_id = actor.id,
+        card_id = card.id,
+        text = tostring(amount),
+        at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = actor.id,
+        action = card.kind == "wildStackNumber" and "stackNumber" or "stack",
+        card_id = card.id,
+        color = action.chosen_color,
+        count = amount,
+      }
+    end
+    advance(state, 1)
+  elseif card.kind == "reverseDraw2" then
     if reverse_pack then
       state.direction = state.direction == 1 and -1 or 1
       local target_id = state.players[next_active_index(state, actor_index)].id
@@ -1769,10 +1919,11 @@ function rules.apply_action(previous, action, now)
       advance(state, 1)
     end
   elseif card.kind == "draw2" then
-    if state.mode == "progressive" or reverse_pack then
+    if state.mode == "progressive" or reverse_pack or stack_pack then
       state.pending_stack = {
         kind = "draw2",
         amount = rules.DRAW_TWO_AMOUNT,
+        color = stack_pack and (card.color or state.current_color) or nil,
         owner_id = actor.id,
         target_id = next_player.id,
       }
@@ -1861,12 +2012,12 @@ function rules.apply_action(previous, action, now)
       target_id = next_player.id,
       legal = wild_challenge_legal,
     }
-    if reverse_pack then
+    if reverse_pack or stack_pack then
       state.pending_challenge.amount = rules.WILD_FOUR_AMOUNT
       state.pending_challenge.kind = "wild4"
       state.pending_challenge.color = action.chosen_color
     end
-    if state.mode == "progressive" then
+    if state.mode == "progressive" or stack_pack then
       state.pending_stack = {
         kind = "wild4",
         amount = rules.WILD_FOUR_AMOUNT,

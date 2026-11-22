@@ -19,7 +19,8 @@ export type GameMode =
   | "noMercy"
   | "flip"
   | "swapPack"
-  | "reversePack";
+  | "reversePack"
+  | "stackPack";
 
 export type CardKind =
   | "number"
@@ -50,7 +51,11 @@ export type CardKind =
   | "reverseDraw2"
   | "reverseSkip"
   | "wildPowerReverse"
-  | "wildNoU";
+  | "wildNoU"
+  | "stack1"
+  | "stack2"
+  | "wildStack3"
+  | "wildStackNumber";
 
 export interface Card {
   id: string;
@@ -106,7 +111,17 @@ export interface PendingChallenge {
   color?: Color;
 }
 
-export type StackKind = "draw2" | "wild4" | "draw4" | "wildReverse4" | "wildDraw6" | "wildDraw10";
+export type StackKind =
+  | "draw2"
+  | "wild4"
+  | "draw4"
+  | "wildReverse4"
+  | "wildDraw6"
+  | "wildDraw10"
+  | "stack1"
+  | "stack2"
+  | "wildStack3"
+  | "wildStackNumber";
 
 export interface PendingStack {
   kind: StackKind;

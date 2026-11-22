@@ -44,7 +44,7 @@ interface PendingTrade {
 }
 
 const COLOUR_STACK_KINDS = new Set<Card["kind"]>([
-  "wild4", "wildDraw6", "wildDraw10", "wildReverse4", "wildNoU",
+  "wild4", "wildDraw6", "wildDraw10", "wildReverse4", "wildNoU", "wildStack3", "wildStackNumber",
 ]);
 
 function isWild(card: Card): boolean {
@@ -66,6 +66,10 @@ function cardHint(card: Card): string | undefined {
   if (card.kind === "reverseSkip") return "Reverse and skip the next player";
   if (card.kind === "wildPowerReverse") return "Reverse, choose a colour and play again";
   if (card.kind === "wildNoU") return "Bounce a draw penalty back and reverse play";
+  if (card.kind === "stack1") return "Make the next player draw 1 and lose a turn";
+  if (card.kind === "stack2") return "Make the next player draw 2 and lose a turn";
+  if (card.kind === "wildStack3") return "Choose a colour and make the next player draw 3";
+  if (card.kind === "wildStackNumber") return "Choose a colour; a revealed number sets the draw";
   return undefined;
 }
 
@@ -109,6 +113,10 @@ function stackKindLabel(kind: string): string {
   if (kind === "wildDraw6") return "Wild Six";
   if (kind === "wildDraw10") return "Wild Ten";
   if (kind === "wildReverse4") return "Wild Reverse Four";
+  if (kind === "stack1") return "Stack One";
+  if (kind === "stack2") return "Stack Two";
+  if (kind === "wildStack3") return "Wild Stack Three";
+  if (kind === "wildStackNumber") return "Wild Stack Number";
   return "Draw Two";
 }
 
@@ -192,6 +200,7 @@ export function UnoBoardStage({
   const challengeTarget =
     view.pendingChallenge !== null && view.pendingChallenge.targetId === view.myUserId;
   const reversePack = effectiveMode === UNO_MODE.REVERSE_PACK;
+  const stackPack = effectiveMode === UNO_MODE.STACK_PACK;
   const noUCards = reversePack
     ? hand.filter((card) => card.kind === "wildNoU")
     : [];
@@ -202,6 +211,8 @@ export function UnoBoardStage({
     ? []
     : reversePack
       ? legalNoUCards
+      : stackPack
+        ? hand.filter((card) => legal.has(card.id))
       : hand.filter((card) => noMercy
         ? drawCardValue(card.kind) > 0 && drawCardValue(card.kind) >= (pendingStack.value ?? 0)
         : pendingStack.kind === "wild4" ? card.kind === "wild4" : card.kind === "draw2");
@@ -567,7 +578,9 @@ export function UnoBoardStage({
                     <span>
                       {reversePack
                         ? "NO U!"
-                        : noMercy
+                        : stackPack
+                          ? `Stack ${stackKindLabel(card.kind)}`
+                          : noMercy
                           ? `Stack +${drawCardValue(card.kind)}`
                           : `Stack ${stackKindLabel(card.kind)}`}
                     </span>

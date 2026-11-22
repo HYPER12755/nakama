@@ -2404,6 +2404,117 @@ test("reverse pack stack target can fire Wild NO U back at the owner", function(
   assert_equal(answered.direction, -1, "direction")
 end)
 
+local function stack_staged(hand, color, seats, seed)
+  local names = { "p1", "p2", "p3" }
+  local seat_list = {}
+  for index = 1, (seats or 3) do
+    seat_list[index] = { id = names[index], name = names[index] }
+  end
+  local game = rules.create_game(seed or 4242, seat_list, 0, "stackPack")
+  game.turn = 1
+  game.direction = 1
+  game.seed = seed or 4242
+  game.current_color = color or "red"
+  game.drawn_card_id = nil
+  game.pending_challenge = nil
+  game.pending_stack = nil
+  game.pending_hit = nil
+  game.pending_roulette = nil
+  game.finished = false
+  game.winner = nil
+  game.events = {}
+  game.replay = {}
+  game.players[1].hand = hand
+  for index = 2, #game.players do
+    game.players[index].hand = {}
+  end
+  return game
+end
+
+local stack_one = { id = "blue-stack1-0", color = "blue", kind = "stack1" }
+local red_stack_one = { id = "red-stack1-0", color = "red", kind = "stack1" }
+local stack_two = { id = "green-stack2-0", color = "green", kind = "stack2" }
+local wild_stack_three = { id = "wildstack3-0", color = nil, kind = "wildStack3" }
+local wild_stack_number = { id = "wildstacknumber-0", color = nil, kind = "wildStackNumber" }
+
+test("builds a stack pack deck with sixteen added cards", function()
+  local deck = rules.build_deck("stackPack")
+  assert_equal(#deck, 124, "deck size")
+  local counts = { stack1 = 0, stack2 = 0, wildStack3 = 0, wildStackNumber = 0 }
+  for _, card in ipairs(deck) do
+    if counts[card.kind] ~= nil then
+      counts[card.kind] = counts[card.kind] + 1
+    end
+  end
+  assert_equal(counts.stack1, 4, "stack one count")
+  assert_equal(counts.stack2, 4, "stack two count")
+  assert_equal(counts.wildStack3, 4, "wild stack three count")
+  assert_equal(counts.wildStackNumber, 4, "wild stack number count")
+end)
+
+test("stack pack stack one can be chained by stack two", function()
+  local game = stack_staged({ stack_one }, "blue", 3, 4242)
+  game.players[2].hand = { stack_two, wild_stack_three }
+  local played, ok = rules.apply_action(game, { type = "play", player_id = "p1", card_id = stack_one.id })
+  assert_equal(ok, true, "played")
+  assert_equal(played.pending_stack ~= nil, true, "pending stack")
+  assert_equal(played.pending_stack.kind, "stack1", "stack kind")
+  assert_equal(played.pending_stack.amount, 1, "stack amount")
+  assert_equal(played.pending_stack.color, "blue", "stack colour")
+  local moves = rules.legal_moves(played, "p2")
+  local found = false
+  for _, id in ipairs(moves.cards) do
+    if id == stack_two.id then found = true end
+  end
+  assert_equal(found, true, "stack two response")
+  local chained, chained_ok = rules.apply_action(played, {
+    type = "play", player_id = "p2", card_id = stack_two.id,
+  })
+  assert_equal(chained_ok, true, "chained")
+  assert_equal(chained.pending_stack.amount, 3, "combined amount")
+  assert_equal(chained.pending_stack.kind, "stack2", "combined kind")
+  assert_equal(chained.pending_stack.target_id, "p3", "combined target")
+end)
+
+test("wild stack three answers any stack and chooses a colour", function()
+  local game = stack_staged({ stack_one }, "blue", 3, 4242)
+  game.players[2].hand = { wild_stack_three }
+
+  local played, _ = rules.apply_action(game, { type = "play", player_id = "p1", card_id = stack_one.id })
+  local answered, ok = rules.apply_action(played, {
+    type = "play", player_id = "p2", card_id = wild_stack_three.id, chosen_color = "yellow",
+  })
+  assert_equal(ok, true, "answered")
+  assert_equal(answered.pending_stack.amount, 4, "combined amount")
+  assert_equal(answered.pending_stack.kind, "wildStack3", "combined kind")
+  assert_equal(answered.pending_stack.color, "yellow", "combined colour")
+end)
+
+test("wild stack number reveals a deterministic positive amount", function()
+  local game = stack_staged({ wild_stack_number }, "blue", 3, 4242)
+  local played, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = wild_stack_number.id, chosen_color = "green",
+  })
+  assert_equal(ok, true, "played")
+  assert_equal(played.pending_stack ~= nil, true, "pending stack")
+  assert_equal(played.pending_stack.kind, "wildStackNumber", "stack kind")
+  assert_equal(played.pending_stack.amount >= 1, true, "positive amount")
+  assert_equal(played.pending_stack.color, "green", "stack colour")
+end)
+
+test("stack pack stack card clears a wild four challenge", function()
+  local game = stack_staged({ { id = "wild4-0", color = nil, kind = "wild4" } }, "blue", 3, 4242)
+  game.players[2].hand = { red_stack_one }
+  local wild, _ = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = "wild4-0", chosen_color = "red",
+  })
+  assert_equal(wild.pending_challenge ~= nil, true, "wild four challenge")
+  local stacked, ok = rules.apply_action(wild, { type = "play", player_id = "p2", card_id = red_stack_one.id })
+  assert_equal(ok, true, "stacked")
+  assert_equal(stacked.pending_challenge, nil, "challenge cleared")
+  assert_equal(stacked.pending_stack.amount, 5, "combined amount")
+end)
+
 test("scores swap pack colour actions at 20 and wild actions at 50", function()
   assert_equal(rules.score_hand({ swap_one, refresh_hand }), 40, "colour action score")
   assert_equal(rules.score_hand({ force_trade, pass_hands }), 100, "wild action score")

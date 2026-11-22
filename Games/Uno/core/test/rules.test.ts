@@ -732,6 +732,91 @@ describe("Uno Progressive house rule", () => {
 
 });
 
+describe("Uno Stack Pack", () => {
+  const stackOne: Card = { id: "blue-stack1-0", color: "blue", kind: "stack1" };
+  const redStackOne: Card = { id: "red-stack1-0", color: "red", kind: "stack1" };
+  const stackTwo: Card = { id: "green-stack2-0", color: "green", kind: "stack2" };
+  const wildStackThree: Card = { id: "wildstack3-0", color: null, kind: "wildStack3" };
+  const wildStackNumber: Card = { id: "wildstacknumber-0", color: null, kind: "wildStackNumber" };
+
+  it("builds a Stack Pack deck with sixteen added cards", () => {
+    const deck = buildDeck("stackPack");
+    expect(deck).toHaveLength(124);
+    for (const kind of ["stack1", "stack2", "wildStack3", "wildStackNumber"] as CardKind[]) {
+      expect(deck.filter((card) => card.kind === kind)).toHaveLength(4);
+    }
+  });
+
+  it("starts a Stack One penalty and lets the target chain a Stack Two", () => {
+    const game = stagedGame([stackOne], "blue", "stackPack");
+    game.players[1].hand = [stackTwo, wildStackThree];
+    const played = applyAction(game, { type: "play", playerId: "p1", cardId: stackOne.id });
+    expect(played.state.pendingStack).toMatchObject({
+      kind: "stack1", amount: 1, color: "blue", targetId: "p2",
+    });
+    expect(legalMoves(played.state, "p2").cards).toContain(stackTwo.id);
+    expect(legalMoves(played.state, "p2").cards).toContain(wildStackThree.id);
+
+    const chained = applyAction(played.state, { type: "play", playerId: "p2", cardId: stackTwo.id });
+    expect(chained.state.pendingStack?.amount).toBe(3);
+    expect(chained.state.pendingStack?.kind).toBe("stack2");
+    expect(chained.state.pendingStack?.targetId).toBe("p3");
+    expect(chained.state.events.at(-1)?.type).toBe("stack");
+    expect(chained.state.replay.at(-1)).toMatchObject({ action: "stack", count: 2 });
+  });
+
+  it("lets a coloured stack answer a matching Draw Two", () => {
+    const blueStackTwo: Card = { id: "blue-stack2-0", color: "blue", kind: "stack2" };
+    const game = stagedGame([blueDrawTwo], "blue", "stackPack");
+    game.players[1].hand = [stackTwo, blueStackTwo];
+    const draw = applyAction(game, { type: "play", playerId: "p1", cardId: blueDrawTwo.id });
+    expect(draw.state.pendingStack).toMatchObject({ kind: "draw2", amount: 2, color: "blue" });
+    expect(legalMoves(draw.state, "p2").cards).not.toContain(stackTwo.id);
+    expect(legalMoves(draw.state, "p2").cards).toContain(blueStackTwo.id);
+    const answered = applyAction(draw.state, { type: "play", playerId: "p2", cardId: blueStackTwo.id });
+    expect(answered.state.pendingStack?.amount).toBe(4);
+  });
+
+  it("lets Wild Stack Three answer any stack and choose the colour", () => {
+    const game = stagedGame([stackOne], "blue", "stackPack");
+    game.players[1].hand = [wildStackThree];
+    const played = applyAction(game, { type: "play", playerId: "p1", cardId: stackOne.id });
+    const answered = applyAction(played.state, {
+      type: "play", playerId: "p2", cardId: wildStackThree.id, chosenColor: "yellow",
+    });
+    expect(answered.ok).toBe(true);
+    expect(answered.state.pendingStack).toMatchObject({
+      kind: "wildStack3", amount: 4, color: "yellow", targetId: "p3",
+    });
+    expect(answered.state.currentColor).toBe("yellow");
+  });
+
+  it("reveals a deterministic Wild Stack Number amount", () => {
+    const game = stagedGame([wildStackNumber], "blue", "stackPack");
+    const played = applyAction(game, {
+      type: "play", playerId: "p1", cardId: wildStackNumber.id, chosenColor: "green",
+    });
+    expect(played.ok).toBe(true);
+    expect(played.state.pendingStack?.kind).toBe("wildStackNumber");
+    expect(played.state.pendingStack?.amount).toBeGreaterThanOrEqual(1);
+    expect(played.state.pendingStack?.color).toBe("green");
+    expect(played.state.events.at(-1)?.type).toBe("stackNumber");
+  });
+
+  it("stacks a Wild Four with a coloured Stack card and clears the challenge", () => {
+    const game = stagedGame([wildFour], "blue", "stackPack");
+    game.players[1].hand = [redStackOne];
+    const wild = applyAction(game, {
+      type: "play", playerId: "p1", cardId: wildFour.id, chosenColor: "red",
+    });
+    expect(wild.state.pendingChallenge).not.toBeNull();
+    const stacked = applyAction(wild.state, { type: "play", playerId: "p2", cardId: redStackOne.id });
+    expect(stacked.ok).toBe(true);
+    expect(stacked.state.pendingChallenge).toBeNull();
+    expect(stacked.state.pendingStack?.amount).toBe(5);
+  });
+});
+
 describe("Uno Reverse Pack", () => {
   it("builds a Reverse Pack deck with sixteen added cards", () => {
     const deck = buildDeck("reversePack");

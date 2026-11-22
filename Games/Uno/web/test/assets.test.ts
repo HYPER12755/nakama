@@ -9,7 +9,7 @@ describe("Uno card assets", () => {
     for (const set of ["cards", "cards-neon"]) {
       const dir = path.resolve(path.dirname(new URL(import.meta.url).pathname), `../public/${set}`);
       const files = readdirSync(dir).filter((name) => name.endsWith(".svg"));
-      expect(files, `${set} count`).toHaveLength(433);
+      expect(files, `${set} count`).toHaveLength(449);
       expect(files, `${set} back`).toContain("card-back.svg");
       expect(files, `${set} number`).toContain("red-0-0.svg");
       expect(files, `${set} action`).toContain("blue-draw2-1.svg");
@@ -149,6 +149,34 @@ describe("Uno card assets", () => {
         ["blue-reverseskip-0.svg", "REVERSE SKIP"],
         ["wildpowerreverse-0.svg", "POWER REVERSE"],
         ["wildnou-0.svg", "NO U!"],
+      ]) {
+        expect(readFileSync(path.join(dir, name), "utf8"), `${set}/${name} label`).toContain(label);
+      }
+    }
+  });
+
+  it("ships Stack Pack card art in both sets", () => {
+    const expected: string[] = [];
+    for (const color of ["red", "yellow", "green", "blue"]) {
+      expected.push(`${color}-stack1-0.svg`);
+      expected.push(`${color}-stack2-0.svg`);
+    }
+    for (let copy = 0; copy < 4; copy += 1) {
+      expected.push(`wildstack3-${copy}.svg`);
+      expected.push(`wildstacknumber-${copy}.svg`);
+    }
+    expect(expected).toHaveLength(16);
+    for (const set of ["cards", "cards-neon"]) {
+      const dir = path.resolve(path.dirname(new URL(import.meta.url).pathname), `../public/${set}`);
+      const files = readdirSync(dir).filter((name) => name.endsWith(".svg"));
+      for (const name of expected) {
+        expect(files, `${set}/${name}`).toContain(name);
+      }
+      for (const [name, label] of [
+        ["red-stack1-0.svg", "STACK +1"],
+        ["blue-stack2-0.svg", "STACK +2"],
+        ["wildstack3-0.svg", "STACK +3"],
+        ["wildstacknumber-0.svg", "STACK #"],
       ]) {
         expect(readFileSync(path.join(dir, name), "utf8"), `${set}/${name} label`).toContain(label);
       }

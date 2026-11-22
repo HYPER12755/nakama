@@ -20,6 +20,7 @@ export const NO_MERCY_MODE: RulesMode = UNO_MODE.NO_MERCY;
 const ATTACK_MODE: RulesMode = UNO_MODE.ATTACK;
 export const SWAP_PACK_MODE: RulesMode = UNO_MODE.SWAP_PACK;
 export const REVERSE_PACK_MODE: RulesMode = UNO_MODE.REVERSE_PACK;
+export const STACK_PACK_MODE: RulesMode = UNO_MODE.STACK_PACK;
 
 const JUMP_IN_ALIASES = ["jumpIn", "jump_in", "jump-in", "jumpin"];
 const NO_MERCY_ALIASES = ["noMercy", "no_mercy", "no-mercy", "nomercy"];
@@ -60,6 +61,9 @@ export function rulesModeLabel(mode: RulesMode | undefined): string {
   }
   if (value === REVERSE_PACK_MODE) {
     return "Reverse Pack";
+  }
+  if (value === STACK_PACK_MODE) {
+    return "Stack Pack";
   }
   return value === "sevenO" ? "Seven-O" : "Classic";
 }
@@ -137,7 +141,8 @@ export function normalizeJumpWindow(value: unknown): JumpWindow | null {
 }
 
 export type PendingStackKind =
-  | "draw2" | "wild4" | "draw4" | "wildDraw6" | "wildDraw10" | "wildReverse4";
+  | "draw2" | "wild4" | "draw4" | "wildDraw6" | "wildDraw10" | "wildReverse4"
+  | "stack1" | "stack2" | "wildStack3" | "wildStackNumber";
 
 export interface PendingStack {
   ownerId: string;
@@ -164,6 +169,10 @@ function normalizeStackKind(value: unknown): PendingStackKind {
   if (raw === "wildreverse4" || raw === "wild_reverse4") {
     return "wildReverse4";
   }
+  if (raw === "stack1") return "stack1";
+  if (raw === "stack2") return "stack2";
+  if (raw === "wildstack3" || raw === "wild_stack3") return "wildStack3";
+  if (raw === "wildstacknumber" || raw === "wild_stack_number") return "wildStackNumber";
   return "draw2";
 }
 

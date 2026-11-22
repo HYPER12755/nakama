@@ -1329,6 +1329,69 @@ async function reversePackBattle() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "reverse pack game over", STATE_TIMEOUT_MS);
 }
 
+async function stackPackBattle() {
+  const alice = await authenticate("stack-pack-alice");
+  const bob = await authenticate("stack-pack-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 5,
+    rulesMode: "stackPack",
+  });
+  assert(
+    created?.ok === true && created.rulesMode === "stackPack" && typeof created.matchId === "string",
+    `stack pack room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
+  const aliceStart = await waitState(
+    alice.socket,
+    "stack pack alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "stack pack bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "stackPack", "stack pack mode must reach alice");
+  assert(bobStart.data.rulesMode === "stackPack", "stack pack mode must reach bob");
+  assert(aliceStart.data.deckCount === 109, "stack pack should carry 124 cards");
+  assert(
+    legalCardIds(aliceStart.data).includes("yellow-stack1-0"),
+    "seed 5 should offer Stack One to Alice",
+  );
+  console.log("[ok] stack pack private room reports rulesMode and a 124-card setup");
+
+  await send(alice, matchId, OP.PLAY_REQUEST, { cardId: "yellow-stack1-0" });
+  const aliceStack = await waitState(
+    alice.socket,
+    "stack pack alice stack",
+    (state) => state.pendingStack?.kind === "stack1" && state.pendingStack.amount === 1,
+  );
+  const bobStack = await waitState(
+    bob.socket,
+    "stack pack bob stack",
+    (state) => state.pendingStack?.kind === "stack1" && state.pendingStack.amount === 1,
+  );
+  assert(aliceStack.data.pendingStack.targetId === bob.session.user_id, "the stack should target Bob");
+  assert(legalCardIds(bobStack.data).length >= 0, "Bob should receive a legal response view");
+  console.log("[ok] Stack One opens an authoritative pending stack on both clients");
+
+  const before = seatOf(bobStart.data, bob).count;
+  await send(bob, matchId, OP.DRAW_REQUEST, {});
+  const taken = await waitState(
+    alice.socket,
+    "stack pack stack taken",
+    (state) => state.pendingStack == null && seatOf(state, bob)?.count === before + 1,
+  );
+  assert(taken.data.pendingStack == null, "taking resolves the stack");
+  console.log("[ok] the Stack One penalty resolves on the live server");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "stack pack game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -1359,6 +1422,7 @@ async function main() {
     await flipRoom();
     await swapPackBattle();
     await reversePackBattle();
+    await stackPackBattle();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

@@ -23,12 +23,16 @@ import {
 const NO_MERCY_WILD_KINDS: CardKind[] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4", "wildRoulette",
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands", "wildPowerReverse", "wildNoU",
+  "wildStack3", "wildStackNumber",
 ];
 
 const WILD_COLOR_KINDS: CardKind[] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4",
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands", "wildPowerReverse", "wildNoU",
+  "wildStack3", "wildStackNumber",
 ];
+
+const STACK_PACK_KINDS: CardKind[] = ["stack1", "stack2", "wildStack3", "wildStackNumber"];
 
 export function drawCardValue(kind: CardKind): number {
   switch (kind) {
@@ -38,6 +42,9 @@ export function drawCardValue(kind: CardKind): number {
     case "wildReverse4": return DEFAULT_RULES.drawFourAmount;
     case "wildDraw6": return DEFAULT_RULES.wildDrawSixAmount;
     case "wildDraw10": return DEFAULT_RULES.wildDrawTenAmount;
+    case "stack1": return 1;
+    case "stack2": return 2;
+    case "wildStack3": return 3;
     default: return 0;
   }
 }
@@ -142,6 +149,11 @@ export function legalMoves(state: GameState, playerId: string, now = 0): LegalMo
     const cards = stackPlayer.hand
       .filter((card) => state.mode === UNO_MODE.REVERSE_PACK
         ? card.kind === "wildNoU"
+        : state.mode === UNO_MODE.STACK_PACK
+          ? STACK_PACK_KINDS.includes(card.kind)
+            && (WILD_COLOR_KINDS.includes(card.kind)
+              || STACK_PACK_KINDS.includes(stack.kind)
+              || card.color === stack.color)
         : state.mode === UNO_MODE.NO_MERCY
           ? drawCardValue(card.kind) >= (stack.value ?? 0)
           : card.kind === stack.kind)
@@ -225,7 +237,9 @@ export function createGame(
     || (rulesMode === UNO_MODE.SWAP_PACK
       && (starter.kind === "wildForceTrade" || starter.kind === "wildPassHands"))
     || (rulesMode === UNO_MODE.REVERSE_PACK
-      && (starter.kind === "wildPowerReverse" || starter.kind === "wildNoU"))) {
+      && (starter.kind === "wildPowerReverse" || starter.kind === "wildNoU"))
+    || (rulesMode === UNO_MODE.STACK_PACK
+      && (starter.kind === "wildStack3" || starter.kind === "wildStackNumber"))) {
     starter.color = mostCommonColor(dealt[0].hand, colorsForSide("light"));
   }
   const color = starter.color;
@@ -458,7 +472,35 @@ function finishDeferredWinner(state: GameState, pendingWinnerId: string | undefi
 }
 
 function stackAmount(kind: PendingStack["kind"]): number {
-  return kind === "draw2" ? DEFAULT_RULES.drawTwoAmount : DEFAULT_RULES.wildFourAmount;
+  if (kind === "draw2") return DEFAULT_RULES.drawTwoAmount;
+  if (kind === "stack1") return 1;
+  if (kind === "stack2") return DEFAULT_RULES.drawTwoAmount;
+  if (kind === "wildStack3") return 3;
+  return DEFAULT_RULES.wildFourAmount;
+}
+
+function revealStackNumber(state: GameState): number {
+  const revealed: Card[] = [];
+  let budget = state.drawPile.length + state.discard.length + 1;
+  while (budget > 0) {
+    budget -= 1;
+    recycleDrawPile(state);
+    const card = state.drawPile.pop();
+    if (card === undefined) break;
+    revealed.push(card);
+    if (card.kind === "number" && card.value !== undefined) {
+      state.discard = [...revealed, ...state.discard];
+      return Math.max(1, card.value);
+    }
+  }
+  if (revealed.length > 0) {
+    state.discard = [...revealed, ...state.discard];
+  }
+  return 1;
+}
+
+function stackResponseAmount(state: GameState, card: Card): number {
+  return card.kind === "wildStackNumber" ? revealStackNumber(state) : drawCardValue(card.kind);
 }
 
 function applyStackResolution(state: GameState, stack: PendingStack, accept: boolean | undefined): void {
@@ -490,7 +532,8 @@ function applyStackResolution(state: GameState, stack: PendingStack, accept: boo
     if (!state.finished) {
       state.turn = turnBefore;
     }
-    advance(state, state.mode === UNO_MODE.NO_MERCY || stack.kind === "draw2" ? 1 : 2);
+    advance(state, state.mode === UNO_MODE.NO_MERCY || stack.kind === "draw2"
+      || (state.mode === UNO_MODE.STACK_PACK && stack.kind !== "wild4") ? 1 : 2);
     state.events.push({ type: "draw", playerId: target.id, at: state.events.length });
     state.replay.push({ playerId: target.id, action: "draw" });
   }
@@ -722,7 +765,51 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
     const stackCard = actor.hand[stackIndex];
     const noMercy = state.mode === UNO_MODE.NO_MERCY;
     const reversePack = state.mode === UNO_MODE.REVERSE_PACK;
+    const stackPack = state.mode === UNO_MODE.STACK_PACK;
     const cardValue = drawCardValue(stackCard.kind);
+    if (stackPack) {
+      const stackable = STACK_PACK_KINDS.includes(stackCard.kind)
+        && (WILD_COLOR_KINDS.includes(stackCard.kind)
+          || STACK_PACK_KINDS.includes(stack.kind)
+          || stackCard.color === stack.color);
+      if (!stackable) {
+        return fail(previous, UNO_ERROR.ILLEGAL_CARD as "illegal_card");
+      }
+      if (WILD_COLOR_KINDS.includes(stackCard.kind) && action.chosenColor === undefined) {
+        return fail(previous, UNO_ERROR.MISSING_COLOR as "missing_color");
+      }
+      const actorIndex = state.players.findIndex((player) => player.id === actor.id);
+      const targetId = state.players[nextActiveIndex(state, actorIndex)].id;
+      const amount = stackResponseAmount(state, stackCard);
+      actor.hand.splice(stackIndex, 1);
+      state.discard.push(stackCard);
+      state.drawnCardId = null;
+      state.currentColor = action.chosenColor ?? stackCard.color ?? state.currentColor;
+      stack.kind = stackCard.kind as PendingStack["kind"];
+      stack.amount += amount;
+      stack.color = state.currentColor;
+      stack.ownerId = actor.id;
+      stack.targetId = targetId;
+      state.pendingChallenge = null;
+      state.turn = state.players.findIndex((player) => player.id === targetId);
+      if (actor.hand.length === 0 && stack.pendingWinnerId === undefined) {
+        stack.pendingWinnerId = actor.id;
+      }
+      state.events.push({
+        type: "stack",
+        playerId: actor.id,
+        cardId: stackCard.id,
+        text: String(amount),
+        at: state.events.length,
+      });
+      state.replay.push({
+        playerId: actor.id,
+        action: "stack",
+        cardId: stackCard.id,
+        count: amount,
+      });
+      return { state, ok: true };
+    }
     if (reversePack) {
       if (stackCard.kind !== "wildNoU") {
         return fail(previous, UNO_ERROR.ILLEGAL_CARD as "illegal_card");
@@ -1086,9 +1173,45 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
 
   const noMercy = state.mode === UNO_MODE.NO_MERCY;
   const reversePack = state.mode === UNO_MODE.REVERSE_PACK;
+  const stackPack = state.mode === UNO_MODE.STACK_PACK;
   const next = state.players[targetIndex(state)];
   const actorIndex = state.players.findIndex((player) => player.id === actor.id);
   switch (card.kind) {
+    case "stack1":
+    case "stack2":
+    case "wildStack3":
+    case "wildStackNumber":
+      if (stackPack) {
+        const amount = card.kind === "wildStackNumber"
+          ? revealStackNumber(state)
+          : drawCardValue(card.kind);
+        state.pendingStack = {
+          kind: card.kind as PendingStack["kind"],
+          amount,
+          color: card.color ?? action.chosenColor,
+          ownerId: actor.id,
+          targetId: next.id,
+          ...(actor.hand.length === 0 ? { pendingWinnerId: actor.id } : {}),
+        };
+        state.events.push({
+          type: card.kind === "wildStackNumber" ? "stackNumber" : "stack",
+          playerId: actor.id,
+          cardId: card.id,
+          text: String(amount),
+          at: state.events.length,
+        });
+        state.replay.push({
+          playerId: actor.id,
+          action: card.kind === "wildStackNumber" ? "stackNumber" : "stack",
+          cardId: card.id,
+          color: action.chosenColor,
+          count: amount,
+        });
+        advance(state, 1);
+      } else {
+        advance(state, 1);
+      }
+      break;
     case "reverseDraw2":
       if (reversePack) {
         state.direction = state.direction === 1 ? -1 : 1;
@@ -1142,12 +1265,13 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
     case "skipEveryone":
       break;
     case "draw2":
-      if (state.mode === UNO_MODE.PROGRESSIVE || reversePack) {
+      if (state.mode === UNO_MODE.PROGRESSIVE || reversePack || stackPack) {
         state.pendingStack = {
           kind: "draw2",
           amount: DEFAULT_RULES.drawTwoAmount,
           ownerId: actor.id,
           targetId: next.id,
+          ...(stackPack ? { color: card.color ?? state.currentColor } : {}),
           ...(actor.hand.length === 0 ? { pendingWinnerId: actor.id } : {}),
         };
         advance(state, 1);
@@ -1240,7 +1364,7 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
         ownerId: actor.id,
         targetId: next.id,
         legal: wildChallengeLegal,
-        ...(reversePack
+        ...(reversePack || stackPack
           ? {
             amount: DEFAULT_RULES.wildFourAmount,
             kind: "wild4" as const,
@@ -1248,7 +1372,7 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
           }
           : {}),
       };
-      if (state.mode === UNO_MODE.PROGRESSIVE) {
+      if (state.mode === UNO_MODE.PROGRESSIVE || stackPack) {
         state.pendingStack = {
           kind: "wild4",
           amount: DEFAULT_RULES.wildFourAmount,

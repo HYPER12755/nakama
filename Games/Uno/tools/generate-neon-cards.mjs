@@ -341,6 +341,34 @@ ${neonLabel(label, 90, 216, 16, NEON.wild)}
 ${neonCaption(`${power ? "wildpowerreverse" : "wildnou"} ${copy}`, true)}`, NEON.wild);
 }
 
+function stackPackColoredCard(color, kind, copy) {
+  const c = NEON[color];
+  const value = kind === "stack1" ? 1 : 2;
+  return surface(`
+<g transform="rotate(-12 90 128)">
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="9" filter="url(#soft)" opacity="0.7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="#fff" stroke-opacity="0.85" stroke-width="2"/>
+</g>
+<g style="filter:drop-shadow(0 0 10px ${c[0]})">
+<text x="90" y="150" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="32" fill="#ffffff">STACK +${value}</text>
+</g>
+${neonCaption(`${color} ${kind} ${copy}`, true)}`, c);
+}
+
+function stackPackWildCard(kind, copy) {
+  const numbered = kind === "wildStackNumber";
+  const label = numbered ? "STACK #" : "STACK +3";
+  return surface(`
+<g opacity="0.9">${QUADRANT}</g>
+<ellipse cx="90" cy="132" rx="60" ry="70" fill="#0A0A0E" fill-opacity="0.62" stroke="url(#edge)" stroke-width="8" transform="rotate(-12 90 132)"/>
+<g style="filter:drop-shadow(0 0 12px #18FFFF)">
+<text x="90" y="142" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="44" fill="#ffffff">${numbered ? "#" : "+3"}</text>
+</g>
+${neonLabel(label, 90, 216, 16, NEON.wild)}
+${neonCaption(`${numbered ? "wildstacknumber" : "wildstack3"} ${copy}`, true)}`, NEON.wild);
+}
+
 const LIGHT_PALETTE = {
   red: ["#e8402a", "#ff8a75"],
   yellow: ["#f2c600", "#ffe680"],
@@ -583,6 +611,16 @@ for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
 for (let copy = 0; copy < 4; copy += 1) {
   writeFileSync(path.join(OUT, `wildpowerreverse-${copy}.svg`), reversePackWildCard("wildPowerReverse", copy));
   writeFileSync(path.join(OUT, `wildnou-${copy}.svg`), reversePackWildCard("wildNoU", copy));
+  count += 2;
+}
+for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
+  writeFileSync(path.join(OUT, `${color}-stack1-0.svg`), stackPackColoredCard(color, "stack1", 0));
+  writeFileSync(path.join(OUT, `${color}-stack2-0.svg`), stackPackColoredCard(color, "stack2", 0));
+  count += 2;
+}
+for (let copy = 0; copy < 4; copy += 1) {
+  writeFileSync(path.join(OUT, `wildstack3-${copy}.svg`), stackPackWildCard("wildStack3", copy));
+  writeFileSync(path.join(OUT, `wildstacknumber-${copy}.svg`), stackPackWildCard("wildStackNumber", copy));
   count += 2;
 }
 for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {

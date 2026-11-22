@@ -390,6 +390,63 @@ captured by the standard play entry's `color`.
   (the actor is one participant); Pass Hands and Refresh Hand need no target.
   Every new wild carries a legal `chosenColor`, so automated play never stalls.
 
+## Stack Pack
+
+Stack Pack keeps the classic 108-card deck and adds 16 dedicated cards for a
+124-card deck. It is available locally and in private/quick online matches as
+mode string `stackPack` (core `UNO_MODE.STACK_PACK`, Lua `RULES_MODES`). State
+payloads expose `rulesMode: "stackPack"`. No new opcodes are needed: stacks and
+responses reuse the normal play/draw/challenge requests.
+
+### Added cards
+
+- **Stack 1** (`stack1`, `red-stack1-0`): four coloured copies, one per colour.
+  Played on a matching colour, it opens a pending stack of 1 card. It can be
+  played in response to a matching-colour Draw Two or Wild Four penalty, adding
+  1 to that penalty, and can chain onto another Stack card.
+- **Stack 2** (`stack2`, `red-stack2-0`): four coloured copies, one per colour.
+  Same as Stack 1, adding 2 cards to the penalty.
+- **Wild Stack 3** (`wildStack3`, `wildstack3-0`): four wild copies. Always
+  playable; choosing a colour opens or adds a 3-card penalty.
+- **Wild Stack Number** (`wildStackNumber`, `wildstacknumber-0`): four wild
+  copies. Always playable; choosing a colour opens or adds a penalty whose size
+  is revealed by flipping the draw pile until the first Number card appears.
+  The number on that card sets the amount (a revealed 0 counts as 1). Flipped
+  cards are placed under the discard pile in reveal order, using the same seed
+  in both engines.
+
+### Stacking and resolution
+
+- A stack card played normally opens a pending stack aimed at the next player,
+  who may answer with any legal Stack Pack card or take the accumulated cards
+  and lose their turn.
+- Coloured Stack 1/2 cards may answer a Draw Two or Wild Four only when their
+  colour matches that draw penalty. Any coloured Stack card may chain onto a
+  pending Stack Pack card; wild stack cards may answer any draw or stack
+  penalty.
+- Answering a Wild Four stack with a Stack card resolves the challenge: the
+  bluff accusation is no longer available once the penalty has been passed on.
+- If the stacker empties their hand, the win is deferred until the stack
+  resolves, as with Progressive and Reverse Pack.
+
+### Events and replay
+
+Playing a Stack 1/2 or Wild Stack 3 emits a `stack` event and replay entry with
+the amount added. Wild Stack Number emits `stackNumber` with the revealed
+amount. Answering a pending stack emits another `stack` entry with the added
+amount and the chosen colour on the standard play entry for wilds.
+
+### Integration contract
+
+- Deck: 124 cards; a wildcard starter receives the first player's most common
+  colour before starting rules are applied.
+- Pending stacks carry `kind`, `amount`, `color`, `ownerId` and `targetId` so
+  the web overlay and both engines agree on the active penalty.
+- AI scores the new cards and answers stacks with legal Stack Pack responses.
+- The web board renders all 16 added cards in classic and neon art, exposes
+  legal stack responses on the overlay, and opens the colour picker for wild
+  stack cards.
+
 ## Reverse Pack
 
 Reverse Pack keeps the classic 108-card deck and adds 16 dedicated cards for a

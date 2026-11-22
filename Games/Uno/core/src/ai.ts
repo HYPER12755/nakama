@@ -5,7 +5,7 @@ import { colorsForSide, type Action, type Card, type Color, type GameState, type
 const WILD_KINDS: Card["kind"][] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4",
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands",
-  "wildPowerReverse", "wildNoU",
+  "wildPowerReverse", "wildNoU", "wildStack3", "wildStackNumber",
 ];
 
 function preferredColor(state: GameState, hand: Card[]): Color {
@@ -31,6 +31,10 @@ function cardScore(state: GameState, card: Card): number {
   if (card.kind === "wildPassHands") return 60;
   if (card.kind === "wildPowerReverse") return 108;
   if (card.kind === "wildNoU") return 118;
+  if (card.kind === "wildStackNumber") return 116;
+  if (card.kind === "wildStack3") return 114;
+  if (card.kind === "stack2") return 96;
+  if (card.kind === "stack1") return 94;
   if (card.kind === "reverseDraw2") return 84;
   if (card.kind === "reverseSkip") return 74;
   if (card.kind === "wild") return 90;
@@ -133,6 +137,27 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
       return null;
     }
     const stack = state.pendingStack;
+    if (state.mode === UNO_MODE.STACK_PACK) {
+      const stackable = stackPlayer.hand
+        .filter((card) => (card.kind === "wildStack3" || card.kind === "wildStackNumber"
+          || (card.kind === "stack1" || card.kind === "stack2")
+            && (stack.kind === "stack1" || stack.kind === "stack2"
+              || stack.kind === "wildStack3" || stack.kind === "wildStackNumber"
+              || card.color === stack.color)))
+        .sort((left, right) => cardScore(state, right) - cardScore(state, left));
+      const matching = stackable[0];
+      if (matching !== undefined) {
+        return {
+          type: "play",
+          playerId,
+          cardId: matching.id,
+          ...(WILD_KINDS.includes(matching.kind)
+            ? { chosenColor: preferredColor(state, stackPlayer.hand) }
+            : {}),
+        };
+      }
+      return { type: "draw", playerId };
+    }
     if (state.mode === UNO_MODE.REVERSE_PACK) {
       const noU = stackPlayer.hand.find((card) => card.kind === "wildNoU");
       if (noU !== undefined) {
