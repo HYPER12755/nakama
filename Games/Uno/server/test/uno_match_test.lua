@@ -1000,6 +1000,72 @@ test("broadcasts flip plays through the match lifecycle", function()
   assert_equal(payload.flipSide, "dark", "state payload side updated")
 end)
 
+test("propagates swapPack mode through match payloads", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "swapPack",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  assert_equal(state.rules_mode, "swapPack", "stored rules mode")
+  assert_equal(state.game.mode, "swapPack", "game rules mode")
+  local started = nil
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.MATCH_STARTED then
+      started = require("json").decode(message.data)
+    end
+  end
+  assert_equal(started.rulesMode, "swapPack", "match started payload")
+  local payload = require("json").decode(select(2, MATCH.match_signal({}, dispatcher_obj, 1, state, "")))
+  assert_equal(payload.rulesMode, "swapPack", "state payload mode")
+  assert_equal(#state.game.draw_pile + #state.game.discard + 14, 124, "swap pack deck dealt")
+end)
+
+test("forwards swap pack fields through PLAY_REQUEST and MOVE", function()
+  local state = MATCH.match_init({ match_id = "m2" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "swapPack",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  state.game.players[1].hand = {
+    { id = "red-swap1-0", color = "red", kind = "swap1" },
+    { id = "red-1-0", color = "red", kind = "number", value = 1 },
+  }
+  state.game.players[2].hand = {
+    { id = "blue-2-0", color = "blue", kind = "number", value = 2 },
+  }
+  state.game.current_color = "red"
+  state.game.turn = 1
+  local before = #dispatcher_obj.messages
+  MATCH.match_loop({}, dispatcher_obj, 3, state, {
+    {
+      op_code = OP.PLAY_REQUEST,
+      presence = presence("u1", "Alice"),
+      data = json_encode({
+        cardId = "red-swap1-0",
+        targetId = "u2",
+        giveCardId = "red-1-0",
+      }),
+    },
+  })
+  local found = false
+  for index = before + 1, #dispatcher_obj.messages do
+    if dispatcher_obj.messages[index].op == OP.MOVE then
+      local payload = require("json").decode(dispatcher_obj.messages[index].data)
+      if payload.action.type == "play" and payload.action.give_card_id == "red-1-0"
+        and payload.giveCardId == "red-1-0" and payload.targetId == "u2" then
+        found = true
+      end
+    end
+  end
+  assert_equal(found, true, "swap one fields broadcast")
+  assert_equal(state.game.players[2].hand[1].id, "red-1-0", "given card arrived")
+  assert_equal(state.game.players[1].hand[1].id, "blue-2-0", "random card received")
+end)
+
 if failures > 0 then
   io.stderr:write(failures .. " Uno match test(s) failed\n")
   os.exit(1)

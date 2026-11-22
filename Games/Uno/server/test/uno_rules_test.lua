@@ -2026,6 +2026,306 @@ test("scores flip wild variants at 50 and flip actions at 20", function()
   }), 60, "action score")
 end)
 
+local swap_one = { id = "red-swap1-0", color = "red", kind = "swap1" }
+local blue_swap_one = { id = "blue-swap1-0", color = "blue", kind = "swap1" }
+local refresh_hand = { id = "red-refreshhand-0", color = "red", kind = "refreshHand" }
+local blue_refresh_hand = { id = "blue-refreshhand-0", color = "blue", kind = "refreshHand" }
+local force_trade = { id = "wildforcetrade-0", color = nil, kind = "wildForceTrade" }
+local pass_hands = { id = "wildpasshands-0", color = nil, kind = "wildPassHands" }
+local red_one = { id = "red-1-0", color = "red", kind = "number", value = 1 }
+local blue_two = { id = "blue-2-0", color = "blue", kind = "number", value = 2 }
+local green_three = { id = "green-3-0", color = "green", kind = "number", value = 3 }
+local yellow_four = { id = "yellow-4-0", color = "yellow", kind = "number", value = 4 }
+local dark_five = { id = "blue-5-1", color = "blue", kind = "number", value = 5 }
+
+local function swap_staged(hand, color, seats, seed)
+  local names = { "p1", "p2", "p3" }
+  local seat_list = {}
+  for index = 1, (seats or 3) do
+    seat_list[index] = { id = names[index], name = names[index] }
+  end
+  local game = rules.create_game(seed or 4242, seat_list, 0, "swapPack")
+  game.turn = 1
+  game.direction = 1
+  game.seed = seed or 4242
+  game.current_color = color or "red"
+  game.drawn_card_id = nil
+  game.pending_challenge = nil
+  game.pending_stack = nil
+  game.pending_hit = nil
+  game.pending_roulette = nil
+  game.finished = false
+  game.winner = nil
+  game.events = {}
+  game.replay = {}
+  game.players[1].hand = hand
+  for index = 2, #game.players do
+    game.players[index].hand = {}
+  end
+  return game
+end
+
+test("builds exactly 124 cards with the documented swap pack ids", function()
+  local deck = rules.build_deck("swapPack")
+  assert_equal(#deck, 124, "deck size")
+  assert_equal(#rules.build_deck(), 108, "classic deck size")
+  local tail = {}
+  for index = 109, #deck do
+    tail[#tail + 1] = deck[index].id
+  end
+  assert_equal(join(tail), join({
+    "red-swap1-0", "yellow-swap1-0", "green-swap1-0", "blue-swap1-0",
+    "red-refreshhand-0", "yellow-refreshhand-0", "green-refreshhand-0", "blue-refreshhand-0",
+    "wildforcetrade-0", "wildforcetrade-1", "wildforcetrade-2", "wildforcetrade-3",
+    "wildpasshands-0", "wildpasshands-1", "wildpasshands-2", "wildpasshands-3",
+  }), "swap pack tail")
+  local counts = { swap1 = 0, refreshHand = 0, wildForceTrade = 0, wildPassHands = 0 }
+  for _, card in ipairs(deck) do
+    if counts[card.kind] ~= nil then
+      counts[card.kind] = counts[card.kind] + 1
+    end
+  end
+  assert_equal(counts.swap1, 4, "swap one count")
+  assert_equal(counts.refreshHand, 4, "refresh hand count")
+  assert_equal(counts.wildForceTrade, 4, "force trade count")
+  assert_equal(counts.wildPassHands, 4, "pass hands count")
+end)
+
+test("exposes swapPack as an authoritative mode", function()
+  assert_equal(protocol.is_rules_mode("swapPack"), true, "mode recognised")
+  assert_equal(protocol.normalize_rules_mode("swapPack"), "swapPack", "mode normalized")
+  assert_equal(protocol.normalize_rules_mode("unknown"), "classic", "fallback mode")
+  for seed = 1, 10 do
+    local game = rules.create_game(seed, players({ "p1", "p2" }), 0, "swapPack")
+    assert_equal(game.mode, "swapPack", "game mode")
+  end
+end)
+
+test("matches new cards by colour or symbol and wilds always match", function()
+  local game = swap_staged({ swap_one, refresh_hand, force_trade, pass_hands }, "red")
+  assert_equal(rules.can_play(game, swap_one), true, "swap one by colour")
+  assert_equal(rules.can_play(game, refresh_hand), true, "refresh by colour")
+  assert_equal(rules.can_play(game, force_trade), true, "force trade wild")
+  assert_equal(rules.can_play(game, pass_hands), true, "pass hands wild")
+  game.current_color = "green"
+  game.discard = { blue_swap_one }
+  assert_equal(rules.can_play(game, swap_one), true, "swap one on swap one")
+  assert_equal(rules.can_play(game, refresh_hand), false, "refresh not on swap one")
+  game.discard = { blue_refresh_hand }
+  assert_equal(rules.can_play(game, refresh_hand), true, "refresh on refresh")
+  assert_equal(rules.can_play(game, swap_one), false, "swap one not on refresh")
+end)
+
+test("swap one takes a deterministic card and gives back the chosen card", function()
+  local game = swap_staged({ swap_one, red_one }, "red", 3, 777)
+  game.players[2].hand = { blue_two, green_three, yellow_four }
+  local seed = game.seed
+  local pick = rules.random_int(seed, 3)
+  local received = game.players[2].hand[pick + 1]
+  local state, ok, error_code = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = swap_one.id,
+    target_id = "p2", give_card_id = red_one.id,
+  })
+  assert_equal(ok, true, "swap one play: " .. tostring(error_code))
+  assert_equal(state.seed, rules.next_seed(seed), "seed advanced once")
+  assert_equal(join(ids(state.players[1].hand)), received.id, "actor received card")
+  local expected = {}
+  local original = { blue_two, green_three, yellow_four }
+  for index, card in ipairs(original) do
+    expected[index] = card.id == received.id and red_one.id or card.id
+  end
+  assert_equal(join(ids(state.players[2].hand)), join(expected), "target gave one card")
+  assert_equal(state.turn, 2, "turn advanced")
+  local found_event = false
+  for _, event in ipairs(state.events) do
+    if event.type == "swap1" then found_event = true end
+  end
+  assert_equal(found_event, true, "swap one event")
+  local found_replay = false
+  for _, step in ipairs(state.replay) do
+    if step.action == "swap1" and step.target_id == "p2" and step.give_card_id == red_one.id
+      and step.received_card_id == received.id then
+      found_replay = true
+    end
+  end
+  assert_equal(found_replay, true, "swap one replay")
+end)
+
+test("swap one rejects missing or invalid targets and give cards", function()
+  local cases = {
+    { {}, "missing_target" },
+    { { target_id = "p1", give_card_id = red_one.id }, "missing_target" },
+    { { target_id = "nobody", give_card_id = red_one.id }, "missing_target" },
+    { { target_id = "p3", give_card_id = red_one.id }, "missing_target" },
+    { { target_id = "p2" }, "unknown_card" },
+    { { target_id = "p2", give_card_id = "not-in-hand" }, "unknown_card" },
+    { { target_id = "p2", give_card_id = swap_one.id }, "unknown_card" },
+  }
+  for _, case in ipairs(cases) do
+    local game = swap_staged({ swap_one, red_one }, "red", 3, 4242)
+    game.players[2].hand = { blue_two }
+    local action = { type = "play", player_id = "p1", card_id = swap_one.id }
+    for key, value in pairs(case[1]) do
+      action[key] = value
+    end
+    local _, ok, code = rules.apply_action(game, action)
+    assert_equal(ok, false, "rejected")
+    assert_equal(code, case[2], "error code")
+  end
+end)
+
+test("refresh hand places the hand at the bottom of the discard and draws", function()
+  local game = swap_staged({ refresh_hand, red_one, blue_two }, "red", 3, 4242)
+  game.players[2].hand = { green_three }
+  game.draw_pile = { dark_five, yellow_four }
+  local old_card = { id = "green-6-0", color = "green", kind = "number", value = 6 }
+  game.discard = { old_card }
+  local state, ok, error_code = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = refresh_hand.id,
+  })
+  assert_equal(ok, true, "refresh hand play: " .. tostring(error_code))
+  assert_equal(join(ids(state.discard)), join({
+    red_one.id, blue_two.id, old_card.id, refresh_hand.id,
+  }), "bottom of discard")
+  assert_equal(join(ids(state.players[1].hand)), join({
+    yellow_four.id, dark_five.id,
+  }), "drew the same count")
+  assert_equal(state.turn, 2, "turn advanced")
+  local found_event = false
+  for _, event in ipairs(state.events) do
+    if event.type == "refreshHand" and event.text == "2" then found_event = true end
+  end
+  assert_equal(found_event, true, "refresh hand event")
+end)
+
+test("refresh hand recycles the discard deterministically", function()
+  local game = swap_staged({ refresh_hand, red_one, blue_two }, "red", 3, 4242)
+  local old_card = { id = "green-6-0", color = "green", kind = "number", value = 6 }
+  game.discard = { old_card }
+  game.draw_pile = {}
+  local state, ok, error_code = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = refresh_hand.id,
+  })
+  assert_equal(ok, true, "refresh recycle: " .. tostring(error_code))
+  assert_equal(#state.players[1].hand, 2, "hand refilled")
+  assert_equal(state.discard[#state.discard].id, refresh_hand.id, "played card on top")
+  local returned = { red_one, blue_two, old_card }
+  local shuffled, next_seed = rules.shuffle(game.seed, returned)
+  assert_equal(join(ids(state.players[1].hand)), join({
+    shuffled[#shuffled].id, shuffled[#shuffled - 1].id,
+  }), "recycled order")
+  assert_equal(state.seed, next_seed, "recycle seed")
+end)
+
+test("refresh hand wins after resolving an empty hand", function()
+  local game = swap_staged({ refresh_hand }, "red", 3, 4242)
+  local starter_id = game.discard[#game.discard].id
+  local state, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = refresh_hand.id,
+  })
+  assert_equal(ok, true, "final refresh hand")
+  assert_equal(state.finished, true, "finished")
+  assert_equal(state.winner, "p1", "winner")
+  assert_equal(#state.players[1].hand, 0, "empty hand")
+  assert_equal(join(ids(state.discard)), join({ starter_id, refresh_hand.id }), "discard order")
+end)
+
+test("wild force trade swaps two hands and sets the colour", function()
+  local game = swap_staged({ force_trade, red_one }, "red", 3, 4242)
+  game.players[2].hand = { blue_two, green_three }
+  game.players[3].hand = { yellow_four }
+  local state, ok, error_code = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = force_trade.id,
+    target_id = "p2", trade_with_id = "p3", chosen_color = "blue",
+  })
+  assert_equal(ok, true, "force trade: " .. tostring(error_code))
+  assert_equal(join(ids(state.players[2].hand)), yellow_four.id, "second hand")
+  assert_equal(join(ids(state.players[3].hand)), join({
+    blue_two.id, green_three.id,
+  }), "third hand")
+  assert_equal(join(ids(state.players[1].hand)), red_one.id, "actor hand")
+  assert_equal(state.current_color, "blue", "chosen colour")
+  assert_equal(state.turn, 2, "turn advanced")
+end)
+
+test("wild force trade permits the actor as one participant", function()
+  local game = swap_staged({ force_trade, red_one }, "red", 3, 4242)
+  game.players[2].hand = { blue_two, green_three }
+  local state, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = force_trade.id,
+    target_id = "p1", trade_with_id = "p2", chosen_color = "green",
+  })
+  assert_equal(ok, true, "self force trade")
+  assert_equal(join(ids(state.players[1].hand)), join({
+    blue_two.id, green_three.id,
+  }), "actor got other hand")
+  assert_equal(join(ids(state.players[2].hand)), red_one.id, "other got actor hand")
+  assert_equal(state.current_color, "green", "chosen colour")
+end)
+
+test("wild force trade rejects bad participants and a missing colour", function()
+  local cases = {
+    { { trade_with_id = "p2", chosen_color = "red" }, "missing_target" },
+    { { target_id = "p2", chosen_color = "red" }, "missing_target" },
+    { { target_id = "p2", trade_with_id = "p2", chosen_color = "red" }, "missing_target" },
+    { { target_id = "p2", trade_with_id = "unknown", chosen_color = "red" }, "missing_target" },
+    { { target_id = "p2", trade_with_id = "p3" }, "missing_color" },
+  }
+  for _, case in ipairs(cases) do
+    local game = swap_staged({ force_trade, red_one }, "red", 3, 4242)
+    game.players[2].hand = { blue_two }
+    local action = { type = "play", player_id = "p1", card_id = force_trade.id }
+    for key, value in pairs(case[1]) do
+      action[key] = value
+    end
+    local _, ok, code = rules.apply_action(game, action)
+    assert_equal(ok, false, "rejected")
+    assert_equal(code, case[2], "error code")
+  end
+end)
+
+test("wild pass hands rotates every hand clockwise and counter-clockwise", function()
+  local clockwise = swap_staged({ pass_hands, red_one }, "red", 3, 4242)
+  clockwise.players[2].hand = { blue_two }
+  clockwise.players[3].hand = { green_three }
+  local forward, forward_ok = rules.apply_action(clockwise, {
+    type = "play", player_id = "p1", card_id = pass_hands.id, chosen_color = "yellow",
+  })
+  assert_equal(forward_ok, true, "clockwise play")
+  assert_equal(join(ids(forward.players[1].hand)), green_three.id, "actor hand")
+  assert_equal(join(ids(forward.players[2].hand)), red_one.id, "second hand")
+  assert_equal(join(ids(forward.players[3].hand)), blue_two.id, "third hand")
+  assert_equal(forward.current_color, "yellow", "chosen colour")
+
+  local backward = swap_staged({ pass_hands, red_one }, "red", 3, 4242)
+  backward.direction = -1
+  backward.players[2].hand = { blue_two }
+  backward.players[3].hand = { green_three }
+  local reversed, reversed_ok = rules.apply_action(backward, {
+    type = "play", player_id = "p1", card_id = pass_hands.id, chosen_color = "blue",
+  })
+  assert_equal(reversed_ok, true, "counter-clockwise play")
+  assert_equal(join(ids(reversed.players[1].hand)), blue_two.id, "actor hand")
+  assert_equal(join(ids(reversed.players[2].hand)), green_three.id, "second hand")
+  assert_equal(join(ids(reversed.players[3].hand)), red_one.id, "third hand")
+end)
+
+test("wild pass hands requires a continuing colour", function()
+  local game = swap_staged({ pass_hands, red_one }, "red", 3, 4242)
+  game.players[2].hand = { blue_two }
+  local _, ok, code = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = pass_hands.id,
+  })
+  assert_equal(ok, false, "rejected")
+  assert_equal(code, "missing_color", "error code")
+end)
+
+test("scores swap pack colour actions at 20 and wild actions at 50", function()
+  assert_equal(rules.score_hand({ swap_one, refresh_hand }), 40, "colour action score")
+  assert_equal(rules.score_hand({ force_trade, pass_hands }), 100, "wild action score")
+  assert_equal(rules.score_hand({ red_one, swap_one, force_trade }), 71, "mixed score")
+end)
+
 if failures > 0 then
   io.stderr:write(failures .. " Uno rules test(s) failed\n")
   os.exit(1)

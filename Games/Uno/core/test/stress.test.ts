@@ -79,9 +79,22 @@ async function runMode(mode: GameMode): Promise<void> {
         expect(action).not.toBeNull();
         if (action === null) break;
         if (action.type === "play" && action.targetId !== undefined) {
+          const actor = state.players.find((player) => player.id === action.playerId);
+          const card = actor?.hand.find((held) => held.id === action.cardId);
+          const allowSelf = card?.kind === "wildForceTrade";
           expect(state.players.some((player) => (
-            player.id === action.targetId && player.id !== action.playerId
+            player.id === action.targetId && (allowSelf || player.id !== action.playerId)
           ))).toBe(true);
+        }
+        if (action.type === "play" && action.giveCardId !== undefined) {
+          const actor = state.players.find((player) => player.id === action.playerId);
+          expect(actor?.hand.some((card) => (
+            card.id === action.giveCardId && card.id !== action.cardId
+          ))).toBe(true);
+        }
+        if (action.type === "play" && action.tradeWithId !== undefined) {
+          expect(state.players.some((player) => player.id === action.tradeWithId)).toBe(true);
+          expect(action.tradeWithId).not.toBe(action.targetId);
         }
         const result = applyAction(state, action, now);
         expect(result.ok).toBe(true);
@@ -121,5 +134,9 @@ describe("Uno stress simulation", () => {
 
   it("finishes 100 seeds across 2, 3 and 4 seats in flip mode", async () => {
     await runMode("flip");
+  }, 60000);
+
+  it("finishes 100 seeds across 2, 3 and 4 seats in swapPack mode", async () => {
+    await runMode("swapPack");
   }, 60000);
 });

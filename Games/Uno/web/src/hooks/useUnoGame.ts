@@ -220,11 +220,17 @@ export function buildColourChoosePayload(color: Color): Record<string, unknown> 
   return { colour: color };
 }
 
+export interface PlayExtras {
+  giveCardId?: string;
+  tradeWithId?: string;
+}
+
 export function buildPlayPayload(
   view: BoardView,
   cardId: string,
   chosenColor?: Color,
   targetId?: string,
+  extras: PlayExtras = {},
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = { cardId };
   if (chosenColor !== undefined) {
@@ -232,6 +238,12 @@ export function buildPlayPayload(
   }
   if (targetId !== undefined) {
     payload.targetId = targetId;
+  }
+  if (extras.giveCardId !== undefined) {
+    payload.giveCardId = extras.giveCardId;
+  }
+  if (extras.tradeWithId !== undefined) {
+    payload.tradeWithId = extras.tradeWithId;
   }
   if (isJumpCandidate(view, cardId)) {
     payload.jump = true;
@@ -302,7 +314,7 @@ export interface UnoController {
   joinMatch: (matchId: string, token?: string, spectator?: boolean) => Promise<void>;
   joinByCode: (code: string, spectator?: boolean) => Promise<void>;
   leave: () => Promise<void>;
-  play: (cardId: string, chosenColor?: Color, targetId?: string) => void;
+  play: (cardId: string, chosenColor?: Color, targetId?: string, extras?: PlayExtras) => void;
   chooseColour: (color: Color) => void;
   draw: () => void;
   challenge: (accept: boolean) => void;
@@ -1127,7 +1139,7 @@ export function useUnoGame(enabled = true): UnoController {
     void socket.sendMatchState(joined, op, matchStateBytes(payload)).catch(() => undefined);
   }, []);
 
-  const play = useCallback((cardId: string, chosenColor?: Color, targetId?: string) => {
+  const play = useCallback((cardId: string, chosenColor?: Color, targetId?: string, extras: PlayExtras = {}) => {
     if (mode === "local") {
       if (localGame === null) {
         return;
@@ -1135,6 +1147,8 @@ export function useUnoGame(enabled = true): UnoController {
       const jump = isJumpCandidate(view, cardId);
       const action: Action = {
         type: "play", playerId: "local", cardId, chosenColor, targetId,
+        ...(extras.giveCardId !== undefined ? { giveCardId: extras.giveCardId } : {}),
+        ...(extras.tradeWithId !== undefined ? { tradeWithId: extras.tradeWithId } : {}),
         ...(jump ? { jump: true } : {}),
       };
       const result = applyAction(localGame, action, Date.now());
@@ -1145,7 +1159,7 @@ export function useUnoGame(enabled = true): UnoController {
       }
       return;
     }
-    send(UNO_OP.PLAY_REQUEST, buildPlayPayload(view, cardId, chosenColor, targetId));
+    send(UNO_OP.PLAY_REQUEST, buildPlayPayload(view, cardId, chosenColor, targetId, extras));
   }, [localGame, mode, send, view]);
 
   const chooseColour = useCallback((color: Color) => {

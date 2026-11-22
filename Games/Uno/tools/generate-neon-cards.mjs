@@ -204,6 +204,110 @@ function back() {
 <text x="90" y="150" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 16px #18FFFF)">UNO</text>`, NEON.wild);
 }
 
+function handIcon(stroke, fill) {
+  return `<g fill="${fill}" stroke="${stroke}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
+<rect x="-20" y="0" width="40" height="28" rx="11"/>
+<rect x="-19" y="-18" width="9" height="24" rx="4.5"/>
+<rect x="-7" y="-25" width="9" height="31" rx="4.5"/>
+<rect x="5" y="-23" width="9" height="29" rx="4.5"/>
+<rect x="17" y="-15" width="9" height="21" rx="4.5"/>
+<path d="M-22 6 a6 6 0 0 0 -5 9 l5 7" fill="none"/>
+</g>`;
+}
+
+function swapSymbol(fill, stroke) {
+  return `<g transform="translate(90 122)">
+<rect x="-48" y="-38" width="46" height="72" rx="7" fill="#ffffff" stroke="${stroke}" stroke-width="2.5" transform="rotate(-14 -25 -2)"/>
+<rect x="2" y="-38" width="46" height="72" rx="7" fill="${fill}" stroke="${stroke}" stroke-width="2.5" transform="rotate(14 25 -2)"/>
+<g fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+<path d="M-34 -50 L32 -50"/>
+<path d="M22 -60 L34 -50 L22 -40"/>
+<path d="M34 50 L-32 50"/>
+<path d="M-22 40 L-34 50 L-22 60"/>
+</g>
+</g>`;
+}
+
+function refreshSymbol() {
+  return `<g>
+<path d="M60.3 102.3 A42 42 0 1 1 50.5 146.4" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+<polygon points="50.5,146.4 64.5,158.3 47.5,164.5" fill="#ffffff"/>
+</g>`;
+}
+
+function forceTradeSymbol(stroke) {
+  return `<g transform="translate(90 128)">
+<g transform="translate(-32 2) scale(0.82) rotate(180)">${handIcon(stroke, "#0A0A0E")}</g>
+<g transform="translate(32 2) scale(0.82)">${handIcon(stroke, "#0A0A0E")}</g>
+<g fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+<path d="M-10 -18 L10 -18"/>
+<path d="M4 -25 L11 -18 L4 -11"/>
+<path d="M10 22 L-10 22"/>
+<path d="M-4 15 L-11 22 L-4 29"/>
+</g>
+</g>`;
+}
+
+function passHandsSymbol(stroke) {
+  return `<g transform="translate(90 130)">
+<g transform="translate(-28 -28) scale(0.7) rotate(-25)">${handIcon(stroke, "#0A0A0E")}</g>
+<g transform="translate(28 28) scale(0.7) rotate(155)">${handIcon(stroke, "#0A0A0E")}</g>
+<g fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+<path d="M-44 -4 A46 46 0 0 1 44 -4"/>
+<polygon points="46,4 34,-8 56,-8" fill="#ffffff" stroke="none"/>
+<path d="M44 4 A46 46 0 0 1 -44 4"/>
+<polygon points="-46,-4 -58,8 -34,8" fill="#ffffff" stroke="none"/>
+</g>
+</g>`;
+}
+
+function swap1Card(color, copy) {
+  const c = NEON[color];
+  return surface(`
+<g transform="rotate(-12 90 128)">
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="9" filter="url(#soft)" opacity="0.7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="#fff" stroke-opacity="0.85" stroke-width="2"/>
+</g>
+<g style="filter:drop-shadow(0 0 8px ${c[0]})">${swapSymbol("#0A0A0E", "#ffffff")}</g>
+${neonLabel("SWAP 1", 90, 214, 19, c)}
+${neonCaption(`swap1 ${copy}`, true)}`, c);
+}
+
+function refreshHandCard(color, copy) {
+  const c = NEON[color];
+  return surface(`
+<g transform="rotate(-12 90 128)">
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="9" filter="url(#soft)" opacity="0.7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="#fff" stroke-opacity="0.85" stroke-width="2"/>
+</g>
+<g style="filter:drop-shadow(0 0 8px ${c[0]})">${refreshSymbol()}</g>
+<g transform="translate(90 136) scale(0.72)" style="filter:drop-shadow(0 0 8px ${c[0]})">${handIcon("#ffffff", "#0A0A0E")}</g>
+${neonLabel("REFRESH HAND", 90, 214, 17, c)}
+${neonCaption(`refreshhand ${copy}`, true)}`, c);
+}
+
+function wildForceTradeCard(copy) {
+  return surface(`
+<g opacity="0.9">${QUADRANT}</g>
+<ellipse cx="90" cy="132" rx="60" ry="70" fill="#0A0A0E" fill-opacity="0.62" transform="rotate(-12 90 132)"/>
+<ellipse cx="90" cy="132" rx="60" ry="70" fill="none" stroke="url(#edge)" stroke-width="8" transform="rotate(-12 90 132)"/>
+<g style="filter:drop-shadow(0 0 10px #18FFFF)">${forceTradeSymbol("#ffffff")}</g>
+${neonLabel("FORCE TRADE", 90, 216, 17, NEON.wild)}
+${neonCaption(`wildforcetrade ${copy}`, true)}`, NEON.wild);
+}
+
+function wildPassHandsCard(copy) {
+  return surface(`
+<g opacity="0.9">${QUADRANT}</g>
+<ellipse cx="90" cy="132" rx="60" ry="70" fill="#0A0A0E" fill-opacity="0.62" transform="rotate(-12 90 132)"/>
+<ellipse cx="90" cy="132" rx="60" ry="70" fill="none" stroke="url(#edge)" stroke-width="8" transform="rotate(-12 90 132)"/>
+<g style="filter:drop-shadow(0 0 10px #18FFFF)">${passHandsSymbol("#ffffff")}</g>
+${neonLabel("PASS HANDS", 90, 216, 17, NEON.wild)}
+${neonCaption(`wildpasshands ${copy}`, true)}`, NEON.wild);
+}
+
 const LIGHT_PALETTE = {
   red: ["#e8402a", "#ff8a75"],
   yellow: ["#f2c600", "#ffe680"],
@@ -436,6 +540,16 @@ for (let copy = 0; copy < 4; copy += 1) {
 for (let copy = 0; copy < 8; copy += 1) {
   writeFileSync(path.join(OUT, `wildreverse4-${copy}.svg`), wildReverse4Card());
   writeFileSync(path.join(OUT, `wildroulette-${copy}.svg`), wildRouletteCard());
+  count += 2;
+}
+for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
+  writeFileSync(path.join(OUT, `${color}-swap1-0.svg`), swap1Card(color, 0));
+  writeFileSync(path.join(OUT, `${color}-refreshhand-0.svg`), refreshHandCard(color, 0));
+  count += 2;
+}
+for (let copy = 0; copy < 4; copy += 1) {
+  writeFileSync(path.join(OUT, `wildforcetrade-${copy}.svg`), wildForceTradeCard(copy));
+  writeFileSync(path.join(OUT, `wildpasshands-${copy}.svg`), wildPassHandsCard(copy));
   count += 2;
 }
 for (const side of ["light", "dark"]) {

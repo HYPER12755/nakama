@@ -301,3 +301,91 @@ colours. `buildDeck("flip")` returns the 112 light-side visible cards.
 - AI uses the active side's colours for wild colour choices and avoids Flip card
   loops by preferring other legal cards. Score handling keeps wild variants at
   50 points and other action cards at 20.
+
+## Swap Pack (optional mode, official Mattel UNO Swap Pack add-on)
+
+Swap Pack is **off by default**: games created without an explicit mode use
+classic rules. The mode is authoritative state, is included in state payloads,
+and all matchmaker tickets for a game must agree on it. Everything not described
+here behaves as in classic UNO, including matching by colour/number/symbol,
+drawing one card, Wild Draw Four challenges, and immediate win on an empty hand.
+
+**Deck (124 cards).** `buildDeck("swapPack")` is the classic 108-card deck plus
+16 new cards appended in this exact order:
+
+- `<color>-swap1-0` for red, yellow, green, blue (4)
+- `<color>-refreshhand-0` for red, yellow, green, blue (4)
+- `wildforcetrade-0..3` (4, colourless)
+- `wildpasshands-0..3` (4, colourless)
+
+The colour card IDs are `red-swap1-0`, `red-refreshhand-0`, and so on. All four
+kinds are action cards for scoring (`swap1` and `refreshHand` score 20; the two
+wild variants score 50, like other wild actions). A starting Wild Force Trade or
+Wild Pass Hands is treated like a starting Wild: the engine assigns the most
+common colour of the first player's hand and the action does not trigger.
+
+**Play semantics and required fields.** A play request for any of these cards
+carries the normal `playerId` / `cardId` plus the fields below. The canonical
+core fields are camelCase; the Lua server action uses snake_case and accepts
+both spellings from the client. Invalid fields reject the play and leave the
+state unchanged.
+
+- **Swap 1** (`swap1`, `red-swap1-0`): playable on a matching colour or on
+  another Swap 1. Requires `targetId` and `giveCardId`. `targetId` must be a
+  different seated player with a non-empty hand; `giveCardId` must name a card
+  in the actor's hand *other than the played Swap 1 card*. The actor takes one
+  card at random from the target's hand and gives that player the chosen card.
+  The random index is derived from the authoritative `seed` with
+  `randomInt(seed, hand.length)` and then advances the seed with `nextSeed`, so
+  the server owns the randomness and every client can reproduce it. The two
+  cards are exchanged in place (the received card is appended to the actor's
+  hand, the given card replaces the taken card in the target's hand). Missing or
+  invalid `targetId` returns `missing_target`; missing or invalid `giveCardId`
+  returns `unknown_card`. Play then advances one seat.
+- **Refresh Hand** (`refreshHand`, `red-refreshhand-0`): playable on a matching
+  colour or on another Refresh Hand. No extra fields. After the card is
+  discarded, the actor's entire remaining hand is placed at the **bottom** of
+  the discard pile (behind the played Refresh Hand card), preserving order, and
+  the actor draws exactly that many cards from the draw pile, recycling the
+  discard pile if needed. An actor whose hand was empty after playing wins once
+  the draw resolves. Play then advances one seat.
+- **Wild Force Trade** (`wildForceTrade`, `wildforcetrade-0`): a wild, always
+  playable. Requires `targetId`, `tradeWithId` and `chosenColor`. Both IDs must
+  name seated players, may include the actor, and must be distinct. Those two
+  players swap their entire hands simultaneously (after the played card leaves
+  the actor's hand); the actor chooses the continuing colour. Missing,
+  identical or unknown IDs return `missing_target`, and a missing colour
+  returns `missing_color`. Play then advances one seat.
+- **Wild Pass Hands** (`wildPassHands`, `wildpasshands-0`): a wild, always
+  playable. Requires `chosenColor` (missing returns `missing_color`). Every
+  seated player, including the actor, passes their entire hand to the next
+  player in the current direction simultaneously, using the same active-seat
+  rotation as Seven-O's number 0. The actor chooses the continuing colour. Play
+  then advances one seat.
+
+### Events and replay
+
+Each new play emits the normal `play` event and replay step plus one extra entry
+describing its effect. Event types are `swap1`, `refreshHand`, `wildForceTrade`
+and `wildPassHands`; replay actions use the same names. Swap 1 replay carries
+`targetId`, `giveCardId` and `receivedCardId`; Force Trade carries `targetId`
+and `tradeWithId`; Refresh Hand carries `count` (`String(count)` in the event's
+`text`); Pass Hands carries only the card ID. Wild colour choices are already
+captured by the standard play entry's `color`.
+
+### Swap Pack integration contract
+
+- Mode string: `swapPack` (core `UNO_MODE.SWAP_PACK`, Lua `RULES_MODES`).
+- Play fields: `targetId` (Lua `target_id`), `giveCardId` (`give_card_id`),
+  `tradeWithId` (`trade_with_id`) and `chosenColor` (`chosen_color`). They are
+  forwarded from `PLAY_REQUEST` into the Lua action and echoed in the camelCase
+  `MOVE` broadcast alongside `targetId` and `chosenColor`. No new opcodes are
+  needed: plays, draws and challenges reuse the existing request opcodes.
+- State payloads expose `rulesMode: "swapPack"` in `MATCH_STARTED` and `STATE`.
+- Randomness is server-owned: the Swap 1 target card is chosen from the state
+  seed, and both engines advance that seed identically, so a given seed and
+  action sequence produce identical hands and outcomes.
+- AI chooses a non-actor target with the largest hand and gives away its lowest
+  scoring card for Swap 1; Force Trade swaps the actor's hand with that target
+  (the actor is one participant); Pass Hands and Refresh Hand need no target.
+  Every new wild carries a legal `chosenColor`, so automated play never stalls.

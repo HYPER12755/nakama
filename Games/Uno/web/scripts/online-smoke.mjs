@@ -1208,6 +1208,63 @@ async function flipRoom() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "flip game over", STATE_TIMEOUT_MS);
 }
 
+async function swapPackBattle() {
+  const alice = await authenticate("swap-pack-alice");
+  const bob = await authenticate("swap-pack-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 37,
+    rulesMode: "swapPack",
+  });
+  assert(
+    created?.ok === true && created.rulesMode === "swapPack" && typeof created.matchId === "string",
+    `swap pack room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
+  const aliceStart = await waitState(
+    alice.socket,
+    "swap pack alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "swap pack bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "swapPack", "swap pack mode must reach alice");
+  assert(bobStart.data.rulesMode === "swapPack", "swap pack mode must reach bob");
+  assert(aliceStart.data.deckCount === 109, "swap pack deck should hold 124 cards");
+  assert(legalCardIds(aliceStart.data).includes("yellow-swap1-0"), "seed 37 should offer Swap 1");
+
+  const giveCard = seatOf(aliceStart.data, alice).hand.find((card) => card.id !== "yellow-swap1-0");
+  assert(giveCard !== undefined, "Alice should have a card to give");
+  await send(alice, matchId, OP.PLAY_REQUEST, {
+    cardId: "yellow-swap1-0",
+    targetId: bob.session.user_id,
+    giveCardId: giveCard.id,
+  });
+  const aliceSwapped = await waitState(
+    alice.socket,
+    "swap pack alice after swap",
+    (state) => state.topCard?.id === "yellow-swap1-0",
+  );
+  const bobSwapped = await waitState(
+    bob.socket,
+    "swap pack bob after swap",
+    (state) => state.topCard?.id === "yellow-swap1-0",
+  );
+  const bobHand = seatOf(bobSwapped.data, bob).hand ?? [];
+  assert(bobHand.some((card) => card.id === giveCard.id), "the given card must reach the target");
+  assert(seatOf(aliceSwapped.data, alice).count === 6, "the actor plays one card and trades one card");
+  assert(seatOf(bobSwapped.data, bob).count === 7, "the target trades one card and receives one card");
+  console.log("[ok] Swap Pack Swap 1 exchanges a card on the live server");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "swap pack game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -1236,6 +1293,7 @@ async function main() {
     await attackRoom();
     await noMercyRoom();
     await flipRoom();
+    await swapPackBattle();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

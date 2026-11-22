@@ -22,6 +22,27 @@ interface AttackPrompt {
   targetId: string | null;
 }
 
+interface PlayExtras {
+  giveCardId?: string;
+  tradeWithId?: string;
+}
+
+interface SwapPrompt {
+  cardId: string;
+  targetId: string | null;
+}
+
+interface TradePrompt {
+  cardId: string;
+  firstId: string | null;
+}
+
+interface PendingTrade {
+  cardId: string;
+  targetId: string;
+  tradeWithId: string;
+}
+
 const COLOUR_STACK_KINDS = new Set<Card["kind"]>([
   "wild4", "wildDraw6", "wildDraw10", "wildReverse4",
 ]);
@@ -37,6 +58,10 @@ function cardHint(card: Card): string | undefined {
   if (card.kind === "skipEveryone") return "Skips every other player";
   if (card.kind === "wildDraw2") return "The next player takes 2 or challenges";
   if (card.kind === "wildDrawColor") return "The next player draws until the chosen colour";
+  if (card.kind === "swap1") return "Swap one card with another player";
+  if (card.kind === "refreshHand") return "Replace your whole hand";
+  if (card.kind === "wildForceTrade") return "Force two players to swap hands";
+  if (card.kind === "wildPassHands") return "Every player passes their hand";
   return undefined;
 }
 
@@ -87,6 +112,15 @@ export function targetCandidates(view: BoardView): BoardView["players"] {
   return view.players.filter((player) => player.userId !== view.myUserId && player.out !== true);
 }
 
+export function tradeCandidates(view: BoardView): BoardView["players"] {
+  return view.players.filter((player) => player.out !== true);
+}
+
+export function giveCandidates(view: BoardView, playedCardId: string): Card[] {
+  const mine = view.players.find((player) => player.userId === view.myUserId);
+  return (mine?.hand ?? []).filter((card) => card.id !== playedCardId);
+}
+
 export interface UnoBoardStageProps {
   view: BoardView;
   cardSet: "classic" | "neon";
@@ -96,7 +130,7 @@ export interface UnoBoardStageProps {
   highlight: "lift" | "outline" | "glow";
   pileStyle: "stack" | "fan" | "tower";
   rulesMode?: RulesMode;
-  onPlay: (cardId: string, chosenColor?: Color, targetId?: string) => void;
+  onPlay: (cardId: string, chosenColor?: Color, targetId?: string, extras?: PlayExtras) => void;
   onChooseColour?: (color: Color) => void;
   onChooseColor?: (color: Color) => void;
   onDraw: () => void;
@@ -111,6 +145,9 @@ export function UnoBoardStage({
   const [pendingCard, setPendingCard] = useState<string | null>(null);
   const [pendingTarget, setPendingTarget] = useState<string | null>(null);
   const [attackPrompt, setAttackPrompt] = useState<AttackPrompt | null>(null);
+  const [swapPrompt, setSwapPrompt] = useState<SwapPrompt | null>(null);
+  const [tradePrompt, setTradePrompt] = useState<TradePrompt | null>(null);
+  const [pendingTrade, setPendingTrade] = useState<PendingTrade | null>(null);
   const [flights, setFlights] = useState<Flight[]>([]);
   const [dealt, setDealt] = useState(false);
   const [jumpNow, setJumpNow] = useState(() => Date.now());
@@ -198,6 +235,9 @@ export function UnoBoardStage({
     setPendingCard(null);
     setPendingTarget(null);
     setAttackPrompt(null);
+    setSwapPrompt(null);
+    setTradePrompt(null);
+    setPendingTrade(null);
     const timer = window.setTimeout(() => setDealt(true), 1300);
     return () => window.clearTimeout(timer);
   }, [dealKey]);
@@ -230,6 +270,14 @@ export function UnoBoardStage({
 
   const play = (card: Card, event: MouseEvent<HTMLButtonElement>) => {
     if (!isMyTurn && !jumping) return;
+    if (card.kind === "swap1") {
+      setSwapPrompt({ cardId: card.id, targetId: null });
+      return;
+    }
+    if (card.kind === "wildForceTrade") {
+      setTradePrompt({ cardId: card.id, firstId: null });
+      return;
+    }
     if (card.kind === "wildAttack") {
       setAttackPrompt({ cardId: card.id, deflect: false, targetId: null });
       return;
@@ -629,11 +677,16 @@ export function UnoBoardStage({
                       fly(pendingCard, handRef.current?.querySelector("img")?.getBoundingClientRect() ?? null, discardRef.current?.getBoundingClientRect() ?? null);
                       if (attackPrompt !== null && attackPrompt.targetId !== null) {
                         onPlay(pendingCard, color, attackPrompt.targetId);
+                      } else if (pendingTrade !== null) {
+                        onPlay(pendingTrade.cardId, color, pendingTrade.targetId, {
+                          tradeWithId: pendingTrade.tradeWithId,
+                        });
                       } else {
                         onPlay(pendingCard, color);
                       }
                       setPendingCard(null);
                       setAttackPrompt(null);
+                      setPendingTrade(null);
                     }}
                     aria-label={`Choose ${color}`}
                   >
@@ -697,6 +750,96 @@ export function UnoBoardStage({
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {swapPrompt !== null && (
+        <div className="uno-overlay uno-overlay--target">
+          <div className="uno-target-card" role="dialog" aria-label={swapPrompt.targetId === null ? "Choose a swap target" : "Choose a card to give"}>
+            <p className="eyebrow">Swap Pack</p>
+            <h2>{swapPrompt.targetId === null ? "Choose a player" : "Give a card"}</h2>
+            <p className="uno-overlay-copy">
+              {swapPrompt.targetId === null
+                ? "Take a random card from the player you pick, then give one of yours back."
+                : "Pick the card you give to the player you chose."}
+            </p>
+            {swapPrompt.targetId === null ? (
+              <div className="uno-target-choices">
+                {targetCandidates(view).filter((player) => player.count > 0).map((player) => (
+                  <button
+                    type="button"
+                    key={player.userId}
+                    className="uno-target-choice"
+                    onClick={() => setSwapPrompt({ ...swapPrompt, targetId: player.userId })}
+                  >
+                    <strong>{player.username}</strong>
+                    <span>{player.count} cards</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="uno-hit-deflects">
+                {giveCandidates(view, swapPrompt.cardId).map((card) => (
+                  <button
+                    type="button"
+                    key={card.id}
+                    className="uno-hit-deflect"
+                    onClick={() => {
+                      const targetId = swapPrompt.targetId;
+                      if (targetId === null) return;
+                      const source = handRef.current?.querySelector("img")?.getBoundingClientRect() ?? null;
+                      const destination = surfaceRef.current?.querySelector(`[data-seat-user="${targetId}"]`)?.getBoundingClientRect() ?? null;
+                      fly(card.id, source, destination);
+                      onPlay(swapPrompt.cardId, undefined, targetId, { giveCardId: card.id });
+                      setSwapPrompt(null);
+                    }}
+                  >
+                    <img src={art(card.id)} alt={card.id} />
+                    <span>Give</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <button type="button" className="button button--ghost" onClick={() => setSwapPrompt(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {tradePrompt !== null && (
+        <div className="uno-overlay uno-overlay--target">
+          <div className="uno-target-card" role="dialog" aria-label="Choose trade players">
+            <p className="eyebrow">Wild Force Trade</p>
+            <h2>{tradePrompt.firstId === null ? "First player" : "Second player"}</h2>
+            <p className="uno-overlay-copy">Choose two players to swap entire hands. You may include yourself.</p>
+            <div className="uno-target-choices">
+              {tradeCandidates(view)
+                .filter((player) => tradePrompt.firstId === null || player.userId !== tradePrompt.firstId)
+                .map((player) => (
+                  <button
+                    type="button"
+                    key={player.userId}
+                    className="uno-target-choice"
+                    onClick={() => {
+                      if (tradePrompt.firstId === null) {
+                        setTradePrompt({ ...tradePrompt, firstId: player.userId });
+                        return;
+                      }
+                      setPendingTrade({
+                        cardId: tradePrompt.cardId,
+                        targetId: tradePrompt.firstId,
+                        tradeWithId: player.userId,
+                      });
+                      setPendingCard(tradePrompt.cardId);
+                      setTradePrompt(null);
+                    }}
+                  >
+                    <strong>{player.username}</strong>
+                    <span>{player.userId === view.myUserId ? "You" : `${player.count} cards`}</span>
+                  </button>
+                ))}
+            </div>
+            <button type="button" className="button button--ghost" onClick={() => setTradePrompt(null)}>Cancel</button>
           </div>
         </div>
       )}

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 270" width="180" height="270" role="img">
+<defs>
+<linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E040FB"/><stop offset="1" stop-color="#18FFFF"/></linearGradient>
+<radialGradient id="glow"><stop offset="0" stop-color="#E040FB" stop-opacity="0.42"/><stop offset="1" stop-color="#E040FB" stop-opacity="0"/></radialGradient>
+<filter id="soft"><feGaussianBlur stdDeviation="8"/></filter>
+</defs>
+<rect x="3" y="3" width="174" height="264" rx="10" fill="#0A0A0E" stroke="url(#edge)" stroke-width="4"/>
+<rect x="6" y="6" width="168" height="258" rx="8" fill="none" stroke="#FF003C" stroke-opacity="0.65" stroke-width="0.8"/>
+<rect x="9" y="9" width="162" height="252" rx="7" fill="url(#glow)"/>
+
+<g opacity="0.9"><path d="M90 135 L90 52 A83 83 0 0 1 173 135 Z" fill="#FF1744"/>
+<path d="M90 135 L173 135 A83 83 0 0 1 90 218 Z" fill="#FFEA00"/>
+<path d="M90 135 L90 218 A83 83 0 0 1 7 135 Z" fill="#00E676"/>
+<path d="M90 135 L7 135 A83 83 0 0 1 90 52 Z" fill="#2979FF"/></g>
+<ellipse cx="90" cy="132" rx="60" ry="70" fill="#0A0A0E" fill-opacity="0.62" transform="rotate(-12 90 132)"/>
+<ellipse cx="90" cy="132" rx="60" ry="70" fill="none" stroke="url(#edge)" stroke-width="8" transform="rotate(-12 90 132)"/>
+<g style="filter:drop-shadow(0 0 10px #18FFFF)"><g transform="translate(90 130)">
+<g transform="translate(-28 -28) scale(0.7) rotate(-25)"><g fill="#0A0A0E" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
+<rect x="-20" y="0" width="40" height="28" rx="11"/>
+<rect x="-19" y="-18" width="9" height="24" rx="4.5"/>
+<rect x="-7" y="-25" width="9" height="31" rx="4.5"/>
+<rect x="5" y="-23" width="9" height="29" rx="4.5"/>
+<rect x="17" y="-15" width="9" height="21" rx="4.5"/>
+<path d="M-22 6 a6 6 0 0 0 -5 9 l5 7" fill="none"/>
+</g></g>
+<g transform="translate(28 28) scale(0.7) rotate(155)"><g fill="#0A0A0E" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
+<rect x="-20" y="0" width="40" height="28" rx="11"/>
+<rect x="-19" y="-18" width="9" height="24" rx="4.5"/>
+<rect x="-7" y="-25" width="9" height="31" rx="4.5"/>
+<rect x="5" y="-23" width="9" height="29" rx="4.5"/>
+<rect x="17" y="-15" width="9" height="21" rx="4.5"/>
+<path d="M-22 6 a6 6 0 0 0 -5 9 l5 7" fill="none"/>
+</g></g>
+<g fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+<path d="M-44 -4 A46 46 0 0 1 44 -4"/>
+<polygon points="46,4 34,-8 56,-8" fill="#ffffff" stroke="none"/>
+<path d="M44 4 A46 46 0 0 1 -44 4"/>
+<polygon points="-46,-4 -58,8 -34,8" fill="#ffffff" stroke="none"/>
+</g>
+</g></g>
+<text x="90" y="216" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="17" fill="#E040FB" style="filter:drop-shadow(0 0 10px #18FFFF)">PASS HANDS</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700" font-style="italic" fill="#b9c2d0">wildpasshands 0</text>
+</svg>

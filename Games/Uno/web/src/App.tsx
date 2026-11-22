@@ -45,6 +45,7 @@ const ATTACK_RULE = "Attack: Hit cards make the target take the launcher, or def
 
 const NO_MERCY_RULE = "No Mercy: draw until you can play, stack +2/+4/+6/+10 with equal or higher cards, and drop out at 25 cards. Coloured +4, Skip Everyone, Discard All, Wild Reverse +4 and Wild Colour Roulette apply.";
 
+const SWAP_PACK_RULE = "Swap Pack: Swap 1 trades one card with a player you choose; Refresh Hand draws a new hand; Wild Force Trade swaps two players; Wild Pass Hands rotates every hand.";
 const FLIP_RULE = "Flip: match the active colour on the current side. Draw One, Skip and Reverse sit on the light side; Draw Five, Skip Everyone and Wild Draw Color sit on the dark side. Play a Flip card to turn the whole game over and switch between red/yellow/green/blue and pink/teal/orange/purple. Wild Draw Two may be challenged: take 2, or challenge a guilty player who draws 2 and an innocent target who draws 4.";
 
 const COLOURS: Color[] = ["red", "yellow", "green", "blue"];
@@ -98,7 +99,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
             ? [...RULES, NO_MERCY_RULE]
             : game.rulesMode === UNO_MODE.FLIP
               ? [...RULES, FLIP_RULE]
-              : RULES;
+              : (game.rulesMode as string) === "swapPack"
+                ? [...RULES, SWAP_PACK_RULE]
+                : RULES;
   const activePlayer = game.view.players[game.view.turn];
   const winner = game.view.result?.winnerUserId == null
     ? null

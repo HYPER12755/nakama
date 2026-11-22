@@ -18,6 +18,7 @@ const PROGRESSIVE_MODE: RulesMode = "progressive";
 export const JUMP_IN_MODE: RulesMode = "jumpIn";
 export const NO_MERCY_MODE: RulesMode = UNO_MODE.NO_MERCY;
 const ATTACK_MODE: RulesMode = UNO_MODE.ATTACK;
+export const SWAP_PACK_MODE: RulesMode = UNO_MODE.SWAP_PACK;
 
 const JUMP_IN_ALIASES = ["jumpIn", "jump_in", "jump-in", "jumpin"];
 const NO_MERCY_ALIASES = ["noMercy", "no_mercy", "no-mercy", "nomercy"];
@@ -52,6 +53,9 @@ export function rulesModeLabel(mode: RulesMode | undefined): string {
   }
   if (value === UNO_MODE.FLIP) {
     return "Flip";
+  }
+  if (value === SWAP_PACK_MODE) {
+    return "Swap Pack";
   }
   return value === "sevenO" ? "Seven-O" : "Classic";
 }

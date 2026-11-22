@@ -18,10 +18,12 @@ local WILD_KINDS = {
   wild = true, wild4 = true, wildAttack = true, wildDraw6 = true,
   wildDraw10 = true, wildReverse4 = true, wildRoulette = true,
   wildDraw2 = true, wildDrawColor = true,
+  wildForceTrade = true, wildPassHands = true,
 }
 local WILD_COLOR_KINDS = {
   wild = true, wild4 = true, wildAttack = true, wildDraw6 = true,
   wildDraw10 = true, wildReverse4 = true, wildDraw2 = true, wildDrawColor = true,
+  wildForceTrade = true, wildPassHands = true,
 }
 
 local FLIP_COLOR_MAP = {
@@ -297,6 +299,26 @@ function rules.build_deck(mode)
       }
     end
   end
+  if mode == "swapPack" then
+    for _, kind in ipairs({ "swap1", "refreshHand" }) do
+      for _, color in ipairs(protocol.LIGHT_COLORS) do
+        local id_prefix = kind == "swap1"
+          and string.format("%s-swap1", color)
+          or string.format("%s-refreshhand", color)
+        deck[#deck + 1] = { id = id_prefix .. "-0", color = color, kind = kind }
+      end
+    end
+    for _, kind in ipairs({ "wildForceTrade", "wildPassHands" }) do
+      local id_prefix = kind == "wildForceTrade" and "wildforcetrade" or "wildpasshands"
+      for copy_index = 0, 3 do
+        deck[#deck + 1] = {
+          id = string.format("%s-%d", id_prefix, copy_index),
+          color = nil,
+          kind = kind,
+        }
+      end
+    end
+  end
   return deck
 end
 
@@ -537,7 +559,9 @@ function rules.create_game(seed, players, now, mode)
     starter = table.remove(deck)
   end
   if starter.kind == "wild" or starter.kind == "wildAttack"
-    or (rules_mode == "flip" and starter.kind:find("^wild") ~= nil) then
+    or (rules_mode == "flip" and starter.kind:find("^wild") ~= nil)
+    or (rules_mode == "swapPack"
+      and (starter.kind == "wildForceTrade" or starter.kind == "wildPassHands")) then
     starter.color = most_common_color(dealt[1].hand, rules.colors_for_side("light"))
   end
 
@@ -860,6 +884,26 @@ local function apply_stack_resolution(state, stack, accept)
     state.replay[#state.replay + 1] = { player_id = target.id, action = "draw" }
   end
   finish_deferred_winner(state, pending_winner_id)
+end
+
+local function rotate_hands(state)
+  local original = {}
+  for hand_index, player in ipairs(state.players) do
+    original[hand_index] = player.hand
+  end
+  local count = #state.players
+  for hand_index = 1, count do
+    if not state.players[hand_index].out then
+      local from = ((hand_index - 1 - state.direction + count * 4) % count) + 1
+      for _ = 1, count do
+        if not state.players[from].out then
+          break
+        end
+        from = ((from - 1 - state.direction + count * 4) % count) + 1
+      end
+      state.players[hand_index].hand = original[from]
+    end
+  end
 end
 
 function rules.apply_action(previous, action, now)
@@ -1382,6 +1426,55 @@ function rules.apply_action(previous, action, now)
     end
   end
 
+  local swap1_target
+  local swap1_give
+  if card.kind == "swap1" then
+    local target_id = action.target_id or action.targetId
+    if target_id == nil or target_id == "" then
+      return fail(previous, protocol.ERROR.MISSING_TARGET)
+    end
+    local target_position = player_index(state, target_id)
+    if target_position == nil then
+      return fail(previous, protocol.ERROR.MISSING_TARGET)
+    end
+    local candidate = state.players[target_position]
+    if candidate.id == actor.id or #candidate.hand == 0 then
+      return fail(previous, protocol.ERROR.MISSING_TARGET)
+    end
+    swap1_target = candidate
+    local give_id = action.give_card_id or action.giveCardId
+    if give_id == nil or give_id == "" then
+      return fail(previous, protocol.ERROR.UNKNOWN_CARD)
+    end
+    for _, held in ipairs(actor.hand) do
+      if held.id == give_id and held.id ~= card.id then
+        swap1_give = held
+        break
+      end
+    end
+    if swap1_give == nil then
+      return fail(previous, protocol.ERROR.UNKNOWN_CARD)
+    end
+  end
+
+  local force_trade_a
+  local force_trade_b
+  if card.kind == "wildForceTrade" then
+    local first_id = action.target_id or action.targetId
+    local second_id = action.trade_with_id or action.tradeWithId
+    if first_id == nil or first_id == "" or second_id == nil or second_id == ""
+      or first_id == second_id then
+      return fail(previous, protocol.ERROR.MISSING_TARGET)
+    end
+    local first_position = player_index(state, first_id)
+    local second_position = player_index(state, second_id)
+    if first_position == nil or second_position == nil then
+      return fail(previous, protocol.ERROR.MISSING_TARGET)
+    end
+    force_trade_a = state.players[first_position]
+    force_trade_b = state.players[second_position]
+  end
+
   table.remove(actor.hand, index)
   state.discard[#state.discard + 1] = card
   state.drawn_card_id = nil
@@ -1422,23 +1515,7 @@ function rules.apply_action(previous, action, now)
       actor.hand = swap_target.hand
       swap_target.hand = actor_hand
     elseif card.value == 0 then
-      local original = {}
-      for hand_index, player in ipairs(state.players) do
-        original[hand_index] = player.hand
-      end
-      local count = #state.players
-      for hand_index = 1, count do
-        if not state.players[hand_index].out then
-          local from = ((hand_index - 1 - state.direction + count * 4) % count) + 1
-          for _ = 1, count do
-            if not state.players[from].out then
-              break
-            end
-            from = ((from - 1 - state.direction + count * 4) % count) + 1
-          end
-          state.players[hand_index].hand = original[from]
-        end
-      end
+      rotate_hands(state)
     end
   end
 
@@ -1564,6 +1641,97 @@ function rules.apply_action(previous, action, now)
         state.pending_stack.pending_winner_id = actor.id
       end
     end
+  elseif card.kind == "swap1" then
+    if swap1_target ~= nil and swap1_give ~= nil then
+      local pick = rules.random_int(state.seed, #swap1_target.hand)
+      state.seed = rules.next_seed(state.seed)
+      local received = swap1_target.hand[pick + 1]
+      swap1_target.hand[pick + 1] = swap1_give
+      for give_position, held in ipairs(actor.hand) do
+        if held.id == swap1_give.id then
+          table.remove(actor.hand, give_position)
+          break
+        end
+      end
+      actor.hand[#actor.hand + 1] = received
+      state.events[#state.events + 1] = {
+        type = "swap1",
+        player_id = actor.id,
+        card_id = card.id,
+        text = swap1_target.id .. ":" .. swap1_give.id .. ":" .. received.id,
+        at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = actor.id,
+        action = "swap1",
+        card_id = card.id,
+        target_id = swap1_target.id,
+        give_card_id = swap1_give.id,
+        received_card_id = received.id,
+      }
+    end
+    advance(state, 1)
+  elseif card.kind == "refreshHand" then
+    local count = #actor.hand
+    local new_discard = {}
+    for _, held in ipairs(actor.hand) do
+      new_discard[#new_discard + 1] = held
+    end
+    for _, held in ipairs(state.discard) do
+      new_discard[#new_discard + 1] = held
+    end
+    state.discard = new_discard
+    actor.hand = {}
+    draw_cards(state, actor, count)
+    state.events[#state.events + 1] = {
+      type = "refreshHand",
+      player_id = actor.id,
+      card_id = card.id,
+      text = tostring(count),
+      at = #state.events,
+    }
+    state.replay[#state.replay + 1] = {
+      player_id = actor.id,
+      action = "refreshHand",
+      card_id = card.id,
+      count = count,
+    }
+    advance(state, 1)
+  elseif card.kind == "wildForceTrade" then
+    if force_trade_a ~= nil and force_trade_b ~= nil then
+      local held = force_trade_a.hand
+      force_trade_a.hand = force_trade_b.hand
+      force_trade_b.hand = held
+      state.events[#state.events + 1] = {
+        type = "wildForceTrade",
+        player_id = actor.id,
+        card_id = card.id,
+        text = force_trade_a.id .. ":" .. force_trade_b.id,
+        at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = actor.id,
+        action = "wildForceTrade",
+        card_id = card.id,
+        target_id = force_trade_a.id,
+        trade_with_id = force_trade_b.id,
+      }
+    end
+    advance(state, 1)
+  elseif card.kind == "wildPassHands" then
+    rotate_hands(state)
+    state.events[#state.events + 1] = {
+      type = "wildPassHands",
+      player_id = actor.id,
+      card_id = card.id,
+      at = #state.events,
+    }
+    state.replay[#state.replay + 1] = {
+      player_id = actor.id,
+      action = "wildPassHands",
+      card_id = card.id,
+    }
+    advance(state, 1)
   else
     advance(state, 1)
   end

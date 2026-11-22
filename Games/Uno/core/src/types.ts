@@ -17,7 +17,8 @@ export type GameMode =
   | "jumpIn"
   | "attack"
   | "noMercy"
-  | "flip";
+  | "flip"
+  | "swapPack";
 
 export type CardKind =
   | "number"
@@ -40,7 +41,11 @@ export type CardKind =
   | "flip"
   | "draw5"
   | "wildDraw2"
-  | "wildDrawColor";
+  | "wildDrawColor"
+  | "swap1"
+  | "refreshHand"
+  | "wildForceTrade"
+  | "wildPassHands";
 
 export interface Card {
   id: string;
@@ -73,6 +78,11 @@ export interface ReplayStep {
   action: string;
   cardId?: string;
   color?: Color;
+  targetId?: string;
+  giveCardId?: string;
+  tradeWithId?: string;
+  receivedCardId?: string;
+  count?: number;
 }
 
 export interface Player {
@@ -156,7 +166,19 @@ export interface GameState {
 }
 
 export type Action =
-  | { type: "play"; playerId: string; cardId: string; chosenColor?: Color; targetId?: string; target_id?: string; jump?: boolean }
+  | {
+      type: "play";
+      playerId: string;
+      cardId: string;
+      chosenColor?: Color;
+      targetId?: string;
+      target_id?: string;
+      giveCardId?: string;
+      give_card_id?: string;
+      tradeWithId?: string;
+      trade_with_id?: string;
+      jump?: boolean;
+    }
   | { type: "draw"; playerId: string }
   | { type: "challenge"; playerId: string; accept: boolean }
   | { type: "chooseColour" | "chooseColor"; playerId: string; color?: Color; colour?: Color; chosenColor?: Color };

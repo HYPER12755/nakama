@@ -33,6 +33,10 @@ export function cardId(card: Omit<Card, "id">): string {
   if (card.kind === "wildDraw10") return "wilddraw10";
   if (card.kind === "wildReverse4") return "wildreverse4";
   if (card.kind === "wildRoulette") return "wildroulette";
+  if (card.kind === "wildForceTrade") return "wildforcetrade";
+  if (card.kind === "wildPassHands") return "wildpasshands";
+  if (card.kind === "swap1") return `${card.color}-swap1`;
+  if (card.kind === "refreshHand") return `${card.color}-refreshhand`;
   if (card.kind === "discardAll") return `${card.color}-discardall`;
   if (card.kind === "skipEveryone") return `${card.color}-skipeveryone`;
   if (card.kind === "draw4") return `${card.color}-draw4`;
@@ -167,6 +171,20 @@ export function buildDeck(mode: GameMode = "classic"): Card[] {
     for (let copy = 0; copy < 4; copy += 1) {
       const base = { color: null, kind };
       deck.push({ id: `${base.kind}-${copy}`, ...base });
+    }
+  }
+  if (mode === "swapPack") {
+    for (const kind of ["swap1", "refreshHand"] as const) {
+      for (const color of LIGHT_COLORS) {
+        const base = { color, kind };
+        deck.push({ id: `${cardId(base)}-0`, ...base });
+      }
+    }
+    for (const kind of ["wildForceTrade", "wildPassHands"] as const) {
+      for (let copy = 0; copy < 4; copy += 1) {
+        const base = { color: null, kind };
+        deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+      }
     }
   }
   return deck;

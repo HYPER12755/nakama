@@ -426,6 +426,8 @@ local function handle_action(dispatcher, state, user_id, action)
     currentColor = state.game.current_color,
     targetId = action.target_id,
     chosenColor = action.chosen_color or action.colour or action.color,
+    giveCardId = action.give_card_id,
+    tradeWithId = action.trade_with_id,
   })
   broadcast_state(dispatcher, state)
   if state.game.finished then
@@ -496,6 +498,8 @@ local function handle_message(context, dispatcher, tick, state, message)
       card_id = payload.cardId,
       chosen_color = payload.chosenColor,
       target_id = payload.targetId or payload.target_id,
+      give_card_id = payload.giveCardId or payload.give_card_id,
+      trade_with_id = payload.tradeWithId or payload.trade_with_id,
       jump = payload.jump == true,
     }
   elseif message.op_code == OP.DRAW_REQUEST then
@@ -597,17 +601,31 @@ local function timeout_action(state)
         local chosen_color = nil
         if card.kind == "wild" or card.kind == "wild4" or card.kind == "wildAttack"
           or card.kind == "wildDraw6" or card.kind == "wildDraw10" or card.kind == "wildReverse4"
-          or card.kind == "wildDraw2" or card.kind == "wildDrawColor" then
+          or card.kind == "wildDraw2" or card.kind == "wildDrawColor"
+          or card.kind == "wildForceTrade" or card.kind == "wildPassHands" then
           local colors = game.mode == "flip" and game.flip_side == "dark"
             and protocol.DARK_COLORS or protocol.COLORS
           chosen_color = rules.most_common_color(game.players[index].hand, colors)
         end
         local target_id = nil
+        local give_card_id = nil
+        local trade_with_id = nil
         if (game.mode == "sevenO" or game.mode == "noMercy")
           and card.kind == "number" and card.value == 7 then
           target_id = rules.pick_target(game, player.user_id)
         elseif card.kind == "wildAttack" then
           target_id = rules.pick_target(game, player.user_id)
+        elseif card.kind == "swap1" then
+          target_id = rules.pick_target(game, player.user_id)
+          for _, held in ipairs(game.players[index].hand) do
+            if held.id ~= card.id then
+              give_card_id = held.id
+              break
+            end
+          end
+        elseif card.kind == "wildForceTrade" then
+          target_id = player.user_id
+          trade_with_id = rules.pick_target(game, player.user_id)
         end
         return {
           type = "play",
@@ -615,6 +633,8 @@ local function timeout_action(state)
           card_id = card.id,
           chosen_color = chosen_color,
           target_id = target_id,
+          give_card_id = give_card_id,
+          trade_with_id = trade_with_id,
         }
       end
     end

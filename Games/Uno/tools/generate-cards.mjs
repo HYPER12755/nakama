@@ -182,6 +182,100 @@ ${wheel}
 <text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">wildroulette ${copy}</text>`);
 }
 
+function handIcon(stroke, fill) {
+  return `<g fill="${fill}" stroke="${stroke}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">
+<rect x="-20" y="0" width="40" height="28" rx="11"/>
+<rect x="-19" y="-18" width="9" height="24" rx="4.5"/>
+<rect x="-7" y="-25" width="9" height="31" rx="4.5"/>
+<rect x="5" y="-23" width="9" height="29" rx="4.5"/>
+<rect x="17" y="-15" width="9" height="21" rx="4.5"/>
+<path d="M-22 6 a6 6 0 0 0 -5 9 l5 7" fill="none"/>
+</g>`;
+}
+
+function swapSymbol(fill, stroke) {
+  return `<g transform="translate(90 122)">
+<rect x="-48" y="-38" width="46" height="72" rx="7" fill="#ffffff" stroke="${stroke}" stroke-width="2.5" transform="rotate(-14 -25 -2)"/>
+<rect x="2" y="-38" width="46" height="72" rx="7" fill="${fill}" stroke="${stroke}" stroke-width="2.5" transform="rotate(14 25 -2)"/>
+<g fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+<path d="M-34 -50 L32 -50"/>
+<path d="M22 -60 L34 -50 L22 -40"/>
+<path d="M34 50 L-32 50"/>
+<path d="M-22 40 L-34 50 L-22 60"/>
+</g>
+</g>`;
+}
+
+function refreshSymbol() {
+  return `<g>
+<path d="M60.3 102.3 A42 42 0 1 1 50.5 146.4" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+<polygon points="50.5,146.4 64.5,158.3 47.5,164.5" fill="#ffffff"/>
+</g>`;
+}
+
+function forceTradeSymbol(stroke) {
+  return `<g transform="translate(90 128)">
+<g transform="translate(-32 2) scale(0.82) rotate(180)">${handIcon(stroke, "#ffffff")}</g>
+<g transform="translate(32 2) scale(0.82)">${handIcon(stroke, "#ffffff")}</g>
+<g fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+<path d="M-10 -18 L10 -18"/>
+<path d="M4 -25 L11 -18 L4 -11"/>
+<path d="M10 22 L-10 22"/>
+<path d="M-4 15 L-11 22 L-4 29"/>
+</g>
+</g>`;
+}
+
+function passHandsSymbol(stroke) {
+  return `<g transform="translate(90 130)">
+<g transform="translate(-28 -28) scale(0.7) rotate(-25)">${handIcon(stroke, "#ffffff")}</g>
+<g transform="translate(28 28) scale(0.7) rotate(155)">${handIcon(stroke, "#ffffff")}</g>
+<g fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+<path d="M-44 -4 A46 46 0 0 1 44 -4"/>
+<polygon points="46,4 34,-8 56,-8" fill="#ffffff" stroke="none"/>
+<path d="M44 4 A46 46 0 0 1 -44 4"/>
+<polygon points="-46,-4 -58,8 -34,8" fill="#ffffff" stroke="none"/>
+</g>
+</g>`;
+}
+
+function swap1Card(color, copy) {
+  const fill = COLORS[color];
+  return frame(`${corner(fill, "SWAP")}
+<ellipse cx="90" cy="132" rx="64" ry="80" fill="${fill}" transform="rotate(10 90 132)"/>
+${swapSymbol(fill, "#111827")}
+<text x="90" y="208" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="20" fill="#ffffff" stroke="#111827" stroke-width="1.5" paint-order="stroke">SWAP 1</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">${color} swap1 ${copy}</text>`);
+}
+
+function refreshHandCard(color, copy) {
+  const fill = COLORS[color];
+  return frame(`${corner(fill, "RFH")}
+<ellipse cx="90" cy="132" rx="64" ry="80" fill="${fill}" transform="rotate(-12 90 132)"/>
+<g transform="translate(0 -4)">${refreshSymbol()}</g>
+<g transform="translate(90 136) scale(0.72)">${handIcon("#111827", "#ffffff")}</g>
+<text x="90" y="208" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="14" fill="#ffffff" stroke="#111827" stroke-width="1.5" paint-order="stroke">REFRESH HAND</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">${color} refreshhand ${copy}</text>`);
+}
+
+function wildForceTradeCard(copy) {
+  return frame(`${corner(COLORS.red, "TRADE")}
+${WILD_QUADRANTS}
+<ellipse cx="90" cy="132" rx="60" ry="78" fill="#0f172a" transform="rotate(-12 90 132)"/>
+${forceTradeSymbol("#111827")}
+<text x="90" y="208" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="18" fill="#ffffff" stroke="#111827" stroke-width="1.5" paint-order="stroke">FORCE TRADE</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">wildforcetrade ${copy}</text>`);
+}
+
+function wildPassHandsCard(copy) {
+  return frame(`${corner(COLORS.red, "PASS")}
+${WILD_QUADRANTS}
+<ellipse cx="90" cy="132" rx="60" ry="78" fill="#0f172a" transform="rotate(-12 90 132)"/>
+${passHandsSymbol("#111827")}
+<text x="90" y="208" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="18" fill="#ffffff" stroke="#111827" stroke-width="1.5" paint-order="stroke">PASS HANDS</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">wildpasshands ${copy}</text>`);
+}
+
 const LIGHT_PALETTE = {
   red: [COLORS.red, "#ff8a75"],
   yellow: [COLORS.yellow, "#ffe680"],
@@ -406,6 +500,16 @@ for (let copy = 0; copy < 4; copy += 1) {
 for (let copy = 0; copy < 8; copy += 1) {
   writeFileSync(path.join(OUT, `wildreverse4-${copy}.svg`), wildReverse4Card(copy));
   writeFileSync(path.join(OUT, `wildroulette-${copy}.svg`), wildRouletteCard(copy));
+  count += 2;
+}
+for (const color of Object.keys(COLORS)) {
+  writeFileSync(path.join(OUT, `${color}-swap1-0.svg`), swap1Card(color, 0));
+  writeFileSync(path.join(OUT, `${color}-refreshhand-0.svg`), refreshHandCard(color, 0));
+  count += 2;
+}
+for (let copy = 0; copy < 4; copy += 1) {
+  writeFileSync(path.join(OUT, `wildforcetrade-${copy}.svg`), wildForceTradeCard(copy));
+  writeFileSync(path.join(OUT, `wildpasshands-${copy}.svg`), wildPassHandsCard(copy));
   count += 2;
 }
 for (const side of ["light", "dark"]) {

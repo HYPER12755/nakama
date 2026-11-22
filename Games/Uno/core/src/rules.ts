@@ -22,12 +22,12 @@ import {
 
 const NO_MERCY_WILD_KINDS: CardKind[] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4", "wildRoulette",
-  "wildDraw2", "wildDrawColor",
+  "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands",
 ];
 
 const WILD_COLOR_KINDS: CardKind[] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4",
-  "wildDraw2", "wildDrawColor",
+  "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands",
 ];
 
 export function drawCardValue(kind: CardKind): number {
@@ -200,7 +200,9 @@ export function createGame(
   }
 
   if (starter.kind === "wild" || starter.kind === "wildAttack"
-    || (rulesMode === UNO_MODE.FLIP && starter.kind.startsWith("wild"))) {
+    || (rulesMode === UNO_MODE.FLIP && starter.kind.startsWith("wild"))
+    || (rulesMode === UNO_MODE.SWAP_PACK
+      && (starter.kind === "wildForceTrade" || starter.kind === "wildPassHands"))) {
     starter.color = mostCommonColor(dealt[0].hand, colorsForSide("light"));
   }
   const color = starter.color;
@@ -492,6 +494,21 @@ export function mostCommonColor(hand: Card[], options: readonly Color[] = COLORS
     }
   }
   return best;
+}
+
+function rotateHands(state: GameState): void {
+  const original = state.players.map((player) => player.hand);
+  const count = state.players.length;
+  for (let playerIndex = 0; playerIndex < count; playerIndex += 1) {
+    if (state.players[playerIndex].out) {
+      continue;
+    }
+    let from = (playerIndex - state.direction + count * 4) % count;
+    for (let step = 0; step < count && state.players[from].out; step += 1) {
+      from = (from - state.direction + count * 4) % count;
+    }
+    state.players[playerIndex].hand = original[from];
+  }
 }
 
 export function applyAction(previous: GameState, action: Action, now = 0): MoveResult {
@@ -912,6 +929,44 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
     }
   }
 
+  let swap1Target: Player | undefined;
+  let swap1Give: Card | undefined;
+  if (card.kind === "swap1") {
+    const targetId = action.targetId ?? action.target_id;
+    if (targetId === undefined || targetId === "") {
+      return fail(previous, UNO_ERROR.MISSING_TARGET as "missing_target");
+    }
+    swap1Target = state.players.find((player) => (
+      player.id === targetId && player.id !== actor.id && player.hand.length > 0
+    ));
+    if (swap1Target === undefined) {
+      return fail(previous, UNO_ERROR.MISSING_TARGET as "missing_target");
+    }
+    const giveId = action.giveCardId ?? action.give_card_id;
+    if (giveId === undefined || giveId === "") {
+      return fail(previous, UNO_ERROR.UNKNOWN_CARD as "unknown_card");
+    }
+    swap1Give = actor.hand.find((held) => held.id === giveId && held.id !== card.id);
+    if (swap1Give === undefined) {
+      return fail(previous, UNO_ERROR.UNKNOWN_CARD as "unknown_card");
+    }
+  }
+
+  let forceTradeA: Player | undefined;
+  let forceTradeB: Player | undefined;
+  if (card.kind === "wildForceTrade") {
+    const firstId = action.targetId ?? action.target_id;
+    const secondId = action.tradeWithId ?? action.trade_with_id;
+    if (firstId === undefined || firstId === "" || secondId === undefined || secondId === "" || firstId === secondId) {
+      return fail(previous, UNO_ERROR.MISSING_TARGET as "missing_target");
+    }
+    forceTradeA = state.players.find((player) => player.id === firstId);
+    forceTradeB = state.players.find((player) => player.id === secondId);
+    if (forceTradeA === undefined || forceTradeB === undefined) {
+      return fail(previous, UNO_ERROR.MISSING_TARGET as "missing_target");
+    }
+  }
+
   actor.hand.splice(index, 1);
   state.discard.push(card);
   state.drawnCardId = null;
@@ -947,18 +1002,7 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
       actor.hand = swapTarget.hand;
       swapTarget.hand = actorHand;
     } else if (card.value === 0) {
-      const original = state.players.map((player) => player.hand);
-      const count = state.players.length;
-      for (let playerIndex = 0; playerIndex < count; playerIndex += 1) {
-        if (state.players[playerIndex].out) {
-          continue;
-        }
-        let from = (playerIndex - state.direction + count * 4) % count;
-        for (let step = 0; step < count && state.players[from].out; step += 1) {
-          from = (from - state.direction + count * 4) % count;
-        }
-        state.players[playerIndex].hand = original[from];
-      }
+      rotateHands(state);
     }
   }
 
@@ -1091,6 +1135,85 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
         };
       }
       break;
+    case "swap1": {
+      if (swap1Target !== undefined && swap1Give !== undefined) {
+        const pick = randomInt(state.seed, swap1Target.hand.length);
+        state.seed = nextSeed(state.seed);
+        const received = swap1Target.hand[pick];
+        swap1Target.hand[pick] = swap1Give;
+        const giveIndex = actor.hand.findIndex((held) => held.id === swap1Give.id);
+        actor.hand.splice(giveIndex, 1);
+        actor.hand.push(received);
+        state.events.push({
+          type: "swap1",
+          playerId: actor.id,
+          cardId: card.id,
+          text: `${swap1Target.id}:${swap1Give.id}:${received.id}`,
+          at: state.events.length,
+        });
+        state.replay.push({
+          playerId: actor.id,
+          action: "swap1",
+          cardId: card.id,
+          targetId: swap1Target.id,
+          giveCardId: swap1Give.id,
+          receivedCardId: received.id,
+        });
+      }
+      advance(state, 1);
+      break;
+    }
+    case "refreshHand": {
+      const count = actor.hand.length;
+      state.discard.unshift(...actor.hand);
+      actor.hand = [];
+      drawCards(state, actor, count);
+      state.events.push({
+        type: "refreshHand",
+        playerId: actor.id,
+        cardId: card.id,
+        text: String(count),
+        at: state.events.length,
+      });
+      state.replay.push({ playerId: actor.id, action: "refreshHand", cardId: card.id, count });
+      advance(state, 1);
+      break;
+    }
+    case "wildForceTrade": {
+      if (forceTradeA !== undefined && forceTradeB !== undefined) {
+        const held = forceTradeA.hand;
+        forceTradeA.hand = forceTradeB.hand;
+        forceTradeB.hand = held;
+        state.events.push({
+          type: "wildForceTrade",
+          playerId: actor.id,
+          cardId: card.id,
+          text: `${forceTradeA.id}:${forceTradeB.id}`,
+          at: state.events.length,
+        });
+        state.replay.push({
+          playerId: actor.id,
+          action: "wildForceTrade",
+          cardId: card.id,
+          targetId: forceTradeA.id,
+          tradeWithId: forceTradeB.id,
+        });
+      }
+      advance(state, 1);
+      break;
+    }
+    case "wildPassHands": {
+      rotateHands(state);
+      state.events.push({
+        type: "wildPassHands",
+        playerId: actor.id,
+        cardId: card.id,
+        at: state.events.length,
+      });
+      state.replay.push({ playerId: actor.id, action: "wildPassHands", cardId: card.id });
+      advance(state, 1);
+      break;
+    }
     default:
       advance(state, 1);
       break;

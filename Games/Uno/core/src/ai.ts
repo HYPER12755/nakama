@@ -4,7 +4,7 @@ import { colorsForSide, type Action, type Card, type Color, type GameState, type
 
 const WILD_KINDS: Card["kind"][] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4",
-  "wildDraw2", "wildDrawColor",
+  "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands",
 ];
 
 function preferredColor(state: GameState, hand: Card[]): Color {
@@ -24,6 +24,10 @@ function cardScore(state: GameState, card: Card): number {
   if (card.kind === "wildRoulette") return 96;
   if (card.kind === "wildDrawColor") return 94;
   if (card.kind === "wildDraw2") return 92;
+  if (card.kind === "wildForceTrade") return 115;
+  if (card.kind === "refreshHand") return 112;
+  if (card.kind === "swap1") return 95;
+  if (card.kind === "wildPassHands") return 60;
   if (card.kind === "wild") return 90;
   if (card.kind === "flip") return 10;
   if (card.kind === "skipEveryone") return 88;
@@ -45,6 +49,19 @@ function pickTarget(state: GameState, playerId: string): string | null {
     }
   }
   return best === null ? null : best.id;
+}
+
+function pickGiveCard(state: GameState, hand: Card[], playedId: string): string | undefined {
+  let worst: Card | undefined;
+  for (const card of hand) {
+    if (card.id === playedId) {
+      continue;
+    }
+    if (worst === undefined || cardScore(state, card) < cardScore(state, worst)) {
+      worst = card;
+    }
+  }
+  return worst?.id;
 }
 
 export function chooseAction(state: GameState, playerId: string, now = 0): Action | null {
@@ -169,20 +186,45 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
   ranked.sort((left, right) => cardScore(state, right) - cardScore(state, left));
   let best: Card | null = null;
   let targetId: string | undefined;
+  let giveCardId: string | undefined;
+  let tradeWithId: string | undefined;
   for (const card of ranked) {
-    let needsTarget = false;
+    let usable = true;
     if ((state.mode === UNO_MODE.SEVEN_O || state.mode === UNO_MODE.NO_MERCY)
       && card.kind === "number" && card.value === 7) {
-      needsTarget = true;
-    } else if (card.kind === "wildAttack") {
-      needsTarget = true;
-    }
-    if (needsTarget) {
       const target = pickTarget(state, playerId);
       if (target === null) {
-        continue;
+        usable = false;
+      } else {
+        targetId = target;
       }
-      targetId = target;
+    } else if (card.kind === "wildAttack") {
+      const target = pickTarget(state, playerId);
+      if (target === null) {
+        usable = false;
+      } else {
+        targetId = target;
+      }
+    } else if (card.kind === "swap1") {
+      const target = pickTarget(state, playerId);
+      const give = target === null ? undefined : pickGiveCard(state, player.hand, card.id);
+      if (target === null || give === undefined) {
+        usable = false;
+      } else {
+        targetId = target;
+        giveCardId = give;
+      }
+    } else if (card.kind === "wildForceTrade") {
+      const partner = pickTarget(state, playerId);
+      if (partner === null) {
+        usable = false;
+      } else {
+        targetId = playerId;
+        tradeWithId = partner;
+      }
+    }
+    if (!usable) {
+      continue;
     }
     best = card;
     break;
@@ -199,6 +241,8 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
     cardId: best.id,
     ...(chosenColor === undefined ? {} : { chosenColor }),
     ...(targetId === undefined ? {} : { targetId }),
+    ...(giveCardId === undefined ? {} : { giveCardId }),
+    ...(tradeWithId === undefined ? {} : { tradeWithId }),
   };
 }
 

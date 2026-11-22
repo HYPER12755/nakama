@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 270" width="180" height="270" role="img">
+<defs>
+<linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2979FF"/><stop offset="1" stop-color="#82B1FF"/></linearGradient>
+<radialGradient id="glow"><stop offset="0" stop-color="#2979FF" stop-opacity="0.42"/><stop offset="1" stop-color="#2979FF" stop-opacity="0"/></radialGradient>
+<filter id="soft"><feGaussianBlur stdDeviation="8"/></filter>
+</defs>
+<rect x="3" y="3" width="174" height="264" rx="10" fill="#0A0A0E" stroke="url(#edge)" stroke-width="4"/>
+<rect x="6" y="6" width="168" height="258" rx="8" fill="none" stroke="#FF003C" stroke-opacity="0.65" stroke-width="0.8"/>
+<rect x="9" y="9" width="162" height="252" rx="7" fill="url(#glow)"/>
+
+<g transform="rotate(-12 90 128)">
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="9" filter="url(#soft)" opacity="0.7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="#fff" stroke-opacity="0.85" stroke-width="2"/>
+</g>
+<g style="filter:drop-shadow(0 0 8px #2979FF)"><g transform="translate(90 122)">
+<rect x="-48" y="-38" width="46" height="72" rx="7" fill="#ffffff" stroke="#ffffff" stroke-width="2.5" transform="rotate(-14 -25 -2)"/>
+<rect x="2" y="-38" width="46" height="72" rx="7" fill="#0A0A0E" stroke="#ffffff" stroke-width="2.5" transform="rotate(14 25 -2)"/>
+<g fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+<path d="M-34 -50 L32 -50"/>
+<path d="M22 -60 L34 -50 L22 -40"/>
+<path d="M34 50 L-32 50"/>
+<path d="M-22 40 L-34 50 L-22 60"/>
+</g>
+</g></g>
+<text x="90" y="214" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="19" fill="#2979FF" style="filter:drop-shadow(0 0 10px #82B1FF)">SWAP 1</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700" font-style="italic" fill="#b9c2d0">swap1 0</text>
+</svg>
