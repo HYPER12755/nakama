@@ -80,6 +80,18 @@ local function public_pending_challenge(game)
   }
 end
 
+local function public_pending_hit(game)
+  local pending = game ~= nil and game.pending_hit or nil
+  if pending == nil then
+    return nil
+  end
+  return {
+    amount = pending.amount,
+    ownerId = pending.owner_id,
+    targetId = pending.target_id,
+  }
+end
+
 local function public_jump_window(game)
   local window = game ~= nil and game.jump_window or nil
   if window == nil then
@@ -140,6 +152,7 @@ local function state_payload(state, viewer_id)
     topCard = game ~= nil and game.discard[#game.discard] or nil,
     pendingChallenge = public_pending_challenge(game),
     pendingStack = public_pending_stack(game),
+    pendingHit = public_pending_hit(game),
     jumpWindow = public_jump_window(game),
     players = {},
     spectators = {},
@@ -345,6 +358,7 @@ local function handle_action(dispatcher, state, user_id, action)
     return protocol.ERROR.GAME_OVER
   end
   local pending = state.game.pending_challenge
+  local pending_hit = state.game.pending_hit
   local jump_window = state.game.jump_window
   if jump_window ~= nil then
     if user_id == jump_window.owner_id then
@@ -353,6 +367,10 @@ local function handle_action(dispatcher, state, user_id, action)
   elseif pending ~= nil then
     if pending.target_id ~= user_id then
       return protocol.ERROR.BAD_CHALLENGE
+    end
+  elseif pending_hit ~= nil then
+    if pending_hit.target_id ~= user_id then
+      return protocol.ERROR.NOT_YOUR_TURN
     end
   elseif not require_turn(state, user_id) then
     return protocol.ERROR.NOT_YOUR_TURN
@@ -369,6 +387,7 @@ local function handle_action(dispatcher, state, user_id, action)
     action = action,
     turn = state.game.turn - 1,
     currentColor = state.game.current_color,
+    targetId = action.target_id,
   })
   broadcast_state(dispatcher, state)
   if state.game.finished then
@@ -491,6 +510,17 @@ local function timeout_action(state)
   if game == nil or game.pending_challenge ~= nil or game.jump_window ~= nil then
     return nil
   end
+  if game.pending_hit ~= nil then
+    for game_index, player in ipairs(game.players) do
+      if player.id == game.pending_hit.target_id then
+        local seat = state.player_order[game_index]
+        if seat ~= nil and seat.user_id ~= nil then
+          return { type = "draw", player_id = seat.user_id }
+        end
+      end
+    end
+    return nil
+  end
   local index = game.turn
   local player = state.player_order[index]
   if player == nil or player.user_id == nil or game.players[index] == nil then
@@ -503,11 +533,13 @@ local function timeout_action(state)
     for _, card in ipairs(game.players[index].hand) do
       if card.id == game.drawn_card_id then
         local chosen_color = nil
-        if card.kind == "wild" or card.kind == "wild4" then
+        if card.kind == "wild" or card.kind == "wild4" or card.kind == "wildAttack" then
           chosen_color = rules.most_common_color(game.players[index].hand)
         end
         local target_id = nil
         if game.mode == "sevenO" and card.kind == "number" and card.value == 7 then
+          target_id = rules.pick_target(game, player.user_id)
+        elseif card.kind == "wildAttack" then
           target_id = rules.pick_target(game, player.user_id)
         end
         return {

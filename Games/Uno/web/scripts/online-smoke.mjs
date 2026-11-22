@@ -589,7 +589,8 @@ async function reconnectResign() {
   const bobStart = await waitForStart(bob, "reconnect bob");
   const before = seatOf(bobStart.data, bob);
   assert(aliceStart.data.started === true, "reconnect table should be started");
-  assert(before?.hand?.length === HAND_SIZE, "bob should have a full hand before leaving");
+  const expectedBefore = before?.seat === 0 ? HAND_SIZE + 2 : HAND_SIZE;
+  assert(before?.hand?.length === expectedBefore, "bob should have a full hand before leaving");
 
   bob.socket.disconnect(false);
   await waitFor(
@@ -901,6 +902,120 @@ async function jumpInRoom() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "jumpIn game over", STATE_TIMEOUT_MS);
 }
 
+async function attackRoom() {
+  const alice = await authenticate("attack-alice");
+  const bob = await authenticate("attack-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 31,
+    rulesMode: "attack",
+  });
+  assert(
+    created?.ok === true && created.rulesMode === "attack" && typeof created.matchId === "string",
+    `attack room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  const resolved = await rpc(bob, "moongames_room_code_resolve", {
+    code: created.roomCode,
+    gameId: "uno",
+  });
+  assert(
+    resolved?.ok === true && resolved.matchId === matchId,
+    `attack room code failed: ${JSON.stringify(resolved)}`,
+  );
+
+  await Promise.all([
+    alice.socket.joinMatch(matchId),
+    bob.socket.joinMatch(matchId),
+  ]);
+  const aliceStart = await waitState(
+    alice.socket,
+    "attack alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "attack bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "attack", "attack mode must reach alice");
+  assert(bobStart.data.rulesMode === "attack", "attack mode must reach bob");
+  assert(aliceStart.data.turn === 0, "seed 31 should start at seat 0");
+  assert(aliceStart.data.topCard?.id === "yellow-1-1", "seed 31 starter should be yellow 1");
+  assert(aliceStart.data.pendingHit == null, "no pending hit at the start");
+  assert(legalCardIds(aliceStart.data).includes("yellow-hit1-0"), "Alice should be able to play a Hit card");
+  assert(
+    seatOf(bobStart.data, bob).hand.some((card) => card.id === "green-hit1-0"),
+    "Bob should hold a Hit card to deflect",
+  );
+  console.log("[ok] attack private room reports rulesMode and a deterministic hit setup on both clients");
+
+  await send(alice, matchId, OP.PLAY_REQUEST, { cardId: "yellow-hit1-0" });
+  const aliceHit = await waitState(
+    alice.socket,
+    "attack first hit on alice",
+    (state) => state.pendingHit?.amount === 1,
+  );
+  const bobHit = await waitState(
+    bob.socket,
+    "attack first hit on bob",
+    (state) => state.pendingHit?.amount === 1,
+  );
+  for (const [state, label] of [[aliceHit.data, "alice"], [bobHit.data, "bob"]]) {
+    assert(state.pendingHit.targetId === bob.session.user_id, `${label}: first hit should target Bob`);
+    assert(state.pendingHit.ownerId === alice.session.user_id, `${label}: Alice should own the first hit`);
+    assert(state.turn === 1, `${label}: the hit target should hold the turn`);
+  }
+  assert(legalCardIds(bobHit.data).includes("green-hit1-0"), "Bob should be allowed to deflect");
+  console.log("[ok] a Hit card opens an authoritative pending hit aimed at the next player");
+
+  await send(bob, matchId, OP.PLAY_REQUEST, { cardId: "green-hit1-0" });
+  const aliceDeflected = await waitState(
+    alice.socket,
+    "attack deflected hit on alice",
+    (state) => state.pendingHit?.amount === 2 && state.pendingHit.targetId === alice.session.user_id,
+  );
+  const bobDeflected = await waitState(
+    bob.socket,
+    "attack deflected hit on bob",
+    (state) => state.pendingHit?.amount === 2 && state.pendingHit.targetId === alice.session.user_id,
+  );
+  for (const [state, label] of [[aliceDeflected.data, "alice"], [bobDeflected.data, "bob"]]) {
+    assert(state.pendingHit.ownerId === bob.session.user_id, `${label}: Bob should own the deflected hit`);
+    assert(state.turn === 0, `${label}: the deflected target should hold the turn`);
+    assert(state.topCard?.id === "green-hit1-0", `${label}: the deflect card should be on top`);
+  }
+  console.log("[ok] a Hit deflection adds to the hit and redirects it");
+
+  const before = seatOf(aliceDeflected.data, alice).count;
+  await send(alice, matchId, OP.DRAW_REQUEST, {});
+  const postTake = (state) => state.pendingHit == null
+    && state.topCard?.id === "green-hit1-0"
+    && state.turn === 1;
+  const taken = await waitState(
+    bob.socket,
+    "attack hit taken on bob",
+    postTake,
+  );
+  const takenAlice = await waitState(
+    alice.socket,
+    "attack hit taken on alice",
+    postTake,
+  );
+  for (const [state, label] of [[taken.data, "bob"], [takenAlice.data, "alice"]]) {
+    assert(state.turn === 1, `${label}: taking the hit should pass the turn to the deflector`);
+    const after = seatOf(state, alice).count;
+    assert(
+      after >= before && after <= before + 6,
+      `${label}: launcher draw should be 0..6 cards for a two-count hit, got ${after - before}`,
+    );
+  }
+  console.log("[ok] taking a hit resolves the launcher draw on both clients");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "attack game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -926,6 +1041,7 @@ async function main() {
     await sevenOBattle();
     await progressiveRoom();
     await jumpInRoom();
+    await attackRoom();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

@@ -336,6 +336,51 @@ test("matchmaker matches only tickets that agree on jumpIn mode", function()
   assert_equal(created[#created].params.rulesMode, "jumpIn", "aliased mode passed")
 end)
 
+test("creates an attack private room through the RPC", function()
+  local response = rpcs.uno_create_private_match(
+    { user_id = "u1", username = "Alice" },
+    { seats = 2, rulesMode = "attack" }
+  )
+  assert_equal(response:find("rulesMode=attack", 1, true) ~= nil, true, "mode in response")
+  assert_equal(created[#created].params.rulesMode, "attack", "mode passed to the match")
+end)
+
+test("carries attack mode through invites and attachment", function()
+  local room = games.uno.create_room({ user_id = "u1", username = "Alice" }, {
+    seats = 2,
+    rulesMode = "attack",
+  }, { user_id = "u2", username = "Bob" })
+  assert_equal(room.rulesMode, "attack", "invite response mode")
+  assert_equal(room.metadata.rulesMode, "attack", "invite metadata mode")
+  assert_equal(created[#created].params.rulesMode, "attack", "invite match mode")
+  local attached = games.uno.attach_room({ user_id = "u1", username = "Alice" }, {
+    matchId = "match-1",
+    metadata = { rulesMode = "attack" },
+  })
+  assert_equal(attached.rulesMode, "attack", "attached room mode")
+  assert_equal(attached.metadata.rulesMode, "attack", "attached invite metadata mode")
+end)
+
+test("matchmaker matches only tickets that agree on attack mode", function()
+  local pair = matchmakers.uno({}, {
+    { presence = { user_id = "a", username = "A" }, properties = { game = "uno", seats = 2, rulesMode = "attack" } },
+    { presence = { user_id = "b", username = "B" }, properties = { game = "uno", seats = 2, rulesMode = "attack" } },
+  })
+  assert_equal(pair ~= nil, true, "attack pair created")
+  assert_equal(created[#created].params.rulesMode, "attack", "attack passed to match")
+  local mixed = matchmakers.uno({}, {
+    { presence = { user_id = "a" }, properties = { game = "uno", seats = 2, rulesMode = "attack" } },
+    { presence = { user_id = "b" }, properties = { game = "uno", seats = 2, rulesMode = "classic" } },
+  })
+  assert_equal(mixed, nil, "mixed modes refused")
+  local aliased = matchmakers.uno({}, {
+    { presence = { user_id = "a" }, properties = { game = "uno", seats = 2, mode = "attack" } },
+    { presence = { user_id = "b" }, properties = { game = "uno", seats = 2, mode = "attack" } },
+  })
+  assert_equal(aliased ~= nil, true, "mode alias accepted")
+  assert_equal(created[#created].params.rulesMode, "attack", "aliased mode passed")
+end)
+
 if failures > 0 then
   io.stderr:write(failures .. " Uno RPC test(s) failed\n")
   os.exit(1)

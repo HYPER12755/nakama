@@ -1010,6 +1010,256 @@ test("allows chained jumps", function()
   assert_equal(second.jump_window.owner_id, "p3", "last jumper owns window")
 end)
 
+local hit1_red = { id = "red-hit1-0", color = "red", kind = "hit1" }
+local hit2_green = { id = "green-hit2-0", color = "green", kind = "hit2" }
+local wild_attack = { id = "wildattack-0", color = nil, kind = "wildAttack" }
+local discard_red = { id = "red-discardall-0", color = "red", kind = "discardAll" }
+local discard_yellow = { id = "yellow-discardall-0", color = "yellow", kind = "discardAll" }
+local reverse_red = { id = "red-reverse-0", color = "red", kind = "reverse" }
+local one_red = { id = "red-1-0", color = "red", kind = "number", value = 1 }
+
+local function attack_game(hand, color, seed, seat_count)
+  local ids_list = { "p1", "p2", "p3" }
+  if seat_count == 2 then
+    ids_list = { "p1", "p2" }
+  end
+  local game = rules.create_game(seed or 42, players(ids_list), 0, "attack")
+  game.turn = 1
+  game.direction = 1
+  game.current_color = color or "red"
+  game.drawn_card_id = nil
+  game.pending_challenge = nil
+  game.pending_stack = nil
+  game.pending_hit = nil
+  game.jump_window = nil
+  game.finished = false
+  game.winner = nil
+  for _, player in ipairs(game.players) do
+    player.hand = {}
+  end
+  game.players[1].hand = hand
+  return game
+end
+
+local function kind_count(deck, kind)
+  local count = 0
+  for _, card in ipairs(deck) do
+    if card.kind == kind then
+      count = count + 1
+    end
+  end
+  return count
+end
+
+test("exposes attack as an authoritative mode with a 112 card deck", function()
+  assert_equal(protocol.is_rules_mode("attack"), true, "protocol accepts attack")
+  assert_equal(protocol.normalize_rules_mode("attack"), "attack", "protocol normalizes attack")
+  local game = rules.create_game(7, players({ "p1", "p2", "p3" }), 0, "attack")
+  assert_equal(game.mode, "attack", "game mode")
+  assert_equal(game.pending_hit, nil, "no pending hit at creation")
+  local deck = rules.build_deck("attack")
+  assert_equal(#deck, 112, "deck size")
+  assert_equal(kind_count(deck, "number"), 72, "number cards")
+  assert_equal(kind_count(deck, "hit1"), 4, "hit one cards")
+  assert_equal(kind_count(deck, "hit2"), 8, "hit two cards")
+  assert_equal(kind_count(deck, "discardAll"), 8, "discard all cards")
+  assert_equal(kind_count(deck, "reverse"), 4, "reverse cards")
+  assert_equal(kind_count(deck, "skip"), 8, "skip cards")
+  assert_equal(kind_count(deck, "wild"), 4, "wild cards")
+  assert_equal(kind_count(deck, "wildAttack"), 4, "wild attack cards")
+  assert_equal(kind_count(deck, "draw2"), 0, "no draw two")
+  assert_equal(kind_count(deck, "wild4"), 0, "no wild four")
+  local has_zero = false
+  for _, card in ipairs(deck) do
+    if card.value == 0 then
+      has_zero = true
+    end
+  end
+  assert_equal(has_zero, false, "no zero cards")
+  assert_equal(#rules.build_deck(), 108, "classic deck unchanged")
+end)
+
+test("draws seeded 0-3 cards per launcher press and advances the seed", function()
+  local game = attack_game({}, "red", 42)
+  assert_equal(game.seed, 2783053479, "shuffled seed")
+  local expected = { 1, 1, 1, 2 }
+  for press, wanted in ipairs(expected) do
+    local actor = game.players[game.turn]
+    local before = #actor.hand
+    local seed_before = game.seed
+    local state, ok = rules.apply_action(game, { type = "draw", player_id = actor.id })
+    assert_equal(ok, true, "launcher press " .. press)
+    local after = 0
+    for _, player in ipairs(state.players) do
+      if player.id == actor.id then
+        after = #player.hand
+      end
+    end
+    assert_equal(after - before, wanted, "launcher count " .. press)
+    assert_equal(state.seed == seed_before, false, "seed advanced " .. press)
+    assert_equal(state.drawn_card_id, nil, "no playable drawn card")
+    game = state
+  end
+end)
+
+test("sets a pending hit and takes it with launcher draws", function()
+  local game = attack_game({ hit1_red }, "red")
+  local state, ok, error_code = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = hit1_red.id,
+  })
+  assert_equal(ok, true, "hit played: " .. tostring(error_code))
+  assert_equal(state.pending_hit.amount, 1, "hit amount")
+  assert_equal(state.pending_hit.owner_id, "p1", "hit owner")
+  assert_equal(state.pending_hit.target_id, "p2", "hit target")
+  assert_equal(state.turn, 2, "target's turn")
+  local moves = rules.legal_moves(state, "p2")
+  assert_equal(moves.can_draw, true, "target can take")
+  assert_equal(rules.legal_moves(state, "p1").can_draw, false, "owner cannot act")
+  local taken, taken_ok = rules.apply_action(state, { type = "draw", player_id = "p2" })
+  assert_equal(taken_ok, true, "hit taken")
+  assert_equal(taken.pending_hit, nil, "hit cleared")
+  assert_equal(#taken.players[2].hand, 1, "one launcher card drawn")
+  assert_equal(taken.turn, 3, "turn passed")
+end)
+
+test("presses the launcher once per hit for Hit 2", function()
+  local game = attack_game({ hit2_green }, "green", 123456789)
+  local played, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = hit2_green.id,
+  })
+  assert_equal(ok, true, "hit two played")
+  assert_equal(played.pending_hit.amount, 2, "two hits")
+  local taken, taken_ok = rules.apply_action(played, { type = "draw", player_id = "p2" })
+  assert_equal(taken_ok, true, "hits taken")
+  assert_equal(#taken.players[2].hand, 5, "three plus two launcher cards")
+end)
+
+test("deflects a hit with any hit card and accumulates the amount", function()
+  local game = attack_game({ hit1_red }, "red")
+  game.players[2].hand = { hit2_green, blue_zero }
+  local played = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = hit1_red.id,
+  })
+  local deflected, ok, error_code = rules.apply_action(played, {
+    type = "play", player_id = "p2", card_id = hit2_green.id,
+  })
+  assert_equal(ok, true, "deflect accepted: " .. tostring(error_code))
+  assert_equal(deflected.pending_hit.amount, 3, "accumulated amount")
+  assert_equal(deflected.pending_hit.owner_id, "p2", "new owner")
+  assert_equal(deflected.pending_hit.target_id, "p3", "new target")
+  assert_equal(deflected.turn, 3, "turn on new target")
+  assert_equal(deflected.current_color, "green", "colour changed")
+  assert_equal(join(ids(deflected.players[2].hand)), blue_zero.id, "spare card kept")
+end)
+
+test("rejects a deflection that is not a hit card", function()
+  local game = attack_game({ hit1_red }, "red")
+  game.players[2].hand = { blue_zero }
+  local played = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = hit1_red.id,
+  })
+  local _, ok, error_code = rules.apply_action(played, {
+    type = "play", player_id = "p2", card_id = blue_zero.id,
+  })
+  assert_equal(ok, false, "deflection refused")
+  assert_equal(error_code, protocol.ERROR.ILLEGAL_CARD, "error code")
+end)
+
+test("Wild Attack requires a valid target and hits them twice", function()
+  local game = attack_game({ wild_attack, one_red }, "red")
+  local cases = { {}, { target_id = "p1" }, { target_id = "nobody" } }
+  for _, extra in ipairs(cases) do
+    local action = {
+      type = "play", player_id = "p1", card_id = wild_attack.id, chosen_color = "blue",
+    }
+    for key, value in pairs(extra) do
+      action[key] = value
+    end
+    local _, ok, error_code = rules.apply_action(game, action)
+    assert_equal(ok, false, "target required")
+    assert_equal(error_code, protocol.ERROR.MISSING_TARGET, "missing target code")
+  end
+  local no_color, color_ok, color_error = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = wild_attack.id, target_id = "p3",
+  })
+  assert_equal(color_ok, false, "colour required")
+  assert_equal(color_error, protocol.ERROR.MISSING_COLOR, "missing colour code")
+  local played, ok, error_code = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = wild_attack.id,
+    chosen_color = "blue", target_id = "p3",
+  })
+  assert_equal(ok, true, "wild attack played: " .. tostring(error_code))
+  assert_equal(played.current_color, "blue", "chosen colour")
+  assert_equal(played.pending_hit.amount, 2, "two hits")
+  assert_equal(played.pending_hit.target_id, "p3", "chosen target")
+  assert_equal(played.turn, 3, "turn on target")
+  local taken, taken_ok = rules.apply_action(played, { type = "draw", player_id = "p3" })
+  assert_equal(taken_ok, true, "target took hits")
+  assert_equal(taken.turn, 1, "play continues after target")
+end)
+
+test("deflects with Wild Attack and redirects the hit", function()
+  local game = attack_game({ hit1_red }, "red")
+  game.players[2].hand = { wild_attack }
+  local played = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = hit1_red.id,
+  })
+  local deflected, ok = rules.apply_action(played, {
+    type = "play", player_id = "p2", card_id = wild_attack.id,
+    chosen_color = "yellow", target_id = "p1",
+  })
+  assert_equal(ok, true, "redirect accepted")
+  assert_equal(deflected.current_color, "yellow", "chosen colour")
+  assert_equal(deflected.pending_hit.amount, 3, "accumulated amount")
+  assert_equal(deflected.pending_hit.target_id, "p1", "redirected target")
+  assert_equal(deflected.turn, 1, "turn redirected")
+end)
+
+test("Discard All removes every card of its colour and can win", function()
+  local game = attack_game({ discard_red, one_red, red_zero }, "red")
+  game.players[1].hand[3] = blue_zero
+  local state, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = discard_red.id,
+  })
+  assert_equal(ok, true, "discard all played")
+  assert_equal(join(ids(state.players[1].hand)), blue_zero.id, "other colour kept")
+  assert_equal(state.discard[#state.discard].id, one_red.id, "same colour card discarded")
+  assert_equal(state.finished, false, "game continues")
+
+  local final = attack_game({ discard_red, one_red }, "red")
+  local won, won_ok = rules.apply_action(final, {
+    type = "play", player_id = "p1", card_id = discard_red.id,
+  })
+  assert_equal(won_ok, true, "final discard all played")
+  assert_equal(won.finished, true, "hand finished")
+  assert_equal(won.winner, "p1", "winner")
+
+  local other = attack_game({ discard_yellow, blue_zero }, "blue")
+  table.insert(other.discard, { id = discard_red.id, color = "red", kind = "discardAll" })
+  local cross, cross_ok = rules.apply_action(other, {
+    type = "play", player_id = "p1", card_id = discard_yellow.id,
+  })
+  assert_equal(cross_ok, true, "discard all on discard all")
+  assert_equal(cross.current_color, "yellow", "colour updated")
+end)
+
+test("attack mode always allows a draw and treats two player Reverse as Skip", function()
+  local game = attack_game({ one_red }, "red")
+  assert_equal(rules.legal_moves(game, "p1").can_draw, true, "draw always available")
+  local drawn, ok = rules.apply_action(game, { type = "draw", player_id = "p1" })
+  assert_equal(ok, true, "draw accepted")
+  assert_equal(drawn.drawn_card_id, nil, "drawn card not playable")
+  assert_equal(drawn.turn, 2, "turn passed")
+
+  local two = attack_game({ reverse_red }, "red", 42, 2)
+  local reversed, reverse_ok = rules.apply_action(two, {
+    type = "play", player_id = "p1", card_id = reverse_red.id,
+  })
+  assert_equal(reverse_ok, true, "reverse played")
+  assert_equal(reversed.turn, 1, "actor keeps the turn")
+  assert_equal(reversed.direction, 1, "direction unchanged")
+end)
+
 if failures > 0 then
   io.stderr:write(failures .. " Uno rules test(s) failed\n")
   os.exit(1)

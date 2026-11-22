@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { createGame, type GameState } from "@moongames/uno-core";
 import { normalizeHistory, normalizeView } from "../src/hooks/useUnoGame";
+import { normalizePendingHit, viewFromCore } from "../src/lib/view";
 
 describe("Uno online view normalization", () => {
   it("maps snake_case challenge and result fields", () => {
@@ -27,6 +29,44 @@ describe("Uno online view normalization", () => {
     expect(view.result).toBeNull();
     expect(view.players).toEqual([]);
     expect(view.pendingStack).toBeNull();
+    expect(view.pendingHit).toBeNull();
+  });
+
+  it("maps camelCase and snake_case pending hit fields", () => {
+    const camel = normalizeView({
+      pendingHit: { ownerId: "u1", targetId: "u2", amount: 3 },
+    }, "u2");
+    expect(camel.pendingHit).toEqual({ ownerId: "u1", targetId: "u2", amount: 3 });
+
+    const snake = normalizeView({
+      pending_hit: { owner_id: "u3", target_id: "u4", amount: 2 },
+    }, "u4");
+    expect(snake.pendingHit).toEqual({ ownerId: "u3", targetId: "u4", amount: 2 });
+  });
+
+  it("leaves absent and invalid pending hits empty with safe defaults", () => {
+    expect(normalizePendingHit(null)).toBeNull();
+    expect(normalizePendingHit({ targetId: "u1" })).toBeNull();
+    expect(normalizePendingHit({ amount: 0, targetId: "u1" })).toBeNull();
+    expect(normalizePendingHit({ amount: Number.NaN, targetId: "u1" })).toBeNull();
+    expect(normalizeView({ pendingHit: null }, "u1").pendingHit).toBeNull();
+    expect(normalizeView({ pendingHit: { amount: 2 } }, "u1").pendingHit).toEqual({
+      amount: 2, ownerId: "", targetId: "",
+    });
+  });
+
+  it("reads a pending hit from a local game state", () => {
+    const state = {
+      ...createGame(7, [
+        { id: "local", name: "You" },
+        { id: "ai1", name: "Computer" },
+      ]),
+      pendingHit: { amount: 4, ownerId: "ai1", targetId: "local" },
+    } as GameState;
+    expect(viewFromCore(state, "local").pendingHit).toEqual({
+      amount: 4, ownerId: "ai1", targetId: "local",
+    });
+    expect(viewFromCore(null, "local").pendingHit).toBeNull();
   });
 
   it("maps camelCase pending stack fields", () => {

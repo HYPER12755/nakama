@@ -1,8 +1,18 @@
 export type Color = "red" | "yellow" | "green" | "blue";
 
-export type GameMode = "classic" | "sevenO" | "progressive" | "jumpIn";
+export type GameMode = "classic" | "sevenO" | "progressive" | "jumpIn" | "attack";
 
-export type CardKind = "number" | "skip" | "reverse" | "draw2" | "wild" | "wild4";
+export type CardKind =
+  | "number"
+  | "skip"
+  | "reverse"
+  | "draw2"
+  | "wild"
+  | "wild4"
+  | "hit1"
+  | "hit2"
+  | "discardAll"
+  | "wildAttack";
 
 export interface Card {
   id: string;
@@ -59,6 +69,12 @@ export interface PendingStack {
   pendingWinnerId?: string;
 }
 
+export interface PendingHit {
+  amount: number;
+  ownerId: string;
+  targetId: string;
+}
+
 export interface JumpWindow {
   cardId: string;
   ownerId: string;
@@ -86,6 +102,7 @@ export interface GameState {
   drawnCardId: string | null;
   pendingChallenge: PendingChallenge | null;
   pendingStack: PendingStack | null;
+  pendingHit: PendingHit | null;
   jumpWindow: JumpWindow | null;
   startingRule: StartingRule | null;
   started: boolean;

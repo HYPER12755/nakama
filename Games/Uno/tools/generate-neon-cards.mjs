@@ -10,6 +10,20 @@ const NEON = {
   wild: ["#E040FB", "#18FFFF"],
 };
 const FOUR = ["#FF1744", "#FFEA00", "#00E676", "#2979FF"];
+const QUADRANT = `<path d="M90 135 L90 52 A83 83 0 0 1 173 135 Z" fill="${FOUR[0]}"/>
+<path d="M90 135 L173 135 A83 83 0 0 1 90 218 Z" fill="${FOUR[1]}"/>
+<path d="M90 135 L90 218 A83 83 0 0 1 7 135 Z" fill="${FOUR[2]}"/>
+<path d="M90 135 L7 135 A83 83 0 0 1 90 52 Z" fill="${FOUR[3]}"/>`;
+
+function burstPoints(cx, cy, spikes, outer, inner, rotation = 0) {
+  const points = [];
+  for (let i = 0; i < spikes * 2; i += 1) {
+    const radius = i % 2 === 0 ? outer : inner;
+    const angle = (Math.PI / spikes) * i + rotation;
+    points.push(`${(cx + Math.cos(angle) * radius).toFixed(1)},${(cy + Math.sin(angle) * radius).toFixed(1)}`);
+  }
+  return points.join(" ");
+}
 
 function surface(inner, colors) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 270" width="180" height="270" role="img">
@@ -59,18 +73,51 @@ ${corner(glyph)}`, c);
 
 function wildCard(kind) {
   const label = kind === "wild" ? "W" : "+4";
-  const quadrant = `<path d="M90 135 L90 52 A83 83 0 0 1 173 135 Z" fill="${FOUR[0]}"/>
-<path d="M90 135 L173 135 A83 83 0 0 1 90 218 Z" fill="${FOUR[1]}"/>
-<path d="M90 135 L90 218 A83 83 0 0 1 7 135 Z" fill="${FOUR[2]}"/>
-<path d="M90 135 L7 135 A83 83 0 0 1 90 52 Z" fill="${FOUR[3]}"/>`;
   return surface(`
-<g opacity="0.9">${quadrant}</g>
+<g opacity="0.9">${QUADRANT}</g>
 <circle cx="90" cy="135" r="66" fill="#0A0A0E" fill-opacity="0.5"/>
 <circle cx="90" cy="135" r="66" fill="none" stroke="url(#edge)" stroke-width="12" filter="url(#soft)" opacity="0.7"/>
 <circle cx="90" cy="135" r="66" fill="none" stroke="url(#edge)" stroke-width="10"/>
 <circle cx="90" cy="135" r="66" fill="none" stroke="#fff" stroke-opacity="0.9" stroke-width="3"/>
 <text x="90" y="160" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="${kind === "wild" ? "64" : "76"}" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 20px #E040FB)">${label}</text>
 ${corner(label)}`, NEON.wild);
+}
+
+function hitCard(color, damage) {
+  const c = NEON[color];
+  const label = `HIT ${damage}`;
+  const burst = burstPoints(90, 132, 10, 76, 56, -Math.PI / 2);
+  return surface(`
+<polygon points="${burst}" fill="none" stroke="url(#edge)" stroke-width="9" filter="url(#soft)" opacity="0.7"/>
+<polygon points="${burst}" fill="none" stroke="url(#edge)" stroke-width="8"/>
+<polygon points="${burst}" fill="none" stroke="#fff" stroke-opacity="0.9" stroke-width="2"/>
+<text x="90" y="154" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="74" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 18px ${c[0]})">${damage}</text>
+<text x="90" y="230" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 10px ${c[0]})">${label}</text>
+${corner(`HIT${damage}`)}`, c);
+}
+
+function discardAllCard(color) {
+  const c = NEON[color];
+  return surface(`
+<g transform="translate(90 128)">
+<rect x="-34" y="-42" width="46" height="68" rx="6" fill="none" stroke="url(#edge)" stroke-width="3" transform="rotate(-16 -12 0)"/>
+<rect x="-10" y="-42" width="46" height="68" rx="6" fill="none" stroke="url(#edge)" stroke-width="3" transform="rotate(12 12 0)"/>
+<path d="M-20 -22 L20 22 M20 -22 L-20 22" stroke="#fff" stroke-width="9" stroke-linecap="round" filter="url(#soft)" opacity="0.8"/>
+<path d="M-20 -22 L20 22 M20 -22 L-20 22" stroke="${c[0]}" stroke-width="5" stroke-linecap="round"/>
+</g>
+<text x="90" y="200" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 10px ${c[0]})">DISCARD ALL</text>
+${corner("DISC")}`, c);
+}
+
+function wildAttackCard() {
+  const burst = burstPoints(90, 135, 12, 76, 60, -Math.PI / 2);
+  return surface(`
+<g opacity="0.9">${QUADRANT}</g>
+<circle cx="90" cy="135" r="70" fill="#0A0A0E" fill-opacity="0.62"/>
+<polygon points="${burst}" fill="none" stroke="url(#edge)" stroke-width="9" filter="url(#soft)" opacity="0.8"/>
+<polygon points="${burst}" fill="none" stroke="url(#edge)" stroke-width="7"/>
+<text x="90" y="143" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 18px #FF003C)">ATTACK!</text>
+${corner("ATK!")}`, NEON.wild);
 }
 
 function back() {
@@ -99,11 +146,26 @@ for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
       count += 1;
     }
   }
+  for (const kind of ["hit1", "hit2"]) {
+    const damage = kind === "hit1" ? 1 : 2;
+    for (let copy = 0; copy < damage; copy += 1) {
+      writeFileSync(path.join(OUT, `${color}-${kind}-${copy}.svg`), hitCard(color, damage));
+      count += 1;
+    }
+  }
+  for (let copy = 0; copy < 2; copy += 1) {
+    writeFileSync(path.join(OUT, `${color}-discardall-${copy}.svg`), discardAllCard(color));
+    count += 1;
+  }
 }
 for (const kind of ["wild", "wild4"]) {
   for (let copy = 0; copy < 4; copy += 1) {
     writeFileSync(path.join(OUT, `${kind}-${copy}.svg`), wildCard(kind));
     count += 1;
   }
+}
+for (let copy = 0; copy < 4; copy += 1) {
+  writeFileSync(path.join(OUT, `wildattack-${copy}.svg`), wildAttackCard());
+  count += 1;
 }
 console.log(`wrote ${count} neon card SVGs to ${OUT}`);

@@ -104,3 +104,45 @@ Core state exposes the window as `jumpWindow` with camelCase fields `cardId`,
 `ownerId` and `expiresAt`; the Lua server stores it as `jump_window` with
 `card_id`, `owner_id` and `expires_at`, and publishes the camelCase shape in
 state payloads. Play requests carry `jump: true` (Lua `jump`) to attempt a jump.
+
+## Attack (optional house rule, deterministic launcher)
+
+Attack is based on Mattel's UNO Attack!, adapted so that the physical random
+launcher is replaced by a **deterministic, server-owned launcher**. It is **off
+by default**: games created without an explicit mode use classic rules. The mode
+is authoritative state, is included in state payloads, and all matchmaker
+tickets for a game must agree on it. Everything not described here behaves as
+in classic UNO.
+
+**Deterministic launcher deviation:** in the physical game a launcher fires a
+random 0-3 cards per press. Here each press derives its count from the
+authoritative `seed` with the existing RNG (`randomInt(seed, 4)`) and advances
+the seed by one step, so every client reproduces the same count. No launcher
+hardware or client-side randomness is involved.
+
+- Deck: 112 cards. Per colour there are nine number values 1-9 with two copies
+  each (18, no 0), one Hit 1, two Hit 2, two Discard All, one Reverse and two
+  Skip; plus four Wild and four Wild Attack. There are no Draw Two or Wild Draw
+  Four cards.
+- Hit 1 / Hit 2: playable on a colour, number or symbol match. The next player
+  must take one/two launcher hits or deflect. A hit adds `1`/`2` to an ongoing
+  hit stack and passes the turn to the next player.
+- Wild Attack: always playable; the player chooses a colour and a target seat.
+  A `targetId` is required, and a missing, empty or invalid target is rejected
+  with `missing_target`. The target must take two launcher hits; play continues
+  after that target. When used to deflect, a Wild Attack adds two hits and may
+  redirect them via `targetId`.
+- Pending hits are exposed as `pendingHit` with camelCase fields `amount`,
+  `ownerId` and `targetId`; the Lua server stores them as `pending_hit` with
+  snake_case fields and publishes the camelCase shape in state payloads. Only
+  the named target may act. They may take the hits with a draw request (one
+  launcher press per hit, then their turn passes) or deflect with any Hit 1,
+  Hit 2 or Wild Attack card regardless of colour. A disconnected target is
+  auto-taken on timeout.
+- Discard All: playable on a matching colour or another Discard All. When
+  played, every card of that colour in the actor's hand is discarded along with
+  the Discard All card; an actor who empties their hand wins.
+- A normal draw presses the launcher once, adds the resulting 0-3 cards, and
+  immediately passes the turn. Drawn cards cannot be played. The current
+  player's `canDraw` is always true in this mode.
+- Reverse with two players acts like Skip, as in the other modes.

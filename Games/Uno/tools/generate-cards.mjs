@@ -9,6 +9,16 @@ const COLORS = {
   blue: "#2464d6",
 };
 
+function burstPoints(cx, cy, spikes, outer, inner, rotation = 0) {
+  const points = [];
+  for (let i = 0; i < spikes * 2; i += 1) {
+    const radius = i % 2 === 0 ? outer : inner;
+    const angle = (Math.PI / spikes) * i + rotation;
+    points.push(`${(cx + Math.cos(angle) * radius).toFixed(1)},${(cy + Math.sin(angle) * radius).toFixed(1)}`);
+  }
+  return points.join(" ");
+}
+
 function frame(inner) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 270" width="180" height="270" role="img">
 <rect x="3" y="3" width="174" height="264" rx="18" fill="#ffffff" stroke="#111827" stroke-width="3"/>
@@ -56,6 +66,46 @@ function wildCard(kind, copy) {
 <text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">${kind} ${copy}</text>`);
 }
 
+function hitCard(color, damage, copy) {
+  const fill = COLORS[color];
+  const label = `HIT ${damage}`;
+  const burst = burstPoints(90, 132, 12, 80, 54, -Math.PI / 2);
+  return frame(`${corner(fill, label)}
+<polygon points="${burst}" fill="${fill}" stroke="#111827" stroke-width="2.5"/>
+<circle cx="90" cy="132" r="46" fill="#ffffff" fill-opacity="0.16"/>
+<text x="90" y="150" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="76" fill="#ffffff" stroke="#111827" stroke-width="2" paint-order="stroke">${damage}</text>
+<text x="90" y="186" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="800" fill="#ffffff" stroke="#111827" stroke-width="1.5" paint-order="stroke">${label}</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">${color} hit${damage} ${copy}</text>`);
+}
+
+function discardAllCard(color, copy) {
+  const fill = COLORS[color];
+  const cards = `<g transform="translate(90 130)">
+<rect x="-34" y="-40" width="44" height="66" rx="5" fill="#ffffff" stroke="#111827" stroke-width="2" transform="rotate(-16 -12 0)"/>
+<rect x="-10" y="-40" width="44" height="66" rx="5" fill="#ffffff" stroke="#111827" stroke-width="2" transform="rotate(12 12 0)"/>
+<path d="M-20 -22 L20 22 M20 -22 L-20 22" stroke="${fill}" stroke-width="7" stroke-linecap="round"/>
+</g>`;
+  return frame(`${corner(fill, "DISC")}
+<ellipse cx="90" cy="132" rx="64" ry="80" fill="${fill}" transform="rotate(18 90 132)"/>
+${cards}
+<text x="90" y="196" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="800" fill="#ffffff" stroke="#111827" stroke-width="1.5" paint-order="stroke">DISCARD ALL</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">${color} discardall ${copy}</text>`);
+}
+
+function wildAttackCard(copy) {
+  const burst = burstPoints(90, 135, 12, 78, 60, -Math.PI / 2);
+  return frame(`${corner(COLORS.red, "ATK!")}
+<g>
+<path d="M9 23 A14 14 0 0 1 23 9 L157 9 A14 14 0 0 1 171 23 L90 135 Z" fill="${COLORS.red}"/>
+<path d="M171 23 A14 14 0 0 1 171 247 L90 135 Z" fill="${COLORS.yellow}"/>
+<path d="M171 247 A14 14 0 0 1 157 261 L23 261 A14 14 0 0 1 9 247 L90 135 Z" fill="${COLORS.green}"/>
+<path d="M9 247 A14 14 0 0 1 9 23 L90 135 Z" fill="${COLORS.blue}"/>
+</g>
+<polygon points="${burst}" fill="#0f172a" stroke="#ffffff" stroke-width="2"/>
+<text x="90" y="143" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="28" fill="#ffffff" stroke="#e8402a" stroke-width="6" paint-order="stroke">ATTACK!</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">wildattack ${copy}</text>`);
+}
+
 mkdirSync(OUT, { recursive: true });
 
 writeFileSync(path.join(OUT, "card-back.svg"), frame(`<g>
@@ -82,11 +132,26 @@ for (const color of Object.keys(COLORS)) {
       count += 1;
     }
   }
+  for (const kind of ["hit1", "hit2"]) {
+    const damage = kind === "hit1" ? 1 : 2;
+    for (let copy = 0; copy < damage; copy += 1) {
+      writeFileSync(path.join(OUT, `${color}-${kind}-${copy}.svg`), hitCard(color, damage, copy));
+      count += 1;
+    }
+  }
+  for (let copy = 0; copy < 2; copy += 1) {
+    writeFileSync(path.join(OUT, `${color}-discardall-${copy}.svg`), discardAllCard(color, copy));
+    count += 1;
+  }
 }
 for (const kind of ["wild", "wild4"]) {
   for (let copy = 0; copy < 4; copy += 1) {
     writeFileSync(path.join(OUT, `${kind}-${copy}.svg`), wildCard(kind, copy));
     count += 1;
   }
+}
+for (let copy = 0; copy < 4; copy += 1) {
+  writeFileSync(path.join(OUT, `wildattack-${copy}.svg`), wildAttackCard(copy));
+  count += 1;
 }
 console.log(`wrote ${count} card SVGs to ${OUT}`);

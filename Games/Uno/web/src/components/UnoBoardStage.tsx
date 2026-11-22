@@ -16,6 +16,12 @@ interface Flight {
   dy: number;
 }
 
+interface AttackPrompt {
+  cardId: string;
+  deflect: boolean;
+  targetId: string | null;
+}
+
 function isWild(card: Card): boolean {
   return card.id === "wild" || card.id.startsWith("wild");
 }
@@ -49,6 +55,7 @@ export function UnoBoardStage({
 }: UnoBoardStageProps) {
   const [pendingCard, setPendingCard] = useState<string | null>(null);
   const [pendingTarget, setPendingTarget] = useState<string | null>(null);
+  const [attackPrompt, setAttackPrompt] = useState<AttackPrompt | null>(null);
   const [flights, setFlights] = useState<Flight[]>([]);
   const [dealt, setDealt] = useState(false);
   const [jumpNow, setJumpNow] = useState(() => Date.now());
@@ -66,6 +73,7 @@ export function UnoBoardStage({
   const me = view.players.find((player) => player.userId === view.myUserId);
   const hand = me?.hand ?? [];
   const pendingStack = view.pendingStack ?? null;
+  const pendingHit = view.pendingHit ?? null;
   const jumpWindow = view.jumpWindow ?? null;
   const jumpOpen = jumpWindow !== null;
   const jumping = jumpWindow !== null && jumpWindow.ownerId !== view.myUserId;
@@ -73,6 +81,10 @@ export function UnoBoardStage({
     ? 0
     : Math.max(0, Math.ceil((jumpWindow.expiresAt - jumpNow) / 1000));
   const stackTarget = pendingStack !== null && pendingStack.targetId === view.myUserId;
+  const hitTarget = pendingHit !== null && pendingHit.targetId === view.myUserId;
+  const hitCards = hitTarget
+    ? hand.filter((card) => card.kind === "hit1" || card.kind === "hit2" || card.kind === "wildAttack")
+    : [];
   const isMyTurn =
     view.started && view.pendingChallenge === null && pendingStack === null &&
     view.players[view.turn]?.userId === view.myUserId;
@@ -117,6 +129,7 @@ export function UnoBoardStage({
     setDealt(false);
     setPendingCard(null);
     setPendingTarget(null);
+    setAttackPrompt(null);
     const timer = window.setTimeout(() => setDealt(true), 1300);
     return () => window.clearTimeout(timer);
   }, [dealKey]);
@@ -149,6 +162,10 @@ export function UnoBoardStage({
 
   const play = (card: Card, event: MouseEvent<HTMLButtonElement>) => {
     if (!isMyTurn && !jumping) return;
+    if (card.kind === "wildAttack") {
+      setAttackPrompt({ cardId: card.id, deflect: false, targetId: null });
+      return;
+    }
     if (isWild(card)) {
       setPendingCard(card.id);
       return;
@@ -179,6 +196,22 @@ export function UnoBoardStage({
     fly("card-back", discardRef.current?.getBoundingClientRect() ?? null, handRef.current?.getBoundingClientRect() ?? null);
     lastManualFlight.current = Date.now();
     onDraw();
+  };
+
+  const takeHit = () => {
+    fly("card-back", discardRef.current?.getBoundingClientRect() ?? null, handRef.current?.getBoundingClientRect() ?? null);
+    lastManualFlight.current = Date.now();
+    onDraw();
+  };
+
+  const deflectHit = (card: Card, event: MouseEvent<HTMLButtonElement>) => {
+    if (card.kind === "wildAttack") {
+      setAttackPrompt({ cardId: card.id, deflect: true, targetId: null });
+      return;
+    }
+    fly(card.id, event.currentTarget.getBoundingClientRect(), discardRef.current?.getBoundingClientRect() ?? null);
+    lastManualFlight.current = Date.now();
+    onPlay(card.id);
   };
 
   const stackDraw = () => {
@@ -397,17 +430,50 @@ export function UnoBoardStage({
         </div>
       )}
 
+      {hitTarget && pendingCard === null && attackPrompt === null && (
+        <div className="uno-overlay uno-overlay--hit" role="dialog" aria-label="Incoming hit">
+          <div className="uno-hit-card">
+            <p className="eyebrow">UNO Attack</p>
+            <h2>Incoming hit</h2>
+            <div className="uno-hit-count">
+              <strong>{pendingHit?.amount ?? 0}</strong>
+              <span>cards</span>
+            </div>
+            <p className="uno-overlay-copy">Take the launcher, or deflect it back with a Hit or Wild Attack card.</p>
+            {hitCards.length > 0 ? (
+              <div className="uno-hit-deflects">
+                {hitCards.map((card) => (
+                  <button
+                    type="button"
+                    key={card.id}
+                    className="uno-hit-deflect"
+                    aria-label={`Deflect with ${card.id}`}
+                    onClick={(event) => deflectHit(card, event)}
+                  >
+                    <img src={art(card.id)} alt={card.id} />
+                    <span>{card.kind === "wildAttack" ? "Redirect" : "Deflect"}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="uno-overlay-actions">
+              <button type="button" className="button button--ghost" onClick={takeHit}>Take hit</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {pendingCard !== null && (
         <div className="uno-overlay uno-overlay--colour">
           <div className="uno-colour-card" role="dialog" aria-label="Choose a colour">
             <div className="uno-colour-card__art" aria-hidden="true">
-              <span className="uno-colour-card__wild">WILD</span>
+              <span className="uno-colour-card__wild">{attackPrompt !== null ? "ATTACK" : "WILD"}</span>
               <span className="uno-colour-card__spark uno-colour-card__spark--one" />
               <span className="uno-colour-card__spark uno-colour-card__spark--two" />
               <span className="uno-colour-card__spark uno-colour-card__spark--three" />
             </div>
             <div className="uno-colour-card__body">
-              <p className="eyebrow">Wild card</p>
+              <p className="eyebrow">{attackPrompt !== null ? "Wild Attack" : "Wild card"}</p>
               <h2>Choose a colour</h2>
               <p className="uno-overlay-copy">The next card must match the colour you pick.</p>
               <div className="uno-colour-choices">
@@ -419,8 +485,13 @@ export function UnoBoardStage({
                     style={{ animationDelay: `${index * 55}ms` }}
                     onClick={() => {
                       fly(pendingCard, handRef.current?.querySelector("img")?.getBoundingClientRect() ?? null, discardRef.current?.getBoundingClientRect() ?? null);
-                      onPlay(pendingCard, color);
+                      if (attackPrompt !== null && attackPrompt.targetId !== null) {
+                        onPlay(pendingCard, color, attackPrompt.targetId);
+                      } else {
+                        onPlay(pendingCard, color);
+                      }
                       setPendingCard(null);
+                      setAttackPrompt(null);
                     }}
                     aria-label={`Choose ${color}`}
                   >
@@ -434,12 +505,18 @@ export function UnoBoardStage({
         </div>
       )}
 
-      {pendingTarget !== null && (
+      {(pendingTarget !== null || (attackPrompt !== null && attackPrompt.targetId === null && pendingCard === null)) && (
         <div className="uno-overlay uno-overlay--target">
           <div className="uno-target-card" role="dialog" aria-label="Choose a target player">
-            <p className="eyebrow">Seven-O</p>
+            <p className="eyebrow">{attackPrompt !== null ? "UNO Attack" : "Seven-O"}</p>
             <h2>Choose a target</h2>
-            <p className="uno-overlay-copy">Your 7 swaps hands with the player you pick.</p>
+            <p className="uno-overlay-copy">
+              {attackPrompt !== null
+                ? attackPrompt.deflect
+                  ? "Redirect the hit to the player you pick."
+                  : "Send the hit to the player you pick."
+                : "Your 7 swaps hands with the player you pick."}
+            </p>
             <div className="uno-target-choices">
               {opponents.map((player) => (
                 <button
@@ -447,11 +524,18 @@ export function UnoBoardStage({
                   key={player.userId}
                   className="uno-target-choice"
                   onClick={() => {
-                    fly(
-                      pendingTarget,
-                      handRef.current?.querySelector("img")?.getBoundingClientRect() ?? null,
-                      surfaceRef.current?.querySelector(`[data-seat-user="${player.userId}"]`)?.getBoundingClientRect() ?? null,
-                    );
+                    const destination = surfaceRef.current?.querySelector(`[data-seat-user="${player.userId}"]`)?.getBoundingClientRect() ?? null;
+                    const source = handRef.current?.querySelector("img")?.getBoundingClientRect() ?? null;
+                    if (attackPrompt !== null) {
+                      fly(attackPrompt.cardId, source, destination);
+                      setAttackPrompt({ ...attackPrompt, targetId: player.userId });
+                      setPendingCard(attackPrompt.cardId);
+                      return;
+                    }
+                    if (pendingTarget === null) {
+                      return;
+                    }
+                    fly(pendingTarget, source, destination);
                     onPlay(pendingTarget, undefined, player.userId);
                     setPendingTarget(null);
                   }}
@@ -461,7 +545,14 @@ export function UnoBoardStage({
                 </button>
               ))}
             </div>
-            <button type="button" className="button button--ghost" onClick={() => setPendingTarget(null)}>
+            <button
+              type="button"
+              className="button button--ghost"
+              onClick={() => {
+                setPendingTarget(null);
+                setAttackPrompt(null);
+              }}
+            >
               Cancel
             </button>
           </div>

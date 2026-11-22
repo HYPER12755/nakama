@@ -20,7 +20,7 @@ import { UnoOnlinePanel } from "./components/UnoOnlinePanel";
 import { UnoPreferences } from "./components/UnoPreferences";
 import { useUnoGame } from "./hooks/useUnoGame";
 import { JUMP_IN_MODE, rulesModeLabel, RULES_MODES } from "./lib/view";
-import type { Color } from "@moongames/uno-core";
+import { UNO_MODE, type Color } from "@moongames/uno-core";
 
 const MODES = [
   { id: "local", label: "Local", icon: <Icon name="users" size={15} /> },
@@ -40,6 +40,8 @@ const SEVEN_O_RULE = "Seven-O: playing a 7 swaps hands with a player you choose;
 const PROGRESSIVE_RULE = "Progressive: +2 stacks on +2 and Wild +4 stacks on Wild +4; take the accumulated cards or stack a matching card.";
 
 const JUMP_IN_RULE = "Jump-In: after a number card is played, anyone holding the exact same colour and number has a short window to jump in and take the turn.";
+
+const ATTACK_RULE = "Attack: Hit cards make the target take the launcher, or deflect with a Hit or Wild Attack card. Wild Attack picks a target and a colour; Discard All drops every card of that colour.";
 
 const COLOURS: Color[] = ["red", "yellow", "green", "blue"];
 const COLOUR_HEX: Record<Color, string> = {
@@ -85,7 +87,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
       ? [...RULES, PROGRESSIVE_RULE]
       : game.rulesMode === JUMP_IN_MODE
         ? [...RULES, JUMP_IN_RULE]
-        : RULES;
+        : game.rulesMode === UNO_MODE.ATTACK
+          ? [...RULES, ATTACK_RULE]
+          : RULES;
   const activePlayer = game.view.players[game.view.turn];
   const winner = game.view.result?.winnerUserId == null
     ? null

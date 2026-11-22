@@ -34,6 +34,7 @@ import {
   isJumpCandidate,
   normalizeJumpWindow,
   normalizeList,
+  normalizePendingHit,
   normalizePendingStack,
   normalizeRulesMode,
   rulesModeLabel,
@@ -208,6 +209,7 @@ export function normalizeView(payload: Record<string, unknown>, myUserId: string
     deckCount: Number(payload.deckCount ?? 0),
     pendingChallenge: normalizePendingChallenge(payload.pendingChallenge ?? payload.pending_challenge),
     pendingStack: normalizePendingStack(payload.pendingStack ?? payload.pending_stack),
+    pendingHit: normalizePendingHit(payload.pendingHit ?? payload.pending_hit),
     jumpWindow: normalizeJumpWindow(payload.jumpWindow ?? payload.jump_window),
     legalCards: normalizeList(payload.legalCards).map(String),
     canDraw: payload.canDraw === true,
@@ -241,7 +243,7 @@ function emptyView(myUserId: string | null): BoardView {
   return {
     players: [], spectators: [], chat: [], topCard: null, currentColor: null,
     turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
-    pendingStack: null, jumpWindow: null, legalCards: [], canDraw: false, result: null,
+    pendingStack: null, pendingHit: null, jumpWindow: null, legalCards: [], canDraw: false, result: null,
     myUserId, started: false, mode: "classic",
   };
 }
@@ -708,18 +710,20 @@ export function useUnoGame(enabled = true): UnoController {
       }, 900);
       return () => window.clearTimeout(timer);
     }
-    const actorId = localGame.pendingChallenge?.targetId
+    const actorId = localGame.pendingHit?.targetId
+      ?? localGame.pendingChallenge?.targetId
       ?? localGame.players[localGame.turn].id;
     const actor = localGame.players.find((player) => player.id === actorId);
     if (actor === undefined || actor.id === "local") {
       return;
     }
     const timer = window.setTimeout(() => {
-      const action = chooseAction(localGame, actorId);
+      const now = Date.now();
+      const action = chooseAction(localGame, actorId, now);
       if (action === null) {
         return;
       }
-      const result = applyAction(localGame, action, Date.now());
+      const result = applyAction(localGame, action, now);
       if (result.ok) {
         setLocalGame(result.state);
       }

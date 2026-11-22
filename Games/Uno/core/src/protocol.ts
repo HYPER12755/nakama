@@ -5,6 +5,7 @@ export const UNO_MODE = {
   SEVEN_O: "sevenO",
   PROGRESSIVE: "progressive",
   JUMP_IN: "jumpIn",
+  ATTACK: "attack",
 } as const;
 
 export const UNO_MODES: readonly GameMode[] = [
@@ -12,6 +13,7 @@ export const UNO_MODES: readonly GameMode[] = [
   UNO_MODE.SEVEN_O,
   UNO_MODE.PROGRESSIVE,
   UNO_MODE.JUMP_IN,
+  UNO_MODE.ATTACK,
 ];
 
 export const JUMP_WINDOW_MS = 1800;

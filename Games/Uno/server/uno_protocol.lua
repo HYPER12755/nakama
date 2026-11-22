@@ -33,7 +33,7 @@ protocol.ERROR = {
   BAD_JUMP = "bad_jump",
 }
 
-protocol.RULES_MODES = { "classic", "sevenO", "progressive", "jumpIn" }
+protocol.RULES_MODES = { "classic", "sevenO", "progressive", "jumpIn", "attack" }
 
 protocol.JUMP_WINDOW_MS = 1800
 

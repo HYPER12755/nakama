@@ -1,5 +1,5 @@
 import { buildDeck, isActionCard, shuffle } from "./deck";
-import { nextSeed, normalizeSeed } from "./rng";
+import { nextSeed, normalizeSeed, randomInt } from "./rng";
 import { JUMP_WINDOW_MS, UNO_ERROR, UNO_MODE, normalizeMode } from "./protocol";
 import {
   COLORS,
@@ -25,12 +25,18 @@ export function topCard(state: GameState): Card {
   return state.discard[state.discard.length - 1];
 }
 
+function pressLauncher(state: GameState): number {
+  const amount = randomInt(state.seed, 4);
+  state.seed = nextSeed(state.seed);
+  return amount;
+}
+
 export function currentPlayer(state: GameState): Player {
   return state.players[state.turn];
 }
 
 export function canPlay(state: GameState, card: Card): boolean {
-  if (card.kind === "wild" || card.kind === "wild4") {
+  if (card.kind === "wild" || card.kind === "wild4" || card.kind === "wildAttack") {
     return true;
   }
   const top = topCard(state);
@@ -64,6 +70,19 @@ export function legalMoves(state: GameState, playerId: string, now = 0): LegalMo
       .map((card) => card.id);
     return { cards, canDraw: false };
   }
+  if (state.pendingHit !== null) {
+    if (state.pendingHit.targetId !== playerId) {
+      return empty;
+    }
+    const target = state.players.find((candidate) => candidate.id === playerId);
+    if (target === undefined) {
+      return empty;
+    }
+    const cards = target.hand
+      .filter((card) => card.kind === "hit1" || card.kind === "hit2" || card.kind === "wildAttack")
+      .map((card) => card.id);
+    return { cards, canDraw: true };
+  }
   if (state.pendingStack !== null) {
     if (state.pendingStack.targetId !== playerId) {
       return empty;
@@ -85,10 +104,13 @@ export function legalMoves(state: GameState, playerId: string, now = 0): LegalMo
     return empty;
   }
   const playable = (card: Card): boolean => canPlayCard(state, player, card);
-  const cards = state.drawnCardId === null
+  const cards = state.mode === UNO_MODE.ATTACK || state.drawnCardId === null
     ? player.hand.filter(playable).map((card) => card.id)
     : player.hand.filter((card) => card.id === state.drawnCardId && playable(card)).map((card) => card.id);
-  return { cards, canDraw: state.drawnCardId === null };
+  return {
+    cards,
+    canDraw: state.mode === UNO_MODE.ATTACK || state.drawnCardId === null,
+  };
 }
 
 export function clearJumpWindow(state: GameState, now: number): GameState {
@@ -111,7 +133,7 @@ export function createGame(
   }
   const rulesMode = normalizeMode(mode);
   let state_seed = normalizeSeed(seed);
-  const shuffled = shuffle(state_seed, buildDeck());
+  const shuffled = shuffle(state_seed, buildDeck(rulesMode));
   const deck = shuffled.cards;
   state_seed = shuffled.seed;
 
@@ -135,7 +157,7 @@ export function createGame(
     starter = next;
   }
 
-  if (starter.kind === "wild") {
+  if (starter.kind === "wild" || starter.kind === "wildAttack") {
     starter.color = mostCommonColor(dealt[0].hand);
   }
   const color = starter.color;
@@ -182,6 +204,7 @@ export function createGame(
     drawnCardId: null,
     pendingChallenge: null,
     pendingStack: null,
+    pendingHit: null,
     jumpWindow: null,
     startingRule,
     started: true,
@@ -356,6 +379,83 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
     return fail(previous, UNO_ERROR.BAD_JUMP as "bad_jump");
   }
 
+  if (state.pendingHit !== null) {
+    const hit = state.pendingHit;
+    if (actor === undefined || hit.targetId !== actor.id) {
+      return fail(previous, UNO_ERROR.NOT_YOUR_TURN as "not_your_turn");
+    }
+    if (action.type === "draw") {
+      for (let index = 0; index < hit.amount; index += 1) {
+        drawCards(state, actor, pressLauncher(state));
+      }
+      state.pendingHit = null;
+      advance(state, 1);
+      const owner = state.players.find((player) => player.id === hit.ownerId);
+      if (owner !== undefined && owner.hand.length === 0) {
+        state.finished = true;
+        state.winner = owner.id;
+      }
+      state.events.push({ type: "launcher", playerId: actor.id, at: state.events.length });
+      state.replay.push({ playerId: actor.id, action: "launcher" });
+      return { state, ok: true };
+    }
+    if (action.type !== "play") {
+      return fail(previous, UNO_ERROR.ILLEGAL_CARD as "illegal_card");
+    }
+    const hitIndex = actor.hand.findIndex((card) => card.id === action.cardId);
+    if (hitIndex < 0) {
+      return fail(previous, UNO_ERROR.UNKNOWN_CARD as "unknown_card");
+    }
+    const hitCard = actor.hand[hitIndex];
+    if (hitCard.kind !== "hit1" && hitCard.kind !== "hit2" && hitCard.kind !== "wildAttack") {
+      return fail(previous, UNO_ERROR.ILLEGAL_CARD as "illegal_card");
+    }
+    if (hitCard.kind === "wildAttack" && action.chosenColor === undefined) {
+      return fail(previous, UNO_ERROR.MISSING_COLOR as "missing_color");
+    }
+    const actorIndex = state.players.findIndex((player) => player.id === actor.id);
+    const count = state.players.length;
+    let hitTargetId = state.players[(actorIndex + state.direction + count * 4) % count].id;
+    if (hitCard.kind === "wildAttack") {
+      const requested = action.targetId ?? action.target_id;
+      if (requested !== undefined && requested !== "") {
+        const chosen = state.players.find((player) => player.id === requested && player.id !== actor.id);
+        if (chosen === undefined) {
+          return fail(previous, UNO_ERROR.MISSING_TARGET as "missing_target");
+        }
+        hitTargetId = chosen.id;
+      }
+    }
+    actor.hand.splice(hitIndex, 1);
+    state.discard.push(hitCard);
+    state.drawnCardId = null;
+    if (hitCard.kind === "wildAttack" && action.chosenColor !== undefined) {
+      state.currentColor = action.chosenColor;
+    } else if (hitCard.color !== null) {
+      state.currentColor = hitCard.color;
+    }
+    state.events.push({
+      type: "play",
+      playerId: actor.id,
+      cardId: hitCard.id,
+      text: action.chosenColor,
+      at: state.events.length,
+    });
+    state.replay.push({
+      playerId: actor.id,
+      action: "play",
+      cardId: hitCard.id,
+      color: action.chosenColor,
+    });
+    state.pendingHit = {
+      amount: hit.amount + (hitCard.kind === "hit1" ? 1 : 2),
+      ownerId: actor.id,
+      targetId: hitTargetId,
+    };
+    state.turn = state.players.findIndex((player) => player.id === hitTargetId);
+    return { state, ok: true };
+  }
+
   if (state.pendingStack !== null) {
     const stack = state.pendingStack;
     if (actor === undefined || stack.targetId !== actor.id) {
@@ -469,6 +569,17 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
   }
 
   if (action.type === "draw") {
+    if (state.mode === UNO_MODE.ATTACK) {
+      const launcherCount = pressLauncher(state);
+      for (let index = 0; index < launcherCount; index += 1) {
+        drawCards(state, actor, 1);
+      }
+      state.drawnCardId = null;
+      advance(state, 1);
+      state.events.push({ type: "launcher", playerId: actor.id, at: state.events.length });
+      state.replay.push({ playerId: actor.id, action: "launcher" });
+      return { state, ok: true };
+    }
     if (state.drawnCardId !== null) {
       return fail(previous, UNO_ERROR.ILLEGAL_CARD as "illegal_card");
     }
@@ -500,10 +611,24 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
   if (state.drawnCardId !== null && state.drawnCardId !== card.id) {
     return fail(previous, UNO_ERROR.ILLEGAL_CARD as "illegal_card");
   }
-  if ((card.kind === "wild" || card.kind === "wild4") && action.chosenColor === undefined) {
+  if ((card.kind === "wild" || card.kind === "wild4" || card.kind === "wildAttack")
+    && action.chosenColor === undefined) {
     return fail(previous, UNO_ERROR.MISSING_COLOR as "missing_color");
   }
   const wildFourLegal = card.kind === "wild4" && !hasColorMatch(state, actor);
+
+  let attackTargetId: string | undefined;
+  if (state.mode === UNO_MODE.ATTACK && card.kind === "wildAttack") {
+    const requested = action.targetId ?? action.target_id;
+    if (requested === undefined || requested === "") {
+      return fail(previous, UNO_ERROR.MISSING_TARGET as "missing_target");
+    }
+    const chosen = state.players.find((player) => player.id === requested && player.id !== actor.id);
+    if (chosen === undefined) {
+      return fail(previous, UNO_ERROR.MISSING_TARGET as "missing_target");
+    }
+    attackTargetId = chosen.id;
+  }
 
   let swapTarget: Player | undefined;
   if (state.mode === UNO_MODE.SEVEN_O && card.kind === "number" && card.value === 7) {
@@ -522,6 +647,13 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
   state.drawnCardId = null;
   if (action.chosenColor !== undefined) {
     state.currentColor = action.chosenColor;
+  } else if (state.mode === UNO_MODE.ATTACK && card.color !== null) {
+    state.currentColor = card.color;
+  }
+  if (state.mode === UNO_MODE.ATTACK && card.kind === "discardAll" && card.color !== null) {
+    const discarded = actor.hand.filter((held) => held.color === card.color);
+    actor.hand = actor.hand.filter((held) => held.color !== card.color);
+    state.discard.push(...discarded);
   }
   state.events.push({
     type: "play",
@@ -581,6 +713,24 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
         finishIfEmpty(state, actor);
       }
       break;
+    case "hit1":
+    case "hit2":
+    case "wildAttack":
+      if (state.mode === UNO_MODE.ATTACK) {
+        const targetId = attackTargetId ?? next.id;
+        state.pendingHit = {
+          amount: card.kind === "hit1" ? 1 : 2,
+          ownerId: actor.id,
+          targetId,
+        };
+        state.turn = state.players.findIndex((player) => player.id === targetId);
+      } else {
+        advance(state, 1);
+      }
+      break;
+    case "discardAll":
+      advance(state, 1);
+      break;
     case "wild":
       advance(state, 1);
       break;
@@ -606,7 +756,7 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
       advance(state, 1);
       break;
   }
-  if (state.pendingChallenge === null && state.pendingStack === null) {
+  if (state.pendingChallenge === null && state.pendingStack === null && state.pendingHit === null) {
     finishIfEmpty(state, actor);
   }
   if (state.mode === UNO_MODE.JUMP_IN && card.kind === "number" && !state.finished) {
@@ -621,7 +771,7 @@ export function scoreHand(hand: Card[]): number {
   for (const card of hand) {
     if (card.kind === "number") {
       total += card.value ?? 0;
-    } else if (card.kind === "wild" || card.kind === "wild4") {
+    } else if (card.kind === "wild" || card.kind === "wild4" || card.kind === "wildAttack") {
       total += 50;
     } else {
       total += 20;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { FriendInviteDialog, buildMatchInviteUrl, copyText } from "@moongames/game-ui";
+import { UNO_MODE } from "@moongames/uno-core";
 import type { UnoController } from "../hooks/useUnoGame";
 import { JUMP_IN_MODE, rulesModeLabel } from "../lib/view";
 
@@ -46,7 +47,9 @@ export function UnoOnlinePanel({
     : controller.view.players.find((player) => player.userId === result.winnerUserId) ?? null;
   const shareMatchId = controller.matchId ?? "";
   const shareLink = buildMatchInviteUrl(shareMatchId, inviteAsSpectator, window.location.href);
-  const jumpIn = (controller.view.mode ?? controller.rulesMode) === JUMP_IN_MODE;
+  const effectiveMode = controller.view.mode ?? controller.rulesMode;
+  const jumpIn = effectiveMode === JUMP_IN_MODE;
+  const attack = effectiveMode === UNO_MODE.ATTACK;
 
   async function joinRoom() {
     const code = roomId.trim();
@@ -121,6 +124,9 @@ export function UnoOnlinePanel({
               </div>
               {jumpIn ? (
                 <p className="online-mode-hint">Jump-In is on: play an exact colour and number match to jump into the turn.</p>
+              ) : null}
+              {attack ? (
+                <p className="online-mode-hint">Attack is on: Hit cards make the target take the launcher or deflect; Wild Attack redirects the hit.</p>
               ) : null}
               <div className="online-size">
                 <span className="online-size__label">Players</span>
@@ -214,6 +220,9 @@ export function UnoOnlinePanel({
           </div>
           {jumpIn ? (
             <p className="online-mode-hint">Jump-In is on: an exact colour and number match can steal the turn.</p>
+          ) : null}
+          {attack ? (
+            <p className="online-mode-hint">Attack is on: take the hit or deflect with a Hit or Wild Attack card.</p>
           ) : null}
           {controller.error !== null ? (
             <p className="online-feedback online-feedback--error" role="alert">{controller.error}</p>

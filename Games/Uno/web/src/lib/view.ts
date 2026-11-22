@@ -1,6 +1,7 @@
 import {
   legalMoves,
   normalizeMode,
+  UNO_MODE,
   UNO_MODES,
   type Card,
   type Color,
@@ -12,12 +13,13 @@ export type RulesMode = GameMode;
 
 const PROGRESSIVE_MODE: RulesMode = "progressive";
 export const JUMP_IN_MODE: RulesMode = "jumpIn";
+const ATTACK_MODE: RulesMode = UNO_MODE.ATTACK;
 
 const JUMP_IN_ALIASES = ["jumpIn", "jump_in", "jump-in", "jumpin"];
 
 export const RULES_MODES: RulesMode[] = (() => {
   const modes = [...UNO_MODES] as RulesMode[];
-  for (const extra of [PROGRESSIVE_MODE, JUMP_IN_MODE]) {
+  for (const extra of [PROGRESSIVE_MODE, JUMP_IN_MODE, ATTACK_MODE]) {
     if (!modes.includes(extra)) {
       modes.push(extra);
     }
@@ -35,6 +37,9 @@ export function rulesModeLabel(mode: RulesMode | undefined): string {
   }
   if ((mode as string | undefined) === PROGRESSIVE_MODE) {
     return "Progressive";
+  }
+  if (mode === ATTACK_MODE) {
+    return "Attack";
   }
   return mode === "sevenO" ? "Seven-O" : "Classic";
 }
@@ -100,6 +105,28 @@ export function normalizePendingStack(value: unknown): PendingStack | null {
   };
 }
 
+export interface PendingHit {
+  amount: number;
+  ownerId: string;
+  targetId: string;
+}
+
+export function normalizePendingHit(value: unknown): PendingHit | null {
+  const source = value as Record<string, unknown> | null | undefined;
+  if (source == null) {
+    return null;
+  }
+  const amount = Number(source.amount ?? source.value ?? source.count ?? 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+  return {
+    amount: Math.trunc(amount),
+    ownerId: String(source.ownerId ?? source.owner_id ?? ""),
+    targetId: String(source.targetId ?? source.target_id ?? ""),
+  };
+}
+
 export interface BoardPlayer {
   seat: number;
   userId: string;
@@ -129,6 +156,7 @@ export interface BoardView {
   deckCount: number;
   pendingChallenge: { ownerId: string; targetId: string; legal: boolean } | null;
   pendingStack?: PendingStack | null;
+  pendingHit?: PendingHit | null;
   jumpWindow?: JumpWindow | null;
   legalCards: string[];
   canDraw: boolean;
@@ -165,7 +193,7 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
     return {
       players: [], spectators: [], chat: [], topCard: null, currentColor: null,
       turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
-      pendingStack: null, jumpWindow: null, legalCards: [], canDraw: false, result: null,
+      pendingStack: null, pendingHit: null, jumpWindow: null, legalCards: [], canDraw: false, result: null,
       myUserId, started: false, mode: "classic",
     };
   }
@@ -192,6 +220,7 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
       legal: state.pendingChallenge.legal,
     },
     pendingStack: normalizePendingStack(rawState.pendingStack ?? rawState.pending_stack),
+    pendingHit: normalizePendingHit(rawState.pendingHit ?? rawState.pending_hit),
     jumpWindow: normalizeJumpWindow(rawState.jumpWindow ?? rawState.jump_window),
     legalCards: myUserId === null ? [] : legalMoves(state, myUserId, Date.now()).cards,
     canDraw: myUserId !== null && legalMoves(state, myUserId, Date.now()).canDraw,

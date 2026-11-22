@@ -3,6 +3,10 @@ import { canPlay, legalMoves, mostCommonColor } from "./rules";
 import type { Action, Card, Color, GameState, Player } from "./types";
 
 function cardScore(state: GameState, card: Card): number {
+  if (card.kind === "discardAll") return 120;
+  if (card.kind === "wildAttack") return 110;
+  if (card.kind === "hit2") return 106;
+  if (card.kind === "hit1") return 105;
   if (card.kind === "wild4") return 100;
   if (card.kind === "wild") return 90;
   if (card.kind === "draw2") return 80;
@@ -42,6 +46,32 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
       return null;
     }
     return { type: "play", playerId, cardId: matching.id, jump: true };
+  }
+  if (state.pendingHit !== null) {
+    if (state.pendingHit.targetId !== playerId) {
+      return null;
+    }
+    const target = state.players.find((candidate) => candidate.id === playerId);
+    if (target === undefined) {
+      return null;
+    }
+    const deflection = target.hand.find((card) => (
+      card.kind === "hit1" || card.kind === "hit2" || card.kind === "wildAttack"
+    ));
+    if (deflection === undefined) {
+      return { type: "draw", playerId };
+    }
+    if (deflection.kind !== "wildAttack") {
+      return { type: "play", playerId, cardId: deflection.id };
+    }
+    const redirect = pickTarget(state, playerId);
+    return {
+      type: "play",
+      playerId,
+      cardId: deflection.id,
+      chosenColor: mostCommonColor(target.hand),
+      ...(redirect === null ? {} : { targetId: redirect }),
+    };
   }
   if (state.pendingStack !== null) {
     if (state.pendingStack.targetId !== playerId) {
@@ -93,7 +123,13 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
   let best: Card | null = null;
   let targetId: string | undefined;
   for (const card of ranked) {
+    let needsTarget = false;
     if (state.mode === UNO_MODE.SEVEN_O && card.kind === "number" && card.value === 7) {
+      needsTarget = true;
+    } else if (card.kind === "wildAttack") {
+      needsTarget = true;
+    }
+    if (needsTarget) {
       const target = pickTarget(state, playerId);
       if (target === null) {
         continue;
@@ -107,7 +143,9 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
     return moves.canDraw ? { type: "draw", playerId } : null;
   }
   const chosenColor: Color | undefined =
-    best.kind === "wild" || best.kind === "wild4" ? mostCommonColor(player.hand) : undefined;
+    best.kind === "wild" || best.kind === "wild4" || best.kind === "wildAttack"
+      ? mostCommonColor(player.hand)
+      : undefined;
   return {
     type: "play",
     playerId,

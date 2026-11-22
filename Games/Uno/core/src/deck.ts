@@ -1,13 +1,47 @@
-import { COLORS, type Card, type Color } from "./types";
+import { COLORS, type Card, type Color, type GameMode } from "./types";
 import { nextSeed, randomInt } from "./rng";
 
 export function cardId(card: Omit<Card, "id">): string {
   if (card.kind === "wild") return "wild";
   if (card.kind === "wild4") return "wild4";
+  if (card.kind === "wildAttack") return "wildattack";
+  if (card.kind === "discardAll") return `${card.color}-discardall`;
   return `${card.color}-${card.kind === "number" ? card.value : card.kind}`;
 }
 
-export function buildDeck(): Card[] {
+export function buildDeck(mode: GameMode = "classic"): Card[] {
+  if (mode === "attack") {
+    const deck: Card[] = [];
+    for (const color of COLORS) {
+      for (let value = 1; value <= 9; value += 1) {
+        for (let copy = 0; copy < 2; copy += 1) {
+          const base = { color, kind: "number" as const, value };
+          deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+        }
+      }
+      for (const kind of ["hit1", "hit2", "discardAll"] as const) {
+        const copies = kind === "hit1" ? 1 : 2;
+        for (let copy = 0; copy < copies; copy += 1) {
+          const base = { color, kind };
+          deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+        }
+      }
+      for (const kind of ["reverse", "skip"] as const) {
+        const copies = kind === "reverse" ? 1 : 2;
+        for (let copy = 0; copy < copies; copy += 1) {
+          const base = { color, kind };
+          deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+        }
+      }
+    }
+    for (const kind of ["wild", "wildAttack"] as const) {
+      for (let copy = 0; copy < 4; copy += 1) {
+        const base = { color: null, kind };
+        deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+      }
+    }
+    return deck;
+  }
   const deck: Card[] = [];
   for (const color of COLORS) {
     for (let value = 0; value <= 9; value += 1) {

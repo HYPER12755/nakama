@@ -716,6 +716,103 @@ test("match loop clears an expired jump window", function()
   assert_equal(latest.jumpWindow, nil, "cleared window published")
 end)
 
+test("propagates attack from match params into the game and state payload", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "attack",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  assert_equal(state.rules_mode, "attack", "stored rules mode")
+  assert_equal(state.game.mode, "attack", "game rules mode")
+  local started = nil
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.MATCH_STARTED then
+      started = require("json").decode(message.data)
+    end
+  end
+  assert_equal(started.rulesMode, "attack", "match started payload")
+  local payload = require("json").decode(select(2, MATCH.match_signal({}, dispatcher_obj, 1, state, "")))
+  assert_equal(payload.rulesMode, "attack", "state payload mode")
+  assert_equal(payload.pendingHit, nil, "no pending hit at start")
+end)
+
+test("exposes pending hit with camelCase fields in the state payload", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "attack",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  state.game.pending_hit = { amount = 3, owner_id = "u1", target_id = "u2" }
+  local payload = require("json").decode(select(2, MATCH.match_signal({}, dispatcher_obj, 1, state, "")))
+  assert_equal(payload.pendingHit.amount, 3, "hit amount")
+  assert_equal(payload.pendingHit.ownerId, "u1", "hit owner")
+  assert_equal(payload.pendingHit.targetId, "u2", "hit target")
+end)
+
+test("forwards a wild attack target id from play requests", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "attack",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  state.game.turn = 1
+  state.game.current_color = "red"
+  state.game.players[1].hand = {
+    { id = "wildattack-0", color = nil, kind = "wildAttack" },
+  }
+  local before = #dispatcher_obj.messages
+  MATCH.match_loop({}, dispatcher_obj, 3, state, {
+    {
+      op_code = OP.PLAY_REQUEST,
+      presence = presence("u1", "Alice"),
+      data = json_encode({ cardId = "wildattack-0", chosenColor = "blue", targetId = "u2" }),
+    },
+  })
+  local forwarded = false
+  for index = before + 1, #dispatcher_obj.messages do
+    if dispatcher_obj.messages[index].op == OP.MOVE then
+      forwarded = require("json").decode(dispatcher_obj.messages[index].data).targetId == "u2"
+    end
+  end
+  assert_equal(forwarded, true, "target id broadcast")
+  assert_equal(state.game.pending_hit.amount, 2, "two hits pending")
+  assert_equal(state.game.pending_hit.target_id, "u2", "hit target stored")
+  assert_equal(state.game.current_color, "blue", "chosen colour stored")
+end)
+
+test("a pending hit timeout auto-takes the hits for a disconnected target", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    turnSeconds = 1,
+    rulesMode = "attack",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  state.game.turn = 2
+  state.game.pending_hit = { amount = 2, owner_id = "u1", target_id = "u2" }
+  state.player_order[2].connected = false
+  state.player_order[2].disconnected_at = now
+  local saved = now
+  now = now + 2000
+  MATCH.match_loop({}, dispatcher_obj, 6, state, {})
+  now = saved
+  assert_equal(state.game.pending_hit, nil, "hits auto-taken")
+  local moves = 0
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.MOVE and require("json").decode(message.data).action.type == "draw" then
+      moves = moves + 1
+    end
+  end
+  assert_equal(moves > 0, true, "launcher draw broadcast")
+end)
+
 if failures > 0 then
   io.stderr:write(failures .. " Uno match test(s) failed\n")
   os.exit(1)

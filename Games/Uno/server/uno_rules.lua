@@ -48,7 +48,59 @@ function rules.random_int(seed, bound)
   return math.floor((rules.next_seed(seed) / rules.MODULUS) * bound)
 end
 
-function rules.build_deck()
+local function press_launcher(state)
+  local amount = rules.random_int(state.seed, 4)
+  state.seed = rules.next_seed(state.seed)
+  return amount
+end
+
+local function build_attack_deck()
+  local deck = {}
+  for _, color in ipairs(protocol.COLORS) do
+    for value = 1, 9 do
+      for copy_index = 0, 1 do
+        deck[#deck + 1] = {
+          id = string.format("%s-%d-%d", color, value, copy_index),
+          color = color,
+          kind = "number",
+          value = value,
+        }
+      end
+    end
+    for _, kind in ipairs({ "hit1", "hit2", "discardAll" }) do
+      local copies = kind == "hit1" and 1 or 2
+      for copy_index = 0, copies - 1 do
+        local id = kind == "discardAll" and string.format("%s-discardall-%d", color, copy_index)
+          or string.format("%s-%s-%d", color, kind, copy_index)
+        deck[#deck + 1] = { id = id, color = color, kind = kind }
+      end
+    end
+    for _, kind in ipairs({ "reverse", "skip" }) do
+      local copies = kind == "reverse" and 1 or 2
+      for copy_index = 0, copies - 1 do
+        deck[#deck + 1] = {
+          id = string.format("%s-%s-%d", color, kind, copy_index),
+          color = color,
+          kind = kind,
+        }
+      end
+    end
+  end
+  for _, kind in ipairs({ "wild", "wildAttack" }) do
+    for copy_index = 0, 3 do
+      local id = kind == "wildAttack"
+        and string.format("wildattack-%d", copy_index)
+        or string.format("%s-%d", kind, copy_index)
+      deck[#deck + 1] = { id = id, color = nil, kind = kind }
+    end
+  end
+  return deck
+end
+
+function rules.build_deck(mode)
+  if mode == "attack" then
+    return build_attack_deck()
+  end
   local deck = {}
   for _, color in ipairs(protocol.COLORS) do
     for value = 0, 9 do
@@ -113,7 +165,7 @@ function rules.current_player(state)
 end
 
 function rules.can_play(state, card)
-  if card.kind == "wild" or card.kind == "wild4" then
+  if card.kind == "wild" or card.kind == "wild4" or card.kind == "wildAttack" then
     return true
   end
   local top = rules.top_card(state)
@@ -169,6 +221,28 @@ function rules.legal_moves(state, player_id, now)
     end
     return { cards = cards, can_draw = false }
   end
+  if state.pending_hit ~= nil then
+    if state.pending_hit.target_id ~= player_id then
+      return { cards = {}, can_draw = false }
+    end
+    local hit_player
+    for _, candidate in ipairs(state.players) do
+      if candidate.id == player_id then
+        hit_player = candidate
+        break
+      end
+    end
+    if hit_player == nil then
+      return { cards = {}, can_draw = false }
+    end
+    local cards = {}
+    for _, card in ipairs(hit_player.hand) do
+      if card.kind == "hit1" or card.kind == "hit2" or card.kind == "wildAttack" then
+        cards[#cards + 1] = card.id
+      end
+    end
+    return { cards = cards, can_draw = true }
+  end
   if state.pending_stack ~= nil then
     if state.pending_stack.target_id ~= player_id then
       return { cards = {}, can_draw = false }
@@ -201,12 +275,16 @@ function rules.legal_moves(state, player_id, now)
   local cards = {}
   for _, card in ipairs(player.hand) do
     local playable = can_play_card(state, player, card)
-    local drawn_match = state.drawn_card_id == nil or state.drawn_card_id == card.id
+    local drawn_match = state.mode == "attack" or state.drawn_card_id == nil
+      or state.drawn_card_id == card.id
     if playable and drawn_match then
       cards[#cards + 1] = card.id
     end
   end
-  return { cards = cards, can_draw = state.drawn_card_id == nil }
+  return {
+    cards = cards,
+    can_draw = state.mode == "attack" or state.drawn_card_id == nil,
+  }
 end
 
 function rules.clear_jump_window(state, now)
@@ -245,7 +323,7 @@ function rules.create_game(seed, players, now, mode)
   end
   local rules_mode = protocol.normalize_rules_mode(mode)
   local state_seed = rules.normalize_seed(seed)
-  local deck, next_seed = rules.shuffle(state_seed, rules.build_deck())
+  local deck, next_seed = rules.shuffle(state_seed, rules.build_deck(rules_mode))
   state_seed = next_seed
 
   local dealt = {}
@@ -263,7 +341,7 @@ function rules.create_game(seed, players, now, mode)
     state_seed = rules.next_seed(state_seed)
     starter = table.remove(deck)
   end
-  if starter.kind == "wild" then
+  if starter.kind == "wild" or starter.kind == "wildAttack" then
     starter.color = most_common_color(dealt[1].hand)
   end
 
@@ -303,6 +381,7 @@ function rules.create_game(seed, players, now, mode)
     drawn_card_id = nil,
     pending_challenge = nil,
     pending_stack = nil,
+    pending_hit = nil,
     jump_window = nil,
     starting_rule = starting_rule,
     started = true,
@@ -525,6 +604,99 @@ function rules.apply_action(previous, action, now)
   if state.mode == "jumpIn" and action.type == "play" and action.jump == true then
     return fail(previous, protocol.ERROR.BAD_JUMP)
   end
+  if state.pending_hit ~= nil then
+    local hit = state.pending_hit
+    if actor == nil or hit.target_id ~= actor.id then
+      return fail(previous, protocol.ERROR.NOT_YOUR_TURN)
+    end
+    if action.type == "draw" then
+      for _ = 1, hit.amount do
+        draw_cards(state, actor, press_launcher(state))
+      end
+      state.pending_hit = nil
+      advance(state, 1)
+      local owner_index = player_index(state, hit.owner_id)
+      if owner_index ~= nil and #state.players[owner_index].hand == 0 then
+        state.finished = true
+        state.winner = state.players[owner_index].id
+      end
+      state.events[#state.events + 1] = {
+        type = "launcher",
+        player_id = actor.id,
+        at = #state.events,
+      }
+      state.replay[#state.replay + 1] = { player_id = actor.id, action = "launcher" }
+      return state, true
+    end
+    if action.type ~= "play" then
+      return fail(previous, protocol.ERROR.ILLEGAL_CARD)
+    end
+    local hit_index
+    for candidate_index, card in ipairs(actor.hand) do
+      if card.id == action.card_id then
+        hit_index = candidate_index
+        break
+      end
+    end
+    if hit_index == nil then
+      return fail(previous, protocol.ERROR.UNKNOWN_CARD)
+    end
+    local hit_card = actor.hand[hit_index]
+    if hit_card.kind ~= "hit1" and hit_card.kind ~= "hit2" and hit_card.kind ~= "wildAttack" then
+      return fail(previous, protocol.ERROR.ILLEGAL_CARD)
+    end
+    if hit_card.kind == "wildAttack" and action.chosen_color == nil then
+      return fail(previous, protocol.ERROR.MISSING_COLOR)
+    end
+    local actor_index = player_index(state, actor.id)
+    local player_count = #state.players
+    local next_index = ((actor_index - 1 + state.direction + player_count * 4) % player_count) + 1
+    local hit_target_id = state.players[next_index].id
+    if hit_card.kind == "wildAttack" then
+      local requested = action.target_id or action.targetId
+      if requested ~= nil and requested ~= "" then
+        local found = false
+        for _, player in ipairs(state.players) do
+          if player.id == requested and player.id ~= actor.id then
+            found = true
+            break
+          end
+        end
+        if not found then
+          return fail(previous, protocol.ERROR.MISSING_TARGET)
+        end
+        hit_target_id = requested
+      end
+    end
+    table.remove(actor.hand, hit_index)
+    state.discard[#state.discard + 1] = hit_card
+    state.drawn_card_id = nil
+    if hit_card.kind == "wildAttack" and action.chosen_color ~= nil then
+      state.current_color = action.chosen_color
+    elseif hit_card.color ~= nil then
+      state.current_color = hit_card.color
+    end
+    state.events[#state.events + 1] = {
+      type = "play",
+      player_id = actor.id,
+      card_id = hit_card.id,
+      text = action.chosen_color,
+      at = #state.events,
+    }
+    state.replay[#state.replay + 1] = {
+      player_id = actor.id,
+      action = "play",
+      card_id = hit_card.id,
+      color = action.chosen_color,
+    }
+    state.pending_hit = {
+      amount = hit.amount + (hit_card.kind == "hit1" and 1 or 2),
+      owner_id = actor.id,
+      target_id = hit_target_id,
+    }
+    state.turn = player_index(state, hit_target_id)
+    return state, true
+  end
   if state.pending_stack ~= nil then
     local stack = state.pending_stack
     if actor == nil or stack.target_id ~= actor.id then
@@ -660,6 +832,20 @@ function rules.apply_action(previous, action, now)
   end
 
   if action.type == "draw" then
+    if state.mode == "attack" then
+      for _ = 1, press_launcher(state) do
+        draw_cards(state, actor, 1)
+      end
+      state.drawn_card_id = nil
+      advance(state, 1)
+      state.events[#state.events + 1] = {
+        type = "launcher",
+        player_id = actor.id,
+        at = #state.events,
+      }
+      state.replay[#state.replay + 1] = { player_id = actor.id, action = "launcher" }
+      return state, true
+    end
     if state.drawn_card_id ~= nil then
       return fail(previous, protocol.ERROR.ILLEGAL_CARD)
     end
@@ -700,10 +886,30 @@ function rules.apply_action(previous, action, now)
   if state.drawn_card_id ~= nil and state.drawn_card_id ~= card.id then
     return fail(previous, protocol.ERROR.ILLEGAL_CARD)
   end
-  if (card.kind == "wild" or card.kind == "wild4") and action.chosen_color == nil then
+  if (card.kind == "wild" or card.kind == "wild4" or card.kind == "wildAttack")
+    and action.chosen_color == nil then
     return fail(previous, protocol.ERROR.MISSING_COLOR)
   end
   local wild_four_legal = card.kind == "wild4" and not has_color_match(state, actor)
+
+  local attack_target_id
+  if state.mode == "attack" and card.kind == "wildAttack" then
+    local requested = action.target_id or action.targetId
+    if requested == nil or requested == "" then
+      return fail(previous, protocol.ERROR.MISSING_TARGET)
+    end
+    local found = false
+    for _, player in ipairs(state.players) do
+      if player.id == requested and player.id ~= actor.id then
+        found = true
+        break
+      end
+    end
+    if not found then
+      return fail(previous, protocol.ERROR.MISSING_TARGET)
+    end
+    attack_target_id = requested
+  end
 
   local swap_target
   if state.mode == "sevenO" and card.kind == "number" and card.value == 7 then
@@ -727,6 +933,19 @@ function rules.apply_action(previous, action, now)
   state.drawn_card_id = nil
   if action.chosen_color ~= nil then
     state.current_color = action.chosen_color
+  elseif state.mode == "attack" and card.color ~= nil then
+    state.current_color = card.color
+  end
+  if state.mode == "attack" and card.kind == "discardAll" and card.color ~= nil then
+    local kept = {}
+    for _, held in ipairs(actor.hand) do
+      if held.color ~= card.color then
+        kept[#kept + 1] = held
+      else
+        state.discard[#state.discard + 1] = held
+      end
+    end
+    actor.hand = kept
   end
   state.events[#state.events + 1] = {
     type = "play",
@@ -790,6 +1009,20 @@ function rules.apply_action(previous, action, now)
         state.winner = actor.id
       end
     end
+  elseif card.kind == "hit1" or card.kind == "hit2" or card.kind == "wildAttack" then
+    if state.mode == "attack" then
+      local hit_target_id = attack_target_id or next_player.id
+      state.pending_hit = {
+        amount = card.kind == "hit1" and 1 or 2,
+        owner_id = actor.id,
+        target_id = hit_target_id,
+      }
+      state.turn = player_index(state, hit_target_id)
+    else
+      advance(state, 1)
+    end
+  elseif card.kind == "discardAll" then
+    advance(state, 1)
   elseif card.kind == "wild" then
     advance(state, 1)
   elseif card.kind == "wild4" then
@@ -814,7 +1047,8 @@ function rules.apply_action(previous, action, now)
   else
     advance(state, 1)
   end
-  if state.pending_challenge == nil and state.pending_stack == nil and #actor.hand == 0 then
+  if state.pending_challenge == nil and state.pending_stack == nil and state.pending_hit == nil
+    and #actor.hand == 0 then
     state.finished = true
     state.winner = actor.id
   end
@@ -834,7 +1068,7 @@ function rules.score_hand(hand)
   for _, card in ipairs(hand) do
     if card.kind == "number" then
       total = total + (card.value or 0)
-    elseif card.kind == "wild" or card.kind == "wild4" then
+    elseif card.kind == "wild" or card.kind == "wild4" or card.kind == "wildAttack" then
       total = total + 50
     else
       total = total + 20

@@ -11,6 +11,7 @@ describe("Uno rules mode", () => {
     expect(rulesModeLabel("classic")).toBe("Classic");
     expect(rulesModeLabel("sevenO")).toBe("Seven-O");
     expect(rulesModeLabel(progressive)).toBe("Progressive");
+    expect(rulesModeLabel("attack")).toBe("Attack");
     expect(rulesModeLabel(undefined)).toBe("Classic");
   });
 
@@ -18,6 +19,7 @@ describe("Uno rules mode", () => {
     expect(RULES_MODES).toContain("classic");
     expect(RULES_MODES).toContain("sevenO");
     expect(RULES_MODES as string[]).toContain("progressive");
+    expect(RULES_MODES as string[]).toContain("attack");
     expect(new Set(RULES_MODES).size).toBe(RULES_MODES.length);
   });
 
@@ -32,6 +34,11 @@ describe("Uno rules mode", () => {
   it("normalizes progressive from the online STATE payload", () => {
     expect(normalizeView({ rulesMode: "progressive" }, null).mode).toBe("progressive");
     expect(normalizeView({ mode: "progressive" }, null).mode).toBe("progressive");
+  });
+
+  it("normalizes attack from the online STATE payload", () => {
+    expect(normalizeView({ rulesMode: "attack" }, null).mode).toBe("attack");
+    expect(normalizeView({ mode: "attack" }, null).mode).toBe("attack");
   });
 
   it("reads the mode from a local game state", () => {
@@ -55,6 +62,14 @@ describe("Uno rules mode", () => {
       mode: progressive,
     } as GameState;
     expect(viewFromCore(state, "local").mode).toBe("progressive");
+  });
+
+  it("reads attack from a local game state", () => {
+    const state = createGame(7, [
+      { id: "local", name: "You" },
+      { id: "ai1", name: "Computer" },
+    ], 0, "attack");
+    expect(viewFromCore(state, "local").mode).toBe("attack");
   });
 
   it("exposes the controller rules shape and forwards a target", () => {
