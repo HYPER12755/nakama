@@ -4,12 +4,20 @@ export const UNO_MODE = {
   CLASSIC: "classic",
   SEVEN_O: "sevenO",
   PROGRESSIVE: "progressive",
+  JUMP_IN: "jumpIn",
 } as const;
 
-export const UNO_MODES: readonly GameMode[] = [UNO_MODE.CLASSIC, UNO_MODE.SEVEN_O, UNO_MODE.PROGRESSIVE];
+export const UNO_MODES: readonly GameMode[] = [
+  UNO_MODE.CLASSIC,
+  UNO_MODE.SEVEN_O,
+  UNO_MODE.PROGRESSIVE,
+  UNO_MODE.JUMP_IN,
+];
+
+export const JUMP_WINDOW_MS = 1800;
 
 export function isGameMode(value: unknown): value is GameMode {
-  return value === UNO_MODE.CLASSIC || value === UNO_MODE.SEVEN_O || value === UNO_MODE.PROGRESSIVE;
+  return UNO_MODES.some((mode) => mode === value);
 }
 
 export function normalizeMode(value: unknown): GameMode {
@@ -45,4 +53,6 @@ export const UNO_ERROR = {
   UNKNOWN_CARD: "unknown_card",
   MISSING_COLOR: "missing_color",
   MISSING_TARGET: "missing_target",
+  JUMP_WINDOW_OPEN: "jump_window_open",
+  BAD_JUMP: "bad_jump",
 } as const;

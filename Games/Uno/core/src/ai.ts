@@ -24,7 +24,25 @@ function pickTarget(state: GameState, playerId: string): string | null {
   return best === null ? null : best.id;
 }
 
-export function chooseAction(state: GameState, playerId: string): Action | null {
+export function chooseAction(state: GameState, playerId: string, now = 0): Action | null {
+  if (state.mode === UNO_MODE.JUMP_IN && state.jumpWindow !== null && now < state.jumpWindow.expiresAt) {
+    const window = state.jumpWindow;
+    if (playerId === window.ownerId) {
+      return null;
+    }
+    const player = state.players.find((candidate) => candidate.id === playerId);
+    const windowCard = state.discard[state.discard.length - 1];
+    if (player === undefined || windowCard === undefined || windowCard.id !== window.cardId
+      || windowCard.kind !== "number") {
+      return null;
+    }
+    const matching = player.hand.find((card) => card.kind === "number" && card.color === windowCard.color
+      && card.value === windowCard.value);
+    if (matching === undefined) {
+      return null;
+    }
+    return { type: "play", playerId, cardId: matching.id, jump: true };
+  }
   if (state.pendingStack !== null) {
     if (state.pendingStack.targetId !== playerId) {
       return null;
@@ -56,7 +74,7 @@ export function chooseAction(state: GameState, playerId: string): Action | null 
     }
     return { type: "challenge", playerId, accept: !state.pendingChallenge.legal };
   }
-  const moves = legalMoves(state, playerId);
+  const moves = legalMoves(state, playerId, now);
   if (moves.cards.length === 0) {
     return moves.canDraw ? { type: "draw", playerId } : null;
   }

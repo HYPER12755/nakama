@@ -1,6 +1,6 @@
 import { buildDeck, isActionCard, shuffle } from "./deck";
 import { nextSeed, normalizeSeed } from "./rng";
-import { UNO_ERROR, UNO_MODE, normalizeMode } from "./protocol";
+import { JUMP_WINDOW_MS, UNO_ERROR, UNO_MODE, normalizeMode } from "./protocol";
 import {
   COLORS,
   DEFAULT_RULES,
@@ -43,10 +43,26 @@ export function canPlay(state: GameState, card: Card): boolean {
   return card.kind === top.kind;
 }
 
-export function legalMoves(state: GameState, playerId: string): LegalMoves {
+export function legalMoves(state: GameState, playerId: string, now = 0): LegalMoves {
   const empty: LegalMoves = { cards: [], canDraw: false };
   if (state.finished) {
     return empty;
+  }
+  const window = state.mode === UNO_MODE.JUMP_IN ? state.jumpWindow : null;
+  if (window !== null && now < window.expiresAt) {
+    if (playerId === window.ownerId) {
+      return empty;
+    }
+    const viewer = state.players.find((candidate) => candidate.id === playerId);
+    const windowCard = topCard(state);
+    if (viewer === undefined || windowCard.id !== window.cardId || windowCard.kind !== "number") {
+      return empty;
+    }
+    const cards = viewer.hand
+      .filter((card) => card.kind === "number" && card.color === windowCard.color
+        && card.value === windowCard.value)
+      .map((card) => card.id);
+    return { cards, canDraw: false };
   }
   if (state.pendingStack !== null) {
     if (state.pendingStack.targetId !== playerId) {
@@ -73,6 +89,15 @@ export function legalMoves(state: GameState, playerId: string): LegalMoves {
     ? player.hand.filter(playable).map((card) => card.id)
     : player.hand.filter((card) => card.id === state.drawnCardId && playable(card)).map((card) => card.id);
   return { cards, canDraw: state.drawnCardId === null };
+}
+
+export function clearJumpWindow(state: GameState, now: number): GameState {
+  if (state.jumpWindow === null || now < state.jumpWindow.expiresAt) {
+    return state;
+  }
+  const next = cloneState(state);
+  next.jumpWindow = null;
+  return next;
 }
 
 export function createGame(
@@ -157,6 +182,7 @@ export function createGame(
     drawnCardId: null,
     pendingChallenge: null,
     pendingStack: null,
+    jumpWindow: null,
     startingRule,
     started: true,
     finished: false,
@@ -287,12 +313,48 @@ export function mostCommonColor(hand: Card[]): Color {
   return best;
 }
 
-export function applyAction(previous: GameState, action: Action): MoveResult {
+export function applyAction(previous: GameState, action: Action, now = 0): MoveResult {
   if (previous.finished) {
     return fail(previous, UNO_ERROR.GAME_OVER as "game_over");
   }
   const state = cloneState(previous);
   const actor = state.players.find((player) => player.id === action.playerId);
+  const window = state.mode === UNO_MODE.JUMP_IN ? state.jumpWindow : null;
+
+  if (window !== null && now < window.expiresAt) {
+    if (actor === undefined || actor.id === window.ownerId) {
+      return fail(previous, UNO_ERROR.JUMP_WINDOW_OPEN as "jump_window_open");
+    }
+    if (action.type !== "play" || action.jump !== true) {
+      return fail(previous, UNO_ERROR.JUMP_WINDOW_OPEN as "jump_window_open");
+    }
+    const windowCard = topCard(state);
+    const jumpCard = actor.hand.find((card) => card.id === action.cardId);
+    if (jumpCard === undefined || windowCard.id !== window.cardId || windowCard.kind !== "number"
+      || jumpCard.kind !== "number" || jumpCard.color === null
+      || jumpCard.color !== windowCard.color || jumpCard.value !== windowCard.value) {
+      return fail(previous, UNO_ERROR.BAD_JUMP as "bad_jump");
+    }
+    actor.hand.splice(actor.hand.findIndex((card) => card.id === jumpCard.id), 1);
+    state.discard.push(jumpCard);
+    state.drawnCardId = null;
+    state.events.push({ type: "jump", playerId: actor.id, cardId: jumpCard.id, at: state.events.length });
+    state.replay.push({ playerId: actor.id, action: "jump", cardId: jumpCard.id });
+    state.turn = state.players.findIndex((player) => player.id === actor.id);
+    advance(state, 1);
+    state.jumpWindow = { cardId: jumpCard.id, ownerId: actor.id, expiresAt: now + JUMP_WINDOW_MS };
+    finishIfEmpty(state, actor);
+    if (state.finished) {
+      state.jumpWindow = null;
+    }
+    return { state, ok: true };
+  }
+  if (window !== null) {
+    state.jumpWindow = null;
+  }
+  if (state.mode === UNO_MODE.JUMP_IN && action.type === "play" && action.jump === true) {
+    return fail(previous, UNO_ERROR.BAD_JUMP as "bad_jump");
+  }
 
   if (state.pendingStack !== null) {
     const stack = state.pendingStack;
@@ -546,6 +608,9 @@ export function applyAction(previous: GameState, action: Action): MoveResult {
   }
   if (state.pendingChallenge === null && state.pendingStack === null) {
     finishIfEmpty(state, actor);
+  }
+  if (state.mode === UNO_MODE.JUMP_IN && card.kind === "number" && !state.finished) {
+    state.jumpWindow = { cardId: card.id, ownerId: actor.id, expiresAt: now + JUMP_WINDOW_MS };
   }
 
   return { state, ok: true };

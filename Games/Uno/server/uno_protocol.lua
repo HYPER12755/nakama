@@ -29,16 +29,25 @@ protocol.ERROR = {
   UNKNOWN_CARD = "unknown_card",
   MISSING_COLOR = "missing_color",
   MISSING_TARGET = "missing_target",
+  JUMP_WINDOW_OPEN = "jump_window_open",
+  BAD_JUMP = "bad_jump",
 }
 
-protocol.RULES_MODES = { "classic", "sevenO", "progressive" }
+protocol.RULES_MODES = { "classic", "sevenO", "progressive", "jumpIn" }
+
+protocol.JUMP_WINDOW_MS = 1800
 
 function protocol.is_rules_mode(value)
-  return value == "classic" or value == "sevenO" or value == "progressive"
+  for _, mode in ipairs(protocol.RULES_MODES) do
+    if value == mode then
+      return true
+    end
+  end
+  return false
 end
 
 function protocol.normalize_rules_mode(value)
-  if value == "sevenO" or value == "progressive" then
+  if protocol.is_rules_mode(value) then
     return value
   end
   return "classic"

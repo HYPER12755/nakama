@@ -23,6 +23,7 @@ import {
   UNO_OP,
   applyAction,
   chooseAction,
+  clearJumpWindow,
   createGame,
   type Action,
   type Color,
@@ -30,17 +31,24 @@ import {
   type GameState,
 } from "@moongames/uno-core";
 import {
+  isJumpCandidate,
+  normalizeJumpWindow,
   normalizeList,
   normalizePendingStack,
   normalizeRulesMode,
   rulesModeLabel,
   viewFromCore,
   type BoardView,
+  type JumpWindow,
 } from "../lib/view";
 
 const GAME_ID = __MOONGAMES_GAME_ID__;
 const DEVICE_KEY = `moongames.${GAME_ID}.deviceId`;
 const SERVER_KEY = "defaultkey";
+
+function readJumpWindow(state: GameState | null): JumpWindow | null {
+  return normalizeJumpWindow(state?.jumpWindow ?? null);
+}
 
 function deviceId(): string {
   try {
@@ -200,6 +208,7 @@ export function normalizeView(payload: Record<string, unknown>, myUserId: string
     deckCount: Number(payload.deckCount ?? 0),
     pendingChallenge: normalizePendingChallenge(payload.pendingChallenge ?? payload.pending_challenge),
     pendingStack: normalizePendingStack(payload.pendingStack ?? payload.pending_stack),
+    jumpWindow: normalizeJumpWindow(payload.jumpWindow ?? payload.jump_window),
     legalCards: normalizeList(payload.legalCards).map(String),
     canDraw: payload.canDraw === true,
     result: normalizeResult(payload.result),
@@ -209,11 +218,30 @@ export function normalizeView(payload: Record<string, unknown>, myUserId: string
   };
 }
 
+export function buildPlayPayload(
+  view: BoardView,
+  cardId: string,
+  chosenColor?: Color,
+  targetId?: string,
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = { cardId };
+  if (chosenColor !== undefined) {
+    payload.chosenColor = chosenColor;
+  }
+  if (targetId !== undefined) {
+    payload.targetId = targetId;
+  }
+  if (isJumpCandidate(view, cardId)) {
+    payload.jump = true;
+  }
+  return payload;
+}
+
 function emptyView(myUserId: string | null): BoardView {
   return {
     players: [], spectators: [], chat: [], topCard: null, currentColor: null,
     turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
-    pendingStack: null, legalCards: [], canDraw: false, result: null,
+    pendingStack: null, jumpWindow: null, legalCards: [], canDraw: false, result: null,
     myUserId, started: false, mode: "classic",
   };
 }
@@ -628,7 +656,7 @@ export function useUnoGame(enabled = true): UnoController {
     setLocalGame(createGame(
       Date.now() >>> 0,
       ids.map((id) => ({ id, name: id === "local" ? "You" : "Computer" })),
-      undefined,
+      Date.now(),
       gameMode,
     ));
     setDealKey((value) => value + 1);
@@ -641,6 +669,45 @@ export function useUnoGame(enabled = true): UnoController {
     if (mode !== "local" || localGame === null || localGame.finished) {
       return;
     }
+    const jumpWindow = readJumpWindow(localGame);
+    if (jumpWindow !== null) {
+      const jumpers = localGame.players.filter((player) =>
+        player.id !== "local" && player.id !== jumpWindow.ownerId);
+      const hasJumper = jumpers.some((player) => {
+        const action = chooseAction(localGame, player.id, Date.now());
+        return action !== null && action.type === "play" && action.jump === true;
+      });
+      if (!hasJumper) {
+        return;
+      }
+      const timer = window.setTimeout(() => {
+        setLocalGame((current) => {
+          if (current === null || current.finished) {
+            return current;
+          }
+          const open = readJumpWindow(current);
+          if (open === null || open.cardId !== jumpWindow.cardId || open.ownerId !== jumpWindow.ownerId) {
+            return current;
+          }
+          const now = Date.now();
+          for (const player of current.players) {
+            if (player.id === "local" || player.id === open.ownerId) {
+              continue;
+            }
+            const action = chooseAction(current, player.id, now);
+            if (action === null || action.type !== "play" || action.jump !== true) {
+              continue;
+            }
+            const result = applyAction(current, action, now);
+            if (result.ok) {
+              return result.state;
+            }
+          }
+          return current;
+        });
+      }, 900);
+      return () => window.clearTimeout(timer);
+    }
     const actorId = localGame.pendingChallenge?.targetId
       ?? localGame.players[localGame.turn].id;
     const actor = localGame.players.find((player) => player.id === actorId);
@@ -652,11 +719,35 @@ export function useUnoGame(enabled = true): UnoController {
       if (action === null) {
         return;
       }
-      const result = applyAction(localGame, action);
+      const result = applyAction(localGame, action, Date.now());
       if (result.ok) {
         setLocalGame(result.state);
       }
     }, 650);
+    return () => window.clearTimeout(timer);
+  }, [localGame, mode]);
+
+  useEffect(() => {
+    if (mode !== "local" || localGame === null || localGame.finished) {
+      return;
+    }
+    const jumpWindow = readJumpWindow(localGame);
+    if (jumpWindow === null) {
+      return;
+    }
+    const delay = Math.min(30000, Math.max(0, jumpWindow.expiresAt - Date.now()));
+    const timer = window.setTimeout(() => {
+      setLocalGame((current) => {
+        if (current === null) {
+          return current;
+        }
+        const open = readJumpWindow(current);
+        if (open === null || open.cardId !== jumpWindow.cardId || open.ownerId !== jumpWindow.ownerId) {
+          return current;
+        }
+        return clearJumpWindow(current, Date.now());
+      });
+    }, delay);
     return () => window.clearTimeout(timer);
   }, [localGame, mode]);
 
@@ -1017,6 +1108,8 @@ export function useUnoGame(enabled = true): UnoController {
     }
   }, [connect, disconnect]);
 
+  const view = mode === "online" ? onlineView : viewFromCore(localGame, "local");
+
   const send = useCallback((op: number, payload: Record<string, unknown>) => {
     const socket = socketRef.current;
     const joined = matchIdRef.current;
@@ -1031,8 +1124,12 @@ export function useUnoGame(enabled = true): UnoController {
       if (localGame === null) {
         return;
       }
-      const action: Action = { type: "play", playerId: "local", cardId, chosenColor, targetId };
-      const result = applyAction(localGame, action);
+      const jump = isJumpCandidate(view, cardId);
+      const action: Action = {
+        type: "play", playerId: "local", cardId, chosenColor, targetId,
+        ...(jump ? { jump: true } : {}),
+      };
+      const result = applyAction(localGame, action, Date.now());
       if (result.ok) {
         setLocalGame(result.state);
       } else {
@@ -1040,22 +1137,15 @@ export function useUnoGame(enabled = true): UnoController {
       }
       return;
     }
-    const payload: Record<string, unknown> = { cardId };
-    if (chosenColor !== undefined) {
-      payload.chosenColor = chosenColor;
-    }
-    if (targetId !== undefined) {
-      payload.targetId = targetId;
-    }
-    send(UNO_OP.PLAY_REQUEST, payload);
-  }, [localGame, mode, send]);
+    send(UNO_OP.PLAY_REQUEST, buildPlayPayload(view, cardId, chosenColor, targetId));
+  }, [localGame, mode, send, view]);
 
   const draw = useCallback(() => {
     if (mode === "local") {
       if (localGame === null) {
         return;
       }
-      const result = applyAction(localGame, { type: "draw", playerId: "local" });
+      const result = applyAction(localGame, { type: "draw", playerId: "local" }, Date.now());
       if (result.ok) {
         setLocalGame(result.state);
       }
@@ -1073,7 +1163,7 @@ export function useUnoGame(enabled = true): UnoController {
         type: "challenge",
         playerId: "local",
         accept,
-      });
+      }, Date.now());
       if (result.ok) {
         setLocalGame(result.state);
       }
@@ -1098,8 +1188,6 @@ export function useUnoGame(enabled = true): UnoController {
   const resign = useCallback(() => {
     send(UNO_OP.RESIGN, {});
   }, [send]);
-
-  const view = mode === "online" ? onlineView : viewFromCore(localGame, "local");
 
   return {
     cardSet,

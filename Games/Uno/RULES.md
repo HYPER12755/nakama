@@ -70,3 +70,37 @@ Server state exposes the stack as `pendingStack` with camelCase fields
 `kind`, `amount`, `ownerId`, `targetId`, and optional `legal`, `color`, and
 `pendingWinnerId`. The core state uses the same camelCase shape; the Lua server
 internal state stores it as `pending_stack` with snake_case fields.
+
+## Jump-In (optional house rule)
+
+Jump-In is another optional Mattel-listed house rule. It is **off by default**:
+games created without an explicit mode use classic rules. The mode is
+authoritative state, is included in state payloads, and all matchmaker tickets
+for a game must agree on it. Everything not described here behaves as in classic
+UNO.
+
+- Only **exact number-card matches** can jump in: the played card must be a
+  number card of the same colour *and* the same value as the card it jumps onto
+  (for example, a yellow 7 on a yellow 7). A number card of the same colour but
+  a different value, or the same value in a different colour, is not a match.
+- **Action-card jump-in cancellation is intentionally NOT enabled.** Skip,
+  Reverse, Draw Two, Wild and Wild Draw Four cannot be used to jump in, and
+  playing an action card does not open a jump window. Action cards resolve
+  exactly as in classic UNO. A jump attempt with an action card is rejected.
+- When a number card is played, a jump window of `JUMP_WINDOW_MS = 1800`
+  milliseconds opens. Until it expires, only other seated players may play an
+  exact matching number card as a jump. The player who opened the window cannot
+  act while it is open; normal play resumes from the current turn once it
+  closes. The server clears expired windows authoritatively.
+- A valid jump removes the card from the jumper's hand, discards it, puts the
+  turn on the jumper and advances it by one, and opens a fresh jump window for
+  the jumper's card. A jumper who empties their hand wins immediately.
+- A play attempted by the window owner (or any non-jump action during an open
+  window) is rejected with `jump_window_open`. A jump with a card that is not an
+  exact match, with an action card, or without an open window is rejected with
+  `bad_jump`. A draw during an open window is also `jump_window_open`.
+
+Core state exposes the window as `jumpWindow` with camelCase fields `cardId`,
+`ownerId` and `expiresAt`; the Lua server stores it as `jump_window` with
+`card_id`, `owner_id` and `expires_at`, and publishes the camelCase shape in
+state payloads. Play requests carry `jump: true` (Lua `jump`) to attempt a jump.

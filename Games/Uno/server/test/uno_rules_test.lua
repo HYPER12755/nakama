@@ -825,6 +825,191 @@ test("leaves classic and Seven-O draw effects immediate with no stack", function
   end
 end)
 
+local yellow_seven = { id = "yellow-7-0", color = "yellow", kind = "number", value = 7 }
+local second_yellow_seven = { id = "yellow-7-1", color = "yellow", kind = "number", value = 7 }
+local third_yellow_seven = { id = "yellow-7-2", color = "yellow", kind = "number", value = 7 }
+local red_seven = { id = "red-7-0", color = "red", kind = "number", value = 7 }
+local yellow_six = { id = "yellow-6-0", color = "yellow", kind = "number", value = 6 }
+local yellow_skip = { id = "yellow-skip-0", color = "yellow", kind = "skip" }
+local green_six = { id = "green-6-0", color = "green", kind = "number", value = 6 }
+
+local function jump_game()
+  local game = staged_game({ yellow_seven, blue_zero }, "yellow", "jumpIn")
+  game.jump_window = nil
+  game.players[2].hand = { second_yellow_seven, blue_zero }
+  game.players[3].hand = { green_six }
+  return game
+end
+
+local function open_jump_window(game, now)
+  local state, ok, error_code = rules.apply_action(game, {
+    type = "play",
+    player_id = "p1",
+    card_id = yellow_seven.id,
+  }, now or 1000)
+  assert_equal(ok, true, "jump window play: " .. tostring(error_code))
+  return state
+end
+
+test("exposes jumpIn as a valid authoritative mode", function()
+  assert_equal(protocol.JUMP_WINDOW_MS, 1800, "window length")
+  assert_equal(rules.JUMP_WINDOW_MS, 1800, "rules window length")
+  assert_equal(protocol.is_rules_mode("jumpIn"), true, "protocol accepts mode")
+  assert_equal(protocol.normalize_rules_mode("jumpIn"), "jumpIn", "protocol normalizes mode")
+  assert_equal(protocol.ERROR.JUMP_WINDOW_OPEN, "jump_window_open", "window error code")
+  assert_equal(protocol.ERROR.BAD_JUMP, "bad_jump", "bad jump error code")
+  local game = rules.create_game(vectors.seed, seats(), 0, "jumpIn")
+  assert_equal(game.mode, "jumpIn", "game mode")
+  assert_equal(game.jump_window, nil, "no window at creation")
+end)
+
+test("opens a jump window after a number card", function()
+  local state = open_jump_window(jump_game())
+  assert_equal(state.jump_window.card_id, yellow_seven.id, "window card")
+  assert_equal(state.jump_window.owner_id, "p1", "window owner")
+  assert_equal(state.jump_window.expires_at, 2800, "window expiry")
+  assert_equal(state.turn, 2, "turn advanced")
+  assert_equal(state.finished, false, "game continues")
+end)
+
+test("jumps with an exact number-card match", function()
+  local state = open_jump_window(jump_game())
+  local p2_moves = rules.legal_moves(state, "p2", 1100)
+  assert_equal(join(p2_moves.cards), second_yellow_seven.id, "matching card is legal")
+  assert_equal(p2_moves.can_draw, false, "no draw during a window")
+  assert_equal(#rules.legal_moves(state, "p3", 1100).cards, 0, "no card for p3")
+  local jumped, ok, error_code = rules.apply_action(state, {
+    type = "play",
+    player_id = "p2",
+    card_id = second_yellow_seven.id,
+    jump = true,
+  }, 1100)
+  assert_equal(ok, true, "jump accepted: " .. tostring(error_code))
+  assert_equal(join(ids(jumped.players[2].hand)), blue_zero.id, "jumper kept spare card")
+  assert_equal(jumped.discard[#jumped.discard].id, second_yellow_seven.id, "jump card discarded")
+  assert_equal(jumped.turn, 3, "turn advanced past jumper")
+  assert_equal(jumped.jump_window.card_id, second_yellow_seven.id, "new window card")
+  assert_equal(jumped.jump_window.owner_id, "p2", "new window owner")
+  assert_equal(jumped.jump_window.expires_at, 2900, "new window expiry")
+  assert_equal(jumped.replay[#jumped.replay].action, "jump", "jump replay")
+end)
+
+test("rejects invalid jumps and jump requests without a window", function()
+  local state = open_jump_window(jump_game())
+  for _, card in ipairs({ red_seven, yellow_six }) do
+    state.players[2].hand = { card }
+    local result, ok, error_code = rules.apply_action(state, {
+      type = "play",
+      player_id = "p2",
+      card_id = card.id,
+      jump = true,
+    }, 1100)
+    assert_equal(ok, false, "non-matching jump refused")
+    assert_equal(error_code, protocol.ERROR.BAD_JUMP, "bad jump code")
+    assert_equal(result == state, true, "state untouched")
+  end
+  state.players[2].hand = { yellow_skip }
+  local _, action_ok, action_error = rules.apply_action(state, {
+    type = "play",
+    player_id = "p2",
+    card_id = yellow_skip.id,
+    jump = true,
+  }, 1100)
+  assert_equal(action_ok, false, "action-card jump refused")
+  assert_equal(action_error, protocol.ERROR.BAD_JUMP, "action-card error code")
+  local _, no_window_ok, no_window_error = rules.apply_action(jump_game(), {
+    type = "play",
+    player_id = "p2",
+    card_id = second_yellow_seven.id,
+    jump = true,
+  }, 1100)
+  assert_equal(no_window_ok, false, "jump without window refused")
+  assert_equal(no_window_error, protocol.ERROR.BAD_JUMP, "no-window error code")
+end)
+
+test("blocks the window owner and non-jump actions during a window", function()
+  local state = open_jump_window(jump_game())
+  assert_equal(#rules.legal_moves(state, "p1", 1100).cards, 0, "owner has no legal moves")
+  local cases = {
+    { type = "draw", player_id = "p1" },
+    { type = "play", player_id = "p1", card_id = blue_zero.id },
+    { type = "play", player_id = "p2", card_id = second_yellow_seven.id },
+    { type = "draw", player_id = "p2" },
+  }
+  for _, action in ipairs(cases) do
+    local result, ok, error_code = rules.apply_action(state, action, 1100)
+    assert_equal(ok, false, "action refused during window")
+    assert_equal(error_code, protocol.ERROR.JUMP_WINDOW_OPEN, "window open code")
+    assert_equal(result == state, true, "state untouched")
+  end
+end)
+
+test("clears only an expired jump window and resumes normal play", function()
+  local state = open_jump_window(jump_game())
+  assert_equal(rules.clear_jump_window(state, 2799) == state, true, "window still open")
+  local cleared = rules.clear_jump_window(state, 2800)
+  assert_equal(cleared.jump_window, nil, "window cleared")
+  assert_equal(state.jump_window ~= nil, true, "original untouched")
+  assert_equal(cleared.turn, 2, "current turn unchanged")
+  assert_equal(rules.legal_moves(cleared, "p2", 2800).can_draw, true, "draw restored")
+  local normal, ok = rules.apply_action(cleared, { type = "draw", player_id = "p2" }, 2801)
+  assert_equal(ok, true, "normal play resumed")
+  assert_equal(normal.jump_window, nil, "no window after draw")
+  local implicit, implicit_ok = rules.apply_action(state, { type = "draw", player_id = "p2" }, 2801)
+  assert_equal(implicit_ok, true, "expired window ignored by apply_action")
+  assert_equal(implicit.jump_window, nil, "no window after implicit clear")
+end)
+
+test("finishes immediately when a jumper empties their hand", function()
+  local game = jump_game()
+  game.players[2].hand = { second_yellow_seven }
+  local state = open_jump_window(game)
+  local jumped, ok = rules.apply_action(state, {
+    type = "play",
+    player_id = "p2",
+    card_id = second_yellow_seven.id,
+    jump = true,
+  }, 1100)
+  assert_equal(ok, true, "final card jumped")
+  assert_equal(jumped.finished, true, "hand finished")
+  assert_equal(jumped.winner, "p2", "jumper wins")
+  assert_equal(jumped.jump_window, nil, "no window after win")
+end)
+
+test("action-card plays do not open a jump window", function()
+  local game = staged_game({ yellow_skip, blue_zero }, "yellow", "jumpIn")
+  local state, ok, error_code = rules.apply_action(game, {
+    type = "play",
+    player_id = "p1",
+    card_id = yellow_skip.id,
+  }, 1000)
+  assert_equal(ok, true, "skip played: " .. tostring(error_code))
+  assert_equal(state.jump_window, nil, "no window")
+  assert_equal(state.turn, 3, "skip advanced two seats")
+end)
+
+test("allows chained jumps", function()
+  local state = jump_game()
+  state.players[3].hand = { third_yellow_seven, green_six }
+  local opened = open_jump_window(state)
+  local first, first_ok = rules.apply_action(opened, {
+    type = "play",
+    player_id = "p2",
+    card_id = second_yellow_seven.id,
+    jump = true,
+  }, 1100)
+  assert_equal(first_ok, true, "first jump")
+  local second, second_ok = rules.apply_action(first, {
+    type = "play",
+    player_id = "p3",
+    card_id = third_yellow_seven.id,
+    jump = true,
+  }, 1200)
+  assert_equal(second_ok, true, "second jump")
+  assert_equal(second.turn, 1, "turn wrapped around")
+  assert_equal(second.jump_window.owner_id, "p3", "last jumper owns window")
+end)
+
 if failures > 0 then
   io.stderr:write(failures .. " Uno rules test(s) failed\n")
   os.exit(1)

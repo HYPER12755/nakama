@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { FriendInviteDialog, buildMatchInviteUrl, copyText } from "@moongames/game-ui";
 import type { UnoController } from "../hooks/useUnoGame";
-import { rulesModeLabel } from "../lib/view";
+import { JUMP_IN_MODE, rulesModeLabel } from "../lib/view";
 
 export interface UnoOnlinePanelProps {
   controller: UnoController;
@@ -46,6 +46,7 @@ export function UnoOnlinePanel({
     : controller.view.players.find((player) => player.userId === result.winnerUserId) ?? null;
   const shareMatchId = controller.matchId ?? "";
   const shareLink = buildMatchInviteUrl(shareMatchId, inviteAsSpectator, window.location.href);
+  const jumpIn = (controller.view.mode ?? controller.rulesMode) === JUMP_IN_MODE;
 
   async function joinRoom() {
     const code = roomId.trim();
@@ -118,6 +119,9 @@ export function UnoOnlinePanel({
                 <span className="online-size__label">Rules</span>
                 <strong className="online-size__value">{controller.rulesModeLabel}</strong>
               </div>
+              {jumpIn ? (
+                <p className="online-mode-hint">Jump-In is on: play an exact colour and number match to jump into the turn.</p>
+              ) : null}
               <div className="online-size">
                 <span className="online-size__label">Players</span>
                 <div className="online-size__options" role="radiogroup" aria-label="Players">
@@ -208,6 +212,9 @@ export function UnoOnlinePanel({
             <span className="online-size__label">Rules</span>
             <strong className="online-size__value">{rulesModeLabel(controller.view.mode ?? controller.rulesMode)}</strong>
           </div>
+          {jumpIn ? (
+            <p className="online-mode-hint">Jump-In is on: an exact colour and number match can steal the turn.</p>
+          ) : null}
           {controller.error !== null ? (
             <p className="online-feedback online-feedback--error" role="alert">{controller.error}</p>
           ) : null}

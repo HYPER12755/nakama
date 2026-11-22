@@ -93,6 +93,43 @@ describe("Uno Seven-O AI", () => {
   });
 });
 
+describe("Uno Jump-In AI", () => {
+  const yellowSeven: Card = { id: "yellow-7-0", color: "yellow", kind: "number", value: 7 };
+  const matchingSeven: Card = { id: "yellow-7-1", color: "yellow", kind: "number", value: 7 };
+  const otherCard: Card = { id: "blue-3-0", color: "blue", kind: "number", value: 3 };
+
+  function stagedWindow(p2Hand: Card[]): GameState {
+    const state = createGame(555, players, 0, "jumpIn");
+    state.turn = 0;
+    state.direction = 1;
+    state.currentColor = "yellow";
+    state.drawnCardId = null;
+    state.players[0].hand = [yellowSeven, otherCard];
+    state.players[1].hand = p2Hand;
+    state.players[2].hand = [otherCard];
+    const played = applyAction(state, {
+      type: "play", playerId: "p1", cardId: yellowSeven.id,
+    }, 1000);
+    expect(played.ok).toBe(true);
+    return played.state;
+  }
+
+  it("jumps with an exact matching card during an open window", () => {
+    const state = stagedWindow([matchingSeven, otherCard]);
+    expect(chooseAction(state, "p2", 1100)).toEqual({
+      type: "play", playerId: "p2", cardId: matchingSeven.id, jump: true,
+    });
+    expect(chooseAction(state, "p1", 1100)).toBeNull();
+    expect(chooseAction(state, "p3", 1100)).toBeNull();
+  });
+
+  it("waits without a match and resumes normal play after the window", () => {
+    const state = stagedWindow([otherCard]);
+    expect(chooseAction(state, "p2", 1100)).toBeNull();
+    expect(chooseAction(state, "p2", 3000)).toEqual({ type: "draw", playerId: "p2" });
+  });
+});
+
 describe("Uno Progressive AI", () => {
   const drawTwo: Card = { id: "blue-draw2-0", color: "blue", kind: "draw2" };
   const otherDrawTwo: Card = { id: "green-draw2-0", color: "green", kind: "draw2" };

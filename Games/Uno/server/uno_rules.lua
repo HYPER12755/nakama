@@ -7,6 +7,7 @@ rules.HAND_SIZE = 7
 rules.DRAW_TWO_AMOUNT = 2
 rules.WILD_FOUR_AMOUNT = 4
 rules.CHALLENGE_PENALTY = 6
+rules.JUMP_WINDOW_MS = protocol.JUMP_WINDOW_MS
 rules.DEFAULT_SEED = 123456789
 rules.MULTIPLIER = 1664525
 rules.INCREMENT = 1013904223
@@ -138,9 +139,35 @@ local function can_play_card(state, _player, card)
   return rules.can_play(state, card)
 end
 
-function rules.legal_moves(state, player_id)
+function rules.legal_moves(state, player_id, now)
   if state.finished then
     return { cards = {}, can_draw = false }
+  end
+  local clock = now or 0
+  local window = state.mode == "jumpIn" and state.jump_window or nil
+  if window ~= nil and clock < window.expires_at then
+    if player_id == window.owner_id then
+      return { cards = {}, can_draw = false }
+    end
+    local viewer
+    for _, candidate in ipairs(state.players) do
+      if candidate.id == player_id then
+        viewer = candidate
+        break
+      end
+    end
+    local window_card = rules.top_card(state)
+    if viewer == nil or window_card == nil or window_card.id ~= window.card_id
+      or window_card.kind ~= "number" then
+      return { cards = {}, can_draw = false }
+    end
+    local cards = {}
+    for _, card in ipairs(viewer.hand) do
+      if card.kind == "number" and card.color == window_card.color and card.value == window_card.value then
+        cards[#cards + 1] = card.id
+      end
+    end
+    return { cards = cards, can_draw = false }
   end
   if state.pending_stack ~= nil then
     if state.pending_stack.target_id ~= player_id then
@@ -180,6 +207,15 @@ function rules.legal_moves(state, player_id)
     end
   end
   return { cards = cards, can_draw = state.drawn_card_id == nil }
+end
+
+function rules.clear_jump_window(state, now)
+  if state.jump_window == nil or (now or 0) < state.jump_window.expires_at then
+    return state
+  end
+  local next_state = rules.clone_state(state)
+  next_state.jump_window = nil
+  return next_state
 end
 
 local function most_common_color(hand)
@@ -267,6 +303,7 @@ function rules.create_game(seed, players, now, mode)
     drawn_card_id = nil,
     pending_challenge = nil,
     pending_stack = nil,
+    jump_window = nil,
     starting_rule = starting_rule,
     started = true,
     finished = false,
@@ -420,18 +457,73 @@ local function apply_stack_resolution(state, stack, accept)
   finish_deferred_winner(state, pending_winner_id)
 end
 
-function rules.apply_action(previous, action)
+function rules.apply_action(previous, action, now)
   if previous.finished then
     return fail(previous, protocol.ERROR.GAME_OVER)
   end
 
   local state = rules.clone_state(previous)
+  local clock = now or 0
   local actor
   for _, player in ipairs(state.players) do
     if player.id == action.player_id then
       actor = player
       break
     end
+  end
+  local window = state.mode == "jumpIn" and state.jump_window or nil
+  if window ~= nil and clock < window.expires_at then
+    if actor == nil or actor.id == window.owner_id or action.type ~= "play" or action.jump ~= true then
+      return fail(previous, protocol.ERROR.JUMP_WINDOW_OPEN)
+    end
+    local window_card = rules.top_card(state)
+    local jump_index
+    for candidate_index, card in ipairs(actor.hand) do
+      if card.id == action.card_id then
+        jump_index = candidate_index
+        break
+      end
+    end
+    local jump_card = jump_index == nil and nil or actor.hand[jump_index]
+    if jump_card == nil or window_card == nil or window_card.id ~= window.card_id
+      or window_card.kind ~= "number" or jump_card.kind ~= "number"
+      or jump_card.color == nil or jump_card.color ~= window_card.color
+      or jump_card.value ~= window_card.value then
+      return fail(previous, protocol.ERROR.BAD_JUMP)
+    end
+    table.remove(actor.hand, jump_index)
+    state.discard[#state.discard + 1] = jump_card
+    state.drawn_card_id = nil
+    state.events[#state.events + 1] = {
+      type = "jump",
+      player_id = actor.id,
+      card_id = jump_card.id,
+      at = #state.events,
+    }
+    state.replay[#state.replay + 1] = {
+      player_id = actor.id,
+      action = "jump",
+      card_id = jump_card.id,
+    }
+    state.turn = player_index(state, actor.id)
+    advance(state, 1)
+    state.jump_window = {
+      card_id = jump_card.id,
+      owner_id = actor.id,
+      expires_at = clock + rules.JUMP_WINDOW_MS,
+    }
+    if #actor.hand == 0 then
+      state.finished = true
+      state.winner = actor.id
+      state.jump_window = nil
+    end
+    return state, true
+  end
+  if window ~= nil then
+    state.jump_window = nil
+  end
+  if state.mode == "jumpIn" and action.type == "play" and action.jump == true then
+    return fail(previous, protocol.ERROR.BAD_JUMP)
   end
   if state.pending_stack ~= nil then
     local stack = state.pending_stack
@@ -725,6 +817,13 @@ function rules.apply_action(previous, action)
   if state.pending_challenge == nil and state.pending_stack == nil and #actor.hand == 0 then
     state.finished = true
     state.winner = actor.id
+  end
+  if state.mode == "jumpIn" and card.kind == "number" and not state.finished then
+    state.jump_window = {
+      card_id = card.id,
+      owner_id = actor.id,
+      expires_at = clock + rules.JUMP_WINDOW_MS,
+    }
   end
 
   return state, true

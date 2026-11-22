@@ -51,6 +51,7 @@ export function UnoBoardStage({
   const [pendingTarget, setPendingTarget] = useState<string | null>(null);
   const [flights, setFlights] = useState<Flight[]>([]);
   const [dealt, setDealt] = useState(false);
+  const [jumpNow, setJumpNow] = useState(() => Date.now());
   const surfaceRef = useRef<HTMLDivElement>(null);
   const drawRef = useRef<HTMLButtonElement>(null);
   const discardRef = useRef<HTMLDivElement>(null);
@@ -65,6 +66,12 @@ export function UnoBoardStage({
   const me = view.players.find((player) => player.userId === view.myUserId);
   const hand = me?.hand ?? [];
   const pendingStack = view.pendingStack ?? null;
+  const jumpWindow = view.jumpWindow ?? null;
+  const jumpOpen = jumpWindow !== null;
+  const jumping = jumpWindow !== null && jumpWindow.ownerId !== view.myUserId;
+  const jumpSeconds = jumpWindow === null
+    ? 0
+    : Math.max(0, Math.ceil((jumpWindow.expiresAt - jumpNow) / 1000));
   const stackTarget = pendingStack !== null && pendingStack.targetId === view.myUserId;
   const isMyTurn =
     view.started && view.pendingChallenge === null && pendingStack === null &&
@@ -115,6 +122,15 @@ export function UnoBoardStage({
   }, [dealKey]);
 
   useEffect(() => {
+    if (!jumpOpen) {
+      return;
+    }
+    setJumpNow(Date.now());
+    const timer = window.setInterval(() => setJumpNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, [jumpOpen, jumpWindow?.cardId, jumpWindow?.expiresAt, jumpWindow?.ownerId]);
+
+  useEffect(() => {
     const counts: Record<string, number> = {};
     for (const player of view.players) counts[player.userId] = player.count;
     const previous = previousCounts.current;
@@ -132,7 +148,7 @@ export function UnoBoardStage({
   }, [view.players, view.myUserId]);
 
   const play = (card: Card, event: MouseEvent<HTMLButtonElement>) => {
-    if (!isMyTurn) return;
+    if (!isMyTurn && !jumping) return;
     if (isWild(card)) {
       setPendingCard(card.id);
       return;
@@ -189,6 +205,14 @@ export function UnoBoardStage({
       style={{ ["--uno-active" as string]: activeColor === null ? "transparent" : COLOUR_HEX[activeColor] }}
     >
       <div className="uno-direction" key={direction} aria-hidden="true">{direction === 1 ? "↻" : "↺"}</div>
+
+      {jumpOpen ? (
+        <div className="uno-jump-banner" role="status" aria-live="polite">
+          <span className="uno-jump-banner__label">Jump window</span>
+          <span className="uno-jump-banner__count">{jumpSeconds}s</span>
+          <span className="uno-jump-banner__hint">Exact match only — same colour and number.</span>
+        </div>
+      ) : null}
 
       <div className="uno-board-grid">
         <div className="uno-zone uno-zone--top">
@@ -291,7 +315,7 @@ export function UnoBoardStage({
           <div className="uno-hand-scroll">
             <div className="uno-hand-row" ref={handRef} key={dealKey}>
               {hand.map((card, index) => {
-                const playable = legal.has(card.id) && isMyTurn;
+                const playable = legal.has(card.id) && (isMyTurn || jumping);
                 return (
                   <button
                     type="button"
@@ -300,7 +324,7 @@ export function UnoBoardStage({
                     onClick={(event) => play(card, event)}
                     disabled={!playable}
                     aria-label={`Play ${card.id}`}
-                    title={playable ? "Play this card" : card.id}
+                    title={playable ? (jumping && !isMyTurn ? "Jump in with this card" : "Play this card") : card.id}
                     style={{ ["--uno-deal-delay" as string]: `${index * 4 * 80}ms` }}
                   >
                     <img src={art(card.id)} alt={card.id} />

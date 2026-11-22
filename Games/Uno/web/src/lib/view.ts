@@ -10,17 +10,29 @@ import {
 
 export type RulesMode = GameMode;
 
-const PROGRESSIVE_MODE = "progressive" as unknown as RulesMode;
+const PROGRESSIVE_MODE: RulesMode = "progressive";
+export const JUMP_IN_MODE: RulesMode = "jumpIn";
+
+const JUMP_IN_ALIASES = ["jumpIn", "jump_in", "jump-in", "jumpin"];
 
 export const RULES_MODES: RulesMode[] = (() => {
   const modes = [...UNO_MODES] as RulesMode[];
-  if (!modes.includes(PROGRESSIVE_MODE)) {
-    modes.push(PROGRESSIVE_MODE);
+  for (const extra of [PROGRESSIVE_MODE, JUMP_IN_MODE]) {
+    if (!modes.includes(extra)) {
+      modes.push(extra);
+    }
   }
   return modes;
 })();
 
+function isJumpInValue(value: unknown): boolean {
+  return typeof value === "string" && JUMP_IN_ALIASES.includes(value);
+}
+
 export function rulesModeLabel(mode: RulesMode | undefined): string {
+  if (isJumpInValue(mode)) {
+    return "Jump-In";
+  }
   if ((mode as string | undefined) === PROGRESSIVE_MODE) {
     return "Progressive";
   }
@@ -28,11 +40,34 @@ export function rulesModeLabel(mode: RulesMode | undefined): string {
 }
 
 export function normalizeRulesMode(value: unknown): RulesMode {
+  if (isJumpInValue(value)) {
+    return JUMP_IN_MODE;
+  }
   const normalized = normalizeMode(value);
   if (normalized === ("classic" as RulesMode) && value === PROGRESSIVE_MODE) {
     return PROGRESSIVE_MODE;
   }
   return normalized;
+}
+
+export interface JumpWindow {
+  cardId: string;
+  ownerId: string;
+  expiresAt: number;
+}
+
+export function normalizeJumpWindow(value: unknown): JumpWindow | null {
+  const source = value as Record<string, unknown> | null | undefined;
+  if (source == null) {
+    return null;
+  }
+  const cardId = String(source.cardId ?? source.card_id ?? "");
+  const ownerId = String(source.ownerId ?? source.owner_id ?? "");
+  const expiresAt = Number(source.expiresAt ?? source.expires_at ?? source.expires ?? 0);
+  if (cardId === "" || !Number.isFinite(expiresAt) || expiresAt <= 0) {
+    return null;
+  }
+  return { cardId, ownerId, expiresAt: Math.trunc(expiresAt) };
 }
 
 export interface PendingStack {
@@ -94,6 +129,7 @@ export interface BoardView {
   deckCount: number;
   pendingChallenge: { ownerId: string; targetId: string; legal: boolean } | null;
   pendingStack?: PendingStack | null;
+  jumpWindow?: JumpWindow | null;
   legalCards: string[];
   canDraw: boolean;
   result: { status: string; winnerUserId: string | null; reason?: string } | null;
@@ -102,12 +138,34 @@ export interface BoardView {
   mode?: GameMode;
 }
 
+export function isJumpCandidate(view: BoardView, cardId: string): boolean {
+  const jumpWindow = view.jumpWindow ?? null;
+  if (jumpWindow === null || jumpWindow.ownerId === view.myUserId) {
+    return false;
+  }
+  if (!view.legalCards.includes(cardId)) {
+    return false;
+  }
+  const topCard = view.topCard;
+  if (topCard === null || topCard.id !== jumpWindow.cardId) {
+    return true;
+  }
+  const card = view.players
+    .find((player) => player.userId === view.myUserId)
+    ?.hand?.find((entry) => entry.id === cardId);
+  if (card === undefined) {
+    return true;
+  }
+  return card.kind === "number" && topCard.kind === "number"
+    && card.color === topCard.color && card.value === topCard.value;
+}
+
 export function viewFromCore(state: GameState | null, myUserId: string | null): BoardView {
   if (state === null) {
     return {
       players: [], spectators: [], chat: [], topCard: null, currentColor: null,
       turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
-      pendingStack: null, legalCards: [], canDraw: false, result: null,
+      pendingStack: null, jumpWindow: null, legalCards: [], canDraw: false, result: null,
       myUserId, started: false, mode: "classic",
     };
   }
@@ -134,8 +192,9 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
       legal: state.pendingChallenge.legal,
     },
     pendingStack: normalizePendingStack(rawState.pendingStack ?? rawState.pending_stack),
-    legalCards: myUserId === null ? [] : legalMoves(state, myUserId).cards,
-    canDraw: myUserId !== null && legalMoves(state, myUserId).canDraw,
+    jumpWindow: normalizeJumpWindow(rawState.jumpWindow ?? rawState.jump_window),
+    legalCards: myUserId === null ? [] : legalMoves(state, myUserId, Date.now()).cards,
+    canDraw: myUserId !== null && legalMoves(state, myUserId, Date.now()).canDraw,
     result: state.finished
       ? { status: "finished", winnerUserId: state.winner }
       : null,

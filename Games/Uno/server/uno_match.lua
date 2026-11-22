@@ -80,6 +80,18 @@ local function public_pending_challenge(game)
   }
 end
 
+local function public_jump_window(game)
+  local window = game ~= nil and game.jump_window or nil
+  if window == nil then
+    return nil
+  end
+  return {
+    cardId = window.card_id,
+    ownerId = window.owner_id,
+    expiresAt = window.expires_at,
+  }
+end
+
 local function public_pending_stack(game)
   local stack = game ~= nil and game.pending_stack or nil
   if stack == nil then
@@ -104,7 +116,9 @@ local function public_pending_stack(game)
 end
 
 local function schedule_turn_deadline(state, now)
-  if state.game ~= nil and state.game.pending_challenge == nil and state.turn_seconds > 0 then
+  if state.game ~= nil and state.game.jump_window ~= nil then
+    state.turn_deadline = state.game.jump_window.expires_at
+  elseif state.game ~= nil and state.game.pending_challenge == nil and state.turn_seconds > 0 then
     state.turn_deadline = now + state.turn_seconds * 1000
   else
     state.turn_deadline = nil
@@ -126,6 +140,7 @@ local function state_payload(state, viewer_id)
     topCard = game ~= nil and game.discard[#game.discard] or nil,
     pendingChallenge = public_pending_challenge(game),
     pendingStack = public_pending_stack(game),
+    jumpWindow = public_jump_window(game),
     players = {},
     spectators = {},
     chat = state.chat,
@@ -330,7 +345,12 @@ local function handle_action(dispatcher, state, user_id, action)
     return protocol.ERROR.GAME_OVER
   end
   local pending = state.game.pending_challenge
-  if pending ~= nil then
+  local jump_window = state.game.jump_window
+  if jump_window ~= nil then
+    if user_id == jump_window.owner_id then
+      return protocol.ERROR.JUMP_WINDOW_OPEN
+    end
+  elseif pending ~= nil then
     if pending.target_id ~= user_id then
       return protocol.ERROR.BAD_CHALLENGE
     end
@@ -338,7 +358,7 @@ local function handle_action(dispatcher, state, user_id, action)
     return protocol.ERROR.NOT_YOUR_TURN
   end
 
-  local next_state, ok, error_code = rules.apply_action(state.game, action)
+  local next_state, ok, error_code = rules.apply_action(state.game, action, nk.time())
   if not ok then
     return error_code
   end
@@ -419,6 +439,7 @@ local function handle_message(context, dispatcher, tick, state, message)
       card_id = payload.cardId,
       chosen_color = payload.chosenColor,
       target_id = payload.targetId or payload.target_id,
+      jump = payload.jump == true,
     }
   elseif message.op_code == OP.DRAW_REQUEST then
     action = { type = "draw", player_id = user_id }
@@ -467,7 +488,7 @@ end
 
 local function timeout_action(state)
   local game = state.game
-  if game == nil or game.pending_challenge ~= nil then
+  if game == nil or game.pending_challenge ~= nil or game.jump_window ~= nil then
     return nil
   end
   local index = game.turn
@@ -651,11 +672,22 @@ function MATCH.match_leave(context, dispatcher, tick, state, presences)
 end
 
 function MATCH.match_loop(context, dispatcher, tick, state, messages)
+  local now = nk.time()
+  local window_cleared = false
+  if state.result == nil and state.game ~= nil and state.game.jump_window ~= nil
+    and now >= state.game.jump_window.expires_at then
+    state.game = rules.clear_jump_window(state.game, now)
+    schedule_turn_deadline(state, now)
+    window_cleared = true
+  end
+
   for _, message in ipairs(messages) do
     handle_message(context, dispatcher, tick, state, message)
   end
+  if window_cleared then
+    broadcast_state(dispatcher, state)
+  end
 
-  local now = nk.time()
   if state.result ~= nil and now - state.result.at >= FINISHED_LINGER_MS then
     return nil
   end

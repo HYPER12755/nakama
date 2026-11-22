@@ -606,6 +606,116 @@ test("exposes the pending stack with camelCase fields in the state payload", fun
   assert_equal(stack.pendingWinnerId, "u1", "pending winner")
 end)
 
+test("propagates jumpIn from match params into the game and state payload", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "jumpIn",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  assert_equal(state.rules_mode, "jumpIn", "stored rules mode")
+  assert_equal(state.game.mode, "jumpIn", "game rules mode")
+  local started = nil
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.MATCH_STARTED then
+      started = require("json").decode(message.data)
+    end
+  end
+  assert_equal(started.rulesMode, "jumpIn", "match started payload")
+  local payload = require("json").decode(select(2, MATCH.match_signal({}, dispatcher_obj, 1, state, "")))
+  assert_equal(payload.rulesMode, "jumpIn", "state payload mode")
+  assert_equal(payload.jumpWindow, nil, "no window at start")
+end)
+
+test("forwards jump requests and blocks the window owner", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "jumpIn",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  state.game.turn = 1
+  state.game.current_color = "yellow"
+  state.game.players[1].hand = {
+    { id = "yellow-7-0", color = "yellow", kind = "number", value = 7 },
+    { id = "blue-6-0", color = "blue", kind = "number", value = 6 },
+  }
+  state.game.players[2].hand = {
+    { id = "yellow-7-1", color = "yellow", kind = "number", value = 7 },
+    { id = "blue-3-0", color = "blue", kind = "number", value = 3 },
+  }
+
+  MATCH.match_loop({}, dispatcher_obj, 1, state, {
+    {
+      op_code = OP.PLAY_REQUEST,
+      presence = presence("u1", "Alice"),
+      data = json_encode({ cardId = "yellow-7-0" }),
+    },
+  })
+  assert_equal(state.game.jump_window.owner_id, "u1", "window opened by play")
+  assert_equal(state.game.jump_window.card_id, "yellow-7-0", "window card")
+
+  MATCH.match_loop({}, dispatcher_obj, 2, state, {
+    {
+      op_code = OP.PLAY_REQUEST,
+      presence = presence("u1", "Alice"),
+      data = json_encode({ cardId = "blue-6-0", jump = true }),
+    },
+  })
+  local owner_error = false
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.ERROR then
+      owner_error = require("json").decode(message.data).code == protocol.ERROR.JUMP_WINDOW_OPEN
+    end
+  end
+  assert_equal(owner_error, true, "owner refused while window is open")
+
+  local before = #dispatcher_obj.messages
+  MATCH.match_loop({}, dispatcher_obj, 3, state, {
+    {
+      op_code = OP.PLAY_REQUEST,
+      presence = presence("u2", "Bob"),
+      data = json_encode({ cardId = "yellow-7-1", jump = true }),
+    },
+  })
+  local jumped = false
+  for index = before + 1, #dispatcher_obj.messages do
+    if dispatcher_obj.messages[index].op == OP.MOVE then
+      jumped = require("json").decode(dispatcher_obj.messages[index].data).action.jump == true
+    end
+  end
+  assert_equal(jumped, true, "jump forwarded in move broadcast")
+  assert_equal(state.game.jump_window.owner_id, "u2", "new window owner")
+  assert_equal(state.game.turn, 1, "turn advanced past jumper")
+end)
+
+test("match loop clears an expired jump window", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "jumpIn",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  state.game.jump_window = {
+    card_id = "yellow-7-0",
+    owner_id = "u1",
+    expires_at = now - 1,
+  }
+  state.turn_deadline = state.game.jump_window.expires_at
+  MATCH.match_loop({}, dispatcher_obj, 4, state, {})
+  assert_equal(state.game.jump_window, nil, "expired window cleared")
+  local latest = nil
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.STATE then
+      latest = require("json").decode(message.data)
+    end
+  end
+  assert_equal(latest.jumpWindow, nil, "cleared window published")
+end)
+
 if failures > 0 then
   io.stderr:write(failures .. " Uno match test(s) failed\n")
   os.exit(1)

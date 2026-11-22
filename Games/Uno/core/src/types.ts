@@ -1,6 +1,6 @@
 export type Color = "red" | "yellow" | "green" | "blue";
 
-export type GameMode = "classic" | "sevenO" | "progressive";
+export type GameMode = "classic" | "sevenO" | "progressive" | "jumpIn";
 
 export type CardKind = "number" | "skip" | "reverse" | "draw2" | "wild" | "wild4";
 
@@ -18,7 +18,9 @@ export type UnoErrorCode =
   | "game_over"
   | "unknown_card"
   | "missing_color"
-  | "missing_target";
+  | "missing_target"
+  | "jump_window_open"
+  | "bad_jump";
 
 export interface GameEvent {
   type: string;
@@ -57,6 +59,12 @@ export interface PendingStack {
   pendingWinnerId?: string;
 }
 
+export interface JumpWindow {
+  cardId: string;
+  ownerId: string;
+  expiresAt: number;
+}
+
 export interface StartingRule {
   kind: CardKind;
   color?: Color;
@@ -78,6 +86,7 @@ export interface GameState {
   drawnCardId: string | null;
   pendingChallenge: PendingChallenge | null;
   pendingStack: PendingStack | null;
+  jumpWindow: JumpWindow | null;
   startingRule: StartingRule | null;
   started: boolean;
   finished: boolean;
@@ -88,7 +97,7 @@ export interface GameState {
 }
 
 export type Action =
-  | { type: "play"; playerId: string; cardId: string; chosenColor?: Color; targetId?: string; target_id?: string }
+  | { type: "play"; playerId: string; cardId: string; chosenColor?: Color; targetId?: string; target_id?: string; jump?: boolean }
   | { type: "draw"; playerId: string }
   | { type: "challenge"; playerId: string; accept: boolean };
 

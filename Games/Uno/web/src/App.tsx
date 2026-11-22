@@ -19,7 +19,7 @@ import { UnoMatchActions } from "./components/UnoMatchActions";
 import { UnoOnlinePanel } from "./components/UnoOnlinePanel";
 import { UnoPreferences } from "./components/UnoPreferences";
 import { useUnoGame } from "./hooks/useUnoGame";
-import { rulesModeLabel, RULES_MODES } from "./lib/view";
+import { JUMP_IN_MODE, rulesModeLabel, RULES_MODES } from "./lib/view";
 import type { Color } from "@moongames/uno-core";
 
 const MODES = [
@@ -38,6 +38,8 @@ const RULES = [
 const SEVEN_O_RULE = "Seven-O: playing a 7 swaps hands with a player you choose; playing a 0 rotates every hand.";
 
 const PROGRESSIVE_RULE = "Progressive: +2 stacks on +2 and Wild +4 stacks on Wild +4; take the accumulated cards or stack a matching card.";
+
+const JUMP_IN_RULE = "Jump-In: after a number card is played, anyone holding the exact same colour and number has a short window to jump in and take the turn.";
 
 const COLOURS: Color[] = ["red", "yellow", "green", "blue"];
 const COLOUR_HEX: Record<Color, string> = {
@@ -81,7 +83,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     ? [...RULES, SEVEN_O_RULE]
     : (game.rulesMode as string) === "progressive"
       ? [...RULES, PROGRESSIVE_RULE]
-      : RULES;
+      : game.rulesMode === JUMP_IN_MODE
+        ? [...RULES, JUMP_IN_RULE]
+        : RULES;
   const activePlayer = game.view.players[game.view.turn];
   const winner = game.view.result?.winnerUserId == null
     ? null

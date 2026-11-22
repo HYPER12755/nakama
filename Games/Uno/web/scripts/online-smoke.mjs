@@ -817,6 +817,90 @@ async function progressiveRoom() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "progressive game over", STATE_TIMEOUT_MS);
 }
 
+async function jumpInRoom() {
+  const alice = await authenticate("jumpin-alice");
+  const bob = await authenticate("jumpin-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 10,
+    rulesMode: "jumpIn",
+  });
+  assert(
+    created?.ok === true && created.rulesMode === "jumpIn" && typeof created.matchId === "string",
+    `jumpIn room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  const resolved = await rpc(bob, "moongames_room_code_resolve", {
+    code: created.roomCode,
+    gameId: "uno",
+  });
+  assert(
+    resolved?.ok === true && resolved.matchId === matchId,
+    `jumpIn room code failed: ${JSON.stringify(resolved)}`,
+  );
+
+  await Promise.all([
+    alice.socket.joinMatch(matchId),
+    bob.socket.joinMatch(matchId),
+  ]);
+  const aliceStart = await waitState(
+    alice.socket,
+    "jumpIn alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "jumpIn bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "jumpIn", "jumpIn mode must reach alice");
+  assert(bobStart.data.rulesMode === "jumpIn", "jumpIn mode must reach bob");
+  assert(legalCardIds(aliceStart.data).includes("yellow-8-0"), "seed 10 should offer yellow 8");
+  assert(
+    seatOf(bobStart.data, bob).hand.some((card) => card.id === "yellow-8-1"),
+    "Bob should hold the matching yellow 8",
+  );
+  console.log("[ok] jumpIn private room reports rulesMode on both clients");
+
+  await send(alice, matchId, OP.PLAY_REQUEST, { cardId: "yellow-8-0" });
+  const aliceWindow = await waitState(
+    alice.socket,
+    "jumpIn alice window",
+    (state) => state.jumpWindow?.ownerId === alice.session.user_id,
+  );
+  const bobWindow = await waitState(
+    bob.socket,
+    "jumpIn bob window",
+    (state) => state.jumpWindow?.ownerId === alice.session.user_id,
+  );
+  assert(aliceWindow.data.jumpWindow.cardId === "yellow-8-0", "window card should be Alice's 8");
+  assert(legalCardIds(bobWindow.data).includes("yellow-8-1"), "Bob should be allowed to jump");
+  console.log("[ok] Jump-In opens a short exact-match jump window");
+
+  const bobBefore = seatOf(bobWindow.data, bob).count;
+  await send(bob, matchId, OP.PLAY_REQUEST, { cardId: "yellow-8-1", jump: true });
+  const aliceJump = await waitState(
+    alice.socket,
+    "jumpIn alice after jump",
+    (state) => state.topCard?.id === "yellow-8-1",
+  );
+  const bobJump = await waitState(
+    bob.socket,
+    "jumpIn bob after jump",
+    (state) => state.topCard?.id === "yellow-8-1",
+  );
+  assert(seatOf(bobJump.data, bob).count === bobBefore - 1, "jumping removes the played card");
+  assert(
+    bobJump.data.jumpWindow?.ownerId === bob.session.user_id,
+    "the jumper owns the next window",
+  );
+  assert(aliceJump.data.jumpWindow?.ownerId === bob.session.user_id, "both clients see new window");
+  console.log("[ok] Jump-In lets the next player play out of turn and keeps the jump alive");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "jumpIn game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -841,6 +925,7 @@ async function main() {
     await reconnectResign();
     await sevenOBattle();
     await progressiveRoom();
+    await jumpInRoom();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {
