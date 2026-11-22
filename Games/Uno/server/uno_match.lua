@@ -92,6 +92,7 @@ local function state_payload(state, viewer_id)
   local game = state.game
   local payload = {
     mode = state.mode,
+    rulesMode = state.rules_mode,
     seats = state.seats,
     rated = state.rated,
     started = state.started_at ~= nil,
@@ -186,9 +187,12 @@ local function maybe_start(dispatcher, state)
   for index, player in ipairs(state.player_order) do
     players[index] = { id = player.user_id, name = player.username }
   end
-  state.game = rules.create_game(state.seed or nk.time(), players, state.started_at)
+  state.game = rules.create_game(state.seed or nk.time(), players, state.started_at, state.rules_mode)
   schedule_turn_deadline(state, nk.time())
-  broadcast_all(dispatcher, state, OP.MATCH_STARTED, { seats = state.seats })
+  broadcast_all(dispatcher, state, OP.MATCH_STARTED, {
+    seats = state.seats,
+    rulesMode = state.rules_mode,
+  })
   refresh_label(dispatcher, state)
 end
 
@@ -221,6 +225,7 @@ local function finish_match(dispatcher, state, result)
 
   local converted = {
     mode = state.mode,
+    rules_mode = state.rules_mode,
     rated = state.rated,
     seats = state.seats,
     winner = result.winner_user_id,
@@ -389,6 +394,7 @@ local function handle_message(context, dispatcher, tick, state, message)
       player_id = user_id,
       card_id = payload.cardId,
       chosen_color = payload.chosenColor,
+      target_id = payload.targetId or payload.target_id,
     }
   elseif message.op_code == OP.DRAW_REQUEST then
     action = { type = "draw", player_id = user_id }
@@ -452,11 +458,16 @@ local function timeout_action(state)
         if card.kind == "wild" or card.kind == "wild4" then
           chosen_color = rules.most_common_color(game.players[index].hand)
         end
+        local target_id = nil
+        if game.mode == "sevenO" and card.kind == "number" and card.value == 7 then
+          target_id = rules.pick_target(game, player.user_id)
+        end
         return {
           type = "play",
           player_id = player.user_id,
           card_id = card.id,
           chosen_color = chosen_color,
+          target_id = target_id,
         }
       end
     end
@@ -469,6 +480,7 @@ local MATCH = {}
 function MATCH.match_init(context, params)
   params = params or {}
   local mode = params.mode == "private" and "private" or "quick"
+  local rules_mode = protocol.normalize_rules_mode(params.rulesMode or params.mode)
   local seats = protocol.clamp_seats(params.seats or 2)
   local expected_by_user = {}
   for index, entry in ipairs(params.expected_users or {}) do
@@ -480,6 +492,7 @@ function MATCH.match_init(context, params)
   local state = {
     match_id = context.match_id,
     mode = mode,
+    rules_mode = rules_mode,
     seats = seats,
     rated = mode == "quick" or params.rated == true,
     creator = params.creator,

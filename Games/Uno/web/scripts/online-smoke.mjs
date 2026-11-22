@@ -634,6 +634,98 @@ async function reconnectResign() {
   console.log("[ok] resignation after reconnect is authoritative for both sockets");
 }
 
+async function sevenOBattle() {
+  const alice = await authenticate("seven-o-alice");
+  const bob = await authenticate("seven-o-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 58,
+    rulesMode: "sevenO",
+  });
+  assert(
+    created?.ok === true && created.rulesMode === "sevenO" && typeof created.matchId === "string",
+    `sevenO room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  const resolved = await rpc(bob, "moongames_room_code_resolve", {
+    code: created.roomCode,
+    gameId: "uno",
+  });
+  assert(
+    resolved?.ok === true && resolved.matchId === matchId,
+    `sevenO room code failed: ${JSON.stringify(resolved)}`,
+  );
+
+  await Promise.all([
+    alice.socket.joinMatch(matchId),
+    bob.socket.joinMatch(matchId),
+  ]);
+  const aliceStart = await waitState(
+    alice.socket,
+    "sevenO alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "sevenO bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "sevenO", "sevenO mode must be in state");
+  assert(bobStart.data.rulesMode === "sevenO", "sevenO mode must reach both clients");
+  assert(aliceStart.data.turn === 0, "seed 58 should start at seat 0");
+  assert(legalCardIds(aliceStart.data).includes("yellow-7-0"), "seed 58 should offer a yellow 7");
+  assert(legalCardIds(aliceStart.data).includes("yellow-0-0"), "seed 58 should offer a yellow 0");
+
+  const aliceBefore = seatOf(aliceStart.data, alice).hand.map((card) => card.id);
+  const bobBefore = seatOf(bobStart.data, bob).hand.map((card) => card.id);
+  await send(alice, matchId, OP.PLAY_REQUEST, {
+    cardId: "yellow-7-0",
+    targetId: bob.session.user_id,
+  });
+  await waitState(
+    alice.socket,
+    "sevenO state after seven",
+    (state) => seatOf(state, alice)?.count === HAND_SIZE,
+  );
+  const sevenState = await waitState(
+    bob.socket,
+    "sevenO bob state after seven",
+    (state) => seatOf(state, bob)?.count === HAND_SIZE - 1,
+  );
+  const bobAfterSeven = seatOf(sevenState.data, bob).hand?.map((card) => card.id) ?? [];
+  assert(
+    bobAfterSeven.includes("yellow-0-0"),
+    "the 7 swap should move Alice's yellow 0 into Bob's hand",
+  );
+  assert(!bobAfterSeven.includes("yellow-7-0"), "the played 7 should leave both hands");
+  assert(bobAfterSeven.length === 6, "Bob should hold Alice's six remaining cards");
+  assert(aliceBefore.includes("yellow-7-0") && bobBefore.length === HAND_SIZE, "starting hands");
+  console.log("[ok] Seven-O 7 swaps hands on the live server");
+
+  await send(bob, matchId, OP.PLAY_REQUEST, { cardId: "yellow-0-0" });
+  const zeroState = await waitState(
+    bob.socket,
+    "sevenO state after zero",
+    (state) => seatOf(state, bob)?.count === HAND_SIZE,
+  );
+  const aliceZeroState = await waitState(
+    alice.socket,
+    "sevenO alice state after zero",
+    (state) => seatOf(state, alice)?.count === HAND_SIZE - 2,
+  );
+  assert(aliceZeroState.data.turn === 0, "play should advance back to seat 0 after the 0");
+  assert(zeroState.data.topCard?.id === "yellow-0-0", "the 0 should be on the discard pile");
+  const aliceAfterZero = seatOf(aliceZeroState.data, alice).hand?.map((card) => card.id) ?? [];
+  assert(
+    aliceAfterZero.length === 5 && !aliceAfterZero.includes("yellow-0-0"),
+    "the 0 rotation should give Alice Bob's five-card hand",
+  );
+  console.log("[ok] Seven-O 0 rotates every hand on the live server");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "sevenO game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -656,6 +748,7 @@ async function main() {
     await quickMatchAndPlay();
     await privateRoomCodeAndSpectator();
     await reconnectResign();
+    await sevenOBattle();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

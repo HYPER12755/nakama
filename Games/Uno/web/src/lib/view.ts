@@ -1,4 +1,20 @@
-import { legalMoves, type Card, type Color, type GameState } from "@moongames/uno-core";
+import {
+  legalMoves,
+  normalizeMode,
+  UNO_MODES,
+  type Card,
+  type Color,
+  type GameMode,
+  type GameState,
+} from "@moongames/uno-core";
+
+export type RulesMode = GameMode;
+
+export const RULES_MODES: RulesMode[] = [...UNO_MODES];
+
+export function rulesModeLabel(mode: RulesMode | undefined): string {
+  return mode === "sevenO" ? "Seven-O" : "Classic";
+}
 
 export interface BoardPlayer {
   seat: number;
@@ -33,6 +49,7 @@ export interface BoardView {
   result: { status: string; winnerUserId: string | null; reason?: string } | null;
   myUserId: string | null;
   started: boolean;
+  mode?: GameMode;
 }
 
 export function viewFromCore(state: GameState | null, myUserId: string | null): BoardView {
@@ -41,6 +58,7 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
       players: [], spectators: [], chat: [], topCard: null, currentColor: null,
       turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
       legalCards: [], canDraw: false, result: null, myUserId, started: false,
+      mode: "classic",
     };
   }
   return {
@@ -71,6 +89,7 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
       : null,
     myUserId,
     started: state.started,
+    mode: normalizeMode(state.mode),
   };
 }
 

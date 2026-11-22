@@ -461,6 +461,100 @@ test("uses the runtime sender for actions, errors, pings and chat", function()
   assert_equal(chat_seen, true, "sender chat normalized and attributed")
 end)
 
+test("propagates sevenO from match params into the game and state payload", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "sevenO",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  assert_equal(state.rules_mode, "sevenO", "stored rules mode")
+  assert_equal(state.game.mode, "sevenO", "game rules mode")
+  local started = nil
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.MATCH_STARTED then
+      started = require("json").decode(message.data)
+    end
+  end
+  assert_equal(started.rulesMode, "sevenO", "match started payload")
+  local payload = select(2, MATCH.match_signal({}, dispatcher_obj, 1, state, ""))
+  assert_equal(require("json").decode(payload).rulesMode, "sevenO", "state payload")
+end)
+
+test("defaults older lobbies to classic and reads the mode alias", function()
+  local state = MATCH.match_init({ match_id = "m1" }, { seats = 2, mode = "quick" })
+  assert_equal(state.rules_mode, "classic", "default rules mode")
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  assert_equal(state.game.mode, "classic", "default game mode")
+  local aliased = MATCH.match_init({ match_id = "m2" }, { seats = 2, mode = "sevenO" })
+  assert_equal(aliased.rules_mode, "sevenO", "mode alias")
+end)
+
+test("forwards a seven target id from play requests", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "sevenO",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  local index = state.game.turn
+  local other_index = index == 1 and 2 or 1
+  state.game.players[index].hand = {
+    { id = "red-7-0", color = "red", kind = "number", value = 7 },
+  }
+  state.game.current_color = "red"
+  local other_size = #state.game.players[other_index].hand
+  MATCH.match_loop({}, dispatcher_obj, 3, state, {
+    {
+      op_code = OP.PLAY_REQUEST,
+      presence = presence(state.player_order[index].user_id, "Actor"),
+      data = json_encode({ cardId = "red-7-0", targetId = state.player_order[other_index].user_id }),
+    },
+  })
+  local moved = false
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.MOVE then
+      moved = true
+    end
+  end
+  assert_equal(moved, true, "move broadcast")
+  assert_equal(#state.game.players[index].hand, other_size, "actor received target hand")
+end)
+
+test("a seven timeout picks a valid target instead of stalling", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    turnSeconds = 1,
+    rulesMode = "sevenO",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  local index = state.game.turn
+  local other_index = index == 1 and 2 or 1
+  state.game.players[index].hand = {
+    { id = "red-7-0", color = "red", kind = "number", value = 7 },
+  }
+  state.game.current_color = "red"
+  state.game.drawn_card_id = "red-7-0"
+  local other_size = #state.game.players[other_index].hand
+  local saved = now
+  now = now + 2000
+  MATCH.match_loop({}, dispatcher_obj, 6, state, {})
+  now = saved
+  local moves = 0
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.MOVE then
+      moves = moves + 1
+    end
+  end
+  assert_equal(moves > 0, true, "timeout played the seven")
+  assert_equal(#state.game.players[index].hand, other_size, "hands swapped on timeout")
+end)
+
 if failures > 0 then
   io.stderr:write(failures .. " Uno match test(s) failed\n")
   os.exit(1)

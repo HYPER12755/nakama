@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FriendInviteDialog, buildMatchInviteUrl, copyText } from "@moongames/game-ui";
 import type { UnoController } from "../hooks/useUnoGame";
+import { rulesModeLabel } from "../lib/view";
 
 export interface UnoOnlinePanelProps {
   controller: UnoController;
@@ -114,6 +115,10 @@ export function UnoOnlinePanel({
           ) : (
             <>
               <div className="online-size">
+                <span className="online-size__label">Rules</span>
+                <strong className="online-size__value">{controller.rulesModeLabel}</strong>
+              </div>
+              <div className="online-size">
                 <span className="online-size__label">Players</span>
                 <div className="online-size__options" role="radiogroup" aria-label="Players">
                   {[2, 3, 4].map((count) => (
@@ -198,6 +203,10 @@ export function UnoOnlinePanel({
           <div className="panel-heading">
             <div><p className="eyebrow">Online</p><h2>{spectating ? "Watching" : "At the table"}</h2></div>
             <span className={`online-status online-status--${controller.connection}`}>{statusLabel}</span>
+          </div>
+          <div className="online-size">
+            <span className="online-size__label">Rules</span>
+            <strong className="online-size__value">{rulesModeLabel(controller.view.mode ?? controller.rulesMode)}</strong>
           </div>
           {controller.error !== null ? (
             <p className="online-feedback online-feedback--error" role="alert">{controller.error}</p>

@@ -28,7 +28,18 @@ protocol.ERROR = {
   GAME_OVER = "game_over",
   UNKNOWN_CARD = "unknown_card",
   MISSING_COLOR = "missing_color",
+  MISSING_TARGET = "missing_target",
 }
+
+protocol.RULES_MODES = { "classic", "sevenO" }
+
+function protocol.is_rules_mode(value)
+  return value == "classic" or value == "sevenO"
+end
+
+function protocol.normalize_rules_mode(value)
+  return value == "sevenO" and "sevenO" or "classic"
+end
 
 protocol.COLORS = { "red", "yellow", "green", "blue" }
 protocol.MIN_SEATS = 2

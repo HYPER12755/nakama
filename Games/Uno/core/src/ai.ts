@@ -1,5 +1,6 @@
+import { UNO_MODE } from "./protocol";
 import { canPlay, legalMoves, mostCommonColor } from "./rules";
-import type { Action, Card, Color, GameState } from "./types";
+import type { Action, Card, Color, GameState, Player } from "./types";
 
 function cardScore(state: GameState, card: Card): number {
   if (card.kind === "wild4") return 100;
@@ -8,6 +9,19 @@ function cardScore(state: GameState, card: Card): number {
   if (card.kind === "skip" || card.kind === "reverse") return 70;
   if (card.color === state.currentColor) return 50 + (card.value ?? 0);
   return 40 + (card.value ?? 0);
+}
+
+function pickTarget(state: GameState, playerId: string): string | null {
+  let best: Player | null = null;
+  for (const player of state.players) {
+    if (player.id === playerId) {
+      continue;
+    }
+    if (best === null || player.hand.length > best.hand.length) {
+      best = player;
+    }
+  }
+  return best === null ? null : best.id;
 }
 
 export function chooseAction(state: GameState, playerId: string): Action | null {
@@ -25,19 +39,29 @@ export function chooseAction(state: GameState, playerId: string): Action | null 
   if (player === undefined) {
     return null;
   }
-  let best: Card | null = null;
-  let bestScore = -1;
+  const ranked: Card[] = [];
   for (const id of moves.cards) {
     const card = player.hand.find((candidate) => candidate.id === id);
-    if (card === undefined) continue;
-    const score = cardScore(state, card);
-    if (score > bestScore) {
-      best = card;
-      bestScore = score;
+    if (card !== undefined) {
+      ranked.push(card);
     }
   }
+  ranked.sort((left, right) => cardScore(state, right) - cardScore(state, left));
+  let best: Card | null = null;
+  let targetId: string | undefined;
+  for (const card of ranked) {
+    if (state.mode === UNO_MODE.SEVEN_O && card.kind === "number" && card.value === 7) {
+      const target = pickTarget(state, playerId);
+      if (target === null) {
+        continue;
+      }
+      targetId = target;
+    }
+    best = card;
+    break;
+  }
   if (best === null) {
-    return { type: "draw", playerId };
+    return moves.canDraw ? { type: "draw", playerId } : null;
   }
   const chosenColor: Color | undefined =
     best.kind === "wild" || best.kind === "wild4" ? mostCommonColor(player.hand) : undefined;
@@ -46,6 +70,7 @@ export function chooseAction(state: GameState, playerId: string): Action | null 
     playerId,
     cardId: best.id,
     ...(chosenColor === undefined ? {} : { chosenColor }),
+    ...(targetId === undefined ? {} : { targetId }),
   };
 }
 

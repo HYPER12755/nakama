@@ -1,3 +1,20 @@
+import type { GameMode } from "./types";
+
+export const UNO_MODE = {
+  CLASSIC: "classic",
+  SEVEN_O: "sevenO",
+} as const;
+
+export const UNO_MODES: readonly GameMode[] = [UNO_MODE.CLASSIC, UNO_MODE.SEVEN_O];
+
+export function isGameMode(value: unknown): value is GameMode {
+  return value === UNO_MODE.CLASSIC || value === UNO_MODE.SEVEN_O;
+}
+
+export function normalizeMode(value: unknown): GameMode {
+  return isGameMode(value) ? value : UNO_MODE.CLASSIC;
+}
+
 export const UNO_OP = {
   STATE: 1,
   CHAT: 2,
@@ -26,4 +43,5 @@ export const UNO_ERROR = {
   GAME_OVER: "game_over",
   UNKNOWN_CARD: "unknown_card",
   MISSING_COLOR: "missing_color",
+  MISSING_TARGET: "missing_target",
 } as const;

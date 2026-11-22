@@ -24,11 +24,18 @@ import {
   applyAction,
   chooseAction,
   createGame,
+  normalizeMode,
   type Action,
   type Color,
+  type GameMode,
   type GameState,
 } from "@moongames/uno-core";
-import { normalizeList, viewFromCore, type BoardView } from "../lib/view";
+import {
+  normalizeList,
+  rulesModeLabel,
+  viewFromCore,
+  type BoardView,
+} from "../lib/view";
 
 const GAME_ID = __MOONGAMES_GAME_ID__;
 const DEVICE_KEY = `moongames.${GAME_ID}.deviceId`;
@@ -196,6 +203,7 @@ export function normalizeView(payload: Record<string, unknown>, myUserId: string
     result: normalizeResult(payload.result),
     myUserId,
     started: payload.started === true,
+    mode: normalizeMode(payload.rulesMode ?? payload.mode),
   };
 }
 
@@ -204,6 +212,7 @@ function emptyView(myUserId: string | null): BoardView {
     players: [], spectators: [], chat: [], topCard: null, currentColor: null,
     turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
     legalCards: [], canDraw: false, result: null, myUserId, started: false,
+    mode: "classic",
   };
 }
 
@@ -213,6 +222,9 @@ export interface UnoController {
   dealKey: number;
   mode: "local" | "online";
   setMode: (mode: "local" | "online") => void;
+  rulesMode: GameMode;
+  setRulesMode: (mode: GameMode) => void;
+  rulesModeLabel: string;
   seats: number;
   setSeats: (seats: number) => void;
   connection: string;
@@ -257,7 +269,7 @@ export interface UnoController {
   joinMatch: (matchId: string, token?: string, spectator?: boolean) => Promise<void>;
   joinByCode: (code: string, spectator?: boolean) => Promise<void>;
   leave: () => Promise<void>;
-  play: (cardId: string, chosenColor?: Color) => void;
+  play: (cardId: string, chosenColor?: Color, targetId?: string) => void;
   draw: () => void;
   challenge: (accept: boolean) => void;
   sendChat: (text: string) => void;
@@ -283,6 +295,7 @@ export function useUnoGame(enabled = true): UnoController {
   });
   const [dealKey, setDealKey] = useState(0);
   const [mode, setModeState] = useState<"local" | "online">("local");
+  const [rulesMode, setRulesModeState] = useState<GameMode>("classic");
   const [seats, setSeats] = useState(2);
   const [localGame, setLocalGame] = useState<GameState | null>(null);
   const [onlineView, setOnlineView] = useState<BoardView>(emptyView(null));
@@ -608,14 +621,19 @@ export function useUnoGame(enabled = true): UnoController {
     return undefined;
   }, [searching]);
 
-  const startLocal = useCallback((count: number) => {
+  const startLocal = useCallback((count: number, gameMode: GameMode = rulesMode) => {
     const ids = ["local", "ai1", "ai2", "ai3"].slice(0, count);
-    setLocalGame(createGame(Date.now() >>> 0, ids.map((id) => ({ id, name: id === "local" ? "You" : "Computer" }))));
+    setLocalGame(createGame(
+      Date.now() >>> 0,
+      ids.map((id) => ({ id, name: id === "local" ? "You" : "Computer" })),
+      undefined,
+      gameMode,
+    ));
     setDealKey((value) => value + 1);
     setModeState("local");
     setMyUserId("local");
     setError(null);
-  }, []);
+  }, [rulesMode]);
 
   useEffect(() => {
     if (mode !== "local" || localGame === null || localGame.finished) {
@@ -671,6 +689,21 @@ export function useUnoGame(enabled = true): UnoController {
     void connect();
   }, [clearSearch, connect, leave, seats, startLocal]);
 
+  const setRulesMode = useCallback((next: GameMode) => {
+    if (next === rulesMode) {
+      return;
+    }
+    if (mode === "online" && (matchIdRef.current !== null || onlineView.started)) {
+      setNotice("Leave the online table before changing the rules mode.");
+      return;
+    }
+    clearSearch();
+    setRulesModeState(next);
+    if (mode === "local") {
+      startLocal(seats, next);
+    }
+  }, [clearSearch, mode, onlineView.started, rulesMode, seats, startLocal]);
+
   const joinMatch = useCallback(async (matchId: string, token?: string, spectator = false) => {
     const socket = socketRef.current;
     if (socket === null) {
@@ -713,10 +746,10 @@ export function useUnoGame(enabled = true): UnoController {
     setError(null);
     try {
       const ticket = await socket.addMatchmaker(
-        `+properties.game:uno +properties.seats:${count}`,
+        `+properties.game:uno +properties.seats:${count} +properties.rulesMode:${rulesMode}`,
         count,
         count,
-        { game: GAME_ID, seats: String(count) },
+        { game: GAME_ID, seats: String(count), rulesMode },
       );
       if (run !== searchRunRef.current) {
         await socket.removeMatchmaker(ticket.ticket).catch(() => undefined);
@@ -736,7 +769,7 @@ export function useUnoGame(enabled = true): UnoController {
         setError(cause instanceof Error ? cause.message : "The search could not start.");
       }
     }
-  }, [clearSearch, connect]);
+  }, [clearSearch, connect, rulesMode]);
 
   const createPrivate = useCallback(async (count: number): Promise<string> => {
     clearSearch();
@@ -750,7 +783,7 @@ export function useUnoGame(enabled = true): UnoController {
     if (client === null || session === null) {
       throw new Error("The realtime connection is not ready yet.");
     }
-    const response = await client.rpc(session, "uno_create_private_match", { seats: count });
+    const response = await client.rpc(session, "uno_create_private_match", { seats: count, rulesMode });
     const payload = response.payload as Record<string, unknown>;
     if (payload?.ok !== true || typeof payload.matchId !== "string") {
       throw new Error("The private room could not be created.");
@@ -758,7 +791,7 @@ export function useUnoGame(enabled = true): UnoController {
     setRoomCode(typeof payload.roomCode === "string" ? payload.roomCode : null);
     await joinMatch(payload.matchId);
     return payload.matchId;
-  }, [clearSearch, connect, joinMatch]);
+  }, [clearSearch, connect, joinMatch, rulesMode]);
 
   const joinByCode = useCallback(async (code: string, spectator = false) => {
     clearSearch();
@@ -991,12 +1024,12 @@ export function useUnoGame(enabled = true): UnoController {
     void socket.sendMatchState(joined, op, matchStateBytes(payload)).catch(() => undefined);
   }, []);
 
-  const play = useCallback((cardId: string, chosenColor?: Color) => {
+  const play = useCallback((cardId: string, chosenColor?: Color, targetId?: string) => {
     if (mode === "local") {
       if (localGame === null) {
         return;
       }
-      const action: Action = { type: "play", playerId: "local", cardId, chosenColor };
+      const action: Action = { type: "play", playerId: "local", cardId, chosenColor, targetId };
       const result = applyAction(localGame, action);
       if (result.ok) {
         setLocalGame(result.state);
@@ -1005,7 +1038,14 @@ export function useUnoGame(enabled = true): UnoController {
       }
       return;
     }
-    send(UNO_OP.PLAY_REQUEST, { cardId, chosenColor });
+    const payload: Record<string, unknown> = { cardId };
+    if (chosenColor !== undefined) {
+      payload.chosenColor = chosenColor;
+    }
+    if (targetId !== undefined) {
+      payload.targetId = targetId;
+    }
+    send(UNO_OP.PLAY_REQUEST, payload);
   }, [localGame, mode, send]);
 
   const draw = useCallback(() => {
@@ -1065,6 +1105,9 @@ export function useUnoGame(enabled = true): UnoController {
     dealKey,
     mode,
     setMode,
+    rulesMode,
+    setRulesMode,
+    rulesModeLabel: rulesModeLabel(rulesMode),
     seats,
     setSeats,
     connection,

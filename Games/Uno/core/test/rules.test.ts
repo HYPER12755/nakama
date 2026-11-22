@@ -14,6 +14,7 @@ import {
   type Card,
   type CardKind,
   type Color,
+  type GameMode,
   type GameState,
 } from "../src/index";
 import vectors from "../../tests/vectors.json";
@@ -33,8 +34,8 @@ function findSeed(kind: CardKind): number {
   throw new Error(`no seed found for ${kind}`);
 }
 
-function stagedGame(hand: Card[], color: Color = "red"): GameState {
-  const game = createGame(vectors.seed, players);
+function stagedGame(hand: Card[], color: Color = "red", mode: GameMode = "classic"): GameState {
+  const game = createGame(vectors.seed, players, 0, mode);
   game.turn = 0;
   game.direction = 1;
   game.currentColor = color;
@@ -49,6 +50,7 @@ function stagedGame(hand: Card[], color: Color = "red"): GameState {
 const wildFour: Card = { id: "wild4-0", color: null, kind: "wild4" };
 const redZero: Card = { id: "red-0-0", color: "red", kind: "number", value: 0 };
 const blueZero: Card = { id: "blue-0-0", color: "blue", kind: "number", value: 0 };
+const redSeven: Card = { id: "red-7-0", color: "red", kind: "number", value: 7 };
 const blueDrawTwo: Card = { id: "blue-draw2-0", color: "blue", kind: "draw2" };
 
 describe("Uno classic rules", () => {
@@ -310,5 +312,129 @@ describe("Uno final card effects", () => {
     expect(result.ok).toBe(true);
     expect(result.state.finished).toBe(true);
     expect(result.state.winner).toBe("p1");
+  });
+});
+
+describe("Uno Seven-O house rule", () => {
+  function hands(state: GameState): string[][] {
+    return state.players.map((player) => player.hand.map((card) => card.id));
+  }
+
+  it("defaults to classic and records the explicit mode in state", () => {
+    const classic = createGame(vectors.seed, players);
+    const sevenO = createGame(vectors.seed, players, 0, "sevenO");
+    expect(classic.mode).toBe("classic");
+    expect(sevenO.mode).toBe("sevenO");
+    expect(classic.version).toBe(2);
+    expect(sevenO.version).toBe(2);
+    expect(sevenO.players.map((player) => player.hand)).toEqual(classic.players.map((player) => player.hand));
+  });
+
+  it("swaps the actor's whole hand with the chosen target", () => {
+    const game = stagedGame([redSeven, blueZero], "red", "sevenO");
+    const before = hands(game);
+    const result = applyAction(game, {
+      type: "play",
+      playerId: "p1",
+      cardId: redSeven.id,
+      targetId: "p2",
+    });
+    expect(result.ok).toBe(true);
+    expect(hands(result.state)).toEqual([before[1], [blueZero.id], before[2]]);
+    expect(result.state.turn).toBe(1);
+    expect(result.state.direction).toBe(1);
+    expect(result.state.finished).toBe(false);
+  });
+
+  it("accepts the snake_case target alias", () => {
+    const game = stagedGame([redSeven], "red", "sevenO");
+    const before = hands(game);
+    const result = applyAction(game, {
+      type: "play",
+      playerId: "p1",
+      cardId: redSeven.id,
+      target_id: "p3",
+    });
+    expect(result.ok).toBe(true);
+    expect(hands(result.state)[0]).toEqual(before[2]);
+    expect(hands(result.state)[2]).toEqual([]);
+  });
+
+  it("checks the swap before declaring a winner", () => {
+    const game = stagedGame([redSeven], "red", "sevenO");
+    const result = applyAction(game, {
+      type: "play",
+      playerId: "p1",
+      cardId: redSeven.id,
+      targetId: "p2",
+    });
+    expect(result.ok).toBe(true);
+    expect(result.state.finished).toBe(false);
+    expect(result.state.winner).toBeNull();
+    expect(result.state.players[0].hand.length).toBeGreaterThan(0);
+  });
+
+  it("rejects a seven with no target id", () => {
+    const game = stagedGame([redSeven, blueZero], "red", "sevenO");
+    const result = applyAction(game, { type: "play", playerId: "p1", cardId: redSeven.id });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("missing_target");
+    expect(result.state).toBe(game);
+  });
+
+  it("rejects a seven targeting the actor or an unknown player", () => {
+    for (const targetId of ["p1", "nobody"]) {
+      const game = stagedGame([redSeven, blueZero], "red", "sevenO");
+      const result = applyAction(game, {
+        type: "play",
+        playerId: "p1",
+        cardId: redSeven.id,
+        targetId,
+      });
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("missing_target");
+    }
+  });
+
+  it("rotates every hand to the next player clockwise on zero", () => {
+    const game = stagedGame([redZero], "red", "sevenO");
+    const before = hands(game);
+    const result = applyAction(game, { type: "play", playerId: "p1", cardId: redZero.id });
+    expect(result.ok).toBe(true);
+    expect(hands(result.state)).toEqual([before[2], [], before[1]]);
+    expect(result.state.turn).toBe(1);
+    expect(result.state.direction).toBe(1);
+    expect(result.state.finished).toBe(false);
+  });
+
+  it("rotates every hand to the next player counter-clockwise on zero", () => {
+    const game = stagedGame([redZero], "red", "sevenO");
+    game.direction = -1;
+    const before = hands(game);
+    const result = applyAction(game, { type: "play", playerId: "p1", cardId: redZero.id });
+    expect(result.ok).toBe(true);
+    expect(hands(result.state)).toEqual([before[1], before[2], []]);
+    expect(result.state.turn).toBe(2);
+    expect(result.state.direction).toBe(-1);
+    expect(result.state.finished).toBe(false);
+  });
+
+  it("leaves classic hands untouched by seven and zero", () => {
+    const seven = stagedGame([redSeven, blueZero], "red");
+    const sevenResult = applyAction(seven, {
+      type: "play",
+      playerId: "p1",
+      cardId: redSeven.id,
+      targetId: "p2",
+    });
+    expect(sevenResult.ok).toBe(true);
+    expect(hands(sevenResult.state)[1]).toEqual(hands(seven)[1]);
+    expect(sevenResult.state.players[0].hand.map((card) => card.id)).toEqual([blueZero.id]);
+
+    const zero = stagedGame([redZero, blueZero], "red");
+    const before = hands(zero);
+    const zeroResult = applyAction(zero, { type: "play", playerId: "p1", cardId: redZero.id });
+    expect(zeroResult.ok).toBe(true);
+    expect(hands(zeroResult.state)).toEqual([[blueZero.id], before[1], before[2]]);
   });
 });

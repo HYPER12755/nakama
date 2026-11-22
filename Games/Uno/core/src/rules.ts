@@ -1,17 +1,19 @@
 import { buildDeck, isActionCard, shuffle } from "./deck";
 import { nextSeed, normalizeSeed } from "./rng";
-import { UNO_ERROR } from "./protocol";
+import { UNO_ERROR, UNO_MODE, normalizeMode } from "./protocol";
 import {
   COLORS,
   DEFAULT_RULES,
   type Action,
   type Card,
   type Color,
+  type GameMode,
   type GameState,
   type LegalMoves,
   type MoveResult,
   type Player,
   type StartingRule,
+  type UnoErrorCode,
 } from "./types";
 
 export function cloneState(state: GameState): GameState {
@@ -56,10 +58,16 @@ export function legalMoves(state: GameState, playerId: string): LegalMoves {
   return { cards, canDraw: state.drawnCardId === null };
 }
 
-export function createGame(seed: number | string, players: Array<{ id: string; name: string }>, now = 0): GameState {
+export function createGame(
+  seed: number | string,
+  players: Array<{ id: string; name: string }>,
+  now = 0,
+  mode: GameMode = UNO_MODE.CLASSIC,
+): GameState {
   if (players.length < 2 || players.length > 4) {
     throw new Error("Uno needs two to four players");
   }
+  const rulesMode = normalizeMode(mode);
   let state_seed = normalizeSeed(seed);
   const shuffled = shuffle(state_seed, buildDeck());
   const deck = shuffled.cards;
@@ -120,7 +128,8 @@ export function createGame(seed: number | string, players: Array<{ id: string; n
   }
 
   return {
-    version: 1,
+    version: 2,
+    mode: rulesMode,
     seed: state_seed,
     drawPile: deck,
     discard: [starter],
@@ -175,7 +184,7 @@ function targetIndex(state: GameState): number {
   return (state.turn + state.direction + count * 4) % count;
 }
 
-function fail(state: GameState, error: "not_your_turn" | "illegal_card" | "bad_challenge" | "game_over" | "unknown_card" | "missing_color"): MoveResult {
+function fail(state: GameState, error: UnoErrorCode): MoveResult {
   return { state, ok: false, error };
 }
 
@@ -292,6 +301,18 @@ export function applyAction(previous: GameState, action: Action): MoveResult {
   }
   const wildFourLegal = card.kind === "wild4" && !hasColorMatch(state, actor);
 
+  let swapTarget: Player | undefined;
+  if (state.mode === UNO_MODE.SEVEN_O && card.kind === "number" && card.value === 7) {
+    const targetId = action.targetId ?? action.target_id;
+    if (targetId === undefined || targetId === "") {
+      return fail(previous, UNO_ERROR.MISSING_TARGET as "missing_target");
+    }
+    swapTarget = state.players.find((player) => player.id === targetId && player.id !== actor.id);
+    if (swapTarget === undefined) {
+      return fail(previous, UNO_ERROR.MISSING_TARGET as "missing_target");
+    }
+  }
+
   actor.hand.splice(index, 1);
   state.discard.push(card);
   state.drawnCardId = null;
@@ -311,6 +332,21 @@ export function applyAction(previous: GameState, action: Action): MoveResult {
     cardId: card.id,
     color: action.chosenColor,
   });
+
+  if (state.mode === UNO_MODE.SEVEN_O && card.kind === "number") {
+    if (card.value === 7 && swapTarget !== undefined) {
+      const actorHand = actor.hand;
+      actor.hand = swapTarget.hand;
+      swapTarget.hand = actorHand;
+    } else if (card.value === 0) {
+      const original = state.players.map((player) => player.hand);
+      const count = state.players.length;
+      for (let playerIndex = 0; playerIndex < count; playerIndex += 1) {
+        const from = (playerIndex - state.direction + count * 4) % count;
+        state.players[playerIndex].hand = original[from];
+      }
+    }
+  }
 
   const next = state.players[targetIndex(state)];
   switch (card.kind) {

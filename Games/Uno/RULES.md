@@ -22,4 +22,19 @@ Source: Mattel's official "Let's Play UNO!" instructions (service.mattel.com ins
 - Optional scoring (local only): number = face value, action = 20, wild/wild four = 50; first to 500 wins.
 - Calling "UNO" is social and is not enforced by the server.
 
-This build implements the classic hand only, with a single-winner result.
+## Seven-O (optional house rule)
+
+Seven-O is a Mattel-listed optional house rule. It is **off by default**: every game
+created without an explicit mode uses classic rules, including existing lobbies that
+do not send a mode field. Both modes produce a single-winner result.
+
+- When a player plays a **number 7**, that player swaps their entire hand with one
+  other seated player of their choice. A target must be supplied and must be a
+  different player who is seated in the game; otherwise the play is rejected with
+  `missing_target`.
+- When a player plays a **number 0**, every seated player's hand moves to the next
+  player in the current direction at the same time. Direction is not changed.
+- Either effect resolves before the winner is checked, then the played number card
+  advances the turn by one as usual. All other cards behave exactly as in classic.
+- The mode is authoritative state: it is set at game creation, is included in state
+  payloads, and all matchmaker tickets for a game must agree on it.

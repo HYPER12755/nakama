@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { Card, Color } from "@moongames/uno-core";
-import type { BoardView } from "../lib/view";
+import type { BoardView, RulesMode } from "../lib/view";
 
 const COLORS: Color[] = ["red", "yellow", "green", "blue"];
 const COLOUR_HEX: Record<Color, string> = {
@@ -20,6 +20,14 @@ function isWild(card: Card): boolean {
   return card.id === "wild" || card.id.startsWith("wild");
 }
 
+export function isSevenCard(card: Card): boolean {
+  return card.kind === "number" && card.value === 7;
+}
+
+export function targetCandidates(view: BoardView): BoardView["players"] {
+  return view.players.filter((player) => player.userId !== view.myUserId);
+}
+
 export interface UnoBoardStageProps {
   view: BoardView;
   cardSet: "classic" | "neon";
@@ -28,7 +36,8 @@ export interface UnoBoardStageProps {
   direction: 1 | -1;
   highlight: "lift" | "outline" | "glow";
   pileStyle: "stack" | "fan" | "tower";
-  onPlay: (cardId: string, chosenColor?: Color) => void;
+  rulesMode?: RulesMode;
+  onPlay: (cardId: string, chosenColor?: Color, targetId?: string) => void;
   onDraw: () => void;
   onChallenge: (accept: boolean) => void;
   onUno: () => void;
@@ -36,9 +45,10 @@ export interface UnoBoardStageProps {
 
 export function UnoBoardStage({
   view, cardSet, dealKey, activeColor, direction, highlight, pileStyle,
-  onPlay, onDraw, onChallenge, onUno,
+  rulesMode = "classic", onPlay, onDraw, onChallenge, onUno,
 }: UnoBoardStageProps) {
   const [pendingCard, setPendingCard] = useState<string | null>(null);
+  const [pendingTarget, setPendingTarget] = useState<string | null>(null);
   const [flights, setFlights] = useState<Flight[]>([]);
   const [dealt, setDealt] = useState(false);
   const surfaceRef = useRef<HTMLDivElement>(null);
@@ -60,7 +70,8 @@ export function UnoBoardStage({
     view.pendingChallenge !== null && view.pendingChallenge.targetId === view.myUserId;
   const legal = new Set(view.legalCards);
 
-  const opponents = view.players.filter((player) => player.userId !== view.myUserId);
+  const opponents = targetCandidates(view);
+  const isSevenO = (view.mode ?? rulesMode) === "sevenO";
   const seatZone = (seat: number): "top" | "left" | "right" => {
     const count = view.players.length;
     const mySeat = me?.seat ?? 0;
@@ -91,6 +102,8 @@ export function UnoBoardStage({
 
   useEffect(() => {
     setDealt(false);
+    setPendingCard(null);
+    setPendingTarget(null);
     const timer = window.setTimeout(() => setDealt(true), 1300);
     return () => window.clearTimeout(timer);
   }, [dealKey]);
@@ -116,6 +129,10 @@ export function UnoBoardStage({
     if (!isMyTurn) return;
     if (isWild(card)) {
       setPendingCard(card.id);
+      return;
+    }
+    if (isSevenO && isSevenCard(card)) {
+      setPendingTarget(card.id);
       return;
     }
     fly(card.id, event.currentTarget.getBoundingClientRect(), discardRef.current?.getBoundingClientRect() ?? null);
@@ -328,6 +345,40 @@ export function UnoBoardStage({
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {pendingTarget !== null && (
+        <div className="uno-overlay uno-overlay--target">
+          <div className="uno-target-card" role="dialog" aria-label="Choose a target player">
+            <p className="eyebrow">Seven-O</p>
+            <h2>Choose a target</h2>
+            <p className="uno-overlay-copy">Your 7 swaps hands with the player you pick.</p>
+            <div className="uno-target-choices">
+              {opponents.map((player) => (
+                <button
+                  type="button"
+                  key={player.userId}
+                  className="uno-target-choice"
+                  onClick={() => {
+                    fly(
+                      pendingTarget,
+                      handRef.current?.querySelector("img")?.getBoundingClientRect() ?? null,
+                      surfaceRef.current?.querySelector(`[data-seat-user="${player.userId}"]`)?.getBoundingClientRect() ?? null,
+                    );
+                    onPlay(pendingTarget, undefined, player.userId);
+                    setPendingTarget(null);
+                  }}
+                >
+                  <strong>{player.username}</strong>
+                  <span>{player.count} cards</span>
+                </button>
+              ))}
+            </div>
+            <button type="button" className="button button--ghost" onClick={() => setPendingTarget(null)}>
+              Cancel
+            </button>
           </div>
         </div>
       )}

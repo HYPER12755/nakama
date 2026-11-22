@@ -1,5 +1,7 @@
 export type Color = "red" | "yellow" | "green" | "blue";
 
+export type GameMode = "classic" | "sevenO";
+
 export type CardKind = "number" | "skip" | "reverse" | "draw2" | "wild" | "wild4";
 
 export interface Card {
@@ -15,7 +17,8 @@ export type UnoErrorCode =
   | "bad_challenge"
   | "game_over"
   | "unknown_card"
-  | "missing_color";
+  | "missing_color"
+  | "missing_target";
 
 export interface GameEvent {
   type: string;
@@ -54,6 +57,7 @@ export interface StartingRule {
 
 export interface GameState {
   version: number;
+  mode: GameMode;
   seed: number;
   drawPile: Card[];
   discard: Card[];
@@ -73,7 +77,7 @@ export interface GameState {
 }
 
 export type Action =
-  | { type: "play"; playerId: string; cardId: string; chosenColor?: Color }
+  | { type: "play"; playerId: string; cardId: string; chosenColor?: Color; targetId?: string; target_id?: string }
   | { type: "draw"; playerId: string }
   | { type: "challenge"; playerId: string; accept: boolean };
 

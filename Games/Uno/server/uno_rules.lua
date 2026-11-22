@@ -2,7 +2,7 @@ local protocol = require("uno_protocol")
 
 local rules = {}
 
-rules.VERSION = 1
+rules.VERSION = 2
 rules.HAND_SIZE = 7
 rules.DRAW_TWO_AMOUNT = 2
 rules.WILD_FOUR_AMOUNT = 4
@@ -178,10 +178,11 @@ local function most_common_color(hand)
   return best
 end
 
-function rules.create_game(seed, players, now)
+function rules.create_game(seed, players, now, mode)
   if #players < 2 or #players > 4 then
     error("Uno needs two to four players")
   end
+  local rules_mode = protocol.normalize_rules_mode(mode)
   local state_seed = rules.normalize_seed(seed)
   local deck, next_seed = rules.shuffle(state_seed, rules.build_deck())
   state_seed = next_seed
@@ -230,6 +231,7 @@ function rules.create_game(seed, players, now)
 
   return {
     version = rules.VERSION,
+    mode = rules_mode,
     seed = state_seed,
     draw_pile = deck,
     discard = { starter },
@@ -308,6 +310,18 @@ function rules.most_common_color(hand)
     end
   end
   return best
+end
+
+function rules.pick_target(state, player_id)
+  local best
+  for _, player in ipairs(state.players) do
+    if player.id ~= player_id then
+      if best == nil or #player.hand > #best.hand then
+        best = player
+      end
+    end
+  end
+  return best == nil and nil or best.id
 end
 
 function rules.apply_action(previous, action)
@@ -418,6 +432,23 @@ function rules.apply_action(previous, action)
   end
   local wild_four_legal = card.kind == "wild4" and not has_color_match(state, actor)
 
+  local swap_target
+  if state.mode == "sevenO" and card.kind == "number" and card.value == 7 then
+    local target_id = action.target_id or action.targetId
+    if target_id == nil or target_id == "" then
+      return fail(previous, protocol.ERROR.MISSING_TARGET)
+    end
+    for _, player in ipairs(state.players) do
+      if player.id == target_id and player.id ~= actor.id then
+        swap_target = player
+        break
+      end
+    end
+    if swap_target == nil then
+      return fail(previous, protocol.ERROR.MISSING_TARGET)
+    end
+  end
+
   table.remove(actor.hand, index)
   state.discard[#state.discard + 1] = card
   state.drawn_card_id = nil
@@ -437,6 +468,24 @@ function rules.apply_action(previous, action)
     card_id = card.id,
     color = action.chosen_color,
   }
+
+  if state.mode == "sevenO" and card.kind == "number" then
+    if card.value == 7 and swap_target ~= nil then
+      local actor_hand = actor.hand
+      actor.hand = swap_target.hand
+      swap_target.hand = actor_hand
+    elseif card.value == 0 then
+      local original = {}
+      for hand_index, player in ipairs(state.players) do
+        original[hand_index] = player.hand
+      end
+      local count = #state.players
+      for hand_index = 1, count do
+        local from = ((hand_index - 1 - state.direction + count * 4) % count) + 1
+        state.players[hand_index].hand = original[from]
+      end
+    end
+  end
 
   local next_player = state.players[target_index(state)]
   if card.kind == "skip" then

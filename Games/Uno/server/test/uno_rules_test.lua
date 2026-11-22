@@ -84,10 +84,11 @@ end
 local wild_four_card = { id = "wild4-0", color = nil, kind = "wild4" }
 local red_zero = { id = "red-0-0", color = "red", kind = "number", value = 0 }
 local blue_zero = { id = "blue-0-0", color = "blue", kind = "number", value = 0 }
+local red_seven = { id = "red-7-0", color = "red", kind = "number", value = 7 }
 local blue_draw_two = { id = "blue-draw2-0", color = "blue", kind = "draw2" }
 
-local function staged_game(hand, color)
-  local game = rules.create_game(vectors.seed, seats())
+local function staged_game(hand, color, mode)
+  local game = rules.create_game(vectors.seed, seats(), 0, mode)
   game.turn = 1
   game.direction = 1
   game.current_color = color or "red"
@@ -97,6 +98,20 @@ local function staged_game(hand, color)
   game.winner = nil
   game.players[1].hand = hand
   return game
+end
+
+local function all_hands(state)
+  local result = {}
+  for index, player in ipairs(state.players) do
+    result[index] = ids(player.hand)
+  end
+  return result
+end
+
+local function assert_hands(actual, expected, message)
+  for index, hand in ipairs(expected) do
+    assert_equal(join(actual[index]), join(hand), (message or "hands") .. " seat " .. index)
+  end
 end
 
 local function play_wild_four(game)
@@ -383,6 +398,143 @@ test("plays the shared reference game to the same winner", function()
   end
   assert_equal(state.winner, expected_winner, "winner")
   assert_equal(#state.replay, vectors.reference.steps, "replay length")
+end)
+
+test("defaults to classic and records the explicit rules mode", function()
+  local classic = rules.create_game(vectors.seed, seats())
+  local seven_o = rules.create_game(vectors.seed, seats(), 0, "sevenO")
+  assert_equal(classic.mode, "classic", "classic mode")
+  assert_equal(seven_o.mode, "sevenO", "sevenO mode")
+  assert_equal(classic.version, 2, "version")
+  assert_equal(seven_o.version, 2, "sevenO version")
+  assert_equal(join(ids(seven_o.players[1].hand)), join(ids(classic.players[1].hand)), "same deal")
+end)
+
+test("swaps the actor's whole hand with the chosen target", function()
+  local game = staged_game({ red_seven, blue_zero }, "red", "sevenO")
+  local before = all_hands(game)
+  local state, ok, error_code = rules.apply_action(game, {
+    type = "play",
+    player_id = "p1",
+    card_id = red_seven.id,
+    target_id = "p2",
+  })
+  assert_equal(ok, true, "seven play: " .. tostring(error_code))
+  assert_hands(all_hands(state), { before[2], { blue_zero.id }, before[3] }, "swapped hands")
+  assert_equal(state.turn, 2, "turn advanced")
+  assert_equal(state.direction, 1, "direction unchanged")
+  assert_equal(state.finished, false, "game continues")
+end)
+
+test("accepts the camelCase target alias", function()
+  local game = staged_game({ red_seven }, "red", "sevenO")
+  local before = all_hands(game)
+  local state, ok, error_code = rules.apply_action(game, {
+    type = "play",
+    player_id = "p1",
+    card_id = red_seven.id,
+    targetId = "p3",
+  })
+  assert_equal(ok, true, "seven play: " .. tostring(error_code))
+  assert_equal(join(ids(state.players[1].hand)), join(before[3]), "actor took target hand")
+  assert_equal(#state.players[3].hand, 0, "target took empty hand")
+end)
+
+test("checks the swap before declaring a winner", function()
+  local game = staged_game({ red_seven }, "red", "sevenO")
+  local state, ok = rules.apply_action(game, {
+    type = "play",
+    player_id = "p1",
+    card_id = red_seven.id,
+    target_id = "p2",
+  })
+  assert_equal(ok, true, "seven played")
+  assert_equal(state.finished, false, "not finished")
+  assert_equal(state.winner, nil, "no winner")
+  assert_equal(#state.players[1].hand > 0, true, "actor holds the target's cards")
+end)
+
+test("rejects a seven without a valid target", function()
+  local cases = { {}, { target_id = "p1" }, { target_id = "nobody" } }
+  for _, extra in ipairs(cases) do
+    local game = staged_game({ red_seven, blue_zero }, "red", "sevenO")
+    local action = {
+      type = "play",
+      player_id = "p1",
+      card_id = red_seven.id,
+    }
+    for key, value in pairs(extra) do
+      action[key] = value
+    end
+    local state, ok, error_code = rules.apply_action(game, action)
+    assert_equal(ok, false, "seven refused")
+    assert_equal(error_code, protocol.ERROR.MISSING_TARGET, "missing target code")
+    assert_equal(state == game, true, "state untouched")
+  end
+end)
+
+test("rotates every hand clockwise on zero", function()
+  local game = staged_game({ red_zero }, "red", "sevenO")
+  local before = all_hands(game)
+  local state, ok, error_code = rules.apply_action(game, {
+    type = "play",
+    player_id = "p1",
+    card_id = red_zero.id,
+  })
+  assert_equal(ok, true, "zero play: " .. tostring(error_code))
+  assert_hands(all_hands(state), { before[3], {}, before[2] }, "clockwise rotation")
+  assert_equal(state.turn, 2, "turn advanced")
+  assert_equal(state.direction, 1, "clockwise")
+  assert_equal(state.finished, false, "game continues")
+end)
+
+test("rotates every hand counter-clockwise on zero", function()
+  local game = staged_game({ red_zero }, "red", "sevenO")
+  game.direction = -1
+  local before = all_hands(game)
+  local state, ok, error_code = rules.apply_action(game, {
+    type = "play",
+    player_id = "p1",
+    card_id = red_zero.id,
+  })
+  assert_equal(ok, true, "zero play: " .. tostring(error_code))
+  assert_hands(all_hands(state), { before[2], before[3], {} }, "counter-clockwise rotation")
+  assert_equal(state.turn, 3, "turn advanced backwards")
+  assert_equal(state.direction, -1, "counter-clockwise")
+end)
+
+test("classic ignores the seven and zero effects", function()
+  local seven = staged_game({ red_seven, blue_zero }, "red")
+  local before_seven = all_hands(seven)
+  local seven_state, seven_ok = rules.apply_action(seven, {
+    type = "play",
+    player_id = "p1",
+    card_id = red_seven.id,
+    target_id = "p2",
+  })
+  assert_equal(seven_ok, true, "seven played in classic")
+  assert_equal(join(ids(seven_state.players[2].hand)), join(before_seven[2]), "classic target unchanged")
+  assert_equal(join(ids(seven_state.players[1].hand)), blue_zero.id, "classic actor kept remainder")
+
+  local zero = staged_game({ red_zero, blue_zero }, "red")
+  local before_zero = all_hands(zero)
+  local zero_state, zero_ok = rules.apply_action(zero, {
+    type = "play",
+    player_id = "p1",
+    card_id = red_zero.id,
+  })
+  assert_equal(zero_ok, true, "zero played in classic")
+  assert_hands(all_hands(zero_state), { { blue_zero.id }, before_zero[2], before_zero[3] }, "classic rotation skipped")
+end)
+
+test("picks the opponent with the most cards as a swap target", function()
+  local game = rules.create_game(vectors.seed, seats(), 0, "sevenO")
+  game.players[1].hand = { red_zero }
+  game.players[2].hand = { red_zero, blue_zero }
+  game.players[3].hand = { red_zero, blue_zero }
+  assert_equal(rules.pick_target(game, "p1"), "p2", "tie goes to first seat")
+  game.players[3].hand = { red_zero, blue_zero, red_seven }
+  assert_equal(rules.pick_target(game, "p1"), "p3", "largest hand wins")
 end)
 
 if failures > 0 then

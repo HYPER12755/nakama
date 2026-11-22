@@ -27,6 +27,25 @@ local function seats_from(params)
   return protocol.clamp_seats(params.seats or params.players or params.playerCount)
 end
 
+local function rules_mode_from(params)
+  local requested = params.rulesMode
+  if requested == nil and params.mode ~= nil and protocol.is_rules_mode(params.mode) then
+    requested = params.mode
+  end
+  if type(params.metadata) == "table" then
+    if requested == nil then
+      requested = params.metadata.rulesMode
+    end
+    if requested == nil and protocol.is_rules_mode(params.metadata.mode) then
+      requested = params.metadata.mode
+    end
+  end
+  if requested ~= nil and not protocol.is_rules_mode(requested) then
+    return nil, "invalid rules mode"
+  end
+  return protocol.normalize_rules_mode(requested)
+end
+
 local function spectate_requested(params)
   local value = type(params.metadata) == "table" and params.metadata.spectate or nil
   if value == nil then
@@ -54,19 +73,29 @@ local function attach_private_room(context, params)
   if not spectate_requested(params) and fields[4] ~= "open" then
     error("match is no longer accepting players")
   end
+  local rules_mode, mode_error = rules_mode_from(params)
+  if rules_mode == nil then
+    error(mode_error)
+  end
   return {
     matchId = match_id,
     gameTitle = "Uno",
     mode = "private",
+    rulesMode = rules_mode,
     metadata = {
       seats = tonumber(fields[3]) or 2,
       spectate = spectate_requested(params),
+      rulesMode = rules_mode,
     },
   }
 end
 
 local function create_private_room(context, params, recipient)
   local seats = seats_from(params)
+  local rules_mode, mode_error = rules_mode_from(params)
+  if rules_mode == nil then
+    error(mode_error)
+  end
   local expected_users = {
     { user_id = context.user_id, username = context.username },
   }
@@ -78,6 +107,7 @@ local function create_private_room(context, params, recipient)
   end
   local match_id = nk.match_create("uno_match", {
     mode = "private",
+    rulesMode = rules_mode,
     rated = false,
     creator = context.user_id,
     seats = seats,
@@ -90,7 +120,8 @@ local function create_private_room(context, params, recipient)
     matchId = match_id,
     gameTitle = "Uno",
     mode = "private",
-    metadata = { seats = seats, spectate = false },
+    rulesMode = rules_mode,
+    metadata = { seats = seats, spectate = false, rulesMode = rules_mode },
   }
 end
 
@@ -112,8 +143,13 @@ local function create_private_match(context, payload)
     return response_error("invalid_payload", decode_error)
   end
   local seats = seats_from(params)
+  local rules_mode, mode_error = rules_mode_from(params)
+  if rules_mode == nil then
+    return response_error("invalid_rules_mode", mode_error)
+  end
   local match_id = nk.match_create("uno_match", {
     mode = "private",
+    rulesMode = rules_mode,
     rated = false,
     creator = context.user_id,
     seats = seats,
@@ -127,6 +163,7 @@ local function create_private_match(context, payload)
     matchId = match_id,
     roomCode = room_code,
     mode = "private",
+    rulesMode = rules_mode,
     seats = seats,
   })
 end
@@ -139,6 +176,7 @@ local function matchmaker_matched(context, matched)
   local seats = nil
   local seed = nil
   local turn_seconds = 0
+  local rules_mode = nil
   local expected_users = {}
   for _, entry in ipairs(matched) do
     if entry.presence == nil then
@@ -150,11 +188,17 @@ local function matchmaker_matched(context, matched)
     end
     local entry_seats = protocol.clamp_seats(properties.seats)
     local entry_clock = math.max(0, tonumber(properties.turnSeconds) or 0)
+    local requested_mode = properties.rulesMode or properties.mode
+    if requested_mode ~= nil and not protocol.is_rules_mode(requested_mode) then
+      return nil
+    end
+    local entry_mode = protocol.normalize_rules_mode(requested_mode)
     if seats == nil then
       seats = entry_seats
       seed = tonumber(properties.seed)
       turn_seconds = entry_clock
-    elseif seats ~= entry_seats or turn_seconds ~= entry_clock then
+      rules_mode = entry_mode
+    elseif seats ~= entry_seats or turn_seconds ~= entry_clock or rules_mode ~= entry_mode then
       return nil
     end
     expected_users[#expected_users + 1] = {
@@ -167,6 +211,7 @@ local function matchmaker_matched(context, matched)
   end
   return nk.match_create("uno_match", {
     mode = "quick",
+    rulesMode = rules_mode,
     rated = true,
     seats = seats,
     seed = seed,

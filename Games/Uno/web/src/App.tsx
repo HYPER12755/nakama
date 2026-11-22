@@ -19,6 +19,7 @@ import { UnoMatchActions } from "./components/UnoMatchActions";
 import { UnoOnlinePanel } from "./components/UnoOnlinePanel";
 import { UnoPreferences } from "./components/UnoPreferences";
 import { useUnoGame } from "./hooks/useUnoGame";
+import { rulesModeLabel, RULES_MODES } from "./lib/view";
 import type { Color } from "@moongames/uno-core";
 
 const MODES = [
@@ -33,6 +34,8 @@ const RULES = [
   "Wild +4 may be played even with a matching colour; the next player takes 4 or challenges (challenger takes 6 if legal, player takes 4 if bluffing).",
   "The first player to empty their hand wins the round.",
 ];
+
+const SEVEN_O_RULE = "Seven-O: playing a 7 swaps hands with a player you choose; playing a 0 rotates every hand.";
 
 const COLOURS: Color[] = ["red", "yellow", "green", "blue"];
 const COLOUR_HEX: Record<Color, string> = {
@@ -71,6 +74,8 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const version = __MOONGAMES_GAME_VERSION__;
   const inMatch = game.view.started;
   const modeLabel = mode === "local" ? "Pass and play" : mode === "ai" ? "Computer table" : "Online table";
+  const rulesLocked = onlineMode && inMatch;
+  const rulesText = game.rulesMode === "sevenO" ? [...RULES, SEVEN_O_RULE] : RULES;
   const activePlayer = game.view.players[game.view.turn];
   const winner = game.view.result?.winnerUserId == null
     ? null
@@ -169,8 +174,8 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     setToast(null);
   }, [game]);
 
-  const play = useCallback((cardId: string, chosenColor?: Color) => {
-    game.play(cardId, chosenColor);
+  const play = useCallback((cardId: string, chosenColor?: Color, targetId?: string) => {
+    game.play(cardId, chosenColor, targetId);
   }, [game]);
 
   return (
@@ -236,8 +241,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                 dealKey={game.dealKey}
                 activeColor={game.view.currentColor}
                 direction={game.view.direction}
-                highlight={highlight}
+                 highlight={highlight}
                 pileStyle={pileStyle}
+                rulesMode={game.rulesMode}
                 onPlay={play}
                 onDraw={game.draw}
                 onChallenge={game.challenge}
@@ -345,6 +351,24 @@ export default function App({ bridge }: { bridge: GameBridge }) {
             <div className="panel-heading">
               <div><p className="eyebrow">Table</p><h2>Game controls</h2></div>
             </div>
+            <p className="ludo-note">Rules mode</p>
+            <div className="pref-choices" role="radiogroup" aria-label="Rules mode">
+              {RULES_MODES.map((modeOption) => (
+                <button
+                  type="button"
+                  key={modeOption}
+                  role="radio"
+                  aria-checked={game.rulesMode === modeOption}
+                  className={`pref-choice${game.rulesMode === modeOption ? " is-chosen" : ""}`}
+                  disabled={rulesLocked}
+                  title={rulesLocked ? "Leave the online table before changing rules" : rulesModeLabel(modeOption)}
+                  onClick={() => game.setRulesMode(modeOption)}
+                >
+                  {rulesModeLabel(modeOption)}
+                </button>
+              ))}
+            </div>
+            {rulesLocked ? <p className="ludo-note">Leave the table to change the rules mode.</p> : null}
             <p className="ludo-note">Players</p>
             <div className="pref-choices" role="radiogroup" aria-label="Players">
               {[2, 3, 4].map((count) => (
@@ -366,7 +390,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
 
           <section className="panel tips-panel">
             <div className="panel-heading"><div><p className="eyebrow">Uno</p><h2>How to play</h2></div></div>
-            <ul className="tip-list">{RULES.map((rule) => <li key={rule}><span className="tip-mark" />{rule}</li>)}</ul>
+            <ul className="tip-list">{rulesText.map((rule) => <li key={rule}><span className="tip-mark" />{rule}</li>)}</ul>
           </section>
           <p className="sidebar-note">Every card is drawn as its own SVG and shared across web and native hosts.</p>
         </aside>
@@ -389,7 +413,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
         <div className="dialog-backdrop" role="presentation" onClick={() => setRulesOpen(false)}>
           <div className="dialog" role="dialog" aria-label="Rules" onClick={(event) => event.stopPropagation()}>
             <div className="panel-heading"><div><p className="eyebrow">Uno</p><h2>How to play</h2></div></div>
-            <ul className="tip-list">{RULES.map((rule) => <li key={rule}><span className="tip-mark" />{rule}</li>)}</ul>
+            <ul className="tip-list">{rulesText.map((rule) => <li key={rule}><span className="tip-mark" />{rule}</li>)}</ul>
             <button type="button" className="button button--primary" onClick={() => setRulesOpen(false)}>Close</button>
           </div>
         </div>

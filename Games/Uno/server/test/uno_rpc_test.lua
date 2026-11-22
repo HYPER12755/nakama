@@ -47,6 +47,9 @@ local fake_nk = {
     created[#created + 1] = { module = module, params = params }
     return "match-" .. #created
   end,
+  match_get = function(match_id)
+    return { match_id = match_id, label = "uno|private|2|open" }
+  end,
   storage_read = function()
     return {}
   end,
@@ -159,6 +162,86 @@ test("the matchmaker pairs matching tables only", function()
     { presence = { user_id = "b" }, properties = { game = "uno", seats = 4 } },
   })
   assert_equal(partial, nil, "four seat table needs four players")
+end)
+
+test("creates a sevenO private room through the RPC", function()
+  local response = rpcs.uno_create_private_match(
+    { user_id = "u1", username = "Alice" },
+    { seats = 2, rulesMode = "sevenO" }
+  )
+  assert_equal(response:find("rulesMode=sevenO", 1, true) ~= nil, true, "mode in response")
+  assert_equal(created[#created].params.rulesMode, "sevenO", "mode passed to the match")
+end)
+
+test("defaults private rooms to classic and carries the mode in invites", function()
+  local room = games.uno.create_room({ user_id = "u1", username = "Alice" }, { seats = 2 }, {
+    user_id = "u2", username = "Bob",
+  })
+  assert_equal(room.metadata.rulesMode, "classic", "default invite metadata mode")
+  assert_equal(created[#created].params.rulesMode, "classic", "default match mode")
+
+  local seven_o = games.uno.create_room({ user_id = "u1", username = "Alice" }, {
+    seats = 2,
+    mode = "sevenO",
+  }, { user_id = "u2", username = "Bob" })
+  assert_equal(seven_o.metadata.rulesMode, "sevenO", "sevenO invite metadata mode")
+  assert_equal(created[#created].params.rulesMode, "sevenO", "sevenO match mode")
+
+  local attached = games.uno.attach_room({ user_id = "u1", username = "Alice" }, {
+    matchId = "match-1",
+    metadata = { rulesMode = "sevenO" },
+  })
+  assert_equal(attached.rulesMode, "sevenO", "attached room mode")
+  assert_equal(attached.metadata.rulesMode, "sevenO", "attached invite metadata mode")
+end)
+
+test("refuses unknown rules modes", function()
+  local before = #created
+  local response = rpcs.uno_create_private_match(
+    { user_id = "u1", username = "Alice" },
+    { seats = 2, rulesMode = "bogus" }
+  )
+  assert_equal(response:find("ok=false", 1, true) ~= nil, true, "rpc refused")
+  assert_equal(#created, before, "no match created")
+  local ok = pcall(games.uno.create_room, { user_id = "u1", username = "Alice" }, {
+    seats = 2, rulesMode = "bogus",
+  }, nil)
+  assert_equal(ok, false, "invite room refused")
+end)
+
+test("matchmaker matches only tickets that agree on the rules mode", function()
+  local pair = matchmakers.uno({}, {
+    { presence = { user_id = "a", username = "A" }, properties = { game = "uno", seats = 2, rulesMode = "sevenO" } },
+    { presence = { user_id = "b", username = "B" }, properties = { game = "uno", seats = 2, rulesMode = "sevenO" } },
+  })
+  assert_equal(pair ~= nil, true, "sevenO pair created")
+  assert_equal(created[#created].params.rulesMode, "sevenO", "sevenO passed to match")
+
+  local mixed = matchmakers.uno({}, {
+    { presence = { user_id = "a" }, properties = { game = "uno", seats = 2, rulesMode = "sevenO" } },
+    { presence = { user_id = "b" }, properties = { game = "uno", seats = 2, rulesMode = "classic" } },
+  })
+  assert_equal(mixed, nil, "mixed modes refused")
+
+  local aliased = matchmakers.uno({}, {
+    { presence = { user_id = "a" }, properties = { game = "uno", seats = 2, mode = "sevenO" } },
+    { presence = { user_id = "b" }, properties = { game = "uno", seats = 2, mode = "sevenO" } },
+  })
+  assert_equal(aliased ~= nil, true, "mode alias accepted")
+  assert_equal(created[#created].params.rulesMode, "sevenO", "aliased mode passed")
+
+  local legacy = matchmakers.uno({}, {
+    { presence = { user_id = "a" }, properties = { game = "uno", seats = 2 } },
+    { presence = { user_id = "b" }, properties = { game = "uno", seats = 2 } },
+  })
+  assert_equal(legacy ~= nil, true, "legacy tickets still match")
+  assert_equal(created[#created].params.rulesMode, "classic", "legacy defaults to classic")
+
+  local invalid = matchmakers.uno({}, {
+    { presence = { user_id = "a" }, properties = { game = "uno", seats = 2, rulesMode = "bogus" } },
+    { presence = { user_id = "b" }, properties = { game = "uno", seats = 2, rulesMode = "bogus" } },
+  })
+  assert_equal(invalid, nil, "invalid mode refused")
 end)
 
 if failures > 0 then
