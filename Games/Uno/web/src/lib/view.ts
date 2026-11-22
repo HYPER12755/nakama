@@ -10,10 +10,59 @@ import {
 
 export type RulesMode = GameMode;
 
-export const RULES_MODES: RulesMode[] = [...UNO_MODES];
+const PROGRESSIVE_MODE = "progressive" as unknown as RulesMode;
+
+export const RULES_MODES: RulesMode[] = (() => {
+  const modes = [...UNO_MODES] as RulesMode[];
+  if (!modes.includes(PROGRESSIVE_MODE)) {
+    modes.push(PROGRESSIVE_MODE);
+  }
+  return modes;
+})();
 
 export function rulesModeLabel(mode: RulesMode | undefined): string {
+  if ((mode as string | undefined) === PROGRESSIVE_MODE) {
+    return "Progressive";
+  }
   return mode === "sevenO" ? "Seven-O" : "Classic";
+}
+
+export function normalizeRulesMode(value: unknown): RulesMode {
+  const normalized = normalizeMode(value);
+  if (normalized === ("classic" as RulesMode) && value === PROGRESSIVE_MODE) {
+    return PROGRESSIVE_MODE;
+  }
+  return normalized;
+}
+
+export interface PendingStack {
+  ownerId: string;
+  targetId: string;
+  kind: "draw2" | "wild4";
+  count: number;
+}
+
+export function normalizePendingStack(value: unknown): PendingStack | null {
+  const source = value as Record<string, unknown> | null | undefined;
+  if (source == null) {
+    return null;
+  }
+  const rawKind = String(source.kind ?? source.stackKind ?? source.type ?? "draw2");
+  const kind: PendingStack["kind"] = rawKind === "wild4" || rawKind === "wild_four"
+    ? "wild4"
+    : "draw2";
+  const rawCount = source.count ?? source.amount ?? source.value ?? source.size
+    ?? (Array.isArray(source.cards) ? source.cards.length : undefined);
+  const count = Number(rawCount ?? 0);
+  if (!Number.isFinite(count) || count <= 0) {
+    return null;
+  }
+  return {
+    ownerId: String(source.ownerId ?? source.owner_id ?? ""),
+    targetId: String(source.targetId ?? source.target_id ?? ""),
+    kind,
+    count: Math.trunc(count),
+  };
 }
 
 export interface BoardPlayer {
@@ -44,6 +93,7 @@ export interface BoardView {
   direction: 1 | -1;
   deckCount: number;
   pendingChallenge: { ownerId: string; targetId: string; legal: boolean } | null;
+  pendingStack?: PendingStack | null;
   legalCards: string[];
   canDraw: boolean;
   result: { status: string; winnerUserId: string | null; reason?: string } | null;
@@ -57,10 +107,11 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
     return {
       players: [], spectators: [], chat: [], topCard: null, currentColor: null,
       turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
-      legalCards: [], canDraw: false, result: null, myUserId, started: false,
-      mode: "classic",
+      pendingStack: null, legalCards: [], canDraw: false, result: null,
+      myUserId, started: false, mode: "classic",
     };
   }
+  const rawState = state as unknown as Record<string, unknown>;
   return {
     players: state.players.map((player, index) => ({
       seat: index,
@@ -82,6 +133,7 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
       targetId: state.pendingChallenge.targetId,
       legal: state.pendingChallenge.legal,
     },
+    pendingStack: normalizePendingStack(rawState.pendingStack ?? rawState.pending_stack),
     legalCards: myUserId === null ? [] : legalMoves(state, myUserId).cards,
     canDraw: myUserId !== null && legalMoves(state, myUserId).canDraw,
     result: state.finished
@@ -89,7 +141,7 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
       : null,
     myUserId,
     started: state.started,
-    mode: normalizeMode(state.mode),
+    mode: normalizeRulesMode(state.mode),
   };
 }
 

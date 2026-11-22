@@ -48,4 +48,65 @@ describe("Uno board stage", () => {
     expect(html).toContain("cards-neon/red-5-0.svg");
     expect(html).toContain("uno-table-surface");
   });
+
+  it("shows a pending stack overlay with take and stack actions for the target", () => {
+    const stackView: BoardView = {
+      ...view,
+      mode: "progressive",
+      pendingStack: { ownerId: "them", targetId: "me", kind: "draw2", count: 4 },
+      players: [
+        {
+          ...view.players[0],
+          hand: [
+            ...(view.players[0].hand ?? []),
+            { id: "green-draw2-0", color: "green", kind: "draw2" },
+          ],
+        },
+        view.players[1],
+      ],
+      legalCards: ["red-5-0", "blue-2-0", "green-draw2-0"],
+    };
+    const html = renderToStaticMarkup(
+      <UnoBoardStage
+        view={stackView}
+        cardSet="classic"
+        dealKey={1}
+        activeColor="yellow"
+        direction={1}
+        highlight="lift"
+        pileStyle="stack"
+        onPlay={() => undefined}
+        onDraw={() => undefined}
+        onChallenge={() => undefined}
+        onUno={() => undefined}
+      />,
+    );
+    expect(html).toContain('aria-label="Pending draw stack"');
+    expect(html).toContain("Draw Two chain");
+    expect(html).toContain("Take 4");
+    expect(html).toContain("Stack Draw Two");
+  });
+
+  it("does not show a pending stack overlay to a non-target", () => {
+    const stackView: BoardView = {
+      ...view,
+      pendingStack: { ownerId: "me", targetId: "them", kind: "wild4", count: 8 },
+    };
+    const html = renderToStaticMarkup(
+      <UnoBoardStage
+        view={stackView}
+        cardSet="classic"
+        dealKey={1}
+        activeColor="yellow"
+        direction={1}
+        highlight="lift"
+        pileStyle="stack"
+        onPlay={() => undefined}
+        onDraw={() => undefined}
+        onChallenge={() => undefined}
+        onUno={() => undefined}
+      />,
+    );
+    expect(html).not.toContain('aria-label="Pending draw stack"');
+  });
 });

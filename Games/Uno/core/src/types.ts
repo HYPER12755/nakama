@@ -1,6 +1,6 @@
 export type Color = "red" | "yellow" | "green" | "blue";
 
-export type GameMode = "classic" | "sevenO";
+export type GameMode = "classic" | "sevenO" | "progressive";
 
 export type CardKind = "number" | "skip" | "reverse" | "draw2" | "wild" | "wild4";
 
@@ -47,6 +47,16 @@ export interface PendingChallenge {
   legal: boolean;
 }
 
+export interface PendingStack {
+  kind: "draw2" | "wild4";
+  amount: number;
+  ownerId: string;
+  targetId: string;
+  legal?: boolean;
+  color?: Color;
+  pendingWinnerId?: string;
+}
+
 export interface StartingRule {
   kind: CardKind;
   color?: Color;
@@ -67,6 +77,7 @@ export interface GameState {
   currentColor: Color;
   drawnCardId: string | null;
   pendingChallenge: PendingChallenge | null;
+  pendingStack: PendingStack | null;
   startingRule: StartingRule | null;
   started: boolean;
   finished: boolean;

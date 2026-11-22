@@ -11,6 +11,7 @@ import {
   type GameState,
   type LegalMoves,
   type MoveResult,
+  type PendingStack,
   type Player,
   type StartingRule,
   type UnoErrorCode,
@@ -44,7 +45,23 @@ export function canPlay(state: GameState, card: Card): boolean {
 
 export function legalMoves(state: GameState, playerId: string): LegalMoves {
   const empty: LegalMoves = { cards: [], canDraw: false };
-  if (state.finished || state.pendingChallenge !== null) {
+  if (state.finished) {
+    return empty;
+  }
+  if (state.pendingStack !== null) {
+    if (state.pendingStack.targetId !== playerId) {
+      return empty;
+    }
+    const stackPlayer = state.players.find((candidate) => candidate.id === playerId);
+    if (stackPlayer === undefined) {
+      return empty;
+    }
+    const cards = stackPlayer.hand
+      .filter((card) => card.kind === state.pendingStack?.kind)
+      .map((card) => card.id);
+    return { cards, canDraw: true };
+  }
+  if (state.pendingChallenge !== null) {
     return empty;
   }
   const player = currentPlayer(state);
@@ -139,6 +156,7 @@ export function createGame(
     currentColor: color,
     drawnCardId: null,
     pendingChallenge: null,
+    pendingStack: null,
     startingRule,
     started: true,
     finished: false,
@@ -203,6 +221,50 @@ function finishIfEmpty(state: GameState, actor: Player): void {
   }
 }
 
+function finishDeferredWinner(state: GameState, pendingWinnerId: string | undefined): void {
+  if (pendingWinnerId === undefined) {
+    return;
+  }
+  const winner = state.players.find((player) => player.id === pendingWinnerId);
+  if (winner !== undefined && winner.hand.length === 0) {
+    state.finished = true;
+    state.winner = winner.id;
+  }
+}
+
+function stackAmount(kind: PendingStack["kind"]): number {
+  return kind === "draw2" ? DEFAULT_RULES.drawTwoAmount : DEFAULT_RULES.wildFourAmount;
+}
+
+function applyStackResolution(state: GameState, stack: PendingStack, accept: boolean | undefined): void {
+  const pendingWinnerId = stack.pendingWinnerId;
+  const pending = state.pendingChallenge;
+  const target = state.players.find((player) => player.id === stack.targetId);
+  const owner = pending === null ? undefined : state.players.find((player) => player.id === pending.ownerId);
+  state.pendingStack = null;
+  state.pendingChallenge = null;
+  if (stack.kind === "wild4" && accept !== undefined && owner !== undefined && target !== undefined) {
+    if (accept) {
+      if (pending?.legal === true) {
+        drawCards(state, target, stack.amount + 2);
+      } else {
+        drawCards(state, owner, stack.amount);
+      }
+    } else {
+      drawCards(state, target, stack.amount);
+    }
+    advance(state, 2);
+    state.events.push({ type: "challenge", playerId: target.id, at: state.events.length });
+    state.replay.push({ playerId: target.id, action: `challenge:${accept}` });
+  } else if (target !== undefined) {
+    drawCards(state, target, stack.amount);
+    advance(state, stack.kind === "draw2" ? 1 : 2);
+    state.events.push({ type: "draw", playerId: target.id, at: state.events.length });
+    state.replay.push({ playerId: target.id, action: "draw" });
+  }
+  finishDeferredWinner(state, pendingWinnerId);
+}
+
 export function mostCommonColor(hand: Card[]): Color {
   const counts = new Map<Color, number>();
   for (const color of COLORS) {
@@ -231,6 +293,86 @@ export function applyAction(previous: GameState, action: Action): MoveResult {
   }
   const state = cloneState(previous);
   const actor = state.players.find((player) => player.id === action.playerId);
+
+  if (state.pendingStack !== null) {
+    const stack = state.pendingStack;
+    if (actor === undefined || stack.targetId !== actor.id) {
+      return fail(previous, UNO_ERROR.BAD_CHALLENGE as "bad_challenge");
+    }
+    if (action.type === "challenge") {
+      if (stack.kind !== "wild4" || state.pendingChallenge === null
+        || state.pendingChallenge.targetId !== actor.id) {
+        return fail(previous, UNO_ERROR.BAD_CHALLENGE as "bad_challenge");
+      }
+      applyStackResolution(state, stack, action.accept);
+      return { state, ok: true };
+    }
+    if (action.type === "draw") {
+      applyStackResolution(state, stack, undefined);
+      return { state, ok: true };
+    }
+    if (action.type !== "play") {
+      return fail(previous, UNO_ERROR.ILLEGAL_CARD as "illegal_card");
+    }
+    const stackIndex = actor.hand.findIndex((card) => card.id === action.cardId);
+    if (stackIndex < 0) {
+      return fail(previous, UNO_ERROR.UNKNOWN_CARD as "unknown_card");
+    }
+    const stackCard = actor.hand[stackIndex];
+    if (stackCard.kind !== stack.kind) {
+      return fail(previous, UNO_ERROR.ILLEGAL_CARD as "illegal_card");
+    }
+    if (state.drawnCardId !== null && state.drawnCardId !== stackCard.id) {
+      return fail(previous, UNO_ERROR.ILLEGAL_CARD as "illegal_card");
+    }
+    if (stackCard.kind === "wild4" && action.chosenColor === undefined) {
+      return fail(previous, UNO_ERROR.MISSING_COLOR as "missing_color");
+    }
+    const stackLegal = stackCard.kind === "wild4" && !hasColorMatch(state, actor);
+    const actorIndex = state.players.findIndex((player) => player.id === actor.id);
+    actor.hand.splice(stackIndex, 1);
+    state.discard.push(stackCard);
+    state.drawnCardId = null;
+    if (action.chosenColor !== undefined) {
+      state.currentColor = action.chosenColor;
+    }
+    state.events.push({
+      type: "play",
+      playerId: actor.id,
+      cardId: stackCard.id,
+      text: action.chosenColor,
+      at: state.events.length,
+    });
+    state.replay.push({
+      playerId: actor.id,
+      action: "play",
+      cardId: stackCard.id,
+      color: action.chosenColor,
+    });
+    if (stackCard.kind === "wild4") {
+      state.turn = actorIndex;
+    }
+    const count = state.players.length;
+    const nextIndex = (state.turn + state.direction + count * 4) % count;
+    stack.amount += stackAmount(stack.kind);
+    stack.ownerId = actor.id;
+    stack.targetId = state.players[nextIndex].id;
+    if (stackCard.kind === "wild4") {
+      stack.legal = stackLegal;
+      stack.color = action.chosenColor;
+      state.pendingChallenge = {
+        ownerId: actor.id,
+        targetId: stack.targetId,
+        legal: stackLegal,
+      };
+    } else {
+      advance(state, 1);
+    }
+    if (actor.hand.length === 0 && stack.pendingWinnerId === undefined) {
+      stack.pendingWinnerId = actor.id;
+    }
+    return { state, ok: true };
+  }
 
   if (state.pendingChallenge !== null) {
     if (actor === undefined || action.type !== "challenge" || state.pendingChallenge.targetId !== action.playerId) {
@@ -362,9 +504,20 @@ export function applyAction(previous: GameState, action: Action): MoveResult {
       }
       break;
     case "draw2":
-      drawCards(state, next, DEFAULT_RULES.drawTwoAmount);
-      advance(state, 2);
-      finishIfEmpty(state, actor);
+      if (state.mode === UNO_MODE.PROGRESSIVE) {
+        state.pendingStack = {
+          kind: "draw2",
+          amount: DEFAULT_RULES.drawTwoAmount,
+          ownerId: actor.id,
+          targetId: next.id,
+          ...(actor.hand.length === 0 ? { pendingWinnerId: actor.id } : {}),
+        };
+        advance(state, 1);
+      } else {
+        drawCards(state, next, DEFAULT_RULES.drawTwoAmount);
+        advance(state, 2);
+        finishIfEmpty(state, actor);
+      }
       break;
     case "wild":
       advance(state, 1);
@@ -375,12 +528,23 @@ export function applyAction(previous: GameState, action: Action): MoveResult {
         targetId: next.id,
         legal: wildFourLegal,
       };
+      if (state.mode === UNO_MODE.PROGRESSIVE) {
+        state.pendingStack = {
+          kind: "wild4",
+          amount: DEFAULT_RULES.wildFourAmount,
+          ownerId: actor.id,
+          targetId: next.id,
+          legal: wildFourLegal,
+          color: action.chosenColor,
+          ...(actor.hand.length === 0 ? { pendingWinnerId: actor.id } : {}),
+        };
+      }
       break;
     default:
       advance(state, 1);
       break;
   }
-  if (state.pendingChallenge === null) {
+  if (state.pendingChallenge === null && state.pendingStack === null) {
     finishIfEmpty(state, actor);
   }
 

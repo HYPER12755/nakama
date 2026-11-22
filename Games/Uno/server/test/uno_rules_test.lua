@@ -86,6 +86,10 @@ local red_zero = { id = "red-0-0", color = "red", kind = "number", value = 0 }
 local blue_zero = { id = "blue-0-0", color = "blue", kind = "number", value = 0 }
 local red_seven = { id = "red-7-0", color = "red", kind = "number", value = 7 }
 local blue_draw_two = { id = "blue-draw2-0", color = "blue", kind = "draw2" }
+local green_draw_two = { id = "green-draw2-0", color = "green", kind = "draw2" }
+local yellow_draw_two = { id = "yellow-draw2-0", color = "yellow", kind = "draw2" }
+local second_wild_four = { id = "wild4-1", color = nil, kind = "wild4" }
+local green_zero = { id = "green-0-0", color = "green", kind = "number", value = 0 }
 
 local function staged_game(hand, color, mode)
   local game = rules.create_game(vectors.seed, seats(), 0, mode)
@@ -94,10 +98,15 @@ local function staged_game(hand, color, mode)
   game.current_color = color or "red"
   game.drawn_card_id = nil
   game.pending_challenge = nil
+  game.pending_stack = nil
   game.finished = false
   game.winner = nil
   game.players[1].hand = hand
   return game
+end
+
+local function progressive(hand, color)
+  return staged_game(hand, color, "progressive")
 end
 
 local function all_hands(state)
@@ -535,6 +544,285 @@ test("picks the opponent with the most cards as a swap target", function()
   assert_equal(rules.pick_target(game, "p1"), "p2", "tie goes to first seat")
   game.players[3].hand = { red_zero, blue_zero, red_seven }
   assert_equal(rules.pick_target(game, "p1"), "p3", "largest hand wins")
+end)
+
+test("exposes progressive as a valid mode with an empty pending stack", function()
+  local game = rules.create_game(vectors.seed, seats(), 0, "progressive")
+  assert_equal(game.mode, "progressive", "mode")
+  assert_equal(game.pending_stack, nil, "empty pending stack")
+  assert_equal(protocol.is_rules_mode("progressive"), true, "protocol accepts mode")
+  assert_equal(protocol.normalize_rules_mode("progressive"), "progressive", "protocol normalizes mode")
+end)
+
+test("sets a Draw Two stack instead of drawing immediately", function()
+  local game = progressive({ blue_draw_two, red_zero }, "blue")
+  local target_before = #game.players[2].hand
+  local state, ok, error_code = rules.apply_action(game, {
+    type = "play",
+    player_id = "p1",
+    card_id = blue_draw_two.id,
+  })
+  assert_equal(ok, true, "play: " .. tostring(error_code))
+  assert_equal(state.pending_stack.kind, "draw2", "stack kind")
+  assert_equal(state.pending_stack.amount, rules.DRAW_TWO_AMOUNT, "stack amount")
+  assert_equal(state.pending_stack.owner_id, "p1", "stack owner")
+  assert_equal(state.pending_stack.target_id, "p2", "stack target")
+  assert_equal(#state.players[2].hand, target_before, "no immediate draw")
+  assert_equal(state.turn, 2, "turn on target")
+  assert_equal(state.finished, false, "not finished")
+end)
+
+test("stacks Draw Twos and makes the final target take the accumulated amount", function()
+  local played = rules.apply_action(progressive({ blue_draw_two }, "blue"), {
+    type = "play",
+    player_id = "p1",
+    card_id = blue_draw_two.id,
+  })
+  assert_equal(played.finished, false, "win deferred")
+  assert_equal(played.pending_stack.pending_winner_id, "p1", "pending winner")
+  played.players[2].hand = { green_draw_two }
+  local stacked, stacked_ok = rules.apply_action(played, {
+    type = "play",
+    player_id = "p2",
+    card_id = green_draw_two.id,
+  })
+  assert_equal(stacked_ok, true, "stack accepted")
+  assert_equal(stacked.pending_stack.amount, 4, "amount accumulated")
+  assert_equal(stacked.pending_stack.owner_id, "p2", "owner advanced")
+  assert_equal(stacked.pending_stack.target_id, "p3", "target advanced")
+  assert_equal(stacked.pending_stack.pending_winner_id, "p1", "winner unchanged")
+  local third_before = #stacked.players[3].hand
+  local taken, taken_ok = rules.apply_action(stacked, { type = "draw", player_id = "p3" })
+  assert_equal(taken_ok, true, "take accepted")
+  assert_equal(taken.pending_stack, nil, "stack cleared")
+  assert_equal(#taken.players[3].hand, third_before + 4, "target drew four")
+  assert_equal(taken.finished, true, "hand finished")
+  assert_equal(taken.winner, "p1", "deferred winner")
+end)
+
+test("declares the deferred Draw Two winner when the first stack is taken", function()
+  local game = progressive({ blue_draw_two }, "blue")
+  local target_before = #game.players[2].hand
+  local played = rules.apply_action(game, {
+    type = "play",
+    player_id = "p1",
+    card_id = blue_draw_two.id,
+  })
+  assert_equal(played.finished, false, "not finished before resolution")
+  local taken, ok = rules.apply_action(played, { type = "draw", player_id = "p2" })
+  assert_equal(ok, true, "take accepted")
+  assert_equal(#taken.players[2].hand, target_before + rules.DRAW_TWO_AMOUNT, "target drew two")
+  assert_equal(taken.finished, true, "hand finished")
+  assert_equal(taken.winner, "p1", "winner")
+end)
+
+test("keeps the hand alive when a Draw Two stack returns to the owner", function()
+  local played = rules.apply_action(progressive({ blue_draw_two }, "blue"), {
+    type = "play",
+    player_id = "p1",
+    card_id = blue_draw_two.id,
+  })
+  played.players[2].hand = { green_draw_two }
+  local stacked = rules.apply_action(played, {
+    type = "play",
+    player_id = "p2",
+    card_id = green_draw_two.id,
+  })
+  assert_equal(stacked.pending_stack.amount, 4, "amount after second stack")
+  stacked.players[3].hand = { yellow_draw_two }
+  local stacked_thrice = rules.apply_action(stacked, {
+    type = "play",
+    player_id = "p3",
+    card_id = yellow_draw_two.id,
+  })
+  assert_equal(stacked_thrice.pending_stack.amount, 6, "amount after third stack")
+  assert_equal(stacked_thrice.pending_stack.target_id, "p1", "stack returns to owner")
+  local taken, ok = rules.apply_action(stacked_thrice, { type = "draw", player_id = "p1" })
+  assert_equal(ok, true, "owner takes the stack")
+  assert_equal(#taken.players[1].hand > 0, true, "owner holds cards")
+  assert_equal(taken.finished, false, "game continues")
+end)
+
+test("rejects cross-stacking a Wild Four onto a Draw Two stack", function()
+  local played = rules.apply_action(progressive({ blue_draw_two, red_zero }, "blue"), {
+    type = "play",
+    player_id = "p1",
+    card_id = blue_draw_two.id,
+  })
+  played.players[2].hand = { wild_four_card }
+  local moves = rules.legal_moves(played, "p2")
+  assert_equal(#moves.cards, 0, "no wild four in legal moves")
+  assert_equal(moves.can_draw, true, "take available")
+  local state, ok, error_code = rules.apply_action(played, {
+    type = "play",
+    player_id = "p2",
+    card_id = wild_four_card.id,
+    chosen_color = "green",
+  })
+  assert_equal(ok, false, "cross-stack refused")
+  assert_equal(error_code, protocol.ERROR.ILLEGAL_CARD, "error code")
+end)
+
+test("sets a stacked Wild Four and resolves an innocent challenge by the accumulated amount", function()
+  local played = rules.apply_action(progressive({ wild_four_card, blue_zero }, "red"), {
+    type = "play",
+    player_id = "p1",
+    card_id = wild_four_card.id,
+    chosen_color = "green",
+  })
+  assert_equal(played.pending_stack.kind, "wild4", "stack kind")
+  assert_equal(played.pending_stack.amount, rules.WILD_FOUR_AMOUNT, "stack amount")
+  assert_equal(played.pending_stack.legal, true, "innocent")
+  assert_equal(played.pending_stack.color, "green", "chosen colour")
+  played.players[2].hand = { second_wild_four, blue_zero }
+  local stacked, stacked_ok = rules.apply_action(played, {
+    type = "play",
+    player_id = "p2",
+    card_id = second_wild_four.id,
+    chosen_color = "yellow",
+  })
+  assert_equal(stacked_ok, true, "stack accepted")
+  assert_equal(stacked.pending_stack.amount, 8, "accumulated amount")
+  assert_equal(stacked.pending_stack.legal, true, "still innocent")
+  assert_equal(stacked.pending_stack.color, "yellow", "last colour chosen")
+  assert_equal(stacked.current_color, "yellow", "current colour")
+  local third_before = #stacked.players[3].hand
+  local challenged, ok = rules.apply_action(stacked, {
+    type = "challenge",
+    player_id = "p3",
+    accept = true,
+  })
+  assert_equal(ok, true, "challenge accepted")
+  assert_equal(#challenged.players[3].hand, third_before + 10, "challenger drew amount plus two")
+  assert_equal(challenged.pending_stack, nil, "stack cleared")
+  assert_equal(challenged.pending_challenge, nil, "challenge cleared")
+end)
+
+test("makes the last Wild Four owner draw the accumulated amount on a guilty challenge", function()
+  local played = rules.apply_action(progressive({ wild_four_card, green_zero }, "green"), {
+    type = "play",
+    player_id = "p1",
+    card_id = wild_four_card.id,
+    chosen_color = "blue",
+  })
+  assert_equal(played.pending_challenge.legal, false, "guilty")
+  played.players[2].hand = { second_wild_four, blue_zero }
+  local stacked = rules.apply_action(played, {
+    type = "play",
+    player_id = "p2",
+    card_id = second_wild_four.id,
+    chosen_color = "yellow",
+  })
+  assert_equal(stacked.pending_stack.legal, false, "guilty stack")
+  assert_equal(stacked.pending_stack.amount, 8, "accumulated amount")
+  local challenged, ok = rules.apply_action(stacked, {
+    type = "challenge",
+    player_id = "p3",
+    accept = true,
+  })
+  assert_equal(ok, true, "challenge accepted")
+  assert_equal(#challenged.players[2].hand, 1 + 8, "owner drew eight")
+end)
+
+test("makes the target take the accumulated amount when a stacked Wild Four is declined", function()
+  local played = rules.apply_action(progressive({ wild_four_card, blue_zero }, "red"), {
+    type = "play",
+    player_id = "p1",
+    card_id = wild_four_card.id,
+    chosen_color = "green",
+  })
+  played.players[2].hand = { second_wild_four, blue_zero }
+  local stacked = rules.apply_action(played, {
+    type = "play",
+    player_id = "p2",
+    card_id = second_wild_four.id,
+    chosen_color = "yellow",
+  })
+  local third_before = #stacked.players[3].hand
+  local declined, ok = rules.apply_action(stacked, {
+    type = "challenge",
+    player_id = "p3",
+    accept = false,
+  })
+  assert_equal(ok, true, "challenge declined")
+  assert_equal(#declined.players[3].hand, third_before + 8, "target drew eight")
+end)
+
+test("rejects cross-stacking a Draw Two onto a Wild Four stack", function()
+  local played = rules.apply_action(progressive({ wild_four_card, blue_zero }, "red"), {
+    type = "play",
+    player_id = "p1",
+    card_id = wild_four_card.id,
+    chosen_color = "blue",
+  })
+  played.players[2].hand = { blue_draw_two }
+  local moves = rules.legal_moves(played, "p2")
+  assert_equal(#moves.cards, 0, "no draw two in legal moves")
+  local state, ok, error_code = rules.apply_action(played, {
+    type = "play",
+    player_id = "p2",
+    card_id = blue_draw_two.id,
+  })
+  assert_equal(ok, false, "cross-stack refused")
+  assert_equal(error_code, protocol.ERROR.ILLEGAL_CARD, "error code")
+end)
+
+test("defers a final Wild Four win until the stack resolves", function()
+  local played = rules.apply_action(progressive({ wild_four_card }, "red"), {
+    type = "play",
+    player_id = "p1",
+    card_id = wild_four_card.id,
+    chosen_color = "blue",
+  })
+  assert_equal(played.finished, false, "not finished before resolution")
+  assert_equal(played.pending_stack.pending_winner_id, "p1", "pending winner")
+  local target_before = #played.players[2].hand
+  local declined, ok = rules.apply_action(played, {
+    type = "challenge",
+    player_id = "p2",
+    accept = false,
+  })
+  assert_equal(ok, true, "challenge declined")
+  assert_equal(#declined.players[2].hand, target_before + rules.WILD_FOUR_AMOUNT, "target drew four")
+  assert_equal(declined.finished, true, "hand finished")
+  assert_equal(declined.winner, "p1", "winner")
+end)
+
+test("withholds a final Wild Four win after a guilty challenge", function()
+  local played = rules.apply_action(progressive({ wild_four_card, green_zero }, "green"), {
+    type = "play",
+    player_id = "p1",
+    card_id = wild_four_card.id,
+    chosen_color = "blue",
+  })
+  local challenged, ok = rules.apply_action(played, {
+    type = "challenge",
+    player_id = "p2",
+    accept = true,
+  })
+  assert_equal(ok, true, "challenge accepted")
+  assert_equal(#challenged.players[1].hand, 1 + rules.WILD_FOUR_AMOUNT, "owner drew four")
+  assert_equal(challenged.finished, false, "game continues")
+end)
+
+test("leaves classic and Seven-O draw effects immediate with no stack", function()
+  for _, mode in ipairs({ "classic", "sevenO" }) do
+    local draw_result = rules.apply_action(staged_game({ blue_draw_two, red_zero }, "blue", mode), {
+      type = "play",
+      player_id = "p1",
+      card_id = blue_draw_two.id,
+    })
+    assert_equal(draw_result.pending_stack, nil, "no draw stack in " .. mode)
+    assert_equal(draw_result.finished, false, "actor kept a card in " .. mode)
+    local wild_result = rules.apply_action(staged_game({ wild_four_card }, "red", mode), {
+      type = "play",
+      player_id = "p1",
+      card_id = wild_four_card.id,
+      chosen_color = "blue",
+    })
+    assert_equal(wild_result.pending_stack, nil, "no wild stack in " .. mode)
+    assert_equal(wild_result.pending_challenge ~= nil, true, "challenge pending in " .. mode)
+  end
 end)
 
 if failures > 0 then

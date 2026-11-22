@@ -726,6 +726,97 @@ async function sevenOBattle() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "sevenO game over", STATE_TIMEOUT_MS);
 }
 
+async function progressiveRoom() {
+  const alice = await authenticate("progressive-alice");
+  const bob = await authenticate("progressive-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 25,
+    rulesMode: "progressive",
+  });
+  assert(
+    created?.ok === true && created.rulesMode === "progressive" && typeof created.matchId === "string",
+    `progressive room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  const resolved = await rpc(bob, "moongames_room_code_resolve", {
+    code: created.roomCode,
+    gameId: "uno",
+  });
+  assert(
+    resolved?.ok === true && resolved.matchId === matchId,
+    `progressive room code failed: ${JSON.stringify(resolved)}`,
+  );
+
+  await Promise.all([
+    alice.socket.joinMatch(matchId),
+    bob.socket.joinMatch(matchId),
+  ]);
+  const aliceStart = await waitState(
+    alice.socket,
+    "progressive alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "progressive bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "progressive", "progressive mode must reach alice");
+  assert(bobStart.data.rulesMode === "progressive", "progressive mode must reach bob");
+  assert(aliceStart.data.turn === 0, "seed 25 should start at seat 0");
+  assert(legalCardIds(aliceStart.data).includes("yellow-draw2-0"), "seed 25 should offer Draw Two");
+  assert(
+    seatOf(bobStart.data, bob).hand.some((card) => card.id === "red-draw2-0"),
+    "Bob should hold a Draw Two to answer the stack",
+  );
+  console.log("[ok] progressive private room reports rulesMode on both clients");
+
+  await send(alice, matchId, OP.PLAY_REQUEST, { cardId: "yellow-draw2-0" });
+  const aliceStack = await waitState(
+    alice.socket,
+    "progressive stack after first draw two",
+    (state) => state.pendingStack?.kind === "draw2" && state.pendingStack.amount === 2,
+  );
+  const bobStack = await waitState(
+    bob.socket,
+    "progressive bob stack",
+    (state) => state.pendingStack?.kind === "draw2" && state.pendingStack.amount === 2,
+  );
+  assert(aliceStack.data.pendingStack.targetId === bob.session.user_id, "stack targets Bob");
+  assert(bobStack.data.pendingStack.ownerId === alice.session.user_id, "Alice owns the stack");
+  assert(legalCardIds(bobStack.data).includes("red-draw2-0"), "Bob should be allowed to stack");
+  console.log("[ok] Progressive Draw Two opens an authoritative stack");
+
+  await send(bob, matchId, OP.PLAY_REQUEST, { cardId: "red-draw2-0" });
+  const aliceDouble = await waitState(
+    alice.socket,
+    "progressive doubled stack",
+    (state) => state.pendingStack?.amount === 4 && state.pendingStack.ownerId === bob.session.user_id,
+  );
+  const bobDouble = await waitState(
+    bob.socket,
+    "progressive bob doubled stack",
+    (state) => state.pendingStack?.amount === 4 && state.pendingStack.ownerId === bob.session.user_id,
+  );
+  assert(aliceDouble.data.pendingStack.targetId === alice.session.user_id, "stack returns to Alice");
+  assert(bobDouble.data.pendingStack.kind === "draw2", "stack kind remains draw2");
+  console.log("[ok] Progressive Draw Two stacks and doubles the penalty");
+
+  const countBefore = seatOf(aliceDouble.data, alice).count;
+  await send(alice, matchId, OP.DRAW_REQUEST, {});
+  const taken = await waitState(
+    bob.socket,
+    "progressive stack taken",
+    (state) => state.pendingStack == null && seatOf(state, alice)?.count === countBefore + 4,
+  );
+  assert(taken.data.pendingStack == null, "taking clears the pending stack");
+  console.log("[ok] Progressive stack resolves with accumulated draw");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "progressive game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -749,6 +840,7 @@ async function main() {
     await privateRoomCodeAndSpectator();
     await reconnectResign();
     await sevenOBattle();
+    await progressiveRoom();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

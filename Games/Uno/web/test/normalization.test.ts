@@ -26,6 +26,39 @@ describe("Uno online view normalization", () => {
     expect(view.pendingChallenge).toBeNull();
     expect(view.result).toBeNull();
     expect(view.players).toEqual([]);
+    expect(view.pendingStack).toBeNull();
+  });
+
+  it("maps camelCase pending stack fields", () => {
+    const view = normalizeView({
+      started: true,
+      pendingStack: { ownerId: "u1", targetId: "u2", kind: "draw2", count: 6 },
+    }, "u2");
+    expect(view.pendingStack).toEqual({ ownerId: "u1", targetId: "u2", kind: "draw2", count: 6 });
+  });
+
+  it("maps snake_case pending stack fields and wild four kind", () => {
+    const view = normalizeView({
+      pending_stack: { owner_id: "u3", target_id: "u4", stackKind: "wild4", amount: 8 },
+    }, "u4");
+    expect(view.pendingStack).toEqual({ ownerId: "u3", targetId: "u4", kind: "wild4", count: 8 });
+  });
+
+  it("derives a pending stack count from a card list", () => {
+    const view = normalizeView({
+      pendingStack: {
+        ownerId: "u1",
+        targetId: "u2",
+        kind: "wild4",
+        cards: ["wild4-0", "wild4-1", "wild4-2", "wild4-3"],
+      },
+    }, "u2");
+    expect(view.pendingStack?.count).toBe(4);
+  });
+
+  it("ignores an invalid pending stack without crashing", () => {
+    expect(normalizeView({ pendingStack: { targetId: "u2" } }, "u2").pendingStack).toBeNull();
+    expect(normalizeView({ pendingStack: null }, "u2").pendingStack).toBeNull();
   });
 
   it("normalizes snake_case history into shared entries", () => {

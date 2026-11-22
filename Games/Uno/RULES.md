@@ -38,3 +38,35 @@ do not send a mode field. Both modes produce a single-winner result.
   advances the turn by one as usual. All other cards behave exactly as in classic.
 - The mode is authoritative state: it is set at game creation, is included in state
   payloads, and all matchmaker tickets for a game must agree on it.
+
+## Progressive (optional house rule)
+
+Progressive (also called "stacking" or "cumulative") is an optional Mattel house
+rule. It is **off by default**: every game created without an explicit mode uses
+classic rules, including existing lobbies that do not send a mode field. The mode is
+authoritative state, is included in state payloads, and all matchmaker tickets for a
+game must agree on it. All other behaviour matches classic UNO.
+
+- Draw Two does not resolve immediately. Playing one creates a pending stack with
+  `kind: "draw2"` and an amount of 2 aimed at the next player. Instead of drawing and
+  losing their turn, that player may either take the whole amount (a draw request),
+  or play one more Draw Two to add 2 and pass the stack onward. Only one Draw Two may
+  be played into the stack per turn.
+- Wild Draw Four uses the same stacking rule with `kind: "wild4"`; each additional
+  Wild Draw Four adds 4, and the last player to play one chooses the continuing
+  colour. Bluffing and challenge still apply. The pending stack records whether the
+  most recent Wild Four was legal and the colour chosen with it.
+- A challenge on a stacked Wild Four uses the accumulated amount: an innocent play
+  makes the challenger draw amount + 2; a guilty bluff makes the owner draw amount;
+  declining the challenge makes the target draw amount. In every case the turn skips
+  the target.
+- The two stacks never mix: a Draw Two cannot be played onto a Wild Four stack and a
+  Wild Four cannot be played onto a Draw Two stack. Such a play is rejected.
+- When a stack resolves (the target takes the cards), any player who played their
+  final stacking card wins only if they still hold no cards at that point. If the
+  stack was passed back to them and they had to take cards, play continues.
+
+Server state exposes the stack as `pendingStack` with camelCase fields
+`kind`, `amount`, `ownerId`, `targetId`, and optional `legal`, `color`, and
+`pendingWinnerId`. The core state uses the same camelCase shape; the Lua server
+internal state stores it as `pending_stack` with snake_case fields.

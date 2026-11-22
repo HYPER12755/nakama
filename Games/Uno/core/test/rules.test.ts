@@ -6,8 +6,10 @@ import {
   cloneState,
   createGame,
   DEFAULT_RULES,
+  isGameMode,
   legalMoves,
   mostCommonColor,
+  normalizeMode,
   scoreHand,
   shuffle,
   topCard,
@@ -52,6 +54,10 @@ const redZero: Card = { id: "red-0-0", color: "red", kind: "number", value: 0 };
 const blueZero: Card = { id: "blue-0-0", color: "blue", kind: "number", value: 0 };
 const redSeven: Card = { id: "red-7-0", color: "red", kind: "number", value: 7 };
 const blueDrawTwo: Card = { id: "blue-draw2-0", color: "blue", kind: "draw2" };
+const greenDrawTwo: Card = { id: "green-draw2-0", color: "green", kind: "draw2" };
+const yellowDrawTwo: Card = { id: "yellow-draw2-0", color: "yellow", kind: "draw2" };
+const secondWildFour: Card = { id: "wild4-1", color: null, kind: "wild4" };
+const greenZero: Card = { id: "green-0-0", color: "green", kind: "number", value: 0 };
 
 describe("Uno classic rules", () => {
   it("builds a 108 card deck and shuffles deterministically", () => {
@@ -436,5 +442,314 @@ describe("Uno Seven-O house rule", () => {
     const zeroResult = applyAction(zero, { type: "play", playerId: "p1", cardId: redZero.id });
     expect(zeroResult.ok).toBe(true);
     expect(hands(zeroResult.state)).toEqual([[blueZero.id], before[1], before[2]]);
+  });
+});
+
+describe("Uno Progressive house rule", () => {
+  function progressive(hand: Card[], color: Color = "red"): GameState {
+    return stagedGame(hand, color, "progressive");
+  }
+
+  it("exposes progressive as a valid mode with an empty pending stack", () => {
+    const game = createGame(vectors.seed, players, 0, "progressive");
+    expect(game.mode).toBe("progressive");
+    expect(game.pendingStack).toBeNull();
+    expect(isGameMode("progressive")).toBe(true);
+    expect(normalizeMode("progressive")).toBe("progressive");
+  });
+
+  it("sets a Draw Two stack instead of drawing immediately", () => {
+    const game = progressive([blueDrawTwo, redZero], "blue");
+    const targetBefore = game.players[1].hand.length;
+    const result = applyAction(game, {
+      type: "play",
+      playerId: "p1",
+      cardId: blueDrawTwo.id,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.state.pendingStack).toEqual({
+      kind: "draw2",
+      amount: 2,
+      ownerId: "p1",
+      targetId: "p2",
+    });
+    expect(result.state.players[1].hand).toHaveLength(targetBefore);
+    expect(result.state.turn).toBe(1);
+    expect(result.state.finished).toBe(false);
+  });
+
+  it("stacks Draw Twos and makes the final target take the accumulated amount", () => {
+    const game = progressive([blueDrawTwo], "blue");
+    const played = applyAction(game, {
+      type: "play",
+      playerId: "p1",
+      cardId: blueDrawTwo.id,
+    });
+    expect(played.state.finished).toBe(false);
+    expect(played.state.pendingStack?.pendingWinnerId).toBe("p1");
+
+    const withSecond = cloneState(played.state);
+    withSecond.players[1].hand = [greenDrawTwo];
+    const stacked = applyAction(withSecond, {
+      type: "play",
+      playerId: "p2",
+      cardId: greenDrawTwo.id,
+    });
+    expect(stacked.ok).toBe(true);
+    expect(stacked.state.pendingStack).toMatchObject({
+      kind: "draw2",
+      amount: 4,
+      ownerId: "p2",
+      targetId: "p3",
+      pendingWinnerId: "p1",
+    });
+    const thirdBefore = stacked.state.players[2].hand.length;
+    const taken = applyAction(stacked.state, { type: "draw", playerId: "p3" });
+    expect(taken.ok).toBe(true);
+    expect(taken.state.pendingStack).toBeNull();
+    expect(taken.state.players[2].hand).toHaveLength(thirdBefore + 4);
+    expect(taken.state.finished).toBe(true);
+    expect(taken.state.winner).toBe("p1");
+  });
+
+  it("declares the deferred Draw Two winner when the first stack is taken", () => {
+    const game = progressive([blueDrawTwo], "blue");
+    const targetBefore = game.players[1].hand.length;
+    const played = applyAction(game, {
+      type: "play",
+      playerId: "p1",
+      cardId: blueDrawTwo.id,
+    });
+    expect(played.state.finished).toBe(false);
+    expect(played.state.winner).toBeNull();
+    const taken = applyAction(played.state, { type: "draw", playerId: "p2" });
+    expect(taken.ok).toBe(true);
+    expect(taken.state.players[1].hand).toHaveLength(targetBefore + 2);
+    expect(taken.state.finished).toBe(true);
+    expect(taken.state.winner).toBe("p1");
+  });
+
+  it("keeps the hand alive when a Draw Two stack returns to the owner", () => {
+    const played = applyAction(progressive([blueDrawTwo], "blue"), {
+      type: "play",
+      playerId: "p1",
+      cardId: blueDrawTwo.id,
+    });
+    const withSecond = cloneState(played.state);
+    withSecond.players[1].hand = [greenDrawTwo];
+    const stackedTwice = applyAction(withSecond, {
+      type: "play",
+      playerId: "p2",
+      cardId: greenDrawTwo.id,
+    });
+    expect(stackedTwice.state.pendingStack?.amount).toBe(4);
+    const withThird = cloneState(stackedTwice.state);
+    withThird.players[2].hand = [yellowDrawTwo];
+    const stackedThrice = applyAction(withThird, {
+      type: "play",
+      playerId: "p3",
+      cardId: yellowDrawTwo.id,
+    });
+    expect(stackedThrice.state.pendingStack?.amount).toBe(6);
+    expect(stackedThrice.state.pendingStack?.targetId).toBe("p1");
+    const taken = applyAction(stackedThrice.state, { type: "draw", playerId: "p1" });
+    expect(taken.ok).toBe(true);
+    expect(taken.state.players[0].hand.length).toBeGreaterThan(0);
+    expect(taken.state.finished).toBe(false);
+  });
+
+  it("rejects cross-stacking a Wild Four onto a Draw Two stack", () => {
+    const played = applyAction(progressive([blueDrawTwo, redZero], "blue"), {
+      type: "play",
+      playerId: "p1",
+      cardId: blueDrawTwo.id,
+    });
+    const withWild = cloneState(played.state);
+    withWild.players[1].hand = [wildFour];
+    expect(legalMoves(withWild, "p2")).toEqual({ cards: [], canDraw: true });
+    const result = applyAction(withWild, {
+      type: "play",
+      playerId: "p2",
+      cardId: wildFour.id,
+      chosenColor: "green",
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("illegal_card");
+  });
+
+  it("sets a stacked Wild Four and resolves an innocent challenge by the accumulated amount", () => {
+    const played = applyAction(progressive([wildFour, blueZero], "red"), {
+      type: "play",
+      playerId: "p1",
+      cardId: wildFour.id,
+      chosenColor: "green",
+    });
+    expect(played.state.pendingStack).toMatchObject({
+      kind: "wild4",
+      amount: 4,
+      ownerId: "p1",
+      targetId: "p2",
+      legal: true,
+      color: "green",
+    });
+    const withSecond = cloneState(played.state);
+    withSecond.players[1].hand = [secondWildFour, blueZero];
+    const stacked = applyAction(withSecond, {
+      type: "play",
+      playerId: "p2",
+      cardId: secondWildFour.id,
+      chosenColor: "yellow",
+    });
+    expect(stacked.ok).toBe(true);
+    expect(stacked.state.pendingStack).toMatchObject({
+      amount: 8,
+      ownerId: "p2",
+      targetId: "p3",
+      legal: true,
+      color: "yellow",
+    });
+    expect(stacked.state.currentColor).toBe("yellow");
+    const thirdBefore = stacked.state.players[2].hand.length;
+    const challenged = applyAction(stacked.state, {
+      type: "challenge",
+      playerId: "p3",
+      accept: true,
+    });
+    expect(challenged.ok).toBe(true);
+    expect(challenged.state.players[2].hand).toHaveLength(thirdBefore + 10);
+    expect(challenged.state.pendingStack).toBeNull();
+    expect(challenged.state.pendingChallenge).toBeNull();
+  });
+
+  it("makes the last Wild Four owner draw the accumulated amount on a guilty challenge", () => {
+    const played = applyAction(progressive([wildFour, greenZero], "green"), {
+      type: "play",
+      playerId: "p1",
+      cardId: wildFour.id,
+      chosenColor: "blue",
+    });
+    expect(played.state.pendingChallenge?.legal).toBe(false);
+    const withSecond = cloneState(played.state);
+    withSecond.players[1].hand = [secondWildFour, blueZero];
+    const stacked = applyAction(withSecond, {
+      type: "play",
+      playerId: "p2",
+      cardId: secondWildFour.id,
+      chosenColor: "yellow",
+    });
+    expect(stacked.state.pendingStack?.legal).toBe(false);
+    expect(stacked.state.pendingStack?.amount).toBe(8);
+    const challenged = applyAction(stacked.state, {
+      type: "challenge",
+      playerId: "p3",
+      accept: true,
+    });
+    expect(challenged.ok).toBe(true);
+    expect(challenged.state.players[1].hand).toHaveLength(1 + 8);
+  });
+
+  it("makes the target take the accumulated amount when a stacked Wild Four is declined", () => {
+    const played = applyAction(progressive([wildFour, blueZero], "red"), {
+      type: "play",
+      playerId: "p1",
+      cardId: wildFour.id,
+      chosenColor: "green",
+    });
+    const withSecond = cloneState(played.state);
+    withSecond.players[1].hand = [secondWildFour, blueZero];
+    const stacked = applyAction(withSecond, {
+      type: "play",
+      playerId: "p2",
+      cardId: secondWildFour.id,
+      chosenColor: "yellow",
+    });
+    const thirdBefore = stacked.state.players[2].hand.length;
+    const declined = applyAction(stacked.state, {
+      type: "challenge",
+      playerId: "p3",
+      accept: false,
+    });
+    expect(declined.ok).toBe(true);
+    expect(declined.state.players[2].hand).toHaveLength(thirdBefore + 8);
+  });
+
+  it("rejects cross-stacking a Draw Two onto a Wild Four stack", () => {
+    const played = applyAction(progressive([wildFour, blueZero], "red"), {
+      type: "play",
+      playerId: "p1",
+      cardId: wildFour.id,
+      chosenColor: "blue",
+    });
+    const withDraw = cloneState(played.state);
+    withDraw.players[1].hand = [blueDrawTwo];
+    expect(legalMoves(withDraw, "p2").cards).toEqual([]);
+    const result = applyAction(withDraw, {
+      type: "play",
+      playerId: "p2",
+      cardId: blueDrawTwo.id,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("illegal_card");
+  });
+
+  it("defers a final Wild Four win until the stack resolves", () => {
+    const played = applyAction(progressive([wildFour], "red"), {
+      type: "play",
+      playerId: "p1",
+      cardId: wildFour.id,
+      chosenColor: "blue",
+    });
+    expect(played.state.finished).toBe(false);
+    expect(played.state.pendingStack?.pendingWinnerId).toBe("p1");
+    const targetBefore = played.state.players[1].hand.length;
+    const declined = applyAction(played.state, {
+      type: "challenge",
+      playerId: "p2",
+      accept: false,
+    });
+    expect(declined.ok).toBe(true);
+    expect(declined.state.players[1].hand).toHaveLength(targetBefore + 4);
+    expect(declined.state.finished).toBe(true);
+    expect(declined.state.winner).toBe("p1");
+  });
+
+  it("withholds a final Wild Four win after a guilty challenge", () => {
+    const played = applyAction(progressive([wildFour, greenZero], "green"), {
+      type: "play",
+      playerId: "p1",
+      cardId: wildFour.id,
+      chosenColor: "blue",
+    });
+    const challenged = applyAction(played.state, {
+      type: "challenge",
+      playerId: "p2",
+      accept: true,
+    });
+    expect(challenged.ok).toBe(true);
+    expect(challenged.state.players[0].hand).toHaveLength(1 + 4);
+    expect(challenged.state.finished).toBe(false);
+  });
+
+  it("leaves classic and Seven-O draw effects immediate with no stack", () => {
+    for (const mode of ["classic", "sevenO"] as GameMode[]) {
+      const drawGame = stagedGame([blueDrawTwo, redZero], "blue", mode);
+      const drawResult = applyAction(drawGame, {
+        type: "play",
+        playerId: "p1",
+        cardId: blueDrawTwo.id,
+      });
+      expect(drawResult.state.pendingStack).toBeNull();
+      expect(drawResult.state.finished).toBe(false);
+
+      const wildGame = stagedGame([wildFour], "red", mode);
+      const wildResult = applyAction(wildGame, {
+        type: "play",
+        playerId: "p1",
+        cardId: wildFour.id,
+        chosenColor: "blue",
+      });
+      expect(wildResult.state.pendingStack).toBeNull();
+      expect(wildResult.state.pendingChallenge).not.toBeNull();
+    }
   });
 });

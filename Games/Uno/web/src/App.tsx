@@ -37,6 +37,8 @@ const RULES = [
 
 const SEVEN_O_RULE = "Seven-O: playing a 7 swaps hands with a player you choose; playing a 0 rotates every hand.";
 
+const PROGRESSIVE_RULE = "Progressive: +2 stacks on +2 and Wild +4 stacks on Wild +4; take the accumulated cards or stack a matching card.";
+
 const COLOURS: Color[] = ["red", "yellow", "green", "blue"];
 const COLOUR_HEX: Record<Color, string> = {
   red: "#e8402a", yellow: "#f2c600", green: "#1fa45b", blue: "#2464d6",
@@ -75,7 +77,11 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const inMatch = game.view.started;
   const modeLabel = mode === "local" ? "Pass and play" : mode === "ai" ? "Computer table" : "Online table";
   const rulesLocked = onlineMode && inMatch;
-  const rulesText = game.rulesMode === "sevenO" ? [...RULES, SEVEN_O_RULE] : RULES;
+  const rulesText = game.rulesMode === "sevenO"
+    ? [...RULES, SEVEN_O_RULE]
+    : (game.rulesMode as string) === "progressive"
+      ? [...RULES, PROGRESSIVE_RULE]
+      : RULES;
   const activePlayer = game.view.players[game.view.turn];
   const winner = game.view.result?.winnerUserId == null
     ? null

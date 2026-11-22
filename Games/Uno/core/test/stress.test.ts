@@ -11,6 +11,12 @@ function signature(state: GameState): string {
     state.currentColor,
     state.drawnCardId,
     state.pendingChallenge?.targetId ?? "",
+    state.pendingStack === null ? "" : [
+      state.pendingStack.kind,
+      state.pendingStack.amount,
+      state.pendingStack.ownerId,
+      state.pendingStack.targetId,
+    ].join(","),
     state.discard[state.discard.length - 1]?.id ?? "",
     state.drawPile.length,
     state.players.map((player) => player.hand.map((card) => card.id).join(",")).join("|"),
@@ -18,13 +24,13 @@ function signature(state: GameState): string {
 }
 
 function actorFor(state: GameState): string {
-  return state.pendingChallenge?.targetId ?? state.players[state.turn].id;
+  return state.pendingStack?.targetId ?? state.pendingChallenge?.targetId ?? state.players[state.turn].id;
 }
 
 describe("Uno stress simulation", () => {
-  it("finishes 100 seeds across 2, 3 and 4 seats in both modes", () => {
+  it("finishes 100 seeds across 2, 3 and 4 seats in all three modes", () => {
     let stepsTotal = 0;
-    const modes: GameMode[] = ["classic", "sevenO"];
+    const modes: GameMode[] = ["classic", "sevenO", "progressive"];
     for (const mode of modes) {
       for (const seed of SEEDS) {
         for (const seats of [2, 3, 4]) {

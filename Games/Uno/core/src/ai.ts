@@ -25,6 +25,31 @@ function pickTarget(state: GameState, playerId: string): string | null {
 }
 
 export function chooseAction(state: GameState, playerId: string): Action | null {
+  if (state.pendingStack !== null) {
+    if (state.pendingStack.targetId !== playerId) {
+      return null;
+    }
+    const stackPlayer = state.players.find((candidate) => candidate.id === playerId);
+    if (stackPlayer === undefined) {
+      return null;
+    }
+    const matching = stackPlayer.hand.find((card) => card.kind === state.pendingStack?.kind);
+    if (matching !== undefined) {
+      const chosenColor: Color | undefined = matching.kind === "wild4"
+        ? mostCommonColor(stackPlayer.hand)
+        : undefined;
+      return {
+        type: "play",
+        playerId,
+        cardId: matching.id,
+        ...(chosenColor === undefined ? {} : { chosenColor }),
+      };
+    }
+    if (state.pendingStack.kind === "wild4" && state.pendingChallenge !== null) {
+      return { type: "challenge", playerId, accept: !state.pendingChallenge.legal };
+    }
+    return { type: "draw", playerId };
+  }
   if (state.pendingChallenge !== null) {
     if (state.pendingChallenge.targetId !== playerId) {
       return null;
@@ -75,7 +100,7 @@ export function chooseAction(state: GameState, playerId: string): Action | null 
 }
 
 export function canRespondToChallenge(state: GameState, playerId: string): boolean {
-  return state.pendingChallenge?.targetId === playerId;
+  return state.pendingStack?.targetId === playerId || state.pendingChallenge?.targetId === playerId;
 }
 
 export function colorAlreadyChosen(state: GameState, card: Card): boolean {

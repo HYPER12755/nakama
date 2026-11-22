@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { applyAction, chooseAction, createGame, legalMoves, type Action, type Card } from "../src/index";
+import {
+  applyAction,
+  chooseAction,
+  cloneState,
+  createGame,
+  legalMoves,
+  type Action,
+  type Card,
+  type GameState,
+} from "../src/index";
 
 const players = [
   { id: "p1", name: "One" },
@@ -81,5 +90,93 @@ describe("Uno Seven-O AI", () => {
       expect(state.players.some((player) => player.id === action.targetId && player.id !== "p1")).toBe(true);
     }
     expect(applyAction(state, action as Action).ok).toBe(true);
+  });
+});
+
+describe("Uno Progressive AI", () => {
+  const drawTwo: Card = { id: "blue-draw2-0", color: "blue", kind: "draw2" };
+  const otherDrawTwo: Card = { id: "green-draw2-0", color: "green", kind: "draw2" };
+  const wildFour: Card = { id: "wild4-0", color: null, kind: "wild4" };
+  const otherWildFour: Card = { id: "wild4-1", color: null, kind: "wild4" };
+  const blueZero: Card = { id: "blue-0-0", color: "blue", kind: "number", value: 0 };
+  const greenZero: Card = { id: "green-0-0", color: "green", kind: "number", value: 0 };
+
+  function stagedProgressive(hand: Card[], color: string): GameState {
+    const state = createGame(9001, players, 0, "progressive");
+    state.turn = 0;
+    state.direction = 1;
+    state.currentColor = color as GameState["currentColor"];
+    state.drawnCardId = null;
+    state.pendingChallenge = null;
+    state.pendingStack = null;
+    state.finished = false;
+    state.winner = null;
+    state.players[0].hand = hand.slice();
+    return state;
+  }
+
+  function drawStack(): GameState {
+    const played = applyAction(stagedProgressive([drawTwo, blueZero], "blue"), {
+      type: "play",
+      playerId: "p1",
+      cardId: drawTwo.id,
+    });
+    return played.state;
+  }
+
+  function wildStack(hand: Card[], color: string, chosenColor: string): GameState {
+    const played = applyAction(stagedProgressive(hand, color), {
+      type: "play",
+      playerId: "p1",
+      cardId: wildFour.id,
+      chosenColor: chosenColor as GameState["currentColor"],
+    });
+    return played.state;
+  }
+
+  it("stacks a matching Draw Two when responding to a stack", () => {
+    const state = cloneState(drawStack());
+    state.players[1].hand = [otherDrawTwo];
+    expect(chooseAction(state, "p2")).toEqual({
+      type: "play",
+      playerId: "p2",
+      cardId: otherDrawTwo.id,
+    });
+  });
+
+  it("takes the stack without a matching Draw Two", () => {
+    const state = cloneState(drawStack());
+    state.players[1].hand = [blueZero];
+    expect(chooseAction(state, "p2")).toEqual({ type: "draw", playerId: "p2" });
+  });
+
+  it("stacks a Wild Four with a chosen colour when holding one", () => {
+    const state = cloneState(wildStack([wildFour, blueZero], "red", "green"));
+    state.players[1].hand = [otherWildFour, blueZero];
+    const action = chooseAction(state, "p2");
+    expect(action?.type).toBe("play");
+    if (action?.type === "play") {
+      expect(action.cardId).toBe(otherWildFour.id);
+      expect(action.chosenColor).toBeDefined();
+    }
+    expect(applyAction(state, action as Action).ok).toBe(true);
+  });
+
+  it("challenges a guilty stacked Wild Four and takes an innocent one", () => {
+    const guilty = cloneState(wildStack([wildFour, greenZero], "green", "blue"));
+    guilty.players[1].hand = [blueZero];
+    expect(chooseAction(guilty, "p2")).toEqual({
+      type: "challenge",
+      playerId: "p2",
+      accept: true,
+    });
+
+    const innocent = cloneState(wildStack([wildFour, blueZero], "red", "green"));
+    innocent.players[1].hand = [blueZero];
+    expect(chooseAction(innocent, "p2")).toEqual({
+      type: "challenge",
+      playerId: "p2",
+      accept: false,
+    });
   });
 });

@@ -31,14 +31,17 @@ protocol.ERROR = {
   MISSING_TARGET = "missing_target",
 }
 
-protocol.RULES_MODES = { "classic", "sevenO" }
+protocol.RULES_MODES = { "classic", "sevenO", "progressive" }
 
 function protocol.is_rules_mode(value)
-  return value == "classic" or value == "sevenO"
+  return value == "classic" or value == "sevenO" or value == "progressive"
 end
 
 function protocol.normalize_rules_mode(value)
-  return value == "sevenO" and "sevenO" or "classic"
+  if value == "sevenO" or value == "progressive" then
+    return value
+  end
+  return "classic"
 end
 
 protocol.COLORS = { "red", "yellow", "green", "blue" }

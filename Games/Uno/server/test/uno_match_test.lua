@@ -555,6 +555,57 @@ test("a seven timeout picks a valid target instead of stalling", function()
   assert_equal(#state.game.players[index].hand, other_size, "hands swapped on timeout")
 end)
 
+test("propagates progressive from match params into the game and state payload", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "progressive",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  assert_equal(state.rules_mode, "progressive", "stored rules mode")
+  assert_equal(state.game.mode, "progressive", "game rules mode")
+  local started = nil
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.MATCH_STARTED then
+      started = require("json").decode(message.data)
+    end
+  end
+  assert_equal(started.rulesMode, "progressive", "match started payload")
+  local payload = select(2, MATCH.match_signal({}, dispatcher_obj, 1, state, ""))
+  local decoded = require("json").decode(payload)
+  assert_equal(decoded.rulesMode, "progressive", "state payload mode")
+  assert_equal(decoded.pendingStack, nil, "no pending stack at start")
+end)
+
+test("exposes the pending stack with camelCase fields in the state payload", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    rulesMode = "progressive",
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  state.game.pending_stack = {
+    kind = "wild4",
+    amount = 8,
+    owner_id = "u1",
+    target_id = "u2",
+    legal = true,
+    color = "green",
+    pending_winner_id = "u1",
+  }
+  local payload = select(2, MATCH.match_signal({}, dispatcher_obj, 1, state, ""))
+  local stack = require("json").decode(payload).pendingStack
+  assert_equal(stack.kind, "wild4", "stack kind")
+  assert_equal(stack.amount, 8, "stack amount")
+  assert_equal(stack.ownerId, "u1", "owner id")
+  assert_equal(stack.targetId, "u2", "target id")
+  assert_equal(stack.legal, true, "legal flag")
+  assert_equal(stack.color, "green", "chosen colour")
+  assert_equal(stack.pendingWinnerId, "u1", "pending winner")
+end)
+
 if failures > 0 then
   io.stderr:write(failures .. " Uno match test(s) failed\n")
   os.exit(1)

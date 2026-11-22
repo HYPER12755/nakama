@@ -80,6 +80,29 @@ local function public_pending_challenge(game)
   }
 end
 
+local function public_pending_stack(game)
+  local stack = game ~= nil and game.pending_stack or nil
+  if stack == nil then
+    return nil
+  end
+  local result = {
+    kind = stack.kind,
+    amount = stack.amount,
+    ownerId = stack.owner_id,
+    targetId = stack.target_id,
+  }
+  if stack.pending_winner_id ~= nil then
+    result.pendingWinnerId = stack.pending_winner_id
+  end
+  if stack.legal ~= nil then
+    result.legal = stack.legal
+  end
+  if stack.color ~= nil then
+    result.color = stack.color
+  end
+  return result
+end
+
 local function schedule_turn_deadline(state, now)
   if state.game ~= nil and state.game.pending_challenge == nil and state.turn_seconds > 0 then
     state.turn_deadline = now + state.turn_seconds * 1000
@@ -102,6 +125,7 @@ local function state_payload(state, viewer_id)
     currentColor = game ~= nil and game.current_color or nil,
     topCard = game ~= nil and game.discard[#game.discard] or nil,
     pendingChallenge = public_pending_challenge(game),
+    pendingStack = public_pending_stack(game),
     players = {},
     spectators = {},
     chat = state.chat,
@@ -450,6 +474,9 @@ local function timeout_action(state)
   local player = state.player_order[index]
   if player == nil or player.user_id == nil or game.players[index] == nil then
     return nil
+  end
+  if game.pending_stack ~= nil and game.pending_stack.kind == "draw2" then
+    return { type = "draw", player_id = player.user_id }
   end
   if game.drawn_card_id ~= nil then
     for _, card in ipairs(game.players[index].hand) do

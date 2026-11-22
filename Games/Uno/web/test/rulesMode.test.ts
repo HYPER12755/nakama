@@ -1,14 +1,24 @@
 import { describe, expect, it, vi } from "vitest";
-import { createGame, type Card, type GameState } from "@moongames/uno-core";
+import { createGame, type Card, type GameMode, type GameState } from "@moongames/uno-core";
 import { normalizeView, type UnoController } from "../src/hooks/useUnoGame";
-import { rulesModeLabel, viewFromCore } from "../src/lib/view";
+import { rulesModeLabel, RULES_MODES, viewFromCore } from "../src/lib/view";
 import { isSevenCard, targetCandidates } from "../src/components/UnoBoardStage";
 
+const progressive = "progressive" as unknown as GameMode;
+
 describe("Uno rules mode", () => {
-  it("labels both modes and defaults to classic", () => {
+  it("labels every mode and defaults to classic", () => {
     expect(rulesModeLabel("classic")).toBe("Classic");
     expect(rulesModeLabel("sevenO")).toBe("Seven-O");
+    expect(rulesModeLabel(progressive)).toBe("Progressive");
     expect(rulesModeLabel(undefined)).toBe("Classic");
+  });
+
+  it("lists every rules mode once", () => {
+    expect(RULES_MODES).toContain("classic");
+    expect(RULES_MODES).toContain("sevenO");
+    expect(RULES_MODES as string[]).toContain("progressive");
+    expect(new Set(RULES_MODES).size).toBe(RULES_MODES.length);
   });
 
   it("normalizes the rules mode from the online STATE payload", () => {
@@ -17,6 +27,11 @@ describe("Uno rules mode", () => {
     expect(normalizeView({ mode: "private" }, null).mode).toBe("classic");
     expect(normalizeView({ rulesMode: "unknown" }, null).mode).toBe("classic");
     expect(normalizeView({}, null).mode).toBe("classic");
+  });
+
+  it("normalizes progressive from the online STATE payload", () => {
+    expect(normalizeView({ rulesMode: "progressive" }, null).mode).toBe("progressive");
+    expect(normalizeView({ mode: "progressive" }, null).mode).toBe("progressive");
   });
 
   it("reads the mode from a local game state", () => {
@@ -29,6 +44,17 @@ describe("Uno rules mode", () => {
     } as GameState;
     expect(viewFromCore(state, "local").mode).toBe("sevenO");
     expect(viewFromCore(null, "local").mode).toBe("classic");
+  });
+
+  it("reads progressive from a local game state", () => {
+    const state = {
+      ...createGame(7, [
+        { id: "local", name: "You" },
+        { id: "ai1", name: "Computer" },
+      ]),
+      mode: progressive,
+    } as GameState;
+    expect(viewFromCore(state, "local").mode).toBe("progressive");
   });
 
   it("exposes the controller rules shape and forwards a target", () => {

@@ -64,11 +64,17 @@ export function UnoBoardStage({
 
   const me = view.players.find((player) => player.userId === view.myUserId);
   const hand = me?.hand ?? [];
+  const pendingStack = view.pendingStack ?? null;
+  const stackTarget = pendingStack !== null && pendingStack.targetId === view.myUserId;
   const isMyTurn =
-    view.started && view.pendingChallenge === null && view.players[view.turn]?.userId === view.myUserId;
+    view.started && view.pendingChallenge === null && pendingStack === null &&
+    view.players[view.turn]?.userId === view.myUserId;
   const challengeTarget =
     view.pendingChallenge !== null && view.pendingChallenge.targetId === view.myUserId;
   const legal = new Set(view.legalCards);
+  const stackCard = pendingStack === null
+    ? undefined
+    : hand.find((card) => pendingStack.kind === "draw2" ? card.kind === "draw2" : card.kind === "wild4");
 
   const opponents = targetCandidates(view);
   const isSevenO = (view.mode ?? rulesMode) === "sevenO";
@@ -151,6 +157,29 @@ export function UnoBoardStage({
     fly("card-back", discardRef.current?.getBoundingClientRect() ?? null, handRef.current?.getBoundingClientRect() ?? null);
     lastManualFlight.current = Date.now();
     onChallenge(accept);
+  };
+
+  const takeStack = () => {
+    fly("card-back", discardRef.current?.getBoundingClientRect() ?? null, handRef.current?.getBoundingClientRect() ?? null);
+    lastManualFlight.current = Date.now();
+    onDraw();
+  };
+
+  const stackDraw = () => {
+    if (stackCard === undefined) {
+      return;
+    }
+    if (pendingStack?.kind === "wild4") {
+      setPendingCard(stackCard.id);
+      return;
+    }
+    fly(
+      stackCard.id,
+      handRef.current?.querySelector("img")?.getBoundingClientRect() ?? null,
+      discardRef.current?.getBoundingClientRect() ?? null,
+    );
+    lastManualFlight.current = Date.now();
+    onPlay(stackCard.id);
   };
 
   return (
@@ -298,7 +327,7 @@ export function UnoBoardStage({
         />
       ))}
 
-      {challengeTarget && (
+      {challengeTarget && pendingStack === null && (
         <div className="uno-overlay">
           <div className="uno-overlay-card">
             <p className="eyebrow">Wild Draw Four</p>
@@ -307,6 +336,38 @@ export function UnoBoardStage({
             <div className="uno-overlay-actions">
               <button type="button" className="button button--ghost" onClick={() => resolveChallenge(false)}>Take 4</button>
               <button type="button" className="button button--primary" onClick={() => resolveChallenge(true)}>Challenge</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {stackTarget && pendingCard === null && (
+        <div className="uno-overlay uno-overlay--stack">
+          <div className="uno-overlay-card uno-stack-card" role="dialog" aria-label="Pending draw stack">
+            <p className="eyebrow">{pendingStack?.kind === "wild4" ? "Wild Four" : "Draw Two"} chain</p>
+            <h2>Incoming stack</h2>
+            <div className="uno-stack-count">
+              <strong>{pendingStack?.count ?? 0}</strong>
+              <span>cards</span>
+            </div>
+            <p className="uno-overlay-copy">
+              Take the accumulated cards, play a matching card to pass the stack on
+              {challengeTarget ? ", or challenge the Wild Four play" : ""}.
+            </p>
+            <div className="uno-overlay-actions">
+              <button type="button" className="button button--ghost" onClick={takeStack}>
+                Take {pendingStack?.count ?? 0}
+              </button>
+              {stackCard !== undefined ? (
+                <button type="button" className="button button--primary" onClick={stackDraw}>
+                  Stack {pendingStack?.kind === "wild4" ? "Wild Four" : "Draw Two"}
+                </button>
+              ) : null}
+              {challengeTarget ? (
+                <button type="button" className="button" onClick={() => resolveChallenge(true)}>
+                  Challenge
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

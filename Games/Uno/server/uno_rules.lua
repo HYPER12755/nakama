@@ -139,7 +139,32 @@ local function can_play_card(state, _player, card)
 end
 
 function rules.legal_moves(state, player_id)
-  if state.finished or state.pending_challenge ~= nil then
+  if state.finished then
+    return { cards = {}, can_draw = false }
+  end
+  if state.pending_stack ~= nil then
+    if state.pending_stack.target_id ~= player_id then
+      return { cards = {}, can_draw = false }
+    end
+    local stack_player
+    for _, candidate in ipairs(state.players) do
+      if candidate.id == player_id then
+        stack_player = candidate
+        break
+      end
+    end
+    if stack_player == nil then
+      return { cards = {}, can_draw = false }
+    end
+    local cards = {}
+    for _, card in ipairs(stack_player.hand) do
+      if card.kind == state.pending_stack.kind then
+        cards[#cards + 1] = card.id
+      end
+    end
+    return { cards = cards, can_draw = true }
+  end
+  if state.pending_challenge ~= nil then
     return { cards = {}, can_draw = false }
   end
   local player = rules.current_player(state)
@@ -241,6 +266,7 @@ function rules.create_game(seed, players, now, mode)
     current_color = starter.color,
     drawn_card_id = nil,
     pending_challenge = nil,
+    pending_stack = nil,
     starting_rule = starting_rule,
     started = true,
     finished = false,
@@ -324,6 +350,76 @@ function rules.pick_target(state, player_id)
   return best == nil and nil or best.id
 end
 
+local function player_index(state, player_id)
+  for index, player in ipairs(state.players) do
+    if player.id == player_id then
+      return index
+    end
+  end
+  return nil
+end
+
+local function stack_amount(kind)
+  return kind == "draw2" and rules.DRAW_TWO_AMOUNT or rules.WILD_FOUR_AMOUNT
+end
+
+local function finish_deferred_winner(state, pending_winner_id)
+  if pending_winner_id == nil then
+    return
+  end
+  local winner_index = player_index(state, pending_winner_id)
+  local winner = winner_index == nil and nil or state.players[winner_index]
+  if winner ~= nil and #winner.hand == 0 then
+    state.finished = true
+    state.winner = winner.id
+  end
+end
+
+local function apply_stack_resolution(state, stack, accept)
+  local pending_winner_id = stack.pending_winner_id
+  local pending = state.pending_challenge
+  local target_index_value = player_index(state, stack.target_id)
+  local target = target_index_value == nil and nil or state.players[target_index_value]
+  local owner = nil
+  if pending ~= nil then
+    local owner_index = player_index(state, pending.owner_id)
+    owner = owner_index == nil and nil or state.players[owner_index]
+  end
+  state.pending_stack = nil
+  state.pending_challenge = nil
+  if stack.kind == "wild4" and accept ~= nil and owner ~= nil and target ~= nil then
+    if accept then
+      if pending.legal then
+        draw_cards(state, target, stack.amount + 2)
+      else
+        draw_cards(state, owner, stack.amount)
+      end
+    else
+      draw_cards(state, target, stack.amount)
+    end
+    advance(state, 2)
+    state.events[#state.events + 1] = {
+      type = "challenge",
+      player_id = target.id,
+      at = #state.events,
+    }
+    state.replay[#state.replay + 1] = {
+      player_id = target.id,
+      action = "challenge:" .. tostring(accept),
+    }
+  elseif target ~= nil then
+    draw_cards(state, target, stack.amount)
+    advance(state, stack.kind == "draw2" and 1 or 2)
+    state.events[#state.events + 1] = {
+      type = "draw",
+      player_id = target.id,
+      at = #state.events,
+    }
+    state.replay[#state.replay + 1] = { player_id = target.id, action = "draw" }
+  end
+  finish_deferred_winner(state, pending_winner_id)
+end
+
 function rules.apply_action(previous, action)
   if previous.finished then
     return fail(previous, protocol.ERROR.GAME_OVER)
@@ -337,6 +433,91 @@ function rules.apply_action(previous, action)
       break
     end
   end
+  if state.pending_stack ~= nil then
+    local stack = state.pending_stack
+    if actor == nil or stack.target_id ~= actor.id then
+      return fail(previous, protocol.ERROR.BAD_CHALLENGE)
+    end
+    if action.type == "challenge" then
+      if stack.kind ~= "wild4" or state.pending_challenge == nil
+        or state.pending_challenge.target_id ~= actor.id then
+        return fail(previous, protocol.ERROR.BAD_CHALLENGE)
+      end
+      apply_stack_resolution(state, stack, action.accept == true)
+      return state, true
+    end
+    if action.type == "draw" then
+      apply_stack_resolution(state, stack, nil)
+      return state, true
+    end
+    if action.type ~= "play" then
+      return fail(previous, protocol.ERROR.ILLEGAL_CARD)
+    end
+    local stack_index
+    for candidate_index, card in ipairs(actor.hand) do
+      if card.id == action.card_id then
+        stack_index = candidate_index
+        break
+      end
+    end
+    if stack_index == nil then
+      return fail(previous, protocol.ERROR.UNKNOWN_CARD)
+    end
+    local stack_card = actor.hand[stack_index]
+    if stack_card.kind ~= stack.kind then
+      return fail(previous, protocol.ERROR.ILLEGAL_CARD)
+    end
+    if state.drawn_card_id ~= nil and state.drawn_card_id ~= stack_card.id then
+      return fail(previous, protocol.ERROR.ILLEGAL_CARD)
+    end
+    if stack_card.kind == "wild4" and action.chosen_color == nil then
+      return fail(previous, protocol.ERROR.MISSING_COLOR)
+    end
+    local stack_legal = stack_card.kind == "wild4" and not has_color_match(state, actor)
+    local actor_index = player_index(state, actor.id)
+    table.remove(actor.hand, stack_index)
+    state.discard[#state.discard + 1] = stack_card
+    state.drawn_card_id = nil
+    if action.chosen_color ~= nil then
+      state.current_color = action.chosen_color
+    end
+    state.events[#state.events + 1] = {
+      type = "play",
+      player_id = actor.id,
+      card_id = stack_card.id,
+      text = action.chosen_color,
+      at = #state.events,
+    }
+    state.replay[#state.replay + 1] = {
+      player_id = actor.id,
+      action = "play",
+      card_id = stack_card.id,
+      color = action.chosen_color,
+    }
+    if stack_card.kind == "wild4" then
+      state.turn = actor_index
+    end
+    local next_index = target_index(state)
+    stack.amount = stack.amount + stack_amount(stack.kind)
+    stack.owner_id = actor.id
+    stack.target_id = state.players[next_index].id
+    if stack_card.kind == "wild4" then
+      stack.legal = stack_legal
+      stack.color = action.chosen_color
+      state.pending_challenge = {
+        owner_id = actor.id,
+        target_id = stack.target_id,
+        legal = stack_legal,
+      }
+    else
+      advance(state, 1)
+    end
+    if #actor.hand == 0 and stack.pending_winner_id == nil then
+      stack.pending_winner_id = actor.id
+    end
+    return state, true
+  end
+
   if state.pending_challenge ~= nil then
     if actor == nil or action.type ~= "challenge" or state.pending_challenge.target_id ~= action.player_id then
       return fail(previous, protocol.ERROR.BAD_CHALLENGE)
@@ -498,11 +679,24 @@ function rules.apply_action(previous, action)
       advance(state, 1)
     end
   elseif card.kind == "draw2" then
-    draw_cards(state, next_player, rules.DRAW_TWO_AMOUNT)
-    advance(state, 2)
-    if #actor.hand == 0 then
-      state.finished = true
-      state.winner = actor.id
+    if state.mode == "progressive" then
+      state.pending_stack = {
+        kind = "draw2",
+        amount = rules.DRAW_TWO_AMOUNT,
+        owner_id = actor.id,
+        target_id = next_player.id,
+      }
+      if #actor.hand == 0 then
+        state.pending_stack.pending_winner_id = actor.id
+      end
+      advance(state, 1)
+    else
+      draw_cards(state, next_player, rules.DRAW_TWO_AMOUNT)
+      advance(state, 2)
+      if #actor.hand == 0 then
+        state.finished = true
+        state.winner = actor.id
+      end
     end
   elseif card.kind == "wild" then
     advance(state, 1)
@@ -512,10 +706,23 @@ function rules.apply_action(previous, action)
       target_id = next_player.id,
       legal = wild_four_legal,
     }
+    if state.mode == "progressive" then
+      state.pending_stack = {
+        kind = "wild4",
+        amount = rules.WILD_FOUR_AMOUNT,
+        owner_id = actor.id,
+        target_id = next_player.id,
+        legal = wild_four_legal,
+        color = action.chosen_color,
+      }
+      if #actor.hand == 0 then
+        state.pending_stack.pending_winner_id = actor.id
+      end
+    end
   else
     advance(state, 1)
   end
-  if state.pending_challenge == nil and #actor.hand == 0 then
+  if state.pending_challenge == nil and state.pending_stack == nil and #actor.hand == 0 then
     state.finished = true
     state.winner = actor.id
   end

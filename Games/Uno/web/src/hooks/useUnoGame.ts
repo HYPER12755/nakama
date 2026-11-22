@@ -24,7 +24,6 @@ import {
   applyAction,
   chooseAction,
   createGame,
-  normalizeMode,
   type Action,
   type Color,
   type GameMode,
@@ -32,6 +31,8 @@ import {
 } from "@moongames/uno-core";
 import {
   normalizeList,
+  normalizePendingStack,
+  normalizeRulesMode,
   rulesModeLabel,
   viewFromCore,
   type BoardView,
@@ -198,12 +199,13 @@ export function normalizeView(payload: Record<string, unknown>, myUserId: string
     direction: payload.direction === -1 ? -1 : 1,
     deckCount: Number(payload.deckCount ?? 0),
     pendingChallenge: normalizePendingChallenge(payload.pendingChallenge ?? payload.pending_challenge),
+    pendingStack: normalizePendingStack(payload.pendingStack ?? payload.pending_stack),
     legalCards: normalizeList(payload.legalCards).map(String),
     canDraw: payload.canDraw === true,
     result: normalizeResult(payload.result),
     myUserId,
     started: payload.started === true,
-    mode: normalizeMode(payload.rulesMode ?? payload.mode),
+    mode: normalizeRulesMode(payload.rulesMode ?? payload.mode),
   };
 }
 
@@ -211,8 +213,8 @@ function emptyView(myUserId: string | null): BoardView {
   return {
     players: [], spectators: [], chat: [], topCard: null, currentColor: null,
     turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
-    legalCards: [], canDraw: false, result: null, myUserId, started: false,
-    mode: "classic",
+    pendingStack: null, legalCards: [], canDraw: false, result: null,
+    myUserId, started: false, mode: "classic",
   };
 }
 

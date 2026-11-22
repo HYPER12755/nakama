@@ -3,12 +3,13 @@ import type { GameMode } from "./types";
 export const UNO_MODE = {
   CLASSIC: "classic",
   SEVEN_O: "sevenO",
+  PROGRESSIVE: "progressive",
 } as const;
 
-export const UNO_MODES: readonly GameMode[] = [UNO_MODE.CLASSIC, UNO_MODE.SEVEN_O];
+export const UNO_MODES: readonly GameMode[] = [UNO_MODE.CLASSIC, UNO_MODE.SEVEN_O, UNO_MODE.PROGRESSIVE];
 
 export function isGameMode(value: unknown): value is GameMode {
-  return value === UNO_MODE.CLASSIC || value === UNO_MODE.SEVEN_O;
+  return value === UNO_MODE.CLASSIC || value === UNO_MODE.SEVEN_O || value === UNO_MODE.PROGRESSIVE;
 }
 
 export function normalizeMode(value: unknown): GameMode {
