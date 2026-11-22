@@ -730,6 +730,80 @@ describe("Uno Progressive house rule", () => {
     expect(challenged.state.finished).toBe(false);
   });
 
+});
+
+describe("Uno Reverse Pack", () => {
+  it("builds a Reverse Pack deck with sixteen added cards", () => {
+    const deck = buildDeck("reversePack");
+    expect(deck).toHaveLength(124);
+    expect(buildDeck()).toHaveLength(108);
+    for (const kind of ["reverseDraw2", "reverseSkip"] as CardKind[]) {
+      expect(deck.filter((card) => card.kind === kind)).toHaveLength(4);
+    }
+    for (const kind of ["wildPowerReverse", "wildNoU"] as CardKind[]) {
+      expect(deck.filter((card) => card.kind === kind)).toHaveLength(4);
+    }
+  });
+
+  it("matches Reverse Draw Two and Reverse Skip across their symbols", () => {
+    const game = stagedGame([], "blue", "reversePack");
+    const reverseDrawTwo: Card = { id: "red-reversedraw2-0", color: "red", kind: "reverseDraw2" };
+    const reverseSkip: Card = { id: "red-reverseskip-0", color: "red", kind: "reverseSkip" };
+    game.discard = [{ id: "blue-draw2-0", color: "blue", kind: "draw2" }];
+    expect(canPlay(game, reverseDrawTwo)).toBe(true);
+    game.discard = [{ id: "blue-reverse-0", color: "blue", kind: "reverse" }];
+    expect(canPlay(game, reverseSkip)).toBe(true);
+  });
+
+  it("reverses direction and hands a Draw Two stack to the next player in the new order", () => {
+    const game = stagedGame([
+      { id: "red-reversedraw2-0", color: "red", kind: "reverseDraw2" },
+      redZero,
+    ], "blue", "reversePack");
+    game.discard = [{ id: "blue-draw2-0", color: "blue", kind: "draw2" }];
+    game.players[1].hand = [blueZero];
+    game.players[2].hand = [greenZero];
+    const played = applyAction(game, { type: "play", playerId: "p1", cardId: "red-reversedraw2-0" });
+    expect(played.error).toBeUndefined();
+    expect(played.ok).toBe(true);
+    expect(played.state.direction).toBe(-1);
+    expect(played.state.pendingStack?.kind).toBe("draw2");
+    expect(played.state.pendingStack?.amount).toBe(2);
+    expect(played.state.pendingStack?.targetId).toBe("p3");
+    expect(played.state.turn).toBe(2);
+  });
+
+  it("lets the stack target fire Wild NO U back at the owner", () => {
+    const game = stagedGame([redZero], "blue", "reversePack");
+    game.players[1].hand = [];
+    game.players[2].hand = [
+      { id: "wildnou-0", color: null, kind: "wildNoU" },
+    ];
+    game.pendingStack = { kind: "draw2", amount: 2, ownerId: "p1", targetId: "p3" };
+    game.turn = 2;
+    const answered = applyAction(game, {
+      type: "play", playerId: "p3", cardId: "wildnou-0", chosenColor: "green",
+    });
+    expect(answered.ok).toBe(true);
+    expect(answered.state.pendingStack).toBeNull();
+    expect(answered.state.players[0].hand).toHaveLength(3);
+    expect(answered.state.currentColor).toBe("green");
+    expect(answered.state.direction).toBe(-1);
+  });
+
+  it("keeps Wild Power Reverse on the actor for another turn", () => {
+    const game = stagedGame([
+      { id: "wildpowerreverse-0", color: null, kind: "wildPowerReverse" },
+    ], "blue", "reversePack");
+    const played = applyAction(game, {
+      type: "play", playerId: "p1", cardId: "wildpowerreverse-0", chosenColor: "green",
+    });
+    expect(played.ok).toBe(true);
+    expect(played.state.turn).toBe(0);
+    expect(played.state.direction).toBe(-1);
+    expect(played.state.currentColor).toBe("green");
+  });
+
   it("leaves classic and Seven-O draw effects immediate with no stack", () => {
     for (const mode of ["classic", "sevenO"] as GameMode[]) {
       const drawGame = stagedGame([blueDrawTwo, redZero], "blue", mode);

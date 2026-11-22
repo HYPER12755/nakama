@@ -308,6 +308,39 @@ ${neonLabel("PASS HANDS", 90, 216, 17, NEON.wild)}
 ${neonCaption(`wildpasshands ${copy}`, true)}`, NEON.wild);
 }
 
+function reversePackColoredCard(color, kind, copy) {
+  const c = NEON[color];
+  const isDraw = kind === "reverseDraw2";
+  const label = isDraw ? "REVERSE +2" : "REVERSE SKIP";
+  const glyph = isDraw ? "↻+2" : "↻⊘";
+  return surface(`
+<g transform="rotate(-12 90 128)">
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="9" filter="url(#soft)" opacity="0.7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="#fff" stroke-opacity="0.85" stroke-width="2"/>
+</g>
+<g style="filter:drop-shadow(0 0 10px ${c[0]})">
+<text x="90" y="150" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="44" fill="#ffffff">${glyph}</text>
+</g>
+${neonLabel(label, 90, 214, 16, c)}
+${neonCaption(`${isDraw ? "reversedraw2" : "reverseskip"} ${copy}`, true)}`, c);
+}
+
+function reversePackWildCard(kind, copy) {
+  const power = kind === "wildPowerReverse";
+  const label = power ? "POWER REVERSE" : "NO U!";
+  const glyph = power ? "↻↻" : "NO U";
+  return surface(`
+<g opacity="0.9">${QUADRANT}</g>
+<ellipse cx="90" cy="132" rx="60" ry="70" fill="#0A0A0E" fill-opacity="0.62" transform="rotate(-12 90 132)"/>
+<ellipse cx="90" cy="132" rx="60" ry="70" fill="none" stroke="url(#edge)" stroke-width="8" transform="rotate(-12 90 132)"/>
+<g style="filter:drop-shadow(0 0 12px #18FFFF)">
+<text x="90" y="150" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="46" fill="#ffffff">${glyph}</text>
+</g>
+${neonLabel(label, 90, 216, 16, NEON.wild)}
+${neonCaption(`${power ? "wildpowerreverse" : "wildnou"} ${copy}`, true)}`, NEON.wild);
+}
+
 const LIGHT_PALETTE = {
   red: ["#e8402a", "#ff8a75"],
   yellow: ["#f2c600", "#ffe680"],
@@ -540,6 +573,16 @@ for (let copy = 0; copy < 4; copy += 1) {
 for (let copy = 0; copy < 8; copy += 1) {
   writeFileSync(path.join(OUT, `wildreverse4-${copy}.svg`), wildReverse4Card());
   writeFileSync(path.join(OUT, `wildroulette-${copy}.svg`), wildRouletteCard());
+  count += 2;
+}
+for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
+  writeFileSync(path.join(OUT, `${color}-reversedraw2-0.svg`), reversePackColoredCard(color, "reverseDraw2", 0));
+  writeFileSync(path.join(OUT, `${color}-reverseskip-0.svg`), reversePackColoredCard(color, "reverseSkip", 0));
+  count += 2;
+}
+for (let copy = 0; copy < 4; copy += 1) {
+  writeFileSync(path.join(OUT, `wildpowerreverse-${copy}.svg`), reversePackWildCard("wildPowerReverse", copy));
+  writeFileSync(path.join(OUT, `wildnou-${copy}.svg`), reversePackWildCard("wildNoU", copy));
   count += 2;
 }
 for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {

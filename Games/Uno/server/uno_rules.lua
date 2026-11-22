@@ -19,11 +19,13 @@ local WILD_KINDS = {
   wildDraw10 = true, wildReverse4 = true, wildRoulette = true,
   wildDraw2 = true, wildDrawColor = true,
   wildForceTrade = true, wildPassHands = true,
+  wildPowerReverse = true, wildNoU = true,
 }
 local WILD_COLOR_KINDS = {
   wild = true, wild4 = true, wildAttack = true, wildDraw6 = true,
   wildDraw10 = true, wildReverse4 = true, wildDraw2 = true, wildDrawColor = true,
   wildForceTrade = true, wildPassHands = true,
+  wildPowerReverse = true, wildNoU = true,
 }
 
 local FLIP_COLOR_MAP = {
@@ -257,9 +259,73 @@ local function build_flip_deck()
   return deck
 end
 
+local function build_reverse_pack_deck()
+  local deck = {}
+  for _, color in ipairs(protocol.COLORS) do
+    for _, kind in ipairs({ "reverseDraw2", "reverseSkip" }) do
+      local kind_id = kind == "reverseDraw2" and "reversedraw2" or "reverseskip"
+      deck[#deck + 1] = {
+        id = string.format("%s-%s-0", color, kind_id),
+        color = color,
+        kind = kind,
+      }
+    end
+  end
+  for _, kind in ipairs({ "wildPowerReverse", "wildNoU" }) do
+    local kind_id = kind == "wildPowerReverse" and "wildpowerreverse" or "wildnou"
+    for copy_index = 0, 3 do
+      deck[#deck + 1] = {
+        id = string.format("%s-%d", kind_id, copy_index),
+        color = nil,
+        kind = kind,
+      }
+    end
+  end
+  return deck
+end
+
 function rules.build_deck(mode)
   if mode == "flip" then
     return build_flip_deck()
+  end
+  if mode == "reversePack" then
+    local deck = {}
+    for _, color in ipairs(protocol.COLORS) do
+      for value = 0, 9 do
+        local copies = value == 0 and 1 or 2
+        for copy_index = 0, copies - 1 do
+          deck[#deck + 1] = {
+            id = string.format("%s-%d-%d", color, value, copy_index),
+            color = color,
+            kind = "number",
+            value = value,
+          }
+        end
+      end
+      for _, kind in ipairs({ "skip", "reverse", "draw2" }) do
+        for copy_index = 0, 1 do
+          deck[#deck + 1] = {
+            id = string.format("%s-%s-%d", color, kind, copy_index),
+            color = color,
+            kind = kind,
+          }
+        end
+      end
+    end
+    for _, kind in ipairs({ "wild", "wild4" }) do
+      for copy_index = 0, 3 do
+        deck[#deck + 1] = {
+          id = string.format("%s-%d", kind, copy_index),
+          color = nil,
+          kind = kind,
+        }
+      end
+    end
+    local pack = build_reverse_pack_deck()
+    for _, card in ipairs(pack) do
+      deck[#deck + 1] = card
+    end
+    return deck
   end
   if mode == "attack" then
     return build_attack_deck()
@@ -355,6 +421,18 @@ function rules.can_play(state, card)
     return true
   end
   local top = rules.top_card(state)
+  if state.mode == "reversePack" then
+    if card.kind == "reverseDraw2" and (top.kind == "reverse" or top.kind == "draw2" or top.kind == "reverseDraw2") then
+      return true
+    end
+    if card.kind == "reverseSkip" and (top.kind == "reverse" or top.kind == "skip" or top.kind == "reverseSkip") then
+      return true
+    end
+    if (card.kind == "reverse" or card.kind == "skip" or card.kind == "draw2")
+      and (top.kind == "reverseDraw2" or top.kind == "reverseSkip") then
+      return true
+    end
+  end
   if card.color == state.current_color then
     return true
   end
@@ -469,7 +547,9 @@ function rules.legal_moves(state, player_id, now)
     local cards = {}
     for _, card in ipairs(stack_player.hand) do
       local eligible = false
-      if state.mode == "noMercy" then
+      if state.mode == "reversePack" then
+        eligible = card.kind == "wildNoU"
+      elseif state.mode == "noMercy" then
         eligible = rules.draw_card_value(card.kind) >= (state.pending_stack.value or 0)
       else
         eligible = card.kind == state.pending_stack.kind
@@ -481,6 +561,24 @@ function rules.legal_moves(state, player_id, now)
     return { cards = cards, can_draw = true }
   end
   if state.pending_challenge ~= nil then
+    if state.mode == "reversePack" then
+      local no_u_player
+      for _, candidate in ipairs(state.players) do
+        if candidate.id == player_id then
+          no_u_player = candidate
+          break
+        end
+      end
+      local cards = {}
+      if no_u_player ~= nil and state.pending_challenge.target_id == player_id then
+        for _, card in ipairs(no_u_player.hand) do
+          if card.kind == "wildNoU" then
+            cards[#cards + 1] = card.id
+          end
+        end
+      end
+      return { cards = cards, can_draw = true }
+    end
     return { cards = {}, can_draw = false }
   end
   local player = rules.current_player(state)
@@ -559,9 +657,11 @@ function rules.create_game(seed, players, now, mode)
     starter = table.remove(deck)
   end
   if starter.kind == "wild" or starter.kind == "wildAttack"
-    or (rules_mode == "flip" and starter.kind:find("^wild") ~= nil)
+    or (rules_mode == "flip" and starter.kind:find("^wild"))
     or (rules_mode == "swapPack"
-      and (starter.kind == "wildForceTrade" or starter.kind == "wildPassHands")) then
+      and (starter.kind == "wildForceTrade" or starter.kind == "wildPassHands"))
+    or (rules_mode == "reversePack"
+      and (starter.kind == "wildPowerReverse" or starter.kind == "wildNoU")) then
     starter.color = most_common_color(dealt[1].hand, rules.colors_for_side("light"))
   end
 
@@ -1148,6 +1248,48 @@ function rules.apply_action(previous, action, now)
     local stack_card = actor.hand[stack_index]
     local no_mercy = state.mode == "noMercy"
     local card_value = rules.draw_card_value(stack_card.kind)
+    if state.mode == "reversePack" then
+      if stack_card.kind ~= "wildNoU" then
+        return fail(previous, protocol.ERROR.ILLEGAL_CARD)
+      end
+      if action.chosen_color == nil then
+        return fail(previous, protocol.ERROR.MISSING_COLOR)
+      end
+      table.remove(actor.hand, stack_index)
+      state.discard[#state.discard + 1] = stack_card
+      state.drawn_card_id = nil
+      state.current_color = action.chosen_color
+      state.direction = state.direction == 1 and -1 or 1
+      state.pending_stack = nil
+      local owner
+      for _, player in ipairs(state.players) do
+        if player.id == stack.owner_id then
+          owner = player
+          break
+        end
+      end
+      if owner ~= nil then
+        draw_cards(state, owner, stack.amount)
+      end
+      state.events[#state.events + 1] = {
+        type = "wildNoU",
+        player_id = actor.id,
+        card_id = stack_card.id,
+        at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = actor.id,
+        action = "wildNoU",
+        card_id = stack_card.id,
+      }
+      state.turn = player_index(state, actor.id)
+      advance(state, 1)
+      if #actor.hand == 0 then
+        state.finished = true
+        state.winner = actor.id
+      end
+      return state, true
+    end
     local eligible = no_mercy
       and card_value > 0 and card_value >= (stack.value or 0)
       or (not no_mercy and stack_card.kind == stack.kind)
@@ -1225,6 +1367,61 @@ function rules.apply_action(previous, action, now)
   end
 
   if state.pending_challenge ~= nil then
+    if state.mode == "reversePack" and actor ~= nil
+      and state.pending_challenge.target_id == actor.id
+      and action.type == "play" then
+      local no_u_index
+      for candidate_index, card in ipairs(actor.hand) do
+        if card.kind == "wildNoU" and card.id == action.card_id then
+          no_u_index = candidate_index
+          break
+        end
+      end
+      if no_u_index == nil then
+        return fail(previous, protocol.ERROR.BAD_CHALLENGE)
+      end
+      if action.chosen_color == nil then
+        return fail(previous, protocol.ERROR.MISSING_COLOR)
+      end
+      local pending = state.pending_challenge
+      local no_u_card = actor.hand[no_u_index]
+      table.remove(actor.hand, no_u_index)
+      state.discard[#state.discard + 1] = no_u_card
+      state.drawn_card_id = nil
+      state.current_color = action.chosen_color
+      state.direction = state.direction == 1 and -1 or 1
+      state.pending_challenge = nil
+      local owner
+      for _, player in ipairs(state.players) do
+        if player.id == pending.owner_id then
+          owner = player
+          break
+        end
+      end
+      local amount = pending.amount
+        or (pending.kind == "wildDraw2" and rules.DRAW_TWO_AMOUNT or rules.WILD_FOUR_AMOUNT)
+      if owner ~= nil then
+        draw_cards(state, owner, amount)
+      end
+      state.events[#state.events + 1] = {
+        type = "wildNoU",
+        player_id = actor.id,
+        card_id = no_u_card.id,
+        at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = actor.id,
+        action = "wildNoU",
+        card_id = no_u_card.id,
+      }
+      state.turn = player_index(state, actor.id)
+      advance(state, 1)
+      if #actor.hand == 0 then
+        state.finished = true
+        state.winner = actor.id
+      end
+      return state, true
+    end
     if actor == nil or action.type ~= "challenge" or state.pending_challenge.target_id ~= action.player_id then
       return fail(previous, protocol.ERROR.BAD_CHALLENGE)
     end
@@ -1520,9 +1717,45 @@ function rules.apply_action(previous, action, now)
   end
 
   local no_mercy = state.mode == "noMercy"
+  local reverse_pack = state.mode == "reversePack"
   local next_player = state.players[target_index(state)]
   local actor_index = player_index(state, actor.id)
-  if card.kind == "skip" then
+  if card.kind == "reverseDraw2" then
+    if reverse_pack then
+      state.direction = state.direction == 1 and -1 or 1
+      local target_id = state.players[next_active_index(state, actor_index)].id
+      state.turn = player_index(state, target_id)
+      state.pending_stack = {
+        kind = "draw2",
+        amount = rules.DRAW_TWO_AMOUNT,
+        owner_id = actor.id,
+        target_id = target_id,
+      }
+      if #actor.hand == 0 then
+        state.pending_stack.pending_winner_id = actor.id
+      end
+    else
+      advance(state, 1)
+    end
+  elseif card.kind == "reverseSkip" then
+    if reverse_pack then
+      state.direction = state.direction == 1 and -1 or 1
+      advance(state, 2)
+    else
+      advance(state, 1)
+    end
+  elseif card.kind == "wildPowerReverse" then
+    if reverse_pack then
+      state.direction = state.direction == 1 and -1 or 1
+    else
+      advance(state, 1)
+    end
+  elseif card.kind == "wildNoU" then
+    if reverse_pack then
+      state.direction = state.direction == 1 and -1 or 1
+    end
+    advance(state, 1)
+  elseif card.kind == "skip" then
     advance(state, 2)
   elseif card.kind == "reverse" then
     if #rules.active_players(state) == 2 then
@@ -1536,7 +1769,7 @@ function rules.apply_action(previous, action, now)
       advance(state, 1)
     end
   elseif card.kind == "draw2" then
-    if state.mode == "progressive" then
+    if state.mode == "progressive" or reverse_pack then
       state.pending_stack = {
         kind = "draw2",
         amount = rules.DRAW_TWO_AMOUNT,
@@ -1628,6 +1861,11 @@ function rules.apply_action(previous, action, now)
       target_id = next_player.id,
       legal = wild_challenge_legal,
     }
+    if reverse_pack then
+      state.pending_challenge.amount = rules.WILD_FOUR_AMOUNT
+      state.pending_challenge.kind = "wild4"
+      state.pending_challenge.color = action.chosen_color
+    end
     if state.mode == "progressive" then
       state.pending_stack = {
         kind = "wild4",

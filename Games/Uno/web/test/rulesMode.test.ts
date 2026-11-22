@@ -12,6 +12,8 @@ describe("Uno rules mode", () => {
     expect(rulesModeLabel("sevenO")).toBe("Seven-O");
     expect(rulesModeLabel(progressive)).toBe("Progressive");
     expect(rulesModeLabel("attack")).toBe("Attack");
+    expect(rulesModeLabel("swapPack")).toBe("Swap Pack");
+    expect(rulesModeLabel("reversePack")).toBe("Reverse Pack");
     expect(rulesModeLabel(undefined)).toBe("Classic");
   });
 
@@ -20,6 +22,8 @@ describe("Uno rules mode", () => {
     expect(RULES_MODES).toContain("sevenO");
     expect(RULES_MODES as string[]).toContain("progressive");
     expect(RULES_MODES as string[]).toContain("attack");
+    expect(RULES_MODES as string[]).toContain("swapPack");
+    expect(RULES_MODES as string[]).toContain("reversePack");
     expect(new Set(RULES_MODES).size).toBe(RULES_MODES.length);
   });
 
@@ -70,6 +74,16 @@ describe("Uno rules mode", () => {
       { id: "ai1", name: "Computer" },
     ], 0, "attack");
     expect(viewFromCore(state, "local").mode).toBe("attack");
+  });
+
+  it("normalizes and reads Reverse Pack", () => {
+    expect(normalizeView({ rulesMode: "reversePack" }, null).mode).toBe("reversePack");
+    expect(normalizeView({ mode: "reversePack" }, null).mode).toBe("reversePack");
+    const state = createGame(7, [
+      { id: "local", name: "You" },
+      { id: "ai1", name: "Computer" },
+    ], 0, "reversePack");
+    expect(viewFromCore(state, "local").rulesMode).toBe("reversePack");
   });
 
   it("exposes the controller rules shape and forwards a target", () => {

@@ -9,7 +9,7 @@ describe("Uno card assets", () => {
     for (const set of ["cards", "cards-neon"]) {
       const dir = path.resolve(path.dirname(new URL(import.meta.url).pathname), `../public/${set}`);
       const files = readdirSync(dir).filter((name) => name.endsWith(".svg"));
-      expect(files, `${set} count`).toHaveLength(417);
+      expect(files, `${set} count`).toHaveLength(433);
       expect(files, `${set} back`).toContain("card-back.svg");
       expect(files, `${set} number`).toContain("red-0-0.svg");
       expect(files, `${set} action`).toContain("blue-draw2-1.svg");
@@ -121,6 +121,34 @@ describe("Uno card assets", () => {
         ["blue-refreshhand-0.svg", "REFRESH HAND"],
         ["wildforcetrade-0.svg", "FORCE TRADE"],
         ["wildpasshands-0.svg", "PASS HANDS"],
+      ]) {
+        expect(readFileSync(path.join(dir, name), "utf8"), `${set}/${name} label`).toContain(label);
+      }
+    }
+  });
+
+  it("ships UNO Reverse Pack card art in both sets", () => {
+    const expected: string[] = [];
+    for (const color of ["red", "yellow", "green", "blue"]) {
+      expected.push(`${color}-reversedraw2-0.svg`);
+      expected.push(`${color}-reverseskip-0.svg`);
+    }
+    for (let copy = 0; copy < 4; copy += 1) {
+      expected.push(`wildpowerreverse-${copy}.svg`);
+      expected.push(`wildnou-${copy}.svg`);
+    }
+    expect(expected).toHaveLength(16);
+    for (const set of ["cards", "cards-neon"]) {
+      const dir = path.resolve(path.dirname(new URL(import.meta.url).pathname), `../public/${set}`);
+      const files = readdirSync(dir).filter((name) => name.endsWith(".svg"));
+      for (const name of expected) {
+        expect(files, `${set}/${name}`).toContain(name);
+      }
+      for (const [name, label] of [
+        ["red-reversedraw2-0.svg", "REVERSE +2"],
+        ["blue-reverseskip-0.svg", "REVERSE SKIP"],
+        ["wildpowerreverse-0.svg", "POWER REVERSE"],
+        ["wildnou-0.svg", "NO U!"],
       ]) {
         expect(readFileSync(path.join(dir, name), "utf8"), `${set}/${name} label`).toContain(label);
       }

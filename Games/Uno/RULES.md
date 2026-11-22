@@ -389,3 +389,67 @@ captured by the standard play entry's `color`.
   scoring card for Swap 1; Force Trade swaps the actor's hand with that target
   (the actor is one participant); Pass Hands and Refresh Hand need no target.
   Every new wild carries a legal `chosenColor`, so automated play never stalls.
+
+## Reverse Pack
+
+Reverse Pack keeps the classic 108-card deck and adds 16 dedicated cards for a
+124-card deck. It is available locally and in private/quick online matches as
+mode string `reversePack` (core `UNO_MODE.REVERSE_PACK`, Lua `RULES_MODES`).
+State payloads expose `rulesMode: "reversePack"`. All new effects reuse the
+standard play request opcodes; no new opcode is needed.
+
+### Added cards
+
+- **Reverse Draw 2** (`reverseDraw2`, `red-reversedraw2-0`): four coloured
+  copies, one per colour. Playable on a matching colour, on any Reverse or Draw
+  Two, or on another Reverse Draw 2 regardless of colour. It reverses direction,
+  then aims a normal Draw Two stack at the next player in the new direction.
+  Like classic Draw Two in this mode, the stack may be answered only with Wild
+  NO U; players without one take the accumulated cards.
+- **Reverse Skip** (`reverseSkip`, `red-reverseskip-0`): four coloured copies,
+  one per colour. Playable on a matching colour, on any Reverse or Skip, or on
+  another Reverse Skip regardless of colour. It reverses direction and skips the
+  next player.
+- **Wild Power Reverse** (`wildPowerReverse`, `wildpowerreverse-0`): four wild
+  copies. Always playable; choosing a colour reverses direction and gives the
+  actor another turn.
+- **Wild NO U** (`wildNoU`, `wildnou-0`): four wild copies. Always playable as a
+  normal turn; choosing a colour reverses direction and advances. Its main use
+  is defensive: when a Reverse Pack Draw Two stack or Wild Four challenge
+  targets the actor, the target may play NO U instead of taking or challenging.
+  NO U chooses a colour, reverses direction, makes the stack owner or Wild Four
+  player draw the accumulated amount, and passes the turn to the next player in
+  the new direction.
+
+### Matching and resolution
+
+- Reverse Pack hybrids match both of their component actions across colours:
+  Reverse Draw 2 counts as Reverse and Draw Two, and Reverse Skip counts as
+  Reverse and Skip. Ordinary Reverse, Skip and Draw Two can answer those hybrids.
+- Wild Power Reverse and Wild NO U are wilds and require `chosenColor`.
+- Draw Two uses a pending stack in Reverse Pack, so normal Draw Two cards cannot
+  be chained; only Wild NO U answers it. The Wild Four pending challenge also
+  exposes NO U to the target while retaining the classic accept/challenge
+  options.
+- A final card played as a reverse or stack effect is a deferred win: the hand
+  empties immediately but the game waits until the resulting stack or challenge
+  resolves before awarding the winner.
+
+### Events and replay
+
+NO U responses emit a `wildNoU` event and replay entry with the actor and card
+ID. The chosen colour is recorded by the standard play entry, as with other
+wilds. Reverse Draw 2, Reverse Skip and Wild Power Reverse reuse the standard
+play event and replay entry; their effects are deterministic from the card kind
+and current direction.
+
+### Integration contract
+
+- Deck: 124 cards; the starter is never Wild Four, Wild Power Reverse or Wild
+  NO U, and a wildcard starter receives the first player's most common colour
+  before starting rules are applied.
+- AI knows the hybrid matching rules, assigns scores to the new cards, and
+  answers stacks/challenges with NO U when legal.
+- The web board exposes NO U on both the stack and challenge overlays, opens the
+  colour picker for it, and renders all 16 added cards in both classic and neon
+  art sets.

@@ -35,6 +35,10 @@ export function cardId(card: Omit<Card, "id">): string {
   if (card.kind === "wildRoulette") return "wildroulette";
   if (card.kind === "wildForceTrade") return "wildforcetrade";
   if (card.kind === "wildPassHands") return "wildpasshands";
+  if (card.kind === "wildPowerReverse") return "wildpowerreverse";
+  if (card.kind === "wildNoU") return "wildnou";
+  if (card.kind === "reverseDraw2") return `${card.color}-reversedraw2`;
+  if (card.kind === "reverseSkip") return `${card.color}-reverseskip`;
   if (card.kind === "swap1") return `${card.color}-swap1`;
   if (card.kind === "refreshHand") return `${card.color}-refreshhand`;
   if (card.kind === "discardAll") return `${card.color}-discardall`;
@@ -172,6 +176,21 @@ export function buildDeck(mode: GameMode = "classic"): Card[] {
       const base = { color: null, kind };
       deck.push({ id: `${base.kind}-${copy}`, ...base });
     }
+  }
+  if (mode === "reversePack") {
+    for (const color of COLORS) {
+      for (const kind of ["reverseDraw2", "reverseSkip"] as const) {
+        const base = { color, kind };
+        deck.push({ id: `${cardId(base)}-0`, ...base });
+      }
+    }
+    for (const kind of ["wildPowerReverse", "wildNoU"] as const) {
+      for (let copy = 0; copy < 4; copy += 1) {
+        const base = { color: null, kind };
+        deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+      }
+    }
+    return deck;
   }
   if (mode === "swapPack") {
     for (const kind of ["swap1", "refreshHand"] as const) {

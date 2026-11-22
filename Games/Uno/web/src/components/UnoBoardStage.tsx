@@ -44,7 +44,7 @@ interface PendingTrade {
 }
 
 const COLOUR_STACK_KINDS = new Set<Card["kind"]>([
-  "wild4", "wildDraw6", "wildDraw10", "wildReverse4",
+  "wild4", "wildDraw6", "wildDraw10", "wildReverse4", "wildNoU",
 ]);
 
 function isWild(card: Card): boolean {
@@ -62,6 +62,10 @@ function cardHint(card: Card): string | undefined {
   if (card.kind === "refreshHand") return "Replace your whole hand";
   if (card.kind === "wildForceTrade") return "Force two players to swap hands";
   if (card.kind === "wildPassHands") return "Every player passes their hand";
+  if (card.kind === "reverseDraw2") return "Reverse and make the next player draw 2";
+  if (card.kind === "reverseSkip") return "Reverse and skip the next player";
+  if (card.kind === "wildPowerReverse") return "Reverse, choose a colour and play again";
+  if (card.kind === "wildNoU") return "Bounce a draw penalty back and reverse play";
   return undefined;
 }
 
@@ -187,13 +191,20 @@ export function UnoBoardStage({
     view.players[view.turn]?.userId === view.myUserId;
   const challengeTarget =
     view.pendingChallenge !== null && view.pendingChallenge.targetId === view.myUserId;
+  const reversePack = effectiveMode === UNO_MODE.REVERSE_PACK;
+  const noUCards = reversePack
+    ? hand.filter((card) => card.kind === "wildNoU")
+    : [];
   const info = view.pendingChallenge === null ? null : challengeInfo(view.pendingChallenge);
   const legal = new Set(view.legalCards);
+  const legalNoUCards = noUCards.filter((card) => legal.has(card.id));
   const stackCards = !stackTarget || pendingStack === null
     ? []
-    : hand.filter((card) => noMercy
-      ? drawCardValue(card.kind) > 0 && drawCardValue(card.kind) >= (pendingStack.value ?? 0)
-      : pendingStack.kind === "wild4" ? card.kind === "wild4" : card.kind === "draw2");
+    : reversePack
+      ? legalNoUCards
+      : hand.filter((card) => noMercy
+        ? drawCardValue(card.kind) > 0 && drawCardValue(card.kind) >= (pendingStack.value ?? 0)
+        : pendingStack.kind === "wild4" ? card.kind === "wild4" : card.kind === "draw2");
 
   const opponents = view.players.filter((player) => player.userId !== view.myUserId);
   const targets = targetCandidates(view);
@@ -516,6 +527,9 @@ export function UnoBoardStage({
             <div className="uno-overlay-actions">
               <button type="button" className="button button--ghost" onClick={() => resolveChallenge(false)}>{info.takeLabel}</button>
               <button type="button" className="button button--primary" onClick={() => resolveChallenge(true)}>Challenge</button>
+              {legalNoUCards.length > 0 ? (
+                <button type="button" className="button" onClick={() => setPendingCard(legalNoUCards[0].id)}>NO U!</button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -550,7 +564,13 @@ export function UnoBoardStage({
                     onClick={() => stackDraw(card)}
                   >
                     <img src={art(card.id)} alt={card.id} />
-                    <span>{noMercy ? `Stack +${drawCardValue(card.kind)}` : `Stack ${stackKindLabel(card.kind)}`}</span>
+                    <span>
+                      {reversePack
+                        ? "NO U!"
+                        : noMercy
+                          ? `Stack +${drawCardValue(card.kind)}`
+                          : `Stack ${stackKindLabel(card.kind)}`}
+                    </span>
                   </button>
                 ))}
               </div>

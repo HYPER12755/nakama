@@ -276,6 +276,34 @@ ${passHandsSymbol("#111827")}
 <text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">wildpasshands ${copy}</text>`);
 }
 
+function reversePackColoredCard(color, kind, copy) {
+  const fill = COLORS[color];
+  const isDraw = kind === "reverseDraw2";
+  const label = isDraw ? "REV +2" : "REV SKIP";
+  const glyph = isDraw ? "↻+2" : "↻⊘";
+  return frame(`${corner(fill, isDraw ? "+2" : "SKIP")}
+<ellipse cx="90" cy="132" rx="64" ry="80" fill="${fill}" transform="rotate(-14 90 132)"/>
+<text x="90" y="142" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="44" fill="#ffffff" stroke="#111827" stroke-width="2.5" paint-order="stroke">${glyph}</text>
+<text x="90" y="196" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="800" fill="#ffffff" stroke="#111827" stroke-width="1.5" paint-order="stroke">${label}</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">${color} ${isDraw ? "reversedraw2" : "reverseskip"} ${copy}</text>`);
+}
+
+function reversePackWildCard(kind, copy) {
+  const power = kind === "wildPowerReverse";
+  const label = power ? "POWER REVERSE" : "NO U!";
+  const glyph = power ? "↻↻" : "NO U";
+  return frame(`<g>
+<path d="M9 23 A14 14 0 0 1 23 9 L157 9 A14 14 0 0 1 171 23 L90 135 Z" fill="${COLORS.red}"/>
+<path d="M171 23 A14 14 0 0 1 171 247 L90 135 Z" fill="${COLORS.yellow}"/>
+<path d="M171 247 A14 14 0 0 1 157 261 L23 261 A14 14 0 0 1 9 247 L90 135 Z" fill="${COLORS.green}"/>
+<path d="M9 247 A14 14 0 0 1 9 23 L90 135 Z" fill="${COLORS.blue}"/>
+</g>
+<ellipse cx="90" cy="132" rx="60" ry="78" fill="#0f172a" transform="rotate(-12 90 132)"/>
+<text x="90" y="142" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="${power ? "46" : "48"}" fill="#ffffff">${glyph}</text>
+<text x="90" y="196" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="800" fill="#ffffff" stroke="#e8402a" stroke-width="4" paint-order="stroke">${label}</text>
+<text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">${power ? "wildpowerreverse" : "wildnou"} ${copy}</text>`);
+}
+
 const LIGHT_PALETTE = {
   red: [COLORS.red, "#ff8a75"],
   yellow: [COLORS.yellow, "#ffe680"],
@@ -500,6 +528,16 @@ for (let copy = 0; copy < 4; copy += 1) {
 for (let copy = 0; copy < 8; copy += 1) {
   writeFileSync(path.join(OUT, `wildreverse4-${copy}.svg`), wildReverse4Card(copy));
   writeFileSync(path.join(OUT, `wildroulette-${copy}.svg`), wildRouletteCard(copy));
+  count += 2;
+}
+for (const color of Object.keys(COLORS)) {
+  writeFileSync(path.join(OUT, `${color}-reversedraw2-0.svg`), reversePackColoredCard(color, "reverseDraw2", 0));
+  writeFileSync(path.join(OUT, `${color}-reverseskip-0.svg`), reversePackColoredCard(color, "reverseSkip", 0));
+  count += 2;
+}
+for (let copy = 0; copy < 4; copy += 1) {
+  writeFileSync(path.join(OUT, `wildpowerreverse-${copy}.svg`), reversePackWildCard("wildPowerReverse", copy));
+  writeFileSync(path.join(OUT, `wildnou-${copy}.svg`), reversePackWildCard("wildNoU", copy));
   count += 2;
 }
 for (const color of Object.keys(COLORS)) {

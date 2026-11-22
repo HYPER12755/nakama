@@ -88,6 +88,86 @@ describe("Uno board stage", () => {
     expect(html).toContain("Stack Draw Two");
   });
 
+  it("offers a legal Wild NO U against a Reverse Pack stack", () => {
+    const reverseView: BoardView = {
+      ...view,
+      rulesMode: "reversePack",
+      pendingStack: { ownerId: "them", targetId: "me", kind: "draw2", count: 2 },
+      players: [
+        {
+          ...view.players[0],
+          hand: [
+            ...(view.players[0].hand ?? []),
+            { id: "wildnou-0", color: null, kind: "wildNoU" },
+          ],
+        },
+        view.players[1],
+      ],
+      legalCards: ["wildnou-0"],
+    };
+    const html = renderToStaticMarkup(
+      <UnoBoardStage
+        view={reverseView}
+        cardSet="classic"
+        dealKey={1}
+        activeColor="yellow"
+        direction={-1}
+        highlight="lift"
+        pileStyle="stack"
+        onPlay={() => undefined}
+        onDraw={() => undefined}
+        onChallenge={() => undefined}
+        onUno={() => undefined}
+      />,
+    );
+    expect(html).toContain('aria-label="Pending draw stack"');
+    expect(html).toContain("cards/wildnou-0.svg");
+    expect(html).toContain("NO U!");
+  });
+
+  it("offers a legal Wild NO U against a Reverse Pack challenge", () => {
+    const reverseView: BoardView = {
+      ...view,
+      rulesMode: "reversePack",
+      pendingChallenge: {
+        ownerId: "them",
+        targetId: "me",
+        legal: true,
+        kind: "wild4",
+        amount: 4,
+        color: "red",
+      },
+      players: [
+        {
+          ...view.players[0],
+          hand: [
+            ...(view.players[0].hand ?? []),
+            { id: "wildnou-1", color: null, kind: "wildNoU" },
+          ],
+        },
+        view.players[1],
+      ],
+      legalCards: ["wildnou-1"],
+    };
+    const html = renderToStaticMarkup(
+      <UnoBoardStage
+        view={reverseView}
+        cardSet="classic"
+        dealKey={1}
+        activeColor="red"
+        direction={-1}
+        highlight="lift"
+        pileStyle="stack"
+        onPlay={() => undefined}
+        onDraw={() => undefined}
+        onChallenge={() => undefined}
+        onUno={() => undefined}
+      />,
+    );
+    expect(html).toContain("Challenge the play?");
+    expect(html).toContain("NO U!");
+  });
+
   it("does not show a pending stack overlay to a non-target", () => {
     const stackView: BoardView = {
       ...view,

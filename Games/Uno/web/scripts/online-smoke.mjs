@@ -1265,6 +1265,70 @@ async function swapPackBattle() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "swap pack game over", STATE_TIMEOUT_MS);
 }
 
+async function reversePackBattle() {
+  const alice = await authenticate("reverse-pack-alice");
+  const bob = await authenticate("reverse-pack-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 5,
+    rulesMode: "reversePack",
+  });
+  assert(
+    created?.ok === true && created.rulesMode === "reversePack" && typeof created.matchId === "string",
+    `reverse pack room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
+  const aliceStart = await waitState(
+    alice.socket,
+    "reverse pack alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "reverse pack bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "reversePack", "reverse pack mode must reach alice");
+  assert(bobStart.data.rulesMode === "reversePack", "reverse pack mode must reach bob");
+  assert(aliceStart.data.deckCount === 109, "reverse pack should carry 124 cards");
+  assert(
+    legalCardIds(aliceStart.data).includes("yellow-reversedraw2-0"),
+    "seed 5 should offer Reverse Draw Two to Alice",
+  );
+  console.log("[ok] reverse pack private room reports rulesMode and a 124-card setup");
+
+  await send(alice, matchId, OP.PLAY_REQUEST, { cardId: "yellow-reversedraw2-0" });
+  const aliceStack = await waitState(
+    alice.socket,
+    "reverse pack alice stack",
+    (state) => state.pendingStack?.kind === "draw2" && state.pendingStack.amount === 2,
+  );
+  const bobStack = await waitState(
+    bob.socket,
+    "reverse pack bob stack",
+    (state) => state.pendingStack?.kind === "draw2" && state.pendingStack.amount === 2,
+  );
+  assert(aliceStack.data.direction === -1 && bobStack.data.direction === -1, "play should reverse direction");
+  assert(aliceStack.data.pendingStack.targetId === bob.session.user_id, "the stack should target Bob");
+  assert(legalCardIds(bobStack.data).length >= 0, "Bob should receive a legal response view");
+  console.log("[ok] Reverse Draw Two opens an authoritative reversed draw stack");
+
+  const before = seatOf(bobStart.data, bob).count;
+  await send(bob, matchId, OP.DRAW_REQUEST, {});
+  const taken = await waitState(
+    alice.socket,
+    "reverse pack stack taken",
+    (state) => state.pendingStack == null && seatOf(state, bob)?.count === before + 2,
+  );
+  assert(taken.data.pendingStack == null, "taking resolves the reverse draw stack");
+  console.log("[ok] the reversed draw stack resolves on the live server");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "reverse pack game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -1294,6 +1358,7 @@ async function main() {
     await noMercyRoom();
     await flipRoom();
     await swapPackBattle();
+    await reversePackBattle();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

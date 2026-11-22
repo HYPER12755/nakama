@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "generatedAt": "2026-11-22T19:27:49.054Z",
+  "generatedAt": "2026-11-22T21:41:18.300Z",
   "signers": {
     "dev-1": {
       "algorithm": "ed25519",
@@ -99,13 +99,13 @@
         "spectators",
         "invite-links"
       ],
-      "publishedAt": "2026-11-22T19:27:48.797Z",
-      "sha256": "31b03826846f6a75cd63106a9c49f5bb097987a6556719b8c889c1efdc22e120",
-      "size": 739738,
+      "publishedAt": "2026-11-22T21:41:17.971Z",
+      "sha256": "bb5a0774bb3b556e1a2399b114284d417541edb3e22bf69b1b07e3b99c6d6b3c",
+      "size": 761388,
       "url": "uno/0.1.0/uno-0.1.0.zip",
       "keyId": "dev-1",
       "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE=",
-      "signature": "niuQe86fgjQVrXZPRW57CDkDup2TlI9EQk+bi/Hga11c1IVY3G6iAeFhuyupp8GN44YkvkCxER0tcyqTrv1cCA=="
+      "signature": "fXkIFQliArDDIhWXOYZ0g796S9jyfud5s/++Wm7462y1NEL2uQMYeDG5AF1hSs3C1PPGRDQ7aHBKjErdYHNOBQ=="
     }
   ]
 }

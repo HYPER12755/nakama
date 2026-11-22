@@ -18,7 +18,8 @@ export type GameMode =
   | "attack"
   | "noMercy"
   | "flip"
-  | "swapPack";
+  | "swapPack"
+  | "reversePack";
 
 export type CardKind =
   | "number"
@@ -45,7 +46,11 @@ export type CardKind =
   | "swap1"
   | "refreshHand"
   | "wildForceTrade"
-  | "wildPassHands";
+  | "wildPassHands"
+  | "reverseDraw2"
+  | "reverseSkip"
+  | "wildPowerReverse"
+  | "wildNoU";
 
 export interface Card {
   id: string;

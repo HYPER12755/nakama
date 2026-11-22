@@ -5,6 +5,7 @@ import { colorsForSide, type Action, type Card, type Color, type GameState, type
 const WILD_KINDS: Card["kind"][] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4",
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands",
+  "wildPowerReverse", "wildNoU",
 ];
 
 function preferredColor(state: GameState, hand: Card[]): Color {
@@ -28,6 +29,10 @@ function cardScore(state: GameState, card: Card): number {
   if (card.kind === "refreshHand") return 112;
   if (card.kind === "swap1") return 95;
   if (card.kind === "wildPassHands") return 60;
+  if (card.kind === "wildPowerReverse") return 108;
+  if (card.kind === "wildNoU") return 118;
+  if (card.kind === "reverseDraw2") return 84;
+  if (card.kind === "reverseSkip") return 74;
   if (card.kind === "wild") return 90;
   if (card.kind === "flip") return 10;
   if (card.kind === "skipEveryone") return 88;
@@ -128,6 +133,13 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
       return null;
     }
     const stack = state.pendingStack;
+    if (state.mode === UNO_MODE.REVERSE_PACK) {
+      const noU = stackPlayer.hand.find((card) => card.kind === "wildNoU");
+      if (noU !== undefined) {
+        return { type: "play", playerId, cardId: noU.id, chosenColor: preferredColor(state, stackPlayer.hand) };
+      }
+      return { type: "draw", playerId };
+    }
     if (state.mode === UNO_MODE.NO_MERCY) {
       if (stack.ownerId !== playerId) {
         const usable = stackPlayer.hand
@@ -165,6 +177,12 @@ export function chooseAction(state: GameState, playerId: string, now = 0): Actio
   if (state.pendingChallenge !== null) {
     if (state.pendingChallenge.targetId !== playerId) {
       return null;
+    }
+    if (state.mode === UNO_MODE.REVERSE_PACK && actor !== undefined) {
+      const noU = actor.hand.find((card) => card.kind === "wildNoU");
+      if (noU !== undefined) {
+        return { type: "play", playerId, cardId: noU.id, chosenColor: preferredColor(state, actor.hand) };
+      }
     }
     return { type: "challenge", playerId, accept: !state.pendingChallenge.legal };
   }

@@ -139,4 +139,8 @@ describe("Uno stress simulation", () => {
   it("finishes 100 seeds across 2, 3 and 4 seats in swapPack mode", async () => {
     await runMode("swapPack");
   }, 60000);
+
+  it("finishes 100 seeds across 2, 3 and 4 seats in reversePack mode", async () => {
+    await runMode("reversePack");
+  }, 60000);
 });

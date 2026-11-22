@@ -2038,6 +2038,36 @@ local green_three = { id = "green-3-0", color = "green", kind = "number", value 
 local yellow_four = { id = "yellow-4-0", color = "yellow", kind = "number", value = 4 }
 local dark_five = { id = "blue-5-1", color = "blue", kind = "number", value = 5 }
 
+local reverse_draw_two = { id = "red-reversedraw2-0", color = "red", kind = "reverseDraw2" }
+local wild_no_u = { id = "wildnou-0", color = nil, kind = "wildNoU" }
+
+local function reverse_staged(hand, color, seats, seed)
+  local names = { "p1", "p2", "p3" }
+  local seat_list = {}
+  for index = 1, (seats or 3) do
+    seat_list[index] = { id = names[index], name = names[index] }
+  end
+  local game = rules.create_game(seed or 4242, seat_list, 0, "reversePack")
+  game.turn = 1
+  game.direction = 1
+  game.seed = seed or 4242
+  game.current_color = color or "red"
+  game.drawn_card_id = nil
+  game.pending_challenge = nil
+  game.pending_stack = nil
+  game.pending_hit = nil
+  game.pending_roulette = nil
+  game.finished = false
+  game.winner = nil
+  game.events = {}
+  game.replay = {}
+  game.players[1].hand = hand
+  for index = 2, #game.players do
+    game.players[index].hand = {}
+  end
+  return game
+end
+
 local function swap_staged(hand, color, seats, seed)
   local names = { "p1", "p2", "p3" }
   local seat_list = {}
@@ -2318,6 +2348,60 @@ test("wild pass hands requires a continuing colour", function()
   })
   assert_equal(ok, false, "rejected")
   assert_equal(code, "missing_color", "error code")
+end)
+
+test("builds a reverse pack deck with sixteen added cards", function()
+  local deck = rules.build_deck("reversePack")
+  assert_equal(#deck, 124, "deck size")
+  local reverse_draw = 0
+  local reverse_skip = 0
+  local power_reverse = 0
+  local no_u = 0
+  for _, card in ipairs(deck) do
+    if card.kind == "reverseDraw2" then reverse_draw = reverse_draw + 1 end
+    if card.kind == "reverseSkip" then reverse_skip = reverse_skip + 1 end
+    if card.kind == "wildPowerReverse" then power_reverse = power_reverse + 1 end
+    if card.kind == "wildNoU" then no_u = no_u + 1 end
+  end
+  assert_equal(reverse_draw, 4, "reverse draw two count")
+  assert_equal(reverse_skip, 4, "reverse skip count")
+  assert_equal(power_reverse, 4, "wild power reverse count")
+  assert_equal(no_u, 4, "wild no u count")
+end)
+
+test("reverse pack reverses and stacks a draw two in the new direction", function()
+  local game = reverse_staged({ reverse_draw_two, red_one }, "blue", 3, 4242)
+  game.discard = { { id = "blue-draw2-0", color = "blue", kind = "draw2" } }
+  game.players[2].hand = { blue_two }
+  game.players[3].hand = { green_three }
+  local played, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = reverse_draw_two.id,
+  })
+  assert_equal(ok, true, "played")
+  assert_equal(played.direction, -1, "direction")
+  assert_equal(played.pending_stack ~= nil, true, "pending stack")
+  assert_equal(played.pending_stack.kind, "draw2", "stack kind")
+  assert_equal(played.pending_stack.amount, 2, "stack amount")
+  assert_equal(played.pending_stack.target_id, "p3", "stack target")
+  assert_equal(played.turn, 3, "target turn")
+end)
+
+test("reverse pack stack target can fire Wild NO U back at the owner", function()
+  local game = reverse_staged({ red_one }, "blue", 3, 4242)
+  game.players[2].hand = {}
+  game.players[3].hand = { wild_no_u }
+  game.pending_stack = {
+    kind = "draw2", amount = 2, owner_id = "p1", target_id = "p3",
+  }
+  game.turn = 3
+  local answered, ok = rules.apply_action(game, {
+    type = "play", player_id = "p3", card_id = wild_no_u.id, chosen_color = "green",
+  })
+  assert_equal(ok, true, "played")
+  assert_equal(answered.pending_stack, nil, "stack cleared")
+  assert_equal(#answered.players[1].hand, 3, "owner drew")
+  assert_equal(answered.current_color, "green", "colour")
+  assert_equal(answered.direction, -1, "direction")
 end)
 
 test("scores swap pack colour actions at 20 and wild actions at 50", function()

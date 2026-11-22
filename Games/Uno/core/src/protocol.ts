@@ -9,6 +9,7 @@ export const UNO_MODE = {
   NO_MERCY: "noMercy",
   FLIP: "flip",
   SWAP_PACK: "swapPack",
+  REVERSE_PACK: "reversePack",
 } as const;
 
 export const UNO_MODES: readonly GameMode[] = [
@@ -20,6 +21,7 @@ export const UNO_MODES: readonly GameMode[] = [
   UNO_MODE.NO_MERCY,
   UNO_MODE.FLIP,
   UNO_MODE.SWAP_PACK,
+  UNO_MODE.REVERSE_PACK,
 ];
 
 export const JUMP_WINDOW_MS = 1800;
