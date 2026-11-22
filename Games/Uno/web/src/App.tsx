@@ -6,7 +6,12 @@ import {
   MatchChat,
   ModeSwitch,
   ProfilePanel,
+  clearMatchInviteFromLocation,
+  parseLaunchInvite,
+  parseMatchInvite,
   useGamePreferences,
+  useLauncherHandoff,
+  type MatchInvite,
 } from "@moongames/game-ui";
 import { Icon } from "./components/Icon";
 import { UnoBoardStage } from "./components/UnoBoardStage";
@@ -25,7 +30,7 @@ const MODES = [
 const RULES = [
   "Match the top card by colour, number or symbol.",
   "Skip, Reverse and +2 change the turn; Wild changes the colour.",
-  "Wild +4 may only be played with no matching colour in hand.",
+  "Wild +4 may be played even with a matching colour; the next player takes 4 or challenges (challenger takes 6 if legal, player takes 4 if bluffing).",
   "The first player to empty their hand wins the round.",
 ];
 
@@ -35,8 +40,13 @@ const COLOUR_HEX: Record<Color, string> = {
 };
 
 export default function App({ bridge }: { bridge: GameBridge }) {
-  const game = useUnoGame();
   const [mode, setMode] = useState<"local" | "ai" | "online">("ai");
+  const [invite, setInvite] = useState<MatchInvite | null>(() =>
+    typeof window === "undefined" ? null : parseMatchInvite(window.location.search),
+  );
+  const onlineMode = mode === "online";
+  const launcherConfig = useLauncherHandoff(__MOONGAMES_GAME_ID__);
+  const game = useUnoGame(onlineMode);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [soundOn, setSoundOn] = useState(true);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -45,6 +55,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const [roomInput, setRoomInput] = useState("");
   const appRef = useRef<HTMLDivElement>(null);
   const startedRef = useRef(false);
+  const hostLaunchHandledRef = useRef(false);
+  const inviteHandledRef = useRef(false);
+  const inviteConnectRef = useRef(false);
   const { preferences, setPreference } = useGamePreferences(__MOONGAMES_GAME_ID__);
 
   const cardSet = preferences.pieceSet === "neon" ? "neon" as const : "classic" as const;
@@ -56,15 +69,51 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     : "stack") as "stack" | "fan" | "tower";
 
   const version = __MOONGAMES_GAME_VERSION__;
-  const onlineMode = mode === "online";
   const inMatch = game.view.started;
   const modeLabel = mode === "local" ? "Pass and play" : mode === "ai" ? "Computer table" : "Online table";
   const activePlayer = game.view.players[game.view.turn];
+  const winner = game.view.result?.winnerUserId == null
+    ? null
+    : game.view.players.find((player) => player.userId === game.view.result?.winnerUserId) ?? null;
 
   useEffect(() => {
     configureAssets(bridge);
     readLauncherHandoff(__MOONGAMES_GAME_ID__);
   }, [bridge]);
+
+  useEffect(() => {
+    const launch = launcherConfig?.launch;
+    if (launch === undefined || hostLaunchHandledRef.current) {
+      return;
+    }
+    hostLaunchHandledRef.current = true;
+    const launchInvite = parseLaunchInvite(launch);
+    if (launchInvite !== null) {
+      setInvite(launchInvite);
+      setMode("online");
+    }
+  }, [launcherConfig?.launch]);
+
+  useEffect(() => {
+    if (invite === null || inviteHandledRef.current || mode !== "online") {
+      return;
+    }
+    const { connection, connect, joinMatch } = game;
+    if (connection !== "connected") {
+      if (connection === "offline" && !inviteConnectRef.current) {
+        inviteConnectRef.current = true;
+        void connect();
+      }
+      return;
+    }
+    inviteHandledRef.current = true;
+    clearMatchInviteFromLocation();
+    void joinMatch(invite.matchId, undefined, invite.spectate).then(() => {
+      setToast(invite.spectate ? "Watching invited match" : "Joined invited match");
+    }).catch((cause: unknown) => {
+      setToast(cause instanceof Error ? cause.message : "Could not join that match.");
+    });
+  }, [game, invite, mode]);
 
   useEffect(() => {
     if (!startedRef.current) {
@@ -202,7 +251,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                     <h2>
                       {game.view.result.winnerUserId === game.myUserId
                         ? "You win"
-                        : `${activePlayer?.username ?? "Opponent"} wins`}
+                        : `${winner?.username ?? "Opponent"} wins`}
                     </h2>
                     <div className="winner-card__actions">
                       <button type="button" className="button" onClick={() => void game.rematch()}>Play again</button>

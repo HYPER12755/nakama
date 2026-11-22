@@ -44,6 +44,14 @@ export interface PendingChallenge {
   legal: boolean;
 }
 
+export interface StartingRule {
+  kind: CardKind;
+  color?: Color;
+  turn: number;
+  direction: 1 | -1;
+  drewCards: string[];
+}
+
 export interface GameState {
   version: number;
   seed: number;
@@ -55,6 +63,7 @@ export interface GameState {
   currentColor: Color;
   drawnCardId: string | null;
   pendingChallenge: PendingChallenge | null;
+  startingRule: StartingRule | null;
   started: boolean;
   finished: boolean;
   winner: string | null;

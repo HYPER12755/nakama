@@ -119,9 +119,6 @@ local function create_private_match(context, payload)
     seats = seats,
     seed = tonumber(params.seed),
     turnSeconds = math.max(0, tonumber(params.turnSeconds) or 0),
-    expected_users = {
-      { user_id = context.user_id, username = context.username },
-    },
     lobby_timeout_ms = PRIVATE_LOBBY_TIMEOUT_MS,
   })
   local room_code = social.create_room_code(match_id, "uno", seats)

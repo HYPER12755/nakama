@@ -296,26 +296,37 @@ export function UnoBoardStage({
       )}
 
       {pendingCard !== null && (
-        <div className="uno-overlay">
-          <div className="uno-overlay-card uno-colour-card">
-            <p className="eyebrow">Choose colour</p>
-            <h2>Wild card</h2>
-            <div className="uno-colour-choices">
-              {COLORS.map((color) => (
-                <button
-                  type="button"
-                  key={color}
-                  className={`uno-colour uno-colour--${color}`}
-                  onClick={() => {
-                    fly(pendingCard, handRef.current?.querySelector("img")?.getBoundingClientRect() ?? null, discardRef.current?.getBoundingClientRect() ?? null);
-                    onPlay(pendingCard, color);
-                    setPendingCard(null);
-                  }}
-                  aria-label={color}
-                >
-                  <span>{color}</span>
-                </button>
-              ))}
+        <div className="uno-overlay uno-overlay--colour">
+          <div className="uno-colour-card" role="dialog" aria-label="Choose a colour">
+            <div className="uno-colour-card__art" aria-hidden="true">
+              <span className="uno-colour-card__wild">WILD</span>
+              <span className="uno-colour-card__spark uno-colour-card__spark--one" />
+              <span className="uno-colour-card__spark uno-colour-card__spark--two" />
+              <span className="uno-colour-card__spark uno-colour-card__spark--three" />
+            </div>
+            <div className="uno-colour-card__body">
+              <p className="eyebrow">Wild card</p>
+              <h2>Choose a colour</h2>
+              <p className="uno-overlay-copy">The next card must match the colour you pick.</p>
+              <div className="uno-colour-choices">
+                {COLORS.map((color, index) => (
+                  <button
+                    type="button"
+                    key={color}
+                    className={`uno-colour uno-colour--${color}`}
+                    style={{ animationDelay: `${index * 55}ms` }}
+                    onClick={() => {
+                      fly(pendingCard, handRef.current?.querySelector("img")?.getBoundingClientRect() ?? null, discardRef.current?.getBoundingClientRect() ?? null);
+                      onPlay(pendingCard, color);
+                      setPendingCard(null);
+                    }}
+                    aria-label={`Choose ${color}`}
+                  >
+                    <span className="uno-colour__ring" aria-hidden="true" />
+                    <span className="uno-colour__label">{color}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>

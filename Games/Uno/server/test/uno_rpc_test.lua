@@ -111,6 +111,33 @@ test("creates a private room with a room code", function()
   assert_equal(created[#created].params.seats, 3, "three seats")
 end)
 
+test("a non-creator can join a room-code private room", function()
+  rpcs.uno_create_private_match({ user_id = "u1", username = "Alice" }, { seats = 2 })
+  local params = created[#created].params
+  assert_equal(params.expected_users, nil, "no reserved users for a code room")
+
+  local MATCH = dofile(server_dir .. "/uno_match.lua")
+  local state = MATCH.match_init({ match_id = "match-1" }, params)
+  assert_equal(state.expected_count, 0, "no expected users in the match")
+  local _, allowed = MATCH.match_join_attempt({}, {}, 1, state, {
+    user_id = "u1", username = "Alice", session_id = "u1-session",
+  }, {})
+  assert_equal(allowed, true, "creator may join")
+  local _, guest_allowed = MATCH.match_join_attempt({}, {}, 2, state, {
+    user_id = "u2", username = "Bob", session_id = "u2-session",
+  }, {})
+  assert_equal(guest_allowed, true, "code holder may fill the second seat")
+end)
+
+test("invite-created rooms stay reserved for the recipient", function()
+  games.uno.create_room({ user_id = "u1", username = "Alice" }, { seats = 2 }, {
+    user_id = "u2", username = "Bob",
+  })
+  local invite_params = created[#created].params
+  assert_equal(#invite_params.expected_users, 2, "creator and recipient reserved")
+  assert_equal(invite_params.expected_users[2].user_id, "u2", "recipient reserved")
+end)
+
 test("the matchmaker pairs matching tables only", function()
   local pair = matchmakers.uno({}, {
     { presence = { user_id = "a", username = "A" }, properties = { game = "uno", seats = 2 } },

@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import {
   GAME_PROTOCOL_VERSION,
   type GameBundleDescriptor,
@@ -16,6 +19,17 @@ import {
 
 const PUBLIC_KEY = "yBxRYs6iBo79VGJX3V2lcyShDL9GuhEG/m3V72RaHIs=";
 const OTHER_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
+const testDir = path.dirname(fileURLToPath(import.meta.url));
+const gamesRoot = path.resolve(testDir, "..", "..");
+const CONFIGURED_DEV_KEY = (
+  JSON.parse(
+    readFileSync(
+      path.join(gamesRoot, "releases", "release-manifest.json"),
+      "utf8",
+    ),
+  ) as { signers?: Record<string, { publicKey?: string }> }
+).signers?.["dev-1"]?.publicKey;
 
 function descriptor(
   overrides: Partial<GameBundleDescriptor> = {},
@@ -142,7 +156,11 @@ describe("official release proofs", () => {
       two: "def",
     });
     expect(parseTrustedKeys("broken,=value,name=")).toEqual({});
-    expect(configuredTrustedKeys()["dev-1"]).toBe(PUBLIC_KEY);
+    expect(CONFIGURED_DEV_KEY).toBeTypeOf("string");
+    expect(configuredTrustedKeys()["dev-1"]).toBe(CONFIGURED_DEV_KEY);
+    const pinned = parseTrustedKeys("release-1=prod");
+    expect(pinned).toEqual({ "release-1": "prod" });
+    expect(pinned["dev-1"]).toBeUndefined();
     expect(
       defaultReleaseManifestUrl("https://games.example.com/moongames/"),
     ).toBe("https://games.example.com/moongames/release-manifest.json");

@@ -12,8 +12,7 @@
     "online",
     "private-match",
     "spectators",
-    "invite-links",
-    "replay"
+    "invite-links"
   ],
   "orientation": "any",
   "description": "The classic colour-matching card game. Play locally or online with two to four players, with wild cards, action cards and a fullscreen table.",

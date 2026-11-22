@@ -2,65 +2,677 @@ import { Client } from "@heroiclabs/nakama-js";
 
 const HOST = process.env.NAKAMA_HOST ?? "127.0.0.1";
 const PORT = process.env.NAKAMA_PORT ?? "7350";
-const KEY = process.env.NAKAMA_SERVER_KEY ?? "defaultkey";
-const SSL = process.env.NAKAMA_SSL === "true";
+const SERVER_KEY = process.env.NAKAMA_SERVER_KEY ?? "defaultkey";
+const USE_SSL = process.env.NAKAMA_SSL === "true";
 
-async function player(name) {
-  const client = new Client(KEY, HOST, PORT, SSL);
-  const session = await client.authenticateDevice(`uno-smoke-${Date.now()}-${name}`, true, name);
-  const socket = client.createSocket(SSL, false);
-  await socket.connect(session, true);
-  return { client, session, socket };
+const OP = {
+  STATE: 1,
+  CHAT: 2,
+  MOVE: 3,
+  GAME_OVER: 4,
+  ERROR: 5,
+  PLAYER_JOINED: 6,
+  PLAYER_LEFT: 7,
+  MATCH_STARTED: 8,
+  PONG: 9,
+  SPECTATOR_JOINED: 10,
+  SPECTATOR_LEFT: 11,
+  PLAY_REQUEST: 101,
+  DRAW_REQUEST: 102,
+  CHALLENGE_REQUEST: 103,
+  CHAT_SEND: 104,
+  REQUEST_STATE: 105,
+  RESIGN: 106,
+  PING: 107,
+};
+
+const ERROR_CODE = {
+  NOT_YOUR_TURN: "not_your_turn",
+  ILLEGAL_CARD: "illegal_card",
+  BAD_CHALLENGE: "bad_challenge",
+  GAME_OVER: "game_over",
+  UNKNOWN_CARD: "unknown_card",
+  MISSING_COLOR: "missing_color",
+};
+
+const STATE_TIMEOUT_MS = 20000;
+const ERROR_TIMEOUT_MS = 5000;
+const MATCHMAKER_TIMEOUT_MS = 30000;
+const HAND_SIZE = 7;
+const STARTING_DECK_COUNT = 91;
+const STARTING_CARD_ID = "red-draw2-0";
+const QUICK_QUERY = "+properties.game:uno +properties.seats:2 +properties.seed:123456789";
+const QUICK_PROPERTIES = { game: "uno", seats: "2", seed: "123456789" };
+
+const decoder = new TextDecoder();
+const collectors = new WeakMap();
+const connections = [];
+const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
 }
 
-function waitForMatch(socket) {
-  return new Promise((resolve) => {
-    socket.onmatchmakermatched = resolve;
+function decodeData(data) {
+  if (typeof data === "string") {
+    return JSON.parse(data);
+  }
+  return JSON.parse(decoder.decode(data));
+}
+
+function attachCollector(socket, label) {
+  const collector = { label, queue: [], waiters: [], latestState: null };
+  collectors.set(socket, collector);
+  socket.onmatchdata = (message) => {
+    const entry = { op: message.op_code, data: decodeData(message.data) };
+    collector.queue.push(entry);
+    if (entry.op === OP.STATE) {
+      collector.latestState = entry.data;
+    }
+    for (let index = collector.waiters.length - 1; index >= 0; index -= 1) {
+      const waiter = collector.waiters[index];
+      if (waiter.predicate(entry)) {
+        collector.waiters.splice(index, 1);
+        clearTimeout(waiter.timer);
+        waiter.resolve(entry);
+      }
+    }
+  };
+  return socket;
+}
+
+function removeQueued(collector, entry) {
+  const index = collector.queue.indexOf(entry);
+  if (index >= 0) {
+    collector.queue.splice(index, 1);
+  }
+}
+
+function waitFor(socket, predicate, description, timeoutMs = STATE_TIMEOUT_MS) {
+  const collector = collectors.get(socket);
+  assert(collector, "socket has no message collector");
+  const existingIndex = collector.queue.findIndex(predicate);
+  if (existingIndex >= 0) {
+    return Promise.resolve(collector.queue.splice(existingIndex, 1)[0]);
+  }
+  return new Promise((resolve, reject) => {
+    const waiter = {
+      predicate,
+      resolve: (entry) => {
+        removeQueued(collector, entry);
+        resolve(entry);
+      },
+      timer: null,
+    };
+    waiter.timer = setTimeout(() => {
+      const index = collector.waiters.indexOf(waiter);
+      if (index >= 0) {
+        collector.waiters.splice(index, 1);
+      }
+      const recent = collector.queue
+        .slice(-12)
+        .map((entry) => ({ op: entry.op, data: entry.data }));
+      console.error(`${collector.label}: timed out waiting for ${description}`);
+      console.error(`${collector.label}: last 12 queued messages: ${JSON.stringify(recent)}`);
+      reject(new Error(`${collector.label}: timed out waiting for ${description}`));
+    }, timeoutMs);
+    collector.waiters.push(waiter);
   });
 }
 
-function waitForState(socket) {
+function waitState(socket, description, predicate = () => true, timeoutMs = STATE_TIMEOUT_MS) {
+  return waitFor(
+    socket,
+    (message) => message.op === OP.STATE && predicate(message.data),
+    description,
+    timeoutMs,
+  );
+}
+
+function latestState(socket) {
+  return collectors.get(socket)?.latestState ?? null;
+}
+
+function waitForMatchmaker(socket, label) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("no state received")), 10000);
-    socket.onmatchdata = (data) => {
-      if (data.op_code === 1) {
-        const payload = JSON.parse(new TextDecoder().decode(data.data));
-        if (Array.isArray(payload.players) && payload.players.length === 2) {
-          clearTimeout(timer);
-          resolve(payload);
-        }
-      }
+    const timer = setTimeout(() => {
+      reject(new Error(`${label}: timed out waiting for matchmaker`));
+    }, MATCHMAKER_TIMEOUT_MS);
+    socket.onmatchmakermatched = (matched) => {
+      clearTimeout(timer);
+      resolve(matched);
     };
   });
 }
 
-const runId = Date.now();
-const alice = await player(`a-${runId}`);
-const bob = await player(`b-${runId}`);
-try {
-  const aliceMatched = waitForMatch(alice.socket);
-  const bobMatched = waitForMatch(bob.socket);
-  const query = "+properties.game:uno +properties.seats:2";
-  const properties = { game: "uno", seats: "2" };
+async function authenticate(label) {
+  const suffix = `${runId}-${label}`;
+  const client = new Client(SERVER_KEY, HOST, PORT, USE_SSL);
+  const session = await client.authenticateDevice(
+    `uno-smoke-${suffix}`,
+    true,
+    `Uno ${label} ${suffix}`,
+  );
+  const socket = client.createSocket(USE_SSL, false);
+  attachCollector(socket, label);
+  await socket.connect(session, true);
+  const connection = { label, client, session, socket };
+  connections.push(connection);
+  return connection;
+}
+
+async function rpc(connection, id, payload = {}) {
+  const response = await connection.client.rpc(connection.session, id, payload);
+  return response.payload;
+}
+
+function send(connection, matchId, op, payload = {}) {
+  return connection.socket.sendMatchState(matchId, op, JSON.stringify(payload));
+}
+
+function legalCardIds(state) {
+  const value = state.legalCards;
+  if (value == null) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  assert(
+    typeof value === "object" && Object.keys(value).length === 0,
+    `legalCards should be a list, got ${JSON.stringify(value)}`,
+  );
+  return [];
+}
+
+function seatOf(state, connection) {
+  return state.players.find((player) => player.userId === connection.session.user_id);
+}
+
+function otherSeat(state, connection) {
+  return state.players.find((player) => player.userId !== connection.session.user_id);
+}
+
+async function waitForStart(connection, label) {
+  await waitFor(
+    connection.socket,
+    (message) => message.op === OP.MATCH_STARTED,
+    `${label} match started`,
+    STATE_TIMEOUT_MS,
+  );
+  return waitState(
+    connection.socket,
+    `${label} initial state`,
+    (state) => state.started === true && state.players.length === 2,
+  );
+}
+
+async function quickPair(label) {
+  const alice = await authenticate(`${label}-alice`);
+  const bob = await authenticate(`${label}-bob`);
+  const aliceMatched = waitForMatchmaker(alice.socket, `${label}-alice`);
+  const bobMatched = waitForMatchmaker(bob.socket, `${label}-bob`);
   await Promise.all([
-    alice.socket.addMatchmaker(query, 2, 2, properties),
-    bob.socket.addMatchmaker(query, 2, 2, properties),
+    alice.socket.addMatchmaker(QUICK_QUERY, 2, 2, QUICK_PROPERTIES),
+    bob.socket.addMatchmaker(QUICK_QUERY, 2, 2, QUICK_PROPERTIES),
   ]);
   const [alicePair, bobPair] = await Promise.all([aliceMatched, bobMatched]);
-  if (alicePair.match_id !== bobPair.match_id) {
-    throw new Error("the matchmaker did not pair both players into one room");
-  }
-  const aliceState = waitForState(alice.socket);
+  assert(
+    alicePair.match_id === bobPair.match_id,
+    `${label}: matchmaker did not pair both clients into one room`,
+  );
+  const matchId = alicePair.match_id;
   await Promise.all([
-    alice.socket.joinMatch(alicePair.match_id, alicePair.token),
-    bob.socket.joinMatch(bobPair.match_id, bobPair.token),
+    alice.socket.joinMatch(matchId, alicePair.token),
+    bob.socket.joinMatch(matchId, bobPair.token),
   ]);
-  const state = await aliceState;
-  if (!Array.isArray(state.players) || state.players.length !== 2) {
-    throw new Error("the table did not start with two players");
-  }
-  console.log("[ok] the matchmaker paired two Uno players at one table");
-} finally {
-  alice.socket.disconnect(false);
-  bob.socket.disconnect(false);
+  return { alice, bob, matchId };
 }
+
+function pickLegalCard(state, connection) {
+  const legalCards = legalCardIds(state);
+  assert(legalCards.length > 0, `${connection.label}: no legal card to play`);
+  const hand = seatOf(state, connection)?.hand ?? [];
+  const card = (id) => hand.find((entry) => entry.id === id);
+  const numberId = legalCards.find((id) => /^(red|yellow|green|blue)-\d+-\d+$/.test(id));
+  const plainId = legalCards.find((id) => !id.startsWith("wild"));
+  const cardId = numberId ?? plainId ?? legalCards[0];
+  const chosen = card(cardId);
+  const payload = { cardId };
+  if (chosen && (chosen.kind === "wild" || chosen.kind === "wild4")) {
+    payload.chosenColor = "red";
+  }
+  return { cardId, payload, kind: chosen?.kind };
+}
+
+async function assertInitialState(state, connection, label) {
+  assert(state.started === true, `${label}: match did not start`);
+  assert(state.seats === 2, `${label}: expected two seats, got ${state.seats}`);
+  assert(state.turn === 1, `${label}: Draw Two starter should pass seat 0 and start seat 1, got ${state.turn}`);
+  assert(
+    state.deckCount === STARTING_DECK_COUNT,
+    `${label}: expected deck ${STARTING_DECK_COUNT}, got ${state.deckCount}`,
+  );
+  assert(
+    state.topCard?.id === STARTING_CARD_ID,
+    `${label}: expected starter ${STARTING_CARD_ID}, got ${JSON.stringify(state.topCard)}`,
+  );
+  const mine = seatOf(state, connection);
+  const other = otherSeat(state, connection);
+  const expectedHand = mine?.seat === 0 ? HAND_SIZE + 2 : HAND_SIZE;
+  assert(
+    Array.isArray(mine?.hand) && mine.hand.length === expectedHand,
+    `${label}: viewer should see ${expectedHand} cards`,
+  );
+  assert(other?.count === (other.seat === 0 ? HAND_SIZE + 2 : HAND_SIZE), `${label}: opponent count`);
+  assert(other.hand === undefined, `${label}: opponent hand must stay hidden`);
+  const legalCards = legalCardIds(state);
+  assert(
+    legalCards.every((id) => mine.hand.some((entry) => entry.id === id)),
+    `${label}: legalCards must come from the viewer hand`,
+  );
+  assert(
+    state.canDraw === (state.turn === mine.seat),
+    `${label}: only the current player may draw`,
+  );
+}
+
+async function quickMatchAndPlay() {
+  const { alice, bob, matchId } = await quickPair("quick");
+  await Promise.all([
+    waitFor(alice.socket, (m) => m.op === OP.MATCH_STARTED, "alice match started"),
+    waitFor(bob.socket, (m) => m.op === OP.MATCH_STARTED, "bob match started"),
+  ]);
+  const aliceStart = await waitState(
+    alice.socket,
+    "alice initial state",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "bob initial state",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  await assertInitialState(aliceStart.data, alice, "alice");
+  await assertInitialState(bobStart.data, bob, "bob");
+  assert(legalCardIds(aliceStart.data).length === 0, "alice should not have legal cards after Draw Two starter");
+  assert(legalCardIds(bobStart.data).length > 0, "bob should have legal cards first");
+  console.log("[ok] quick match starts with deterministic two-player state");
+
+  const aliceCard = seatOf(aliceStart.data, alice).hand[0].id;
+  await send(alice, matchId, OP.PLAY_REQUEST, { cardId: aliceCard });
+  const rejected = await waitFor(
+    alice.socket,
+    (m) => m.op === OP.ERROR,
+    "out-of-turn rejection",
+    ERROR_TIMEOUT_MS,
+  );
+  assert(
+    rejected.data.code === ERROR_CODE.NOT_YOUR_TURN,
+    `expected ${ERROR_CODE.NOT_YOUR_TURN}, got ${JSON.stringify(rejected.data)}`,
+  );
+  console.log("[ok] out-of-turn play is rejected");
+
+  const choice = pickLegalCard(bobStart.data, bob);
+  const handBefore = seatOf(bobStart.data, bob).count;
+  await send(bob, matchId, OP.PLAY_REQUEST, choice.payload);
+  const moved = (message) =>
+    message.op === OP.MOVE &&
+    (message.data.action?.card_id ?? message.data.action?.cardId) === choice.cardId &&
+    (message.data.action?.player_id ?? message.data.action?.playerId) === bob.session.user_id;
+  await waitFor(alice.socket, moved, "bob move broadcast", ERROR_TIMEOUT_MS);
+  await waitFor(bob.socket, moved, "bob move broadcast", ERROR_TIMEOUT_MS);
+  const alicePlayed = await waitState(
+    alice.socket,
+    "alice state after play",
+    (state) => state.topCard?.id === choice.cardId,
+  );
+  const bobPlayed = await waitState(
+    bob.socket,
+    "bob state after play",
+    (state) => state.topCard?.id === choice.cardId,
+  );
+  for (const [state, label] of [[alicePlayed.data, "alice"], [bobPlayed.data, "bob"]]) {
+    assert(
+      seatOf(state, bob).count === handBefore - 1,
+      `${label}: actor hand should shrink after a play`,
+    );
+    assert(
+      otherSeat(state, bob).count === HAND_SIZE + 2,
+      `${label}: opponent count should stay unchanged`,
+    );
+  }
+  if (choice.kind === "number") {
+    assert(alicePlayed.data.turn === 0 && bobPlayed.data.turn === 0, "turn should advance to seat 0");
+  }
+  console.log("[ok] legal play is broadcast and applied on both clients");
+
+  const countBeforeDraw = seatOf(bobPlayed.data, alice).count;
+  await send(alice, matchId, OP.DRAW_REQUEST, {});
+  const aliceDrawn = await waitState(
+    alice.socket,
+    "alice state after draw",
+    (state) => seatOf(state, alice)?.count === countBeforeDraw + 1,
+  );
+  const bobDrawn = await waitState(
+    bob.socket,
+    "bob state after draw",
+    (state) => seatOf(state, alice)?.count === countBeforeDraw + 1,
+  );
+  const drawnCard = seatOf(aliceDrawn.data, alice).hand?.at(-1);
+  assert(drawnCard?.id, "the drawn card should be appended to the hand");
+  const drawnLegal = legalCardIds(aliceDrawn.data);
+  const playable = drawnLegal.includes(drawnCard.id);
+  if (playable) {
+    assert(aliceDrawn.data.canDraw === false, "a playable drawn card closes the draw option");
+    assert(
+      drawnLegal.length === 1 && drawnLegal[0] === drawnCard.id,
+      "only the drawn card should be legal",
+    );
+    assert(aliceDrawn.data.turn === 0, "the turn should stay with the drawing player");
+  } else {
+    assert(aliceDrawn.data.turn === 1, "an unplayable draw should pass the turn");
+    assert(drawnLegal.length === 0, "no legal cards after a passed draw");
+    assert(bobDrawn.data.canDraw === true, "the next player regains the draw option");
+  }
+  console.log("[ok] draw updates hand counts and turn by drawn-card legality");
+
+  await send(alice, matchId, OP.CHAT_SEND, { text: "  hello   table  " });
+  const aliceChat = await waitFor(
+    alice.socket,
+    (m) => m.op === OP.CHAT,
+    "alice chat",
+    ERROR_TIMEOUT_MS,
+  );
+  const bobChat = await waitFor(
+    bob.socket,
+    (m) => m.op === OP.CHAT,
+    "bob chat",
+    ERROR_TIMEOUT_MS,
+  );
+  assert(aliceChat.data.text === "hello table", "chat text should be normalized");
+  assert(bobChat.data.text === "hello table", "both clients see normalized chat");
+  assert(bobChat.data.userId === alice.session.user_id, "chat should identify the sender");
+  console.log("[ok] chat is normalized and broadcast to both clients");
+
+  const clientTime = Date.now();
+  await send(alice, matchId, OP.PING, { clientTime });
+  await waitFor(
+    alice.socket,
+    (m) => m.op === OP.PONG && m.data.clientTime === clientTime,
+    "pong with clientTime echo",
+    ERROR_TIMEOUT_MS,
+  );
+  console.log("[ok] ping returns a pong with the echoed clientTime");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  const aliceOver = await waitFor(
+    alice.socket,
+    (m) => m.op === OP.GAME_OVER,
+    "alice game over",
+  );
+  const bobOver = await waitFor(
+    bob.socket,
+    (m) => m.op === OP.GAME_OVER,
+    "bob game over",
+  );
+  for (const [over, label] of [[aliceOver, "alice"], [bobOver, "bob"]]) {
+    assert(over.data.status === "finished", `${label}: result status should be finished`);
+    assert(
+      over.data.winnerUserId === bob.session.user_id,
+      `${label}: the other player should win by resignation`,
+    );
+  }
+  const aliceFinal = await waitState(
+    alice.socket,
+    "alice final state",
+    (state) => state.result?.winnerUserId === bob.session.user_id,
+  );
+  const bobFinal = await waitState(
+    bob.socket,
+    "bob final state",
+    (state) => state.result?.winnerUserId === bob.session.user_id,
+  );
+  assert(latestState(alice.socket)?.result?.winnerUserId === bob.session.user_id, "alice final cache");
+  assert(latestState(bob.socket)?.result?.winnerUserId === bob.session.user_id, "bob final cache");
+  assert(aliceFinal.data.started === true && bobFinal.data.started === true, "final state stays started");
+  console.log("[ok] resignation publishes a public result and final state");
+
+  const profiles = await Promise.all([
+    rpc(alice, "uno_get_profile"),
+    rpc(bob, "uno_get_profile"),
+  ]);
+  const expectedOpponents = [bob.session.user_id, alice.session.user_id];
+  for (const [index, profile] of profiles.entries()) {
+    assert(profile?.ok === true, `profile ${index} RPC failed: ${JSON.stringify(profile)}`);
+    const entry = (profile.history ?? []).find((item) => item.matchId === matchId);
+    assert(entry, `profile ${index} should record the finished match`);
+    assert(
+      entry.opponent?.userId === expectedOpponents[index],
+      `profile ${index} should identify the opponent`,
+    );
+    assert(typeof entry.ratingBefore === "number", `profile ${index} ratingBefore`);
+    assert(typeof entry.ratingAfter === "number", `profile ${index} ratingAfter`);
+    assert(typeof entry.ratingDelta === "number", `profile ${index} ratingDelta`);
+    assert(entry.endedAt > 0, `profile ${index} endedAt`);
+    assert(Array.isArray(entry.steps), `profile ${index} steps`);
+  }
+  console.log("[ok] guest profiles persist the match history");
+}
+
+async function privateRoomCodeAndSpectator() {
+  const alice = await authenticate("private-alice");
+  const bob = await authenticate("private-bob");
+  const watcher = await authenticate("private-watcher");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 123456789,
+  });
+  assert(
+    created?.ok === true &&
+      typeof created.matchId === "string" &&
+      typeof created.roomCode === "string" &&
+      created.roomCode.length > 0,
+    `private room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  const resolved = await rpc(bob, "moongames_room_code_resolve", {
+    code: created.roomCode,
+    gameId: "uno",
+  });
+  assert(
+    resolved?.ok === true && resolved.matchId === matchId,
+    `room code did not resolve: ${JSON.stringify(resolved)}`,
+  );
+  console.log("[ok] a private room code resolves to the created table");
+
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
+  const aliceStart = await waitForStart(alice, "alice");
+  const bobStart = await waitForStart(bob, "bob");
+  await assertInitialState(aliceStart.data, alice, "private alice");
+  await assertInitialState(bobStart.data, bob, "private bob");
+  assert(
+    seatOf(aliceStart.data, alice)?.seat === 0 && seatOf(bobStart.data, bob)?.seat === 1,
+    "the creator should hold seat 0",
+  );
+  console.log("[ok] a non-creator joins the private table by its code");
+
+  await watcher.socket.joinMatch(matchId, undefined, { spectate: "1" });
+  await waitFor(
+    alice.socket,
+    (m) => m.op === OP.SPECTATOR_JOINED && m.data.userId === watcher.session.user_id,
+    "alice sees spectator",
+    ERROR_TIMEOUT_MS,
+  );
+  await waitFor(
+    bob.socket,
+    (m) => m.op === OP.SPECTATOR_JOINED && m.data.userId === watcher.session.user_id,
+    "bob sees spectator",
+    ERROR_TIMEOUT_MS,
+  );
+  const watcherState = await waitState(
+    watcher.socket,
+    "watcher state",
+    (state) =>
+      Array.isArray(state.spectators) &&
+      state.spectators.some((entry) => entry.userId === watcher.session.user_id),
+  );
+  assert(watcherState.data.players.length === 2, "watcher should see both players");
+  for (const player of watcherState.data.players) {
+    assert(player.hand === undefined, "watcher must not receive any hand");
+  }
+  assert(legalCardIds(watcherState.data).length === 0, "watcher must not receive legal cards");
+  await send(watcher, matchId, OP.PLAY_REQUEST, { cardId: STARTING_CARD_ID });
+  const spectatorError = await waitFor(
+    watcher.socket,
+    (m) => m.op === OP.ERROR,
+    "spectator play rejection",
+    ERROR_TIMEOUT_MS,
+  );
+  const reason = `${spectatorError.data.code ?? ""} ${spectatorError.data.message ?? ""}`;
+  assert(
+    /not_your_turn|not a player/i.test(reason),
+    `spectator should not play: ${JSON.stringify(spectatorError.data)}`,
+  );
+  console.log("[ok] spectator is read-only and receives hand-free state");
+
+  const choice = pickLegalCard(bobStart.data, bob);
+  await send(bob, matchId, OP.PLAY_REQUEST, choice.payload);
+  const watcherPlayState = await waitState(
+    watcher.socket,
+    "watcher state after play",
+    (state) => state.topCard?.id === choice.cardId,
+  );
+  for (const player of watcherPlayState.data.players) {
+    assert(player.hand === undefined, "watcher still must not receive hands after a play");
+  }
+  const aliceCountBeforeDraw = seatOf(watcherPlayState.data, alice).count;
+  await send(alice, matchId, OP.DRAW_REQUEST, {});
+  const watcherDrawState = await waitState(
+    watcher.socket,
+    "watcher state after draw",
+    (state) => seatOf(state, alice)?.count === aliceCountBeforeDraw + 1,
+  );
+  for (const player of watcherDrawState.data.players) {
+    assert(player.hand === undefined, "watcher still must not receive hands after a draw");
+  }
+  console.log("[ok] watcher follows authoritative play and draw without hands");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  const watcherOver = await waitFor(
+    watcher.socket,
+    (m) => m.op === OP.GAME_OVER,
+    "watcher game over",
+  );
+  assert(watcherOver.data.status === "finished", "watcher should see a finished result");
+  assert(
+    watcherOver.data.winnerUserId === bob.session.user_id,
+    "watcher should see the public winner",
+  );
+  const watcherFinal = await waitState(
+    watcher.socket,
+    "watcher final state",
+    (state) => state.result?.winnerUserId === bob.session.user_id,
+  );
+  for (const player of watcherFinal.data.players) {
+    assert(player.hand === undefined, "watcher final state stays hand-free");
+  }
+  console.log("[ok] watcher receives the public result and final state");
+}
+
+async function reconnectResign() {
+  const { alice, bob, matchId } = await quickPair("reconnect");
+  const aliceStart = await waitForStart(alice, "reconnect alice");
+  const bobStart = await waitForStart(bob, "reconnect bob");
+  const before = seatOf(bobStart.data, bob);
+  assert(aliceStart.data.started === true, "reconnect table should be started");
+  assert(before?.hand?.length === HAND_SIZE, "bob should have a full hand before leaving");
+
+  bob.socket.disconnect(false);
+  await waitFor(
+    alice.socket,
+    (m) => m.op === OP.PLAYER_LEFT && m.data.userId === bob.session.user_id,
+    "alice sees bob leave",
+    ERROR_TIMEOUT_MS,
+  );
+  const reconnectSocket = bob.client.createSocket(USE_SSL, false);
+  attachCollector(reconnectSocket, "bob-reconnected");
+  await reconnectSocket.connect(bob.session, true);
+  connections.push({ label: "bob-reconnected", client: bob.client, session: bob.session, socket: reconnectSocket });
+  await reconnectSocket.joinMatch(matchId);
+  const restored = await waitState(
+    reconnectSocket,
+    "reconnected state",
+    (state) =>
+      state.players.some(
+        (player) => player.userId === bob.session.user_id && player.connected === true,
+      ),
+  );
+  const after = seatOf(restored.data, bob);
+  assert(after?.seat === before.seat, "reconnect should restore the same seat");
+  assert(after.username === before.username, "reconnect should restore the username");
+  assert(after.count === before.count, "reconnect should restore the hand count");
+  assert(after.hand?.length === before.hand.length, "reconnect should restore the hand");
+  console.log("[ok] reconnect restores the seat and hand within grace");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  const aliceOver = await waitFor(
+    alice.socket,
+    (m) => m.op === OP.GAME_OVER,
+    "alice game over after reconnect",
+  );
+  const bobOver = await waitFor(
+    reconnectSocket,
+    (m) => m.op === OP.GAME_OVER,
+    "bob game over after reconnect",
+  );
+  assert(aliceOver.data.winnerUserId === bob.session.user_id, "alice should see bob win");
+  assert(bobOver.data.winnerUserId === bob.session.user_id, "bob should see himself win");
+  console.log("[ok] resignation after reconnect is authoritative for both sockets");
+}
+
+async function noEagerQuick() {
+  const solo = await authenticate("no-eager-quick");
+  let rejected = false;
+  let payload = null;
+  try {
+    const response = await solo.client.rpc(solo.session, "uno_quick_match", {});
+    payload = response.payload;
+  } catch (error) {
+    rejected = true;
+  }
+  assert(
+    rejected || payload?.ok === false || payload?.error != null,
+    `uno_quick_match should not be callable: ${JSON.stringify(payload)}`,
+  );
+  console.log("[ok] there is no eager quick-match RPC");
+}
+
+async function main() {
+  try {
+    await quickMatchAndPlay();
+    await privateRoomCodeAndSpectator();
+    await reconnectResign();
+    await noEagerQuick();
+  } finally {
+    for (const connection of connections) {
+      try {
+        connection.socket.disconnect(false);
+      } catch (error) {
+        console.error(`${connection.label}: disconnect failed: ${error.message}`);
+      }
+    }
+  }
+}
+
+main()
+  .then(() => {
+    console.log("[ok] Uno online smoke passed");
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

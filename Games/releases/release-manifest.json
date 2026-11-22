@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "generatedAt": "2026-11-21T17:30:51.006Z",
+  "generatedAt": "2026-11-22T02:45:55.874Z",
   "signers": {
     "dev-1": {
       "algorithm": "ed25519",
@@ -97,16 +97,15 @@
         "online",
         "private-match",
         "spectators",
-        "invite-links",
-        "replay"
+        "invite-links"
       ],
-      "publishedAt": "2026-11-21T17:30:50.893Z",
-      "sha256": "20913218df8fb2e4f0a6f16c4615a0c3713567dcec832c9dd7fd39bb6675b390",
-      "size": 271911,
+      "publishedAt": "2026-11-22T02:45:55.767Z",
+      "sha256": "3238dbc958486f2005fb3dccfdbec856ab35b2da8f3477d8d18e81de86213677",
+      "size": 279576,
       "url": "uno/0.1.0/uno-0.1.0.zip",
       "keyId": "dev-1",
       "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE=",
-      "signature": "6iRw7+WPW9OLzWdod4DqokYobHXJy+Kcda88R//eSRRfXDxFgrW7jrHCS9jNkSxVxiUVFXWHUC3KY2vO+TevBg=="
+      "signature": "39tqsOANE64DOjqlR633lODfuE+ae5etcn9L7L8SHgi2AdKg+uh6WJ9Y1Z76GPzT7X1jaNbCWUIQW7qMDkycAg=="
     }
   ]
 }

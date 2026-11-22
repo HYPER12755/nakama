@@ -289,38 +289,7 @@ function buildAiPlan(
     );
   }
 
-  // A few neutral options keep the AI from freezing when the table is crowded.
   const baseline = baselineOf(state.turn);
-  for (const raw of [0.35, 0.5, 0.65]) {
-    const position = clampStrikerPosition(raw);
-    const striker = strikerPoint(state.turn, position);
-    const straight =
-      baseline.slideAxis === "x"
-        ? { x: striker.x, y: baseline.inward > 0 ? 1 : 0 }
-        : { x: baseline.inward > 0 ? 1 : 0, y: striker.y };
-    addCandidate(
-      candidates,
-      seen,
-      {
-        position,
-        angle: Math.atan2(straight.y - striker.y, straight.x - striker.x),
-        power: 0.58,
-      },
-      0,
-    );
-    if (own[0] !== undefined) {
-      addCandidate(
-        candidates,
-        seen,
-        {
-          position,
-          angle: aimAngle(striker, own[0]),
-          power: 0.66,
-        },
-        1,
-      );
-    }
-  }
 
   const ordered = [...candidates].sort(
     (left, right) =>

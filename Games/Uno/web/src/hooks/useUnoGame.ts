@@ -1,12 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Client, Session, Socket } from "@heroiclabs/nakama-js";
+import { Client, Session, type Socket } from "@heroiclabs/nakama-js";
+import {
+  MoonGamesSocialClient,
+  signInWithMoonGames,
+  signUpWithMoonGames,
+} from "@moongames/social";
 import {
   accountCreationAllowed,
   insecureConnectionRequested,
   matchStateBytes,
   readLauncherHandoff,
   sameOriginServerAddress,
+  type SocialFriend,
 } from "@moongames/game-sdk";
+import type {
+  GameHistoryEntry,
+  GameLeaderboardEntry,
+  GameProfile,
+  OnlineAuthAccount,
+} from "@moongames/game-ui";
 import {
   UNO_OP,
   applyAction,
@@ -20,35 +32,127 @@ import { normalizeList, viewFromCore, type BoardView } from "../lib/view";
 
 const GAME_ID = __MOONGAMES_GAME_ID__;
 const DEVICE_KEY = `moongames.${GAME_ID}.deviceId`;
+const SERVER_KEY = "defaultkey";
 
 function deviceId(): string {
   try {
-    const existing = sessionStorage.getItem(DEVICE_KEY);
+    const existing = window.sessionStorage.getItem(DEVICE_KEY);
     if (existing !== null && existing !== "") {
       return existing;
     }
     const created = crypto.randomUUID();
-    sessionStorage.setItem(DEVICE_KEY, created);
+    window.sessionStorage.setItem(DEVICE_KEY, created);
+    window.localStorage.removeItem(DEVICE_KEY);
     return created;
   } catch {
-    return "uno-device";
+    return `${GAME_ID}-${Date.now()}`;
   }
 }
 
-function serverAddress() {
-  const config = readLauncherHandoff(GAME_ID);
-  if (config?.nakama) {
-    return config.nakama;
-  }
-  return sameOriginServerAddress(window.location);
+function serverAddress(
+  nakama?: { host?: string; port?: string; useSSL?: boolean; serverKey?: string },
+) {
+  const params = new URLSearchParams(window.location.search);
+  const origin = sameOriginServerAddress();
+  const host = nakama?.host ?? params.get("nakamaHost") ?? origin.host;
+  const port = Number(nakama?.port ?? params.get("nakamaPort") ?? origin.port);
+  const useSSL = nakama?.useSSL ?? (params.get("nakamaSSL") === "1" ? true : origin.useSSL);
+  return {
+    host: host || "127.0.0.1",
+    port: String(Number.isFinite(port) && port > 0 ? port : origin.port),
+    useSSL,
+    serverKey: nakama?.serverKey ?? SERVER_KEY,
+  };
 }
 
-function normalizeView(payload: Record<string, unknown>, myUserId: string | null): BoardView {
+function sessionFromConfig(token?: string, refresh?: string): Session | null {
+  if (typeof token !== "string" || token.length === 0) {
+    return null;
+  }
+  try {
+    return Session.restore(token, refresh ?? "");
+  } catch {
+    return null;
+  }
+}
+
+function normalizeResult(value: unknown): BoardView["result"] {
+  const source = value as Record<string, unknown> | null | undefined;
+  if (source == null) {
+    return null;
+  }
+  const winner = source.winnerUserId ?? source.winner_user_id ?? source.winner ?? null;
+  return {
+    status: String(source.status ?? "finished"),
+    winnerUserId: winner == null ? null : String(winner),
+    reason: source.reason == null ? undefined : String(source.reason),
+  };
+}
+
+function normalizePendingChallenge(value: unknown): BoardView["pendingChallenge"] {
+  const source = value as Record<string, unknown> | null | undefined;
+  if (source == null) {
+    return null;
+  }
+  return {
+    ownerId: String(source.ownerId ?? source.owner_id ?? ""),
+    targetId: String(source.targetId ?? source.target_id ?? ""),
+    legal: source.legal === true,
+  };
+}
+
+export function normalizeHistory(value: unknown): GameHistoryEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => {
+    const record = item as Record<string, unknown>;
+    const opponent = (record.opponent ?? {}) as Record<string, unknown>;
+    const replay = (record.replay ?? {}) as Record<string, unknown>;
+    const mode = record.mode === "private" || record.mode === "quick" ? record.mode : "quick";
+    const rawOutcome = String(record.outcome ?? "");
+    const outcome = (["win", "loss", "draw", "abandoned"].includes(rawOutcome)
+      ? rawOutcome
+      : "abandoned") as GameHistoryEntry["outcome"];
+    const steps = Array.isArray(replay.steps)
+      ? replay.steps.map(String)
+      : Array.isArray(record.steps)
+        ? record.steps.map(String)
+        : [];
+    return {
+      matchId: String(record.matchId ?? record.match_id ?? ""),
+      gameId: typeof record.gameId === "string" ? record.gameId : undefined,
+      mode,
+      rated: record.rated === true,
+      outcome,
+      status: String(record.status ?? "finished"),
+      reason: String(record.reason ?? ""),
+      opponent: {
+        userId: String(
+          opponent.userId ?? opponent.user_id ?? record.opponentId ?? record.opponent_id ?? "",
+        ),
+        username: String(
+          opponent.username ?? record.opponentUsername ?? record.opponent_username ?? "Opponent",
+        ),
+      },
+      ratingBefore: Number(record.ratingBefore ?? record.rating_before ?? 0),
+      ratingAfter: Number(record.ratingAfter ?? record.rating_after ?? 0),
+      ratingDelta: Number(record.ratingDelta ?? record.rating_delta ?? 0),
+      endedAt: Number(record.endedAt ?? record.ended_at ?? 0),
+      steps,
+      ...(typeof record.summary === "string" ? { summary: record.summary } : {}),
+      ...(typeof record.pgn === "string" ? { pgn: record.pgn } : {}),
+      ...(typeof record.finalFen === "string" ? { finalFen: record.finalFen } : {}),
+    };
+  });
+}
+
+export function normalizeView(payload: Record<string, unknown>, myUserId: string | null): BoardView {
   const players = normalizeList(payload.players).map((value, index) => {
     const player = value as Record<string, unknown>;
     return {
       seat: Number(player.seat ?? index),
-      userId: String(player.userId ?? ""),
+      userId: String(player.userId ?? player.user_id ?? ""),
       username: String(player.username ?? "Player"),
       connected: player.connected !== false,
       count: Number(player.count ?? 0),
@@ -59,7 +163,7 @@ function normalizeView(payload: Record<string, unknown>, myUserId: string | null
     const spectator = value as Record<string, unknown>;
     return {
       seat: index,
-      userId: String(spectator.userId ?? ""),
+      userId: String(spectator.userId ?? spectator.user_id ?? ""),
       username: String(spectator.username ?? "Player"),
       connected: true,
       count: 0,
@@ -67,16 +171,16 @@ function normalizeView(payload: Record<string, unknown>, myUserId: string | null
   });
   const chat = normalizeList(payload.chat).map((value) => {
     const message = value as Record<string, unknown>;
+    const at = Number(message.at ?? message.sentAt ?? message.sent_at ?? 0);
     return {
       id: String(message.id ?? ""),
-      userId: String(message.userId ?? ""),
+      userId: String(message.userId ?? message.user_id ?? ""),
       username: String(message.username ?? "Player"),
       text: String(message.text ?? ""),
-      at: Number(message.at ?? 0),
-      sentAt: Number(message.at ?? 0),
+      at,
+      sentAt: at,
     };
   });
-  const resultValue = payload.result as Record<string, unknown> | null | undefined;
   return {
     players,
     spectators,
@@ -86,14 +190,10 @@ function normalizeView(payload: Record<string, unknown>, myUserId: string | null
     turn: Number(payload.turn ?? 0),
     direction: payload.direction === -1 ? -1 : 1,
     deckCount: Number(payload.deckCount ?? 0),
-    pendingChallenge: (payload.pendingChallenge as BoardView["pendingChallenge"]) ?? null,
+    pendingChallenge: normalizePendingChallenge(payload.pendingChallenge ?? payload.pending_challenge),
     legalCards: normalizeList(payload.legalCards).map(String),
     canDraw: payload.canDraw === true,
-    result: resultValue == null ? null : {
-      status: String(resultValue.status ?? "finished"),
-      winnerUserId: resultValue.winnerUserId == null ? null : String(resultValue.winnerUserId),
-      reason: resultValue.reason == null ? undefined : String(resultValue.reason),
-    },
+    result: normalizeResult(payload.result),
     myUserId,
     started: payload.started === true,
   };
@@ -123,31 +223,48 @@ export interface UnoController {
   roomCode: string | null;
   myUserId: string | null;
   view: BoardView;
-  profile: Record<string, unknown> | null;
+  profile: GameProfile | null;
   profileLoading: boolean;
   profileError: string | null;
-  history: unknown[];
-  leaderboard: unknown[];
+  history: GameHistoryEntry[];
+  leaderboard: GameLeaderboardEntry[];
   leaderboardTotal: number;
-  myLeaderboard: Record<string, unknown> | null;
+  myLeaderboard: GameLeaderboardEntry | null;
   matchId: string | null;
   spectating: boolean;
-  account: Record<string, unknown> | null;
+  account: OnlineAuthAccount | null;
+  accountName: string | null;
   authBusy: boolean;
   authError: string | null;
   authNotice: string | null;
+  friends: SocialFriend[];
+  friendsLoading: boolean;
+  friendsError: string | null;
+  inviteSendingId: string | null;
+  inviteError: string | null;
+  inviteNotice: string | null;
+  loadFriends: () => Promise<void>;
+  inviteFriend: (input: {
+    userId: string;
+    username: string;
+    state: number;
+    matchId: string;
+    spectate: boolean;
+  }) => Promise<void>;
   quickMatch: (seats: number) => Promise<void>;
   cancelQuickMatch: () => void;
-  createPrivate: (seats: number) => Promise<void>;
-  joinByCode: (code: string) => Promise<void>;
+  createPrivate: (seats: number) => Promise<string>;
+  joinMatch: (matchId: string, token?: string, spectator?: boolean) => Promise<void>;
+  joinByCode: (code: string, spectator?: boolean) => Promise<void>;
   leave: () => Promise<void>;
   play: (cardId: string, chosenColor?: Color) => void;
   draw: () => void;
   challenge: (accept: boolean) => void;
   sendChat: (text: string) => void;
   refreshProfile: () => Promise<void>;
+  connect: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, username: string) => Promise<void>;
+  signUp: (email: string, password: string, username?: string) => Promise<void>;
   signOut: () => Promise<void>;
   clearAuthFeedback: () => void;
   resign: () => void;
@@ -156,7 +273,7 @@ export interface UnoController {
   rematch: () => Promise<void>;
 }
 
-export function useUnoGame(): UnoController {
+export function useUnoGame(enabled = true): UnoController {
   const [cardSet, setCardSetState] = useState<"classic" | "neon">((): "classic" | "neon" => {
     try {
       return localStorage.getItem("moongames.uno.cardSet") === "neon" ? "neon" : "classic";
@@ -176,29 +293,45 @@ export function useUnoGame(): UnoController {
   const [notice, setNotice] = useState<string | null>(null);
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [myUserId, setMyUserId] = useState<string | null>(null);
-  const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
+  const [profile, setProfile] = useState<GameProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
-  const [history, setHistory] = useState<unknown[]>([]);
-  const [leaderboard, setLeaderboard] = useState<unknown[]>([]);
+  const [history, setHistory] = useState<GameHistoryEntry[]>([]);
+  const [leaderboard, setLeaderboard] = useState<GameLeaderboardEntry[]>([]);
   const [leaderboardTotal, setLeaderboardTotal] = useState(0);
-  const [myLeaderboard, setMyLeaderboard] = useState<Record<string, unknown> | null>(null);
+  const [myLeaderboard, setMyLeaderboard] = useState<GameLeaderboardEntry | null>(null);
   const [matchId, setMatchId] = useState<string | null>(null);
-  const [spectating] = useState(false);
-  const [account] = useState<Record<string, unknown> | null>(null);
-  const [authBusy] = useState(false);
-  const [authError] = useState<string | null>(null);
-  const [authNotice] = useState<string | null>(null);
+  const [spectating, setSpectating] = useState(false);
+  const [account, setAccount] = useState<OnlineAuthAccount | null>(null);
+  const [accountName, setAccountName] = useState<string | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [friends, setFriends] = useState<SocialFriend[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState(false);
+  const [friendsError, setFriendsError] = useState<string | null>(null);
+  const [inviteSendingId, setInviteSendingId] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
 
   const clientRef = useRef<Client | null>(null);
   const sessionRef = useRef<Session | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const matchIdRef = useRef<string | null>(null);
+  const spectatingRef = useRef(false);
   const ticketRef = useRef<string | null>(null);
   const searchTimerRef = useRef<number | null>(null);
   const searchRunRef = useRef(0);
   const reconnectRef = useRef<number | null>(null);
   const connectingRef = useRef(false);
+  const socialRef = useRef<MoonGamesSocialClient | null>(null);
+  const friendsPromiseRef = useRef<Promise<void> | null>(null);
+  const pendingAuthRef = useRef<{
+    mode: "sign-in" | "sign-up";
+    email: string;
+    password: string;
+    username?: string;
+  } | null>(null);
 
   const setCardSet = useCallback((set: "classic" | "neon") => {
     setCardSetState(set);
@@ -237,19 +370,36 @@ export function useUnoGame(): UnoController {
         client.rpc(session, "uno_get_profile", {}),
         client.rpc(session, "uno_get_leaderboard", { limit: 10 }),
       ]);
-      const profilePayload = profileResponse.payload as Record<string, unknown>;
-      const leaderboardPayload = leaderboardResponse.payload as Record<string, unknown>;
-      if (profilePayload?.ok === true) {
-        setProfile((profilePayload.profile as Record<string, unknown>) ?? null);
-        setHistory(Array.isArray(profilePayload.history) ? profilePayload.history : []);
+      const profilePayload = profileResponse.payload as {
+        ok?: boolean;
+        profile?: GameProfile;
+        history?: unknown;
+        error?: { message?: string };
+      };
+      const leaderboardPayload = leaderboardResponse.payload as {
+        ok?: boolean;
+        entries?: GameLeaderboardEntry[];
+        me?: GameLeaderboardEntry | null;
+        total?: number;
+        error?: { message?: string };
+      };
+      if (profilePayload?.ok !== true) {
+        setProfileError(profilePayload?.error?.message ?? "The profile could not be loaded.");
+        return;
       }
-      if (leaderboardPayload?.ok === true) {
-        setLeaderboard(Array.isArray(leaderboardPayload.entries) ? leaderboardPayload.entries : []);
-        setLeaderboardTotal(Number(leaderboardPayload.total ?? 0));
-        setMyLeaderboard((leaderboardPayload.me as Record<string, unknown>) ?? null);
+      if (leaderboardPayload?.ok !== true) {
+        setProfileError(
+          leaderboardPayload?.error?.message ?? "The rating leaderboard could not be loaded.",
+        );
+        return;
       }
-    } catch {
-      setProfileError("Could not load your profile.");
+      setProfile(profilePayload.profile ?? null);
+      setHistory(normalizeHistory(profilePayload.history));
+      setLeaderboard(Array.isArray(leaderboardPayload.entries) ? leaderboardPayload.entries : []);
+      setLeaderboardTotal(Number(leaderboardPayload.total ?? 0));
+      setMyLeaderboard(leaderboardPayload.me ?? null);
+    } catch (cause) {
+      setProfileError(cause instanceof Error ? cause.message : "Could not load your profile.");
     } finally {
       setProfileLoading(false);
     }
@@ -260,21 +410,69 @@ export function useUnoGame(): UnoController {
       return;
     }
     connectingRef.current = true;
+    socialRef.current = null;
+    friendsPromiseRef.current = null;
     setConnection("connecting");
     try {
-      const address = serverAddress();
+      const config = readLauncherHandoff(GAME_ID);
+      const address = serverAddress(config?.nakama);
       if (
-        !address.useSSL &&
-        !accountCreationAllowed({
+        sessionFromConfig(config?.session?.token, config?.session?.refreshToken) === null
+        && !accountCreationAllowed({
           host: address.host,
           useSSL: address.useSSL,
-          allowInsecure: insecureConnectionRequested(window.location.search),
+          allowInsecure:
+            config?.nakama?.allowInsecure === true
+            || insecureConnectionRequested(window.location.search),
         })
       ) {
-        throw new Error("Use HTTPS for a remote server.");
+        throw new Error("A secure connection is required before an account can be created.");
       }
       const client = new Client(address.serverKey, address.host, address.port, address.useSSL);
-      const session = await client.authenticateDevice(deviceId(), true);
+      const hostSession = sessionFromConfig(config?.session?.token, config?.session?.refreshToken);
+      const pendingAuth = pendingAuthRef.current;
+      let session: Session;
+      if (pendingAuth !== null) {
+        session = pendingAuth.mode === "sign-in"
+          ? await signInWithMoonGames({ client, email: pendingAuth.email, password: pendingAuth.password })
+          : await signUpWithMoonGames({
+            client,
+            email: pendingAuth.email,
+            password: pendingAuth.password,
+            username: pendingAuth.username,
+          });
+        setAccount({
+          kind: "email",
+          userId: session.user_id ?? "",
+          username: session.username ?? pendingAuth.username ?? pendingAuth.email,
+          email: pendingAuth.email,
+        });
+        pendingAuthRef.current = null;
+      } else if (hostSession && !hostSession.isexpired(Date.now() / 1000)) {
+        session = hostSession;
+        setAccount({
+          kind: "host",
+          userId: session.user_id ?? "",
+          username: session.username ?? "MoonGames player",
+          email: null,
+        });
+      } else if (hostSession && hostSession.refresh_token) {
+        session = await client.sessionRefresh(hostSession);
+        setAccount({
+          kind: "host",
+          userId: session.user_id ?? "",
+          username: session.username ?? "MoonGames player",
+          email: null,
+        });
+      } else {
+        session = await client.authenticateDevice(deviceId(), true);
+        setAccount({
+          kind: "guest",
+          userId: session.user_id ?? "",
+          username: session.username ?? "Player",
+          email: null,
+        });
+      }
       const socket = client.createSocket(address.useSSL, false);
       await socket.connect(session, true);
 
@@ -293,7 +491,7 @@ export function useUnoGame(): UnoController {
             ...current,
             chat: [...current.chat, {
               id: String(payload.id ?? Date.now()),
-              userId: String(payload.userId ?? ""),
+              userId: String(payload.userId ?? payload.user_id ?? ""),
               username: String(payload.username ?? "Player"),
               text: String(payload.text ?? ""),
               at: Number(payload.at ?? Date.now()),
@@ -301,6 +499,12 @@ export function useUnoGame(): UnoController {
             }],
           }));
         } else if (data.op_code === UNO_OP.GAME_OVER) {
+          setOnlineView((current) => ({
+            ...current,
+            started: true,
+            result: normalizeResult(payload),
+          }));
+          void refreshProfile();
           setNotice("The hand is finished.");
         } else if (data.op_code === UNO_OP.ERROR) {
           setError(String(payload.message ?? "The server refused that move."));
@@ -309,13 +513,12 @@ export function useUnoGame(): UnoController {
 
       socket.onmatchmakermatched = (matched) => {
         clearSearch();
-        void (async () => {
-          await socket.joinMatch(matched.match_id, matched.token ?? undefined);
+        void socket.joinMatch(matched.match_id, matched.token ?? undefined).then(() => {
           matchIdRef.current = matched.match_id;
           setMatchId(matched.match_id);
           setDealKey((value) => value + 1);
           setRoomCode(null);
-        })().catch((cause: unknown) => {
+        }).catch((cause: unknown) => {
           setError(cause instanceof Error ? cause.message : "Could not join the table.");
         });
       };
@@ -333,12 +536,22 @@ export function useUnoGame(): UnoController {
           if (socketRef.current !== null || matchIdRef.current === null) {
             return;
           }
+          const wasSpectating = spectatingRef.current;
           void connect().then(() => {
             const live = socketRef.current;
             const current = matchIdRef.current;
-            if (live !== null && current !== null) {
-              void live.joinMatch(current).catch(() => undefined);
+            if (live === null || current === null) {
+              return;
             }
+            void live.joinMatch(current, undefined, wasSpectating ? { spectate: "1" } : undefined)
+              .catch(() => {
+                setNotice("The table could not be rejoined. Open a new one.");
+                matchIdRef.current = null;
+                spectatingRef.current = false;
+                setMatchId(null);
+                setSpectating(false);
+                setOnlineView(emptyView(session.user_id ?? null));
+              });
           });
         }, 1200);
       };
@@ -350,7 +563,10 @@ export function useUnoGame(): UnoController {
       socketRef.current = socket;
       setMyUserId(session.user_id ?? null);
       setConnection("connected");
-      await refreshProfile();
+      const accountInfo = await client.getAccount(session).catch(() => null) as
+        | { user?: { username?: string } }
+        | null;
+      setAccountName(accountInfo?.user?.username ?? session.username ?? "Guest");
     } catch (cause) {
       setConnection("error");
       setError(cause instanceof Error ? cause.message : "Could not connect.");
@@ -360,14 +576,29 @@ export function useUnoGame(): UnoController {
   }, [clearSearch, refreshProfile]);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    void connect();
     return () => {
       clearSearch();
       if (reconnectRef.current !== null) {
         window.clearTimeout(reconnectRef.current);
+        reconnectRef.current = null;
       }
-      socketRef.current?.disconnect(false);
+      const socket = socketRef.current;
+      socketRef.current = null;
+      if (socket !== null) {
+        void socket.disconnect(false);
+      }
     };
-  }, [clearSearch]);
+  }, [clearSearch, connect, enabled]);
+
+  useEffect(() => {
+    if (enabled && connection === "connected") {
+      void refreshProfile();
+    }
+  }, [connection, enabled, refreshProfile]);
 
   useEffect(() => {
     if (searching) {
@@ -390,12 +621,14 @@ export function useUnoGame(): UnoController {
     if (mode !== "local" || localGame === null || localGame.finished) {
       return;
     }
-    const actor = localGame.players[localGame.turn];
-    if (actor.id === "local") {
+    const actorId = localGame.pendingChallenge?.targetId
+      ?? localGame.players[localGame.turn].id;
+    const actor = localGame.players.find((player) => player.id === actorId);
+    if (actor === undefined || actor.id === "local") {
       return;
     }
     const timer = window.setTimeout(() => {
-      const action = chooseAction(localGame, actor.id);
+      const action = chooseAction(localGame, actorId);
       if (action === null) {
         return;
       }
@@ -407,8 +640,28 @@ export function useUnoGame(): UnoController {
     return () => window.clearTimeout(timer);
   }, [localGame, mode]);
 
+  const leave = useCallback(async () => {
+    clearSearch();
+    const socket = socketRef.current;
+    const joined = matchIdRef.current;
+    if (socket !== null && joined !== null) {
+      await socket.leaveMatch(joined).catch(() => undefined);
+    }
+    socialRef.current = null;
+    friendsPromiseRef.current = null;
+    matchIdRef.current = null;
+    spectatingRef.current = false;
+    setMatchId(null);
+    setRoomCode(null);
+    setSpectating(false);
+    setOnlineView(emptyView(myUserId));
+  }, [clearSearch, myUserId]);
+
   const setMode = useCallback((next: "local" | "online") => {
     if (next === "local") {
+      if (matchIdRef.current !== null) {
+        void leave();
+      }
       clearSearch();
       setModeState("local");
       startLocal(seats);
@@ -416,27 +669,42 @@ export function useUnoGame(): UnoController {
     }
     setModeState("online");
     void connect();
-  }, [clearSearch, connect, seats, startLocal]);
+  }, [clearSearch, connect, leave, seats, startLocal]);
 
-  const joinMatch = useCallback(async (matchId: string, token?: string) => {
+  const joinMatch = useCallback(async (matchId: string, token?: string, spectator = false) => {
     const socket = socketRef.current;
     if (socket === null) {
       throw new Error("The realtime connection is not ready yet.");
     }
-    await socket.joinMatch(matchId, token);
+    if (matchIdRef.current !== null && matchIdRef.current !== matchId) {
+      await socket.leaveMatch(matchIdRef.current).catch(() => undefined);
+    }
+    await socket.joinMatch(matchId, token, spectator ? { spectate: "1" } : undefined);
     matchIdRef.current = matchId;
+    spectatingRef.current = spectator;
     setMatchId(matchId);
+    setSpectating(spectator);
     setDealKey((value) => value + 1);
     setError(null);
   }, []);
 
   const quickMatch = useCallback(async (count: number) => {
-    clearSearch();
-    if (socketRef.current === null) {
-      await connect();
+    if (searchTimerRef.current !== null) {
+      setError("A quick match search is already running.");
+      return;
     }
-    const socket = socketRef.current;
+    if (matchIdRef.current !== null) {
+      setError("Leave the current table before starting a quick match.");
+      return;
+    }
+    clearSearch();
+    let socket = socketRef.current;
     if (socket === null) {
+      await connect();
+      socket = socketRef.current;
+    }
+    if (socket === null) {
+      setError("The realtime connection is not ready yet.");
       return;
     }
     const run = searchRunRef.current + 1;
@@ -463,76 +731,256 @@ export function useUnoGame(): UnoController {
         setError("No opponent found. Try again.");
       }, 60000);
     } catch (cause) {
-      setSearching(false);
-      setError(cause instanceof Error ? cause.message : "The search could not start.");
+      if (run === searchRunRef.current) {
+        setSearching(false);
+        setError(cause instanceof Error ? cause.message : "The search could not start.");
+      }
     }
   }, [clearSearch, connect]);
 
-  const createPrivate = useCallback(async (count: number) => {
+  const createPrivate = useCallback(async (count: number): Promise<string> => {
     clearSearch();
-    const client = clientRef.current;
-    const session = sessionRef.current;
+    let client = clientRef.current;
+    let session = sessionRef.current;
     if (client === null || session === null) {
       await connect();
+      client = clientRef.current;
+      session = sessionRef.current;
     }
-    const liveClient = clientRef.current;
-    const liveSession = sessionRef.current;
-    if (liveClient === null || liveSession === null) {
-      return;
+    if (client === null || session === null) {
+      throw new Error("The realtime connection is not ready yet.");
     }
-    try {
-      const response = await liveClient.rpc(liveSession, "uno_create_private_match", { seats: count });
-      const payload = response.payload as Record<string, unknown>;
-      if (payload?.ok !== true || typeof payload.matchId !== "string") {
-        throw new Error("The private room could not be created.");
-      }
-      setRoomCode(typeof payload.roomCode === "string" ? payload.roomCode : null);
-      await joinMatch(payload.matchId);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The private room could not be created.");
+    const response = await client.rpc(session, "uno_create_private_match", { seats: count });
+    const payload = response.payload as Record<string, unknown>;
+    if (payload?.ok !== true || typeof payload.matchId !== "string") {
+      throw new Error("The private room could not be created.");
     }
+    setRoomCode(typeof payload.roomCode === "string" ? payload.roomCode : null);
+    await joinMatch(payload.matchId);
+    return payload.matchId;
   }, [clearSearch, connect, joinMatch]);
 
-  const joinByCode = useCallback(async (code: string) => {
+  const joinByCode = useCallback(async (code: string, spectator = false) => {
     clearSearch();
+    let client = clientRef.current;
+    let session = sessionRef.current;
+    if (client === null || session === null) {
+      await connect();
+      client = clientRef.current;
+      session = sessionRef.current;
+    }
+    if (client === null || session === null || code.trim() === "") {
+      throw new Error("The realtime connection is not ready yet.");
+    }
+    const response = await client.rpc(session, "moongames_room_code_resolve", {
+      code: code.trim(),
+      gameId: GAME_ID,
+    });
+    const payload = response.payload as {
+      ok?: boolean; matchId?: string; code?: string; error?: { message?: string };
+    };
+    if (payload?.ok !== true || typeof payload.matchId !== "string") {
+      throw new Error(payload.error?.message ?? "That room code was not found.");
+    }
+    setRoomCode(String(payload.code ?? code.trim().toUpperCase()));
+    await joinMatch(payload.matchId, undefined, spectator);
+  }, [clearSearch, connect, joinMatch]);
+
+  const loadFriends = useCallback(async (): Promise<void> => {
+    if (friendsPromiseRef.current !== null) {
+      return friendsPromiseRef.current;
+    }
     const client = clientRef.current;
     const session = sessionRef.current;
     if (client === null || session === null) {
-      await connect();
-    }
-    const liveClient = clientRef.current;
-    const liveSession = sessionRef.current;
-    if (liveClient === null || liveSession === null || code.trim() === "") {
+      setFriendsError("Connect to the game server to load your friends.");
       return;
     }
+    setFriendsLoading(true);
+    setFriendsError(null);
+    const request = (async () => {
+      try {
+        const social = socialRef.current ?? new MoonGamesSocialClient({
+          client,
+          session,
+          socket: socketRef.current,
+          selfUserId: session.user_id,
+        });
+        socialRef.current = social;
+        const responses = await Promise.allSettled([
+          social.listFriends(0),
+          social.listFriends(1),
+          social.listFriends(2),
+        ]);
+        const groups = responses.flatMap((result) =>
+          result.status === "fulfilled" ? [result.value] : [],
+        );
+        if (groups.length === 0) {
+          const rejected = responses.find(
+            (result): result is PromiseRejectedResult => result.status === "rejected",
+          );
+          throw rejected?.reason ?? new Error("Friend list unavailable.");
+        }
+        const byId = new Map<string, SocialFriend>();
+        for (const group of groups) {
+          for (const friend of group) {
+            byId.set(friend.userId, friend);
+          }
+        }
+        const rank = (friendState: number) =>
+          friendState === 0 ? 0 : friendState === 2 ? 1 : friendState === 1 ? 2 : 3;
+        setFriends([...byId.values()].sort((left, right) =>
+          rank(left.state) - rank(right.state) ||
+          left.username.localeCompare(right.username, undefined, { sensitivity: "base" }),
+        ));
+      } catch (cause) {
+        setFriendsError(cause instanceof Error ? cause.message : "Could not load your MoonGames friends.");
+      } finally {
+        setFriendsLoading(false);
+        friendsPromiseRef.current = null;
+      }
+    })();
+    friendsPromiseRef.current = request;
+    await request;
+  }, []);
+
+  const inviteFriend = useCallback(async (input: {
+    userId: string;
+    username: string;
+    state: number;
+    matchId: string;
+    spectate: boolean;
+  }): Promise<void> => {
+    const client = clientRef.current;
+    const session = sessionRef.current;
+    if (client === null || session === null) {
+      throw new Error("Connect to the game server first.");
+    }
+    setInviteSendingId(input.userId);
+    setInviteError(null);
+    setInviteNotice(null);
     try {
-      const response = await liveClient.rpc(liveSession, "moongames_room_code_resolve", {
-        code: code.trim(),
-        gameId: GAME_ID,
+      const social = socialRef.current ?? new MoonGamesSocialClient({
+        client,
+        session,
+        socket: socketRef.current,
+        selfUserId: session.user_id,
       });
-      const payload = response.payload as Record<string, unknown>;
-      if (payload?.ok !== true || typeof payload.matchId !== "string") {
-        throw new Error("That room code was not found.");
+      socialRef.current = social;
+      if (input.state === 1) {
+        throw new Error("That player must accept your friend request first.");
       }
-      setRoomCode(String(payload.code ?? code.trim().toUpperCase()));
-      await joinMatch(payload.matchId);
+      if (input.state === 2) {
+        await social.acceptFriend({ userId: input.userId });
+      }
+      const invite = await social.createInvite({
+        gameId: GAME_ID,
+        mode: "private",
+        matchId: input.matchId,
+        recipientId: input.userId,
+        recipientUsername: input.username,
+        metadata: { spectate: input.spectate },
+      });
+      let chatCardSent = false;
+      if (socketRef.current !== null) {
+        try {
+          await social.sendInviteMessage(input.userId, invite);
+          chatCardSent = true;
+        } catch {
+          chatCardSent = false;
+        }
+      }
+      setInviteNotice(chatCardSent
+        ? `Invite sent to ${input.username}.`
+        : `Invite sent to ${input.username}. The chat card could not be delivered, but the invite is waiting in MoonGames.`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not join that room.");
+      setInviteError(cause instanceof Error ? cause.message : "Could not send that friend invitation.");
+      throw cause;
+    } finally {
+      setInviteSendingId(null);
     }
-  }, [clearSearch, connect, joinMatch]);
+  }, []);
 
-  const leave = useCallback(async () => {
+  const disconnect = useCallback(async () => {
     clearSearch();
-    const socket = socketRef.current;
-    const joined = matchIdRef.current;
-    if (socket !== null && joined !== null) {
-      await socket.leaveMatch(joined).catch(() => undefined);
+    if (reconnectRef.current !== null) {
+      window.clearTimeout(reconnectRef.current);
+      reconnectRef.current = null;
     }
+    const socket = socketRef.current;
+    if (socket !== null) {
+      try {
+        (socket as unknown as { close?: () => void }).close?.();
+      } catch {}
+    }
+    socketRef.current = null;
+    sessionRef.current = null;
     matchIdRef.current = null;
+    spectatingRef.current = false;
+    socialRef.current = null;
+    friendsPromiseRef.current = null;
     setMatchId(null);
+    setSpectating(false);
+    setOnlineView(emptyView(null));
     setRoomCode(null);
-    setOnlineView(emptyView(myUserId));
-  }, [clearSearch, myUserId]);
+    setSearching(false);
+    setConnection("offline");
+  }, [clearSearch]);
+
+  const clearAuthFeedback = useCallback(() => {
+    setAuthError(null);
+    setAuthNotice(null);
+  }, []);
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    setAuthBusy(true);
+    setAuthError(null);
+    setAuthNotice(null);
+    try {
+      pendingAuthRef.current = { mode: "sign-in", email, password };
+      await disconnect();
+      await connect();
+      setAuthNotice("Signed in. Your rating and history are now synced.");
+    } catch (cause) {
+      pendingAuthRef.current = null;
+      setAuthError(cause instanceof Error ? cause.message : "Sign-in failed.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [connect, disconnect]);
+
+  const signUp = useCallback(async (email: string, password: string, username?: string) => {
+    setAuthBusy(true);
+    setAuthError(null);
+    setAuthNotice(null);
+    try {
+      pendingAuthRef.current = { mode: "sign-up", email, password, username };
+      await disconnect();
+      await connect();
+      setAuthNotice("Account created. Welcome to MoonGames.");
+    } catch (cause) {
+      pendingAuthRef.current = null;
+      setAuthError(cause instanceof Error ? cause.message : "Sign-up failed.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [connect, disconnect]);
+
+  const signOut = useCallback(async () => {
+    setAuthBusy(true);
+    setAuthError(null);
+    setAuthNotice(null);
+    try {
+      pendingAuthRef.current = null;
+      await disconnect();
+      await connect();
+      setAuthNotice("Signed out. You are playing as a guest.");
+    } catch (cause) {
+      setAuthError(cause instanceof Error ? cause.message : "Sign-out failed.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [connect, disconnect]);
 
   const send = useCallback((op: number, payload: Record<string, unknown>) => {
     const socket = socketRef.current;
@@ -609,11 +1057,6 @@ export function useUnoGame(): UnoController {
     send(UNO_OP.RESIGN, {});
   }, [send]);
 
-  const signInStub = useCallback(async () => {
-    setNotice("Email sign-in is handled by the launcher account panel.");
-  }, []);
-  const clearAuthFeedback = useCallback(() => undefined, []);
-
   const view = mode === "online" ? onlineView : viewFromCore(localGame, "local");
 
   return {
@@ -642,12 +1085,22 @@ export function useUnoGame(): UnoController {
     matchId,
     spectating,
     account,
+    accountName,
     authBusy,
     authError,
     authNotice,
+    friends,
+    friendsLoading,
+    friendsError,
+    inviteSendingId,
+    inviteError,
+    inviteNotice,
+    loadFriends,
+    inviteFriend,
     quickMatch,
     cancelQuickMatch: clearSearch,
     createPrivate,
+    joinMatch,
     joinByCode,
     leave,
     play,
@@ -655,9 +1108,10 @@ export function useUnoGame(): UnoController {
     challenge,
     sendChat,
     refreshProfile,
-    signIn: signInStub,
-    signUp: signInStub,
-    signOut: signInStub,
+    connect,
+    signIn,
+    signUp,
+    signOut,
     clearAuthFeedback,
     resign,
     chat: sendChat,

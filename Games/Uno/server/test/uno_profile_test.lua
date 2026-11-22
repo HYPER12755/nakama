@@ -7,6 +7,7 @@ package.path = server_dir .. "/?.lua;" .. script_dir .. "/?.lua;" .. package.pat
 local stored = {}
 local leaderboards = {}
 local social_calls = {}
+local recent_calls = {}
 
 local fake_nk = {
   time = function()
@@ -30,9 +31,10 @@ local fake_nk = {
   end,
   storage_list = function(user_id, collection, limit)
     local result = {}
-    local prefix = user_id .. ":" .. collection .. ":"
+    local prefix = collection .. ":"
+    local suffix = ":" .. user_id
     for key, value in pairs(stored) do
-      if key:find(prefix, 1, true) == 1 then
+      if key:find(prefix, 1, true) == 1 and key:sub(-#suffix) == suffix then
         result[#result + 1] = { key = key, value = value }
       end
     end
@@ -123,6 +125,9 @@ package.preload["moongames_social"] = function()
     record_play = function(entry, game)
       social_calls[#social_calls + 1] = { entry = entry, game = game }
     end,
+    record_recent_players = function(game, players)
+      recent_calls[#recent_calls + 1] = { game = game, players = players }
+    end,
   }
 end
 
@@ -167,6 +172,7 @@ test("persists a finished rated hand and updates ratings", function()
   stored = {}
   leaderboards = {}
   social_calls = {}
+  recent_calls = {}
   local state = match_state("a")
   local result = { status = "finished", winner_user_id = "a" }
   assert_equal(progression.finalize_match({ match_id = "m1" }, state, result, 1000), true, "finalized")
@@ -177,6 +183,38 @@ test("persists a finished rated hand and updates ratings", function()
   assert_equal(#social_calls, 2, "play counts recorded")
   assert_equal(progression.finalize_match({ match_id = "m1" }, state, result, 2000), false, "idempotent")
   assert_equal(stored["uno_profile:a"].wins, 1, "no second game")
+end)
+
+test("returns shared history entries and records recent players", function()
+  stored = {}
+  leaderboards = {}
+  social_calls = {}
+  recent_calls = {}
+  local state = match_state("a")
+  progression.finalize_match({ match_id = "m1" }, state, {
+    status = "finished",
+    reason = "hand finished",
+    winner_user_id = "a",
+  }, 1000)
+  local payload = progression.profile_payload({ user_id = "a", username = "Alice" })
+  local entry = payload.history[1]
+  assert_equal(entry ~= nil, true, "history entry returned")
+  assert_equal(entry.matchId, "m1", "match id")
+  assert_equal(entry.mode, "quick", "mode")
+  assert_equal(entry.rated, true, "rated")
+  assert_equal(entry.outcome, "win", "outcome")
+  assert_equal(entry.status, "finished", "status")
+  assert_equal(entry.reason, "hand finished", "reason")
+  assert_equal(entry.opponent.userId, "b", "opponent id")
+  assert_equal(entry.opponent.username, "Bob", "opponent name")
+  assert_equal(entry.pointsFor, 1, "points for")
+  assert_equal(entry.ratingDelta, stored["uno_profile:a"].rating - 1200, "rating delta")
+  assert_equal(entry.endedAt, 1000, "ended at")
+  assert_equal(#entry.steps, 2, "replay steps")
+  assert_equal(#recent_calls, 1, "recent players recorded")
+  assert_equal(recent_calls[1].game, "uno", "recent game")
+  assert_equal(recent_calls[1].players[1].user_id, "a", "recent player id")
+  assert_equal(recent_calls[1].players[1].userId, "a", "shared opponent shape")
 end)
 
 test("keeps guests off the leaderboard", function()

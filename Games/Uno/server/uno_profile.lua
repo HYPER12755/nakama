@@ -200,21 +200,64 @@ local function write_leaderboard(player, profile, state, outcome)
   end
 end
 
-local function history_record(context, state, player, outcome, points_for, rating_before, profile, now)
+local function history_record(context, state, player, outcome, points_for, rating_before, profile, now, result, opponents)
+  local opponent = opponents[1]
+  for _, candidate in ipairs(opponents) do
+    if candidate.user_id == state.winner then
+      opponent = candidate
+      break
+    end
+  end
+  if opponent == nil then
+    opponent = { user_id = "", username = "Player" }
+  end
+  local steps = {}
+  for _, step in ipairs(state.replay or {}) do
+    steps[#steps + 1] = step.action .. (step.cardId and (":" .. step.cardId) or "")
+  end
   return {
     match_id = context.match_id,
+    game_id = "uno",
     mode = state.mode or "quick",
     rated = state.rated == true,
     outcome = outcome,
-    status = "finished",
-    reason = "hand finished",
-    opponent_id = state.winner ~= player.user_id and state.winner or nil,
+    status = result and result.status or "finished",
+    reason = result and result.reason or "hand finished",
+    opponent = opponent,
     points_for = points_for,
     rating_before = rating_before,
     rating_after = profile.rating,
     rating_delta = profile.rating - rating_before,
     ended_at = now,
+    steps = steps,
     replay = { seats = state.seats or #state.players, steps = state.replay or {} },
+  }
+end
+
+local function public_history(value)
+  if type(value) ~= "table" then
+    return nil
+  end
+  local opponent = value.opponent or {}
+  return {
+    matchId = value.match_id,
+    gameId = value.game_id or "uno",
+    mode = value.mode or "quick",
+    rated = value.rated == true,
+    outcome = value.outcome or "draw",
+    status = value.status or "finished",
+    reason = value.reason or "",
+    opponent = {
+      userId = opponent.user_id or opponent.userId or "",
+      username = opponent.username or "Player",
+    },
+    pointsFor = number(value.points_for, 0),
+    ratingBefore = value.rating_before,
+    ratingAfter = value.rating_after,
+    ratingDelta = number(value.rating_delta, 0),
+    endedAt = number(value.ended_at, 0),
+    steps = value.steps or {},
+    metadata = { replay = value.replay or {} },
   }
 end
 
@@ -240,6 +283,8 @@ function progression.finalize_match(context, state, result, now)
     for _, other in ipairs(players) do
       if other.user_id ~= player.user_id then
         opponents[#opponents + 1] = {
+          user_id = other.user_id,
+          username = other.username,
           rating = number(stored[other.user_id] and stored[other.user_id].rating, progression.DEFAULT_RATING),
           deviation = number(
             stored[other.user_id] and stored[other.user_id].rating_deviation,
@@ -340,7 +385,9 @@ function progression.finalize_match(context, state, result, now)
         played,
         rating_before,
         profile,
-        now
+        now,
+        result,
+        opponents_by_player[player.user_id] or {}
       ),
     }
   end
@@ -353,12 +400,21 @@ function progression.finalize_match(context, state, result, now)
   end
 
   local social_ok, social = pcall(require, "moongames_social")
-  if social_ok and type(social) == "table" and social.record_play then
+  if social_ok and type(social) == "table" then
+    local recent_players = {}
     for _, player in ipairs(players) do
-      pcall(social.record_play, {
+      local entry = {
         user_id = player.user_id,
         username = player.username,
-      }, "uno")
+        userId = player.user_id,
+      }
+      recent_players[#recent_players + 1] = entry
+      if social.record_play then
+        pcall(social.record_play, entry, "uno")
+      end
+    end
+    if social.record_recent_players then
+      pcall(social.record_recent_players, "uno", recent_players)
     end
   end
   return true
@@ -375,10 +431,17 @@ function progression.profile_payload(context, username)
     username or context.username,
     nk.time()
   )
+  local history = {}
+  for index, record in ipairs(read_histories(user_id, progression.HISTORY_LIMIT)) do
+    local entry = public_history(record)
+    if entry ~= nil then
+      history[index] = entry
+    end
+  end
   return {
     ok = true,
     profile = progression.public_profile(profile),
-    history = read_histories(user_id, progression.HISTORY_LIMIT),
+    history = history,
   }
 end
 

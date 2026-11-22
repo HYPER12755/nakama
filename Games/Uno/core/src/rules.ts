@@ -11,6 +11,7 @@ import {
   type LegalMoves,
   type MoveResult,
   type Player,
+  type StartingRule,
 } from "./types";
 
 export function cloneState(state: GameState): GameState {
@@ -48,12 +49,11 @@ export function legalMoves(state: GameState, playerId: string): LegalMoves {
   if (player.id !== playerId) {
     return empty;
   }
-  const playable = (card: Card): boolean =>
-    canPlay(state, card) && !(card.kind === "wild4" && hasColorMatch(state, player));
+  const playable = (card: Card): boolean => canPlayCard(state, player, card);
   const cards = state.drawnCardId === null
     ? player.hand.filter(playable).map((card) => card.id)
     : player.hand.filter((card) => card.id === state.drawnCardId && playable(card)).map((card) => card.id);
-  return { cards, canDraw: true };
+  return { cards, canDraw: state.drawnCardId === null };
 }
 
 export function createGame(seed: number | string, players: Array<{ id: string; name: string }>, now = 0): GameState {
@@ -75,7 +75,7 @@ export function createGame(seed: number | string, players: Array<{ id: string; n
   if (starter === undefined) {
     throw new Error("the deck is empty");
   }
-  while (isActionCard(starter)) {
+  while (starter.kind === "wild4") {
     deck.unshift(starter);
     state_seed = nextSeed(state_seed);
     const next = deck.pop();
@@ -85,9 +85,38 @@ export function createGame(seed: number | string, players: Array<{ id: string; n
     starter = next;
   }
 
+  if (starter.kind === "wild") {
+    starter.color = mostCommonColor(dealt[0].hand);
+  }
   const color = starter.color;
   if (color === null) {
     throw new Error("the starting card has no colour");
+  }
+
+  const startingRule: StartingRule = {
+    kind: starter.kind,
+    color,
+    turn: 0,
+    direction: 1,
+    drewCards: [],
+  };
+  if (starter.kind === "wild") {
+    startingRule.turn = 0;
+  }
+  if (starter.kind === "skip") {
+    startingRule.turn = 1 % dealt.length;
+  } else if (starter.kind === "reverse") {
+    startingRule.turn = dealt.length - 1;
+    startingRule.direction = -1;
+  } else if (starter.kind === "draw2") {
+    const target = dealt[0];
+    for (let index = 0; index < DEFAULT_RULES.drawTwoAmount; index += 1) {
+      const card = deck.pop();
+      if (card === undefined) break;
+      target.hand.push(card);
+      startingRule.drewCards.push(card.id);
+    }
+    startingRule.turn = 1 % dealt.length;
   }
 
   return {
@@ -96,11 +125,12 @@ export function createGame(seed: number | string, players: Array<{ id: string; n
     drawPile: deck,
     discard: [starter],
     players: dealt,
-    turn: 0,
-    direction: 1,
+    turn: startingRule.turn,
+    direction: startingRule.direction,
     currentColor: color,
     drawnCardId: null,
     pendingChallenge: null,
+    startingRule,
     started: true,
     finished: false,
     winner: null,
@@ -150,9 +180,18 @@ function fail(state: GameState, error: "not_your_turn" | "illegal_card" | "bad_c
 }
 
 function hasColorMatch(state: GameState, player: Player): boolean {
-  return player.hand.some((card) =>
-    card.kind === "wild" || card.kind === "wild4" || card.color === state.currentColor
-  );
+  return player.hand.some((card) => card.color === state.currentColor);
+}
+
+function canPlayCard(state: GameState, _player: Player, card: Card): boolean {
+  return canPlay(state, card);
+}
+
+function finishIfEmpty(state: GameState, actor: Player): void {
+  if (actor.hand.length === 0) {
+    state.finished = true;
+    state.winner = actor.id;
+  }
 }
 
 export function mostCommonColor(hand: Card[]): Color {
@@ -183,12 +222,9 @@ export function applyAction(previous: GameState, action: Action): MoveResult {
   }
   const state = cloneState(previous);
   const actor = state.players.find((player) => player.id === action.playerId);
-  if (actor === undefined || currentPlayer(state).id !== actor.id) {
-    return fail(previous, UNO_ERROR.NOT_YOUR_TURN as "not_your_turn");
-  }
 
   if (state.pendingChallenge !== null) {
-    if (action.type !== "challenge" || state.pendingChallenge.targetId !== action.playerId) {
+    if (actor === undefined || action.type !== "challenge" || state.pendingChallenge.targetId !== action.playerId) {
       return fail(previous, UNO_ERROR.BAD_CHALLENGE as "bad_challenge");
     }
     const pending = state.pendingChallenge;
@@ -199,8 +235,9 @@ export function applyAction(previous: GameState, action: Action): MoveResult {
     }
     state.pendingChallenge = null;
     if (action.accept) {
-      drawCards(state, target, DEFAULT_RULES.challengePenalty);
-      if (!pending.legal) {
+      if (pending.legal) {
+        drawCards(state, target, DEFAULT_RULES.challengePenalty);
+      } else {
         drawCards(state, owner, DEFAULT_RULES.wildFourAmount);
       }
       advance(state, 2);
@@ -210,14 +247,23 @@ export function applyAction(previous: GameState, action: Action): MoveResult {
     }
     state.events.push({ type: "challenge", playerId: action.playerId, at: state.events.length });
     state.replay.push({ playerId: action.playerId, action: `challenge:${action.accept}` });
+    finishIfEmpty(state, owner);
     return { state, ok: true };
   }
 
+  if (actor === undefined || currentPlayer(state).id !== actor.id) {
+    return fail(previous, UNO_ERROR.NOT_YOUR_TURN as "not_your_turn");
+  }
+
   if (action.type === "draw") {
+    if (state.drawnCardId !== null) {
+      return fail(previous, UNO_ERROR.ILLEGAL_CARD as "illegal_card");
+    }
+
     drawCards(state, actor, 1);
     const drawn = actor.hand[actor.hand.length - 1];
     state.drawnCardId = drawn === undefined ? null : drawn.id;
-    if (drawn !== undefined && !canPlay(state, drawn)) {
+    if (drawn !== undefined && !canPlayCard(state, actor, drawn)) {
       state.drawnCardId = null;
       advance(state, 1);
     }
@@ -245,9 +291,6 @@ export function applyAction(previous: GameState, action: Action): MoveResult {
     return fail(previous, UNO_ERROR.MISSING_COLOR as "missing_color");
   }
   const wildFourLegal = card.kind === "wild4" && !hasColorMatch(state, actor);
-  if (card.kind === "wild4" && !wildFourLegal) {
-    return fail(previous, UNO_ERROR.ILLEGAL_CARD as "illegal_card");
-  }
 
   actor.hand.splice(index, 1);
   state.discard.push(card);
@@ -269,12 +312,6 @@ export function applyAction(previous: GameState, action: Action): MoveResult {
     color: action.chosenColor,
   });
 
-  if (actor.hand.length === 0) {
-    state.finished = true;
-    state.winner = actor.id;
-    return { state, ok: true };
-  }
-
   const next = state.players[targetIndex(state)];
   switch (card.kind) {
     case "skip":
@@ -291,6 +328,7 @@ export function applyAction(previous: GameState, action: Action): MoveResult {
     case "draw2":
       drawCards(state, next, DEFAULT_RULES.drawTwoAmount);
       advance(state, 2);
+      finishIfEmpty(state, actor);
       break;
     case "wild":
       advance(state, 1);
@@ -305,6 +343,9 @@ export function applyAction(previous: GameState, action: Action): MoveResult {
     default:
       advance(state, 1);
       break;
+  }
+  if (state.pendingChallenge === null) {
+    finishIfEmpty(state, actor);
   }
 
   return { state, ok: true };

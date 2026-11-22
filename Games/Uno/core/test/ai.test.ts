@@ -8,7 +8,10 @@ describe("Uno classic AI", () => {
       { id: "p2", name: "Two" },
     ]);
     for (let step = 0; step < 200 && !state.finished; step += 1) {
-      const action = chooseAction(state, state.players[state.turn].id);
+      const actorId = state.pendingChallenge !== null
+        ? state.pendingChallenge.targetId
+        : state.players[state.turn].id;
+      const action = chooseAction(state, actorId);
       expect(action).not.toBeNull();
       if (action === null) break;
       const moves = legalMoves(state, action.playerId);

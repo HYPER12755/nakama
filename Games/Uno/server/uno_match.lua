@@ -53,6 +53,41 @@ local function connected_count(state)
   return count
 end
 
+local function public_result(state)
+  local result = state.result
+  if result == nil then
+    return nil
+  end
+  return {
+    status = result.status,
+    winnerUserId = result.winner_user_id,
+    winner_user_id = result.winner_user_id,
+    reason = result.reason,
+    at = result.at,
+    replay = result.replay or (state.game ~= nil and state.game.replay or {}),
+  }
+end
+
+local function public_pending_challenge(game)
+  local pending = game ~= nil and game.pending_challenge or nil
+  if pending == nil then
+    return nil
+  end
+  return {
+    ownerId = pending.owner_id,
+    targetId = pending.target_id,
+    legal = pending.legal,
+  }
+end
+
+local function schedule_turn_deadline(state, now)
+  if state.game ~= nil and state.game.pending_challenge == nil and state.turn_seconds > 0 then
+    state.turn_deadline = now + state.turn_seconds * 1000
+  else
+    state.turn_deadline = nil
+  end
+end
+
 local function state_payload(state, viewer_id)
   local game = state.game
   local payload = {
@@ -60,12 +95,12 @@ local function state_payload(state, viewer_id)
     seats = state.seats,
     rated = state.rated,
     started = state.started_at ~= nil,
-    result = state.result,
+    result = public_result(state),
     turn = game ~= nil and game.turn - 1 or 0,
     direction = game ~= nil and game.direction or 1,
     currentColor = game ~= nil and game.current_color or nil,
     topCard = game ~= nil and game.discard[#game.discard] or nil,
-    pendingChallenge = game ~= nil and game.pending_challenge or nil,
+    pendingChallenge = public_pending_challenge(game),
     players = {},
     spectators = {},
     chat = state.chat,
@@ -152,7 +187,7 @@ local function maybe_start(dispatcher, state)
     players[index] = { id = player.user_id, name = player.username }
   end
   state.game = rules.create_game(state.seed or nk.time(), players, state.started_at)
-  state.turn_deadline = state.turn_seconds > 0 and nk.time() + state.turn_seconds * 1000 or nil
+  schedule_turn_deadline(state, nk.time())
   broadcast_all(dispatcher, state, OP.MATCH_STARTED, { seats = state.seats })
   refresh_label(dispatcher, state)
 end
@@ -181,15 +216,17 @@ local function finish_match(dispatcher, state, result)
   end
   state.result = result
   state.result.at = nk.time()
+  state.result.replay = state.game ~= nil and state.game.replay or {}
+  state.turn_deadline = nil
 
   local converted = {
     mode = state.mode,
     rated = state.rated,
     seats = state.seats,
     winner = result.winner_user_id,
-    replay = state.game ~= nil and state.game.replay or {},
+    replay = state.result.replay,
     players = {},
-    finalized = false,
+    finalized = state.finalized == true,
   }
   for index, player in ipairs(state.player_order) do
     converted.players[index] = {
@@ -197,10 +234,22 @@ local function finish_match(dispatcher, state, result)
       username = player.username,
     }
   end
-  pcall(progression.finalize_match, { match_id = state.match_id }, converted, result, nk.time())
+  local finalized, finalize_error = pcall(
+    progression.finalize_match,
+    { match_id = state.match_id },
+    converted,
+    result,
+    nk.time()
+  )
+  if finalized then
+    state.finalized = true
+  elseif nk.logger_warn ~= nil then
+    nk.logger_warn("Could not finalize Uno match: " .. tostring(finalize_error))
+  end
   state.chat = {}
-  broadcast_all(dispatcher, state, OP.GAME_OVER, result)
+  broadcast_all(dispatcher, state, OP.GAME_OVER, public_result(state))
   refresh_label(dispatcher, state)
+  broadcast_state(dispatcher, state)
 end
 
 local function require_turn(state, user_id)
@@ -214,9 +263,12 @@ local function require_turn(state, user_id)
   return state.game.turn == index
 end
 
-local function handle_chat(dispatcher, state, presence, payload)
+local function handle_chat(dispatcher, state, sender, payload)
+  if sender == nil then
+    return
+  end
   local now = nk.time()
-  local user_id = presence.user_id
+  local user_id = sender.user_id
   if state.last_chat_at ~= nil and user_id ~= nil then
     local last = state.last_chat_at[user_id] or 0
     if now - last < protocol.CHAT_RATE_MS then
@@ -230,10 +282,13 @@ local function handle_chat(dispatcher, state, presence, payload)
   local message = {
     id = nk.uuid_v4(),
     userId = user_id,
-    username = presence.username,
+    username = sender.username or "Player",
     text = protocol.normalize_chat(payload.text),
     at = now,
   }
+  if message.text == nil then
+    return
+  end
   state.chat[#state.chat + 1] = message
   while #state.chat > protocol.CHAT_HISTORY_LIMIT do
     table.remove(state.chat, 1)
@@ -243,15 +298,15 @@ end
 
 local function handle_action(dispatcher, state, user_id, action)
   if state.game == nil or state.result ~= nil then
-    return
+    return protocol.ERROR.GAME_OVER
   end
   local pending = state.game.pending_challenge
   if pending ~= nil then
     if pending.target_id ~= user_id then
-      return
+      return protocol.ERROR.BAD_CHALLENGE
     end
   elseif not require_turn(state, user_id) then
-    return
+    return protocol.ERROR.NOT_YOUR_TURN
   end
 
   local next_state, ok, error_code = rules.apply_action(state.game, action)
@@ -260,10 +315,7 @@ local function handle_action(dispatcher, state, user_id, action)
   end
   state.game = next_state
   state.last_activity = nk.time()
-  state.turn_deadline = state.game.pending_challenge == nil
-    and state.turn_seconds > 0
-      and nk.time() + state.turn_seconds * 1000
-    or nil
+  schedule_turn_deadline(state, nk.time())
   broadcast_all(dispatcher, state, OP.MOVE, {
     action = action,
     turn = state.game.turn - 1,
@@ -288,24 +340,27 @@ local function handle_message(context, dispatcher, tick, state, message)
       payload = decoded
     end
   end
-  local user_id = message.presence and message.presence.user_id or nil
+  local sender = message.sender or message.presence
+  local user_id = sender and sender.user_id or nil
 
   if message.op_code == OP.PING then
-    dispatcher.broadcast_message(OP.PONG, encode({ clientTime = payload.clientTime }), { message.presence })
+    if sender ~= nil then
+      dispatcher.broadcast_message(OP.PONG, encode({ clientTime = payload.clientTime }), { sender })
+    end
     return
   end
   if message.op_code == OP.REQUEST_STATE then
-    if user_id ~= nil then
+    if sender ~= nil and user_id ~= nil then
       dispatcher.broadcast_message(
         OP.STATE,
         encode(state_payload(state, user_id)),
-        { message.presence }
+        { sender }
       )
     end
     return
   end
   if message.op_code == OP.CHAT_SEND then
-    handle_chat(dispatcher, state, message.presence, payload)
+    handle_chat(dispatcher, state, sender, payload)
     return
   end
   if message.op_code == OP.RESIGN then
@@ -344,7 +399,9 @@ local function handle_message(context, dispatcher, tick, state, message)
   if action ~= nil then
     local error_code = handle_action(dispatcher, state, user_id, action)
     if error_code ~= nil then
-      send_error(dispatcher, message.presence, error_code, "That move is not allowed.")
+      if sender ~= nil then
+        send_error(dispatcher, sender, error_code, "That move is not allowed.")
+      end
     end
   end
 end
@@ -378,6 +435,35 @@ local function check_disconnects(dispatcher, state)
   end
 end
 
+local function timeout_action(state)
+  local game = state.game
+  if game == nil or game.pending_challenge ~= nil then
+    return nil
+  end
+  local index = game.turn
+  local player = state.player_order[index]
+  if player == nil or player.user_id == nil or game.players[index] == nil then
+    return nil
+  end
+  if game.drawn_card_id ~= nil then
+    for _, card in ipairs(game.players[index].hand) do
+      if card.id == game.drawn_card_id then
+        local chosen_color = nil
+        if card.kind == "wild" or card.kind == "wild4" then
+          chosen_color = rules.most_common_color(game.players[index].hand)
+        end
+        return {
+          type = "play",
+          player_id = player.user_id,
+          card_id = card.id,
+          chosen_color = chosen_color,
+        }
+      end
+    end
+  end
+  return { type = "draw", player_id = player.user_id }
+end
+
 local MATCH = {}
 
 function MATCH.match_init(context, params)
@@ -406,6 +492,7 @@ function MATCH.match_init(context, params)
     last_chat_at = {},
     game = nil,
     seed = tonumber(params.seed),
+    lobby_timeout_ms = tonumber(params.lobby_timeout_ms) or LOBBY_TIMEOUT_MS,
     turn_seconds = math.max(0, tonumber(params.turnSeconds) or 0),
     turn_deadline = nil,
     created_at = nk.time(),
@@ -431,12 +518,18 @@ function MATCH.match_join_attempt(context, dispatcher, tick, state, presence, me
     or join_metadata.spectate == "1"
     or join_metadata.spectate == "true"
   local key = presence.user_id or presence.session_id
-  state.pending_joins[key] = { spectate = spectate }
+  local seated_index = seat_for_user(state, presence.user_id)
 
-  if state.result ~= nil then
+  if state.result ~= nil and seated_index == nil then
+    state.pending_joins[key] = { spectate = spectate }
     return state, spectate, "match has finished"
   end
   if spectate then
+    state.pending_joins[key] = { spectate = spectate }
+    return state, true
+  end
+  if seated_index ~= nil then
+    state.pending_joins[key] = { spectate = false }
     return state, true
   end
   if #state.player_order >= state.seats then
@@ -445,6 +538,7 @@ function MATCH.match_join_attempt(context, dispatcher, tick, state, presence, me
   if state.expected_count > 0 and state.expected_by_user[presence.user_id] == nil then
     return state, false, "this table is reserved"
   end
+  state.pending_joins[key] = { spectate = spectate }
   return state, true
 end
 
@@ -525,7 +619,7 @@ function MATCH.match_loop(context, dispatcher, tick, state, messages)
   if state.result ~= nil and now - state.result.at >= FINISHED_LINGER_MS then
     return nil
   end
-  if state.started_at == nil and now - state.created_at >= LOBBY_TIMEOUT_MS then
+  if state.started_at == nil and now - state.created_at >= (state.lobby_timeout_ms or LOBBY_TIMEOUT_MS) then
     return nil
   end
 
@@ -533,10 +627,26 @@ function MATCH.match_loop(context, dispatcher, tick, state, messages)
 
   if state.result == nil and state.turn_deadline ~= nil and now >= state.turn_deadline then
     state.turn_deadline = nil
-    local index = state.game ~= nil and state.game.turn or nil
-    local player = index ~= nil and state.player_order[index] or nil
-    if player ~= nil and player.connected then
-      handle_action(dispatcher, state, player.user_id, { type = "draw", player_id = player.user_id })
+    local pending = state.game ~= nil and state.game.pending_challenge or nil
+    if pending ~= nil then
+      for _, player in ipairs(state.player_order) do
+        if player.user_id == pending.target_id and player.user_id ~= nil and not player.connected then
+          handle_action(dispatcher, state, player.user_id, {
+            type = "challenge",
+            player_id = player.user_id,
+            accept = true,
+          })
+          break
+        end
+      end
+    else
+      local action = timeout_action(state)
+      if action ~= nil then
+        handle_action(dispatcher, state, action.player_id, action)
+      end
+    end
+    if state.result == nil and state.turn_deadline == nil then
+      schedule_turn_deadline(state, now)
     end
   end
 
@@ -549,7 +659,7 @@ function MATCH.match_terminate(context, dispatcher, tick, state, grace)
 end
 
 function MATCH.match_signal(context, dispatcher, tick, state, data)
-  return state
+  return state, encode(state_payload(state, nil))
 end
 
 return MATCH

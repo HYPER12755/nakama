@@ -27,7 +27,7 @@ export interface BoardView {
   turn: number;
   direction: 1 | -1;
   deckCount: number;
-  pendingChallenge: { targetId: string; legal: boolean } | null;
+  pendingChallenge: { ownerId: string; targetId: string; legal: boolean } | null;
   legalCards: string[];
   canDraw: boolean;
   result: { status: string; winnerUserId: string | null; reason?: string } | null;
@@ -60,6 +60,7 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
     direction: state.direction,
     deckCount: state.drawPile.length,
     pendingChallenge: state.pendingChallenge === null ? null : {
+      ownerId: state.pendingChallenge.ownerId,
       targetId: state.pendingChallenge.targetId,
       legal: state.pendingChallenge.legal,
     },

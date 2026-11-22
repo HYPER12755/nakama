@@ -28,23 +28,58 @@ function SearchClock({ active }: { active: boolean }) {
 }
 
 export function UnoOnlinePanel({
-  controller, seats, roomInput, onRoomInput, onNotify,
+  controller, seats, roomInput, onRoomInput, onRematch, onNotify,
 }: UnoOnlinePanelProps) {
-  const [inviteOpen, setInviteOpen] = useState(false);
   const [roomId, setRoomId] = useState(roomInput);
+  const [joinAsWatcher, setJoinAsWatcher] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   useEffect(() => setRoomId(roomInput), [roomInput]);
-  const inMatch = controller.view.started;
-  const joinRoom = () => {
-    if (roomId.trim().length === 0) {
+
+  const connected = controller.connection === "connected";
+  const result = controller.view.result;
+  const inMatch = controller.view.started || result !== null;
+  const spectating = controller.spectating;
+  const inviteAsSpectator = spectating || inMatch;
+  const winner = result?.winnerUserId == null
+    ? null
+    : controller.view.players.find((player) => player.userId === result.winnerUserId) ?? null;
+  const shareMatchId = controller.matchId ?? "";
+  const shareLink = buildMatchInviteUrl(shareMatchId, inviteAsSpectator, window.location.href);
+
+  async function joinRoom() {
+    const code = roomId.trim();
+    if (code.length === 0) {
       return;
     }
-    void controller.joinByCode(roomId);
-  };
-  const shareLink = buildMatchInviteUrl(
-    controller.roomCode ?? controller.matchId ?? "",
-    false,
-    window.location.href,
-  );
+    onRoomInput(code);
+    try {
+      await controller.joinByCode(code, joinAsWatcher);
+    } catch (cause) {
+      onNotify(cause instanceof Error ? cause.message : "Could not join that room.");
+    }
+  }
+
+  function openInvite() {
+    if (controller.matchId === null) {
+      onNotify("Create or join a room first.");
+      return;
+    }
+    void controller.loadFriends();
+    setInviteOpen(true);
+  }
+
+  async function copyInviteLink() {
+    const copied = await copyText(shareLink);
+    onNotify(copied ? "Invite link copied" : "Could not copy the invite link");
+  }
+
+  const statusLabel = connected
+    ? "Connected"
+    : controller.connection === "connecting"
+      ? "Connecting…"
+      : controller.connection === "error"
+        ? "Offline"
+        : "Not connected";
 
   return (
     <section className="panel online-panel">
@@ -52,115 +87,234 @@ export function UnoOnlinePanel({
         <>
           <div className="panel-heading">
             <div><p className="eyebrow">Online</p><h2>Find a table</h2></div>
-            <span className="panel-heading__meta">{controller.connection}</span>
+            <span className={`online-status online-status--${controller.connection}`}>{statusLabel}</span>
           </div>
-          <p className="ludo-note">Players</p>
-          <div className="pref-choices" role="radiogroup" aria-label="Players">
-            {[2, 3, 4].map((count) => (
+          {controller.error !== null ? (
+            <p className="online-feedback online-feedback--error" role="alert">{controller.error}</p>
+          ) : null}
+          {controller.notice !== null ? (
+            <p className="online-feedback" role="status">{controller.notice}</p>
+          ) : null}
+          {!connected ? (
+            <div className="online-connect">
+              <p className="online-feedback">
+                {controller.connection === "connecting"
+                  ? "Connecting to MoonGames…"
+                  : "MoonGames could not be reached."}
+              </p>
               <button
                 type="button"
-                key={count}
-                role="radio"
-                aria-checked={seats === count}
-                className={`pref-choice${seats === count ? " is-chosen" : ""}`}
-                onClick={() => controller.setSeats(count)}
+                className="button button--primary"
+                disabled={controller.connection === "connecting"}
+                onClick={() => void controller.connect()}
               >
-                {count} players
+                {controller.connection === "connecting" ? "Connecting…" : "Try again"}
               </button>
-            ))}
-          </div>
-          <div className="online-actions">
-            <button
-              type="button"
-              className="button button--primary"
-              disabled={controller.searching}
-              onClick={() => void controller.quickMatch(seats)}
-            >
-              {controller.searching ? <>Searching <SearchClock active /></> : "Quick match"}
-            </button>
-            {controller.searching ? (
-              <button type="button" className="button button--ghost" onClick={controller.cancelQuickMatch}>
-                Cancel
-              </button>
-            ) : null}
-            <button type="button" className="button button--ghost" onClick={() => void controller.createPrivate(seats)}>
-              Private room
-            </button>
-          </div>
-          <div className="online-join">
-            <label className="online-join__code">
-              <span>Room code</span>
-              <input
-                type="text"
-                value={roomId}
-                placeholder="Paste a room code"
-                onChange={(event) => {
-                  setRoomId(event.target.value);
-                  onRoomInput(event.target.value);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    joinRoom();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="button button--ghost"
-                disabled={roomId.trim().length === 0}
-                onClick={joinRoom}
-              >
-                Join
-              </button>
-            </label>
-          </div>
+            </div>
+          ) : (
+            <>
+              <div className="online-size">
+                <span className="online-size__label">Players</span>
+                <div className="online-size__options" role="radiogroup" aria-label="Players">
+                  {[2, 3, 4].map((count) => (
+                    <button
+                      type="button"
+                      key={count}
+                      role="radio"
+                      aria-checked={seats === count}
+                      className={`online-size__option${seats === count ? " online-size__option--active" : ""}`}
+                      onClick={() => controller.setSeats(count)}
+                    >
+                      {count}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="online-actions">
+                <button
+                  type="button"
+                  className="button button--primary"
+                  disabled={controller.searching}
+                  onClick={() => void controller.quickMatch(seats)}
+                >
+                  {controller.searching ? <>Searching <SearchClock active /></> : "Quick match"}
+                </button>
+                {controller.searching ? (
+                  <button type="button" className="button button--ghost" onClick={controller.cancelQuickMatch}>
+                    Cancel search
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => void controller.createPrivate(seats).catch((cause: unknown) => {
+                    onNotify(cause instanceof Error ? cause.message : "The private room could not be created.");
+                  })}
+                >
+                  Private room
+                </button>
+              </div>
+              <div className="online-join">
+                <label className="online-join__code">
+                  <span>Room code</span>
+                  <input
+                    type="text"
+                    value={roomId}
+                    placeholder="Paste a room code"
+                    onChange={(event) => {
+                      setRoomId(event.target.value);
+                      onRoomInput(event.target.value);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void joinRoom();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="button button--ghost"
+                    disabled={roomId.trim().length === 0}
+                    onClick={() => void joinRoom()}
+                  >
+                    {joinAsWatcher ? "Watch" : "Join"}
+                  </button>
+                </label>
+                <label className="online-watch">
+                  <input
+                    type="checkbox"
+                    checked={joinAsWatcher}
+                    onChange={(event) => setJoinAsWatcher(event.target.checked)}
+                  />
+                  <span>Join as spectator</span>
+                </label>
+              </div>
+            </>
+          )}
         </>
       ) : (
         <>
           <div className="panel-heading">
-            <div><p className="eyebrow">Online</p><h2>At the table</h2></div>
-            <span className="panel-heading__meta">{seats} players</span>
+            <div><p className="eyebrow">Online</p><h2>{spectating ? "Watching" : "At the table"}</h2></div>
+            <span className={`online-status online-status--${controller.connection}`}>{statusLabel}</span>
           </div>
+          {controller.error !== null ? (
+            <p className="online-feedback online-feedback--error" role="alert">{controller.error}</p>
+          ) : null}
+          {controller.notice !== null ? (
+            <p className="online-feedback" role="status">{controller.notice}</p>
+          ) : null}
           {controller.roomCode !== null ? (
             <div className="room-code-row">
-              <code>{controller.roomCode}</code>
+              <div>
+                <p className="eyebrow">Room code</p>
+                <code>{controller.roomCode}</code>
+              </div>
               <button
                 type="button"
                 className="icon-button"
-                onClick={() => void copyText(shareLink).then(() => onNotify("Invite link copied"))}
-                aria-label="Copy invite link"
+                onClick={() => void copyText(controller.roomCode ?? "").then((copied) => {
+                  onNotify(copied ? "Room code copied" : "Could not copy the room code");
+                })}
+                aria-label="Copy room code"
+                title="Copy room code"
               >
                 <span>⧉</span>
               </button>
             </div>
           ) : null}
+          <div className="online-code">
+            <span className="online-code__label">Invite link</span>
+            <div className="online-code__row">
+              <code>{shareMatchId.slice(0, 8)}</code>
+              <button type="button" className="button button--ghost" onClick={() => void copyInviteLink()}>
+                Copy link
+              </button>
+            </div>
+            <p className="online-code__hint">
+              Share this link to invite a player into this match{inviteAsSpectator ? " as a spectator" : ""}.
+            </p>
+          </div>
+          <div className="online-seats">
+            {controller.view.players.map((player) => (
+              <div
+                key={player.userId || player.seat}
+                className={`online-seat${player.connected === false ? " online-seat--away" : ""}`}
+              >
+                <span className="online-seat__name">
+                  {player.username}
+                  {player.userId === controller.myUserId ? <small>you</small> : null}
+                </span>
+                <span className="online-seat__state">
+                  {player.connected === false ? "away" : `${player.count} cards`}
+                </span>
+              </div>
+            ))}
+          </div>
+          {controller.view.spectators.length > 0 ? (
+            <p className="online-spectators">
+              {controller.view.spectators.length} watching
+              {spectating ? " · you are watching" : ""}
+            </p>
+          ) : null}
+          {result !== null ? (
+            <p className="online-feedback" role="status">
+              {result.winnerUserId === controller.myUserId
+                ? "You win."
+                : `${winner?.username ?? "Opponent"} wins.`}
+              {result.reason ? ` ${result.reason}.` : ""}
+            </p>
+          ) : null}
           <div className="online-actions">
-            <button type="button" className="button button--ghost" onClick={() => setInviteOpen(true)}>
+            <button type="button" className="button button--ghost" onClick={openInvite}>
               Invite friend
             </button>
+            {!spectating && inMatch && result === null ? (
+              <button type="button" className="button button--ghost" onClick={controller.resign}>
+                Resign
+              </button>
+            ) : null}
+            {result !== null && !spectating ? (
+              <button type="button" className="button" onClick={onRematch}>Rematch</button>
+            ) : null}
             <button type="button" className="button button--ghost" onClick={() => void controller.leave()}>
-              Leave table
+              {spectating ? "Stop watching" : "Leave table"}
             </button>
           </div>
         </>
       )}
-      {inviteOpen ? (
+      {inviteOpen && controller.matchId !== null ? (
         <FriendInviteDialog
-          open={inviteOpen}
-          matchId={controller.matchId ?? ""}
-          spectate={false}
-          accountName={null}
-          friends={[]}
-          loading={false}
-          loadError={null}
-          sendingId={null}
-          inviteError={null}
-          inviteNotice={null}
+          open
+          matchId={controller.matchId}
+          spectate={inviteAsSpectator}
+          accountName={controller.accountName}
+          friends={controller.friends}
+          loading={controller.friendsLoading}
+          loadError={controller.friendsError}
+          sendingId={controller.inviteSendingId}
+          inviteError={controller.inviteError}
+          inviteNotice={controller.inviteNotice}
           onClose={() => setInviteOpen(false)}
-          onRetry={() => undefined}
-          onInvite={async () => false}
-          onCopyInvite={() => undefined}
+          onRetry={() => void controller.loadFriends()}
+          onInvite={async (friend) => {
+            try {
+              await controller.inviteFriend({
+                userId: friend.userId,
+                username: friend.username,
+                state: friend.state,
+                matchId: controller.matchId ?? "",
+                spectate: inviteAsSpectator,
+              });
+              onNotify(`Invite sent to ${friend.username}`);
+              return true;
+            } catch (cause) {
+              onNotify(cause instanceof Error ? cause.message : "Could not send that friend invitation.");
+              return false;
+            }
+          }}
+          onCopyInvite={() => void copyInviteLink()}
         />
       ) : null}
     </section>

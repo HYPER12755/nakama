@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "generatedAt": "2026-11-21T17:30:51.083Z",
+  "generatedAt": "2026-11-22T02:45:55.952Z",
   "games": [
     {
       "id": "chess",
@@ -59,8 +59,7 @@
         "online",
         "private-match",
         "spectators",
-        "invite-links",
-        "replay"
+        "invite-links"
       ],
       "orientation": "any",
       "tags": [
@@ -79,9 +78,9 @@
       "release": {
         "version": "0.1.0",
         "minHostProtocol": 2,
-        "publishedAt": "2026-11-21T17:30:50.893Z",
-        "sha256": "20913218df8fb2e4f0a6f16c4615a0c3713567dcec832c9dd7fd39bb6675b390",
-        "size": 271911,
+        "publishedAt": "2026-11-22T02:45:55.767Z",
+        "sha256": "3238dbc958486f2005fb3dccfdbec856ab35b2da8f3477d8d18e81de86213677",
+        "size": 279576,
         "keyId": "dev-1"
       }
     },

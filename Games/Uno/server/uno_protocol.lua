@@ -34,6 +34,7 @@ protocol.COLORS = { "red", "yellow", "green", "blue" }
 protocol.MIN_SEATS = 2
 protocol.MAX_SEATS = 4
 protocol.MAX_CHAT_LENGTH = 240
+protocol.CHAT_MAX_BYTES = 960
 protocol.CHAT_HISTORY_LIMIT = 40
 protocol.CHAT_RATE_MS = 700
 
@@ -93,9 +94,21 @@ function protocol.chat_length(value)
 end
 
 function protocol.normalize_chat(value)
-  local text = tostring(value or "")
-  if protocol.chat_length(text) > protocol.MAX_CHAT_LENGTH then
-    return string.sub(text, 1, protocol.MAX_CHAT_LENGTH)
+  if type(value) ~= "string" then
+    return nil
+  end
+  local text = value:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " ")
+  if text == "" then
+    return nil
+  end
+  if #text > protocol.CHAT_MAX_BYTES then
+    text = text:sub(1, protocol.CHAT_MAX_BYTES)
+  end
+  while protocol.chat_length(text) > protocol.MAX_CHAT_LENGTH do
+    text = text:sub(1, #text - 1)
+  end
+  if text == "" then
+    return nil
   end
   return text
 end

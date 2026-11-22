@@ -128,7 +128,8 @@ package.preload["moongames_social"] = function()
 end
 
 local MATCH = dofile(server_dir .. "/uno_match.lua")
-local OP = require("uno_protocol").OP
+local protocol = require("uno_protocol")
+local OP = protocol.OP
 
 local failures = 0
 
@@ -207,6 +208,27 @@ test("initialises a quick table", function()
   assert_equal(tick, 10, "tick rate")
   assert_equal(label, "uno|quick|2|open", "label")
   assert_equal(state.game, nil, "no game before players join")
+  assert_equal(state.lobby_timeout_ms, 900000, "default lobby timeout")
+end)
+
+test("uses a custom lobby timeout", function()
+  local state = MATCH.match_init({ match_id = "m1" }, { seats = 2, lobby_timeout_ms = 5000 })
+  assert_equal(state.lobby_timeout_ms, 5000, "custom lobby timeout stored")
+  local saved = now
+  now = now + 6000
+  local next_state = MATCH.match_loop({}, dispatcher(), 1, state, {})
+  now = saved
+  assert_equal(next_state, nil, "lobby timed out before the default")
+end)
+
+test("does not leak rejected join attempts into pending_joins", function()
+  local state = new_match()
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  local extra = presence("u3", "Third")
+  local _, allowed = MATCH.match_join_attempt({}, dispatcher_obj, 4, state, extra, {})
+  assert_equal(allowed, false, "full table refused")
+  assert_equal(state.pending_joins[extra.user_id], nil, "no pending join stored")
 end)
 
 test("starts a hand when both seats are taken", function()
@@ -215,7 +237,7 @@ test("starts a hand when both seats are taken", function()
   state = seat_players(dispatcher_obj, state)
   assert_equal(#state.player_order, 2, "two seats")
   assert_equal(state.game ~= nil, true, "game started")
-  assert_equal(#state.game.players[1].hand, 7, "seven cards")
+  assert_equal(#state.game.players[1].hand, 9, "starting Draw Two cards")
   assert_equal(dispatcher_obj.label(), "uno|quick|2|closed", "label closed")
 end)
 
@@ -224,12 +246,13 @@ test("accepts a legal play and broadcasts state", function()
   local dispatcher_obj = dispatcher()
   state = seat_players(dispatcher_obj, state)
   local rules = require("uno_rules")
-  local legal = rules.legal_moves(state.game, "u1").cards
+  local starter_id = state.game.players[state.game.turn].id
+  local legal = rules.legal_moves(state.game, starter_id).cards
   assert_equal(#legal > 0, true, "a legal card exists")
   MATCH.match_loop({}, dispatcher_obj, 3, state, {
     {
       op_code = OP.PLAY_REQUEST,
-      presence = presence("u1", "Alice"),
+      presence = presence(starter_id, starter_id == "u1" and "Alice" or "Bob"),
       data = json_encode({ cardId = legal[1] }),
     },
   })
@@ -251,7 +274,7 @@ test("keeps spectators read-only", function()
   assert_equal(allowed, true, "spectator admitted")
   state = MATCH.match_join({}, dispatcher_obj, 4, state, { watcher })
   assert_equal(#state.spectators, 1, "one spectator")
-  assert_equal(#state.game.players[1].hand, 7, "board unchanged")
+  assert_equal(#state.game.players[1].hand, 9, "board unchanged")
 end)
 
 test("resignation ends the match", function()
@@ -267,6 +290,175 @@ test("resignation ends the match", function()
   })
   assert_equal(state.result ~= nil, true, "result set")
   assert_equal(state.result.winner_user_id, "u2", "other player wins")
+end)
+
+test("broadcasts a public result and a final state on game over", function()
+  local state = new_match()
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  MATCH.match_loop({}, dispatcher_obj, 5, state, {
+    {
+      op_code = OP.RESIGN,
+      presence = presence("u1", "Alice"),
+      data = "{}",
+    },
+  })
+  local json = require("json")
+  local over_index = nil
+  for index, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.GAME_OVER then
+      over_index = index
+      local result = json.decode(message.data)
+      assert_equal(result.status, "finished", "result status")
+      assert_equal(result.winnerUserId, "u2", "camel winner")
+      assert_equal(result.winner_user_id, "u2", "legacy winner")
+      assert_equal(result.reason, "resignation", "result reason")
+      assert_equal(type(result.replay), "table", "result replay")
+    end
+  end
+  assert_equal(over_index ~= nil, true, "game over broadcast")
+  local final_state = nil
+  for index = over_index + 1, #dispatcher_obj.messages do
+    if dispatcher_obj.messages[index].op == OP.STATE then
+      final_state = dispatcher_obj.messages[index]
+    end
+  end
+  assert_equal(final_state ~= nil, true, "final state broadcast")
+  local payload = json.decode(final_state.data)
+  assert_equal(payload.result.winnerUserId, "u2", "payload result winner")
+  assert_equal(state.finalized, true, "match finalized")
+end)
+
+test("a disconnected seat can rejoin a full table", function()
+  local state = new_match()
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  state.player_order[2].connected = false
+  state.player_order[2].disconnected_at = now
+  local bob = presence("u2", "Bob")
+  local _, allowed = MATCH.match_join_attempt({}, dispatcher_obj, 4, state, bob, {})
+  assert_equal(allowed, true, "disconnected player may rejoin")
+  state = MATCH.match_join({}, dispatcher_obj, 4, state, { bob })
+  assert_equal(#state.player_order, 2, "seat count unchanged")
+  assert_equal(state.player_order[2].connected, true, "seat restored")
+end)
+
+test("match_signal returns the viewer-free state payload", function()
+  local state = new_match()
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  state.game.pending_challenge = { owner_id = "u1", target_id = "u2", legal = true }
+  local returned, encoded = MATCH.match_signal({}, dispatcher_obj, 1, state, "")
+  assert_equal(returned == state, true, "state returned")
+  local payload = require("json").decode(encoded)
+  assert_equal(payload.pendingChallenge.ownerId, "u1", "owner id")
+  assert_equal(payload.pendingChallenge.targetId, "u2", "target id")
+  assert_equal(payload.pendingChallenge.legal, true, "legal flag")
+  assert_equal(payload.legalCards, nil, "no viewer legal cards")
+end)
+
+test("turn timeout draws for a disconnected player and reschedules", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    turnSeconds = 1,
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  local index = state.game.turn
+  state.player_order[index].connected = false
+  state.player_order[index].disconnected_at = now
+  local before = #dispatcher_obj.messages
+  local saved = now
+  now = now + 2000
+  MATCH.match_loop({}, dispatcher_obj, 6, state, {})
+  now = saved
+  local moves = 0
+  for message_index = before + 1, #dispatcher_obj.messages do
+    if dispatcher_obj.messages[message_index].op == OP.MOVE then
+      moves = moves + 1
+    end
+  end
+  assert_equal(moves > 0, true, "timeout produced a move")
+  assert_equal(state.turn_deadline ~= nil, true, "next deadline scheduled")
+end)
+
+test("turn timeout auto-accepts for a disconnected challenge target", function()
+  local state = MATCH.match_init({ match_id = "m1" }, {
+    seats = 2,
+    seed = 123456789,
+    turnSeconds = 1,
+  })
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  state.game.pending_challenge = { owner_id = "u1", target_id = "u2", legal = true }
+  state.player_order[2].connected = false
+  state.player_order[2].disconnected_at = now
+  local saved = now
+  now = now + 2000
+  MATCH.match_loop({}, dispatcher_obj, 7, state, {})
+  now = saved
+  assert_equal(state.game.pending_challenge, nil, "challenge auto-accepted")
+end)
+
+test("uses the runtime sender for actions, errors, pings and chat", function()
+  local state = new_match()
+  local dispatcher_obj = dispatcher()
+  state = seat_players(dispatcher_obj, state)
+  local rules = require("uno_rules")
+  local starter_id = state.game.players[state.game.turn].id
+  local legal = rules.legal_moves(state.game, starter_id).cards
+  local out_of_turn_id = starter_id == "u1" and "u2" or "u1"
+
+  MATCH.match_loop({}, dispatcher_obj, 8, state, {
+    {
+      op_code = OP.PLAY_REQUEST,
+      sender = presence(out_of_turn_id, out_of_turn_id == "u1" and "Alice" or "Bob"),
+      data = json_encode({ cardId = legal[1] }),
+    },
+  })
+  local error_seen = false
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.ERROR then
+      local payload = require("json").decode(message.data)
+      error_seen = payload.code == protocol.ERROR.NOT_YOUR_TURN
+    end
+  end
+  assert_equal(error_seen, true, "out-of-turn sender gets an error")
+
+  MATCH.match_loop({}, dispatcher_obj, 9, state, {
+    {
+      op_code = OP.PING,
+      sender = presence("u1", "Alice"),
+      data = json_encode({ clientTime = 12345 }),
+    },
+  })
+  local pong_seen = false
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.PONG then
+      local payload = require("json").decode(message.data)
+      pong_seen = payload.clientTime == 12345
+    end
+  end
+  assert_equal(pong_seen, true, "sender gets a pong")
+
+  MATCH.match_loop({}, dispatcher_obj, 10, state, {
+    {
+      op_code = OP.CHAT_SEND,
+      sender = presence("u1", "Alice"),
+      data = json_encode({ text = "  hello   table  " }),
+    },
+  })
+  local chat_seen = false
+  for _, message in ipairs(dispatcher_obj.messages) do
+    if message.op == OP.CHAT then
+      local payload = require("json").decode(message.data)
+      chat_seen = payload.text == "hello table"
+        and payload.userId == "u1"
+        and payload.username == "Alice"
+    end
+  end
+  assert_equal(chat_seen, true, "sender chat normalized and attributed")
 end)
 
 if failures > 0 then

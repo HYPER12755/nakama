@@ -127,11 +127,15 @@ end
 
 local function has_color_match(state, player)
   for _, card in ipairs(player.hand) do
-    if card.kind == "wild" or card.kind == "wild4" or card.color == state.current_color then
+    if card.color == state.current_color then
       return true
     end
   end
   return false
+end
+
+local function can_play_card(state, _player, card)
+  return rules.can_play(state, card)
 end
 
 function rules.legal_moves(state, player_id)
@@ -144,14 +148,34 @@ function rules.legal_moves(state, player_id)
   end
   local cards = {}
   for _, card in ipairs(player.hand) do
-    local playable = rules.can_play(state, card)
-      and not (card.kind == "wild4" and has_color_match(state, player))
+    local playable = can_play_card(state, player, card)
     local drawn_match = state.drawn_card_id == nil or state.drawn_card_id == card.id
     if playable and drawn_match then
       cards[#cards + 1] = card.id
     end
   end
-  return { cards = cards, can_draw = true }
+  return { cards = cards, can_draw = state.drawn_card_id == nil }
+end
+
+local function most_common_color(hand)
+  local counts = {}
+  for _, color in ipairs(protocol.COLORS) do
+    counts[color] = 0
+  end
+  for _, card in ipairs(hand) do
+    if card.color ~= nil then
+      counts[card.color] = (counts[card.color] or 0) + 1
+    end
+  end
+  local best = protocol.COLORS[1]
+  local best_count = -1
+  for _, color in ipairs(protocol.COLORS) do
+    if (counts[color] or 0) > best_count then
+      best = color
+      best_count = counts[color] or 0
+    end
+  end
+  return best
 end
 
 function rules.create_game(seed, players, now)
@@ -172,10 +196,36 @@ function rules.create_game(seed, players, now)
   end
 
   local starter = table.remove(deck)
-  while rules.is_action_card(starter) do
+  while starter.kind == "wild4" do
     table.insert(deck, 1, starter)
     state_seed = rules.next_seed(state_seed)
     starter = table.remove(deck)
+  end
+  if starter.kind == "wild" then
+    starter.color = most_common_color(dealt[1].hand)
+  end
+
+  local starting_rule = {
+    kind = starter.kind,
+    color = starter.color,
+    turn = 1,
+    direction = 1,
+    drew_cards = {},
+  }
+  if starter.kind == "skip" then
+    starting_rule.turn = 2
+  elseif starter.kind == "reverse" then
+    starting_rule.turn = #dealt
+    starting_rule.direction = -1
+  elseif starter.kind == "draw2" then
+    local target = dealt[1]
+    for _ = 1, rules.DRAW_TWO_AMOUNT do
+      local drawn = table.remove(deck)
+      if drawn == nil then break end
+      target.hand[#target.hand + 1] = drawn
+      starting_rule.drew_cards[#starting_rule.drew_cards + 1] = drawn.id
+    end
+    starting_rule.turn = 2
   end
 
   return {
@@ -184,11 +234,12 @@ function rules.create_game(seed, players, now)
     draw_pile = deck,
     discard = { starter },
     players = dealt,
-    turn = 1,
-    direction = 1,
+    turn = starting_rule.turn,
+    direction = starting_rule.direction,
     current_color = starter.color,
     drawn_card_id = nil,
     pending_challenge = nil,
+    starting_rule = starting_rule,
     started = true,
     finished = false,
     winner = nil,
@@ -272,13 +323,8 @@ function rules.apply_action(previous, action)
       break
     end
   end
-  local current = rules.current_player(state)
-  if actor == nil or current == nil or current.id ~= actor.id then
-    return fail(previous, protocol.ERROR.NOT_YOUR_TURN)
-  end
-
   if state.pending_challenge ~= nil then
-    if action.type ~= "challenge" or state.pending_challenge.target_id ~= action.player_id then
+    if actor == nil or action.type ~= "challenge" or state.pending_challenge.target_id ~= action.player_id then
       return fail(previous, protocol.ERROR.BAD_CHALLENGE)
     end
     local pending = state.pending_challenge
@@ -295,8 +341,9 @@ function rules.apply_action(previous, action)
     end
     state.pending_challenge = nil
     if action.accept then
-      draw_cards(state, target, rules.CHALLENGE_PENALTY)
-      if not pending.legal then
+      if pending.legal then
+        draw_cards(state, target, rules.CHALLENGE_PENALTY)
+      else
         draw_cards(state, owner, rules.WILD_FOUR_AMOUNT)
       end
       advance(state, 2)
@@ -313,14 +360,26 @@ function rules.apply_action(previous, action)
       player_id = action.player_id,
       action = "challenge:" .. tostring(action.accept),
     }
+    if #owner.hand == 0 then
+      state.finished = true
+      state.winner = owner.id
+    end
     return state, true
   end
 
+  local current = rules.current_player(state)
+  if actor == nil or current == nil or current.id ~= actor.id then
+    return fail(previous, protocol.ERROR.NOT_YOUR_TURN)
+  end
+
   if action.type == "draw" then
+    if state.drawn_card_id ~= nil then
+      return fail(previous, protocol.ERROR.ILLEGAL_CARD)
+    end
     draw_cards(state, actor, 1)
     local drawn = actor.hand[#actor.hand]
     state.drawn_card_id = drawn == nil and nil or drawn.id
-    if drawn ~= nil and not rules.can_play(state, drawn) then
+    if drawn ~= nil and not can_play_card(state, actor, drawn) then
       state.drawn_card_id = nil
       advance(state, 1)
     end
@@ -358,9 +417,6 @@ function rules.apply_action(previous, action)
     return fail(previous, protocol.ERROR.MISSING_COLOR)
   end
   local wild_four_legal = card.kind == "wild4" and not has_color_match(state, actor)
-  if card.kind == "wild4" and not wild_four_legal then
-    return fail(previous, protocol.ERROR.ILLEGAL_CARD)
-  end
 
   table.remove(actor.hand, index)
   state.discard[#state.discard + 1] = card
@@ -382,12 +438,6 @@ function rules.apply_action(previous, action)
     color = action.chosen_color,
   }
 
-  if #actor.hand == 0 then
-    state.finished = true
-    state.winner = actor.id
-    return state, true
-  end
-
   local next_player = state.players[target_index(state)]
   if card.kind == "skip" then
     advance(state, 2)
@@ -401,6 +451,10 @@ function rules.apply_action(previous, action)
   elseif card.kind == "draw2" then
     draw_cards(state, next_player, rules.DRAW_TWO_AMOUNT)
     advance(state, 2)
+    if #actor.hand == 0 then
+      state.finished = true
+      state.winner = actor.id
+    end
   elseif card.kind == "wild" then
     advance(state, 1)
   elseif card.kind == "wild4" then
@@ -411,6 +465,10 @@ function rules.apply_action(previous, action)
     }
   else
     advance(state, 1)
+  end
+  if state.pending_challenge == nil and #actor.hand == 0 then
+    state.finished = true
+    state.winner = actor.id
   end
 
   return state, true
