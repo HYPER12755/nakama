@@ -320,16 +320,17 @@ describe("Uno Flip card art and table", () => {
       legalCards: [],
     };
     const classic = staticHtml(artView);
+    expect(classic).toContain("data:image/svg+xml,");
     for (const id of [
       "light-red-flip-0", "light-red-draw1-0", "light-wilddraw2-0",
       "dark-pink-draw5-0", "dark-pink-skipeveryone-0", "dark-wilddrawcolor-0",
       "dark-orange-flip-0",
     ]) {
-      expect(classic).toContain(`cards/${id}.svg`);
+      expect(classic).toContain(`alt="${id}"`);
     }
     const neon = staticHtml(artView, "neon");
-    expect(neon).toContain("cards-neon/dark-pink-skipeveryone-0.svg");
-    expect(neon).toContain("cards-neon/light-wilddraw2-0.svg");
+    expect(neon).toContain('alt="dark-pink-skipeveryone-0"');
+    expect(neon).toContain('alt="light-wilddraw2-0"');
   });
 
   it("shows a side indicator and marks the table for the dark side", () => {

@@ -44,9 +44,9 @@ describe("Uno board stage", () => {
         onUno={() => undefined}
       />,
     );
-    expect(html).toContain("cards-neon/card-back.svg");
-    expect(html).toContain("cards-neon/yellow-1-0.svg");
-    expect(html).toContain("cards-neon/red-5-0.svg");
+    expect(html).toContain("data:image/svg+xml,");
+    expect(html).toContain('alt="Top card yellow-1-0"');
+    expect(html).toContain('alt="red-5-0"');
     expect(html).toContain("uno-table-surface");
   });
 
@@ -121,7 +121,7 @@ describe("Uno board stage", () => {
       />,
     );
     expect(html).toContain('aria-label="Pending draw stack"');
-    expect(html).toContain("cards/wildnou-0.svg");
+    expect(html).toContain('alt="wildnou-0"');
     expect(html).toContain("NO U!");
   });
 

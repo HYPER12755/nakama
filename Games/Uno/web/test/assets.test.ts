@@ -1,7 +1,9 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { UNO_MODES, buildDeck, flipCard } from "@moongames/uno-core";
 import { soundAssetPaths } from "../src/lib/audio";
+import { cardArtDataUri, cardBackDataUri } from "../src/lib/cardArt";
 
 const cardsDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../public/cards");
 
@@ -301,6 +303,39 @@ describe("Uno card assets", () => {
           expect(files, `${set}/minimalist-${color}-${kind}-0.svg`).toContain(`minimalist-${color}-${kind}-0.svg`);
         }
       }
+    }
+  });
+
+  it("draws every generated card and both backs as a real SVG", () => {
+    const cards = UNO_MODES.flatMap((mode) => buildDeck(mode));
+    for (const set of ["classic", "neon"] as const) {
+      const back = decodeURIComponent(cardBackDataUri(set).split(",")[1] ?? "");
+      expect(back).toContain("<svg");
+      expect(back).toContain("MOON GAMES");
+    }
+    for (const card of cards) {
+      const svg = decodeURIComponent(cardArtDataUri(card).split(",")[1] ?? "");
+      expect(svg, `${card.id} svg`).toContain("<svg");
+      expect(svg, `${card.id} label`).toContain("MOON GAMES");
+      const flipped = decodeURIComponent(cardArtDataUri(flipCard(card)).split(",")[1] ?? "");
+      expect(flipped, `${flipCard(card).id} svg`).toContain("<svg");
+    }
+  });
+
+  it("gives special cards their own labelled artwork", () => {
+    const cases: Array<[Parameters<typeof cardArtDataUri>[0], string]> = [
+      [{ id: "wild-0", color: null, kind: "wild" }, "WILD"],
+      [{ id: "wildattack-0", color: null, kind: "wildAttack" }, "ATTACK"],
+      [{ id: "modcard-0", color: null, kind: "modCard" }, "MOD"],
+      [{ id: "red-hit2-0", color: "red", kind: "hit2" }, "HIT 2"],
+      [{ id: "red-dare-0", color: "red", kind: "dare" }, "DARE"],
+      [{ id: "wildshowdown-0", color: null, kind: "wildShowdown" }, "SHOWDOWN"],
+      [{ id: "wildgrabtower-0", color: null, kind: "wildGrabTower" }, "TOWER GRAB"],
+      [{ id: "wildstack3-0", color: null, kind: "wildStack3" }, "STACK +3"],
+    ];
+    for (const [card, label] of cases) {
+      const svg = decodeURIComponent(cardArtDataUri(card).split(",")[1] ?? "");
+      expect(svg, card.id).toContain(label);
     }
   });
 

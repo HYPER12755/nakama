@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { UNO_MODE, colorsForSide, drawCardValue, type Card, type Color } from "@moongames/uno-core";
 import { normalizeFlipSide, type BoardView, type RulesMode } from "../lib/view";
+import { cardArtDataUri, cardArtForId } from "../lib/cardArt";
 
 const COLOUR_HEX: Record<Color, string> = {
   red: "#ff5252", yellow: "#ffd740", green: "#69f0ae", blue: "#448aff",
@@ -213,26 +214,9 @@ export function UnoBoardStage({
   const previousCounts = useRef<Record<string, number> | null>(null);
   const lastManualFlight = useRef(0);
 
-  const art = (cardId: string): string => {
-    const assetId = cardId.startsWith("aw") ? `${cardId.replace(/-\d+$/, "")}-0`
-      : cardId.startsWith("wildshowdown-") ? "wildshowdown-0"
-        : cardId.startsWith("wildgrabtower-") ? "wildgrabtower-0"
-        : cardId.startsWith("modcard-") ? "modcard-0"
-          : cardId.includes("-showdown-") ? `${cardId.slice(0, cardId.indexOf("-showdown-"))}-showdown-0`
-          : cardId.startsWith("minimalist-") ? cardId.replace(/-\d+$/, "-0")
-            : cardId;
-    return cardSet === "neon" ? `cards-neon/${assetId}.svg` : `cards/${assetId}.svg`;
-  };
+  const art = (cardId: string): string => cardArtForId(cardId, cardSet);
+  const cardArt = (card: Card): string => cardArtDataUri(card, cardSet);
 
-  const cardArt = (card: Card): string => {
-    if (card.power !== undefined && card.color !== null) {
-      return art(`${card.color}-power-${card.power}-0`);
-    }
-    if (card.kind === "draw1" && card.color !== null && !card.id.startsWith("light-")
-      && !card.id.startsWith("dark-")) return art(`${card.color}-draw1-0`);
-    if (card.kind === "grab2Towers" && card.color !== null) return art(`${card.color}-grab2towers-0`);
-    return art(card.id);
-  };
 
   const me = view.players.find((player) => player.userId === view.myUserId);
   const hand = me?.hand ?? [];

@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "generatedAt": "2026-11-23T07:17:10.776Z",
+  "generatedAt": "2026-11-23T16:46:30.243Z",
   "games": [
     {
       "id": "chess",
@@ -78,9 +78,9 @@
       "release": {
         "version": "0.1.0",
         "minHostProtocol": 2,
-        "publishedAt": "2026-11-23T07:17:10.475Z",
-        "sha256": "c0c7e9b4f5f2459f7c6ee121e281498e15d0302735733a14159a48f0fd384731",
-        "size": 1550781,
+        "publishedAt": "2026-11-23T16:46:29.821Z",
+        "sha256": "1dc17f1bafc5a9520fe976a5fe86a53abfc82d6bb47cef565975366d2a6c9fbd",
+        "size": 1555697,
         "keyId": "dev-1"
       }
     },

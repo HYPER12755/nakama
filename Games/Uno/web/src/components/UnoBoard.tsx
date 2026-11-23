@@ -2,6 +2,7 @@ import { useState } from "react";
 import { FullscreenChatButton } from "@moongames/game-ui";
 import type { Card, Color } from "@moongames/uno-core";
 import type { BoardView } from "../lib/view";
+import { cardArtDataUri, cardBackDataUri } from "../lib/cardArt";
 
 const COLORS: Color[] = ["red", "yellow", "green", "blue"];
 
@@ -92,7 +93,8 @@ export function UnoBoard({ view, onPlay, onDraw, onChallenge, onRematch }: UnoBo
           .filter((player) => player.userId !== view.myUserId)
           .map((player) => (
             <div className="uno-opponent" key={player.userId}>
-              <img src="cards/card-back.svg" alt="" className="uno-mini-back" />
+              <img src={cardBackDataUri()}
+ alt="" className="uno-mini-back" />
               <span>{player.username}</span>
               <strong>{player.count}</strong>
             </div>
@@ -112,14 +114,17 @@ export function UnoBoard({ view, onPlay, onDraw, onChallenge, onRematch }: UnoBo
           disabled={!isMyTurn}
           aria-label="Draw a card"
         >
-          <img src="cards/card-back.svg" alt="Draw pile" />
+          <img src={cardBackDataUri()}
+ alt="Draw pile" />
           <span>{view.deckCount}</span>
         </button>
         <div className="uno-pile uno-pile--discard">
           {view.topCard !== null ? (
-            <img src={`cards/${view.topCard.id}.svg`} alt={`${view.topCard.color ?? "wild"} ${view.topCard.kind}`} />
+            <img src={cardArtDataUri(view.topCard)}
+ alt={`${view.topCard.color ?? "wild"} ${view.topCard.kind}`} />
           ) : (
-            <img src="cards/card-back.svg" alt="Discard pile" />
+            <img src={cardBackDataUri()}
+ alt="Discard pile" />
           )}
         </div>
       </div>
@@ -134,7 +139,8 @@ export function UnoBoard({ view, onPlay, onDraw, onChallenge, onRematch }: UnoBo
             disabled={!isMyTurn}
             aria-label={`Play ${card.id}`}
           >
-            <img src={`cards/${card.id}.svg`} alt={card.id} />
+            <img src={cardArtDataUri(card)}
+ alt={card.id} />
           </button>
         ))}
       </div>

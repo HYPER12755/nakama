@@ -109,8 +109,9 @@ describe("Uno Attack incoming hit", () => {
     expect(dialog?.textContent).toContain("Incoming hit");
     expect(dialog?.textContent).toContain("2");
     expect(dialog?.textContent).toContain("Take hit");
-    expect(container.innerHTML).toContain("cards/yellow-hit1-0.svg");
-    expect(container.innerHTML).toContain("cards/wildattack-0.svg");
+    expect(container.innerHTML).toContain("data:image/svg+xml,");
+    expect(container.innerHTML).toContain('alt="yellow-hit1-0"');
+    expect(container.innerHTML).toContain('alt="wildattack-0"');
     expect(button("Deflect with yellow-hit1-0")).toBeDefined();
     expect(button("Deflect with wildattack-0")).toBeDefined();
     expect(onPlay).not.toHaveBeenCalled();

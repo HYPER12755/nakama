@@ -220,12 +220,13 @@ describe("Uno No Mercy mode integration", () => {
     const html = container.innerHTML;
     expect(html).toContain("uno-opponent-hand--out");
     expect(html).toContain("OUT");
-    expect(html).toContain("cards/red-draw4-0.svg");
-    expect(html).toContain("cards/wilddraw6-0.svg");
-    expect(html).toContain("cards/wilddraw10-0.svg");
-    expect(html).toContain("cards/wildroulette-0.svg");
-    expect(html).toContain("cards/red-skipeveryone-0.svg");
-    expect(html).toContain("cards/blue-discardall-2.svg");
+    expect(html).toContain("data:image/svg+xml,");
+    for (const id of [
+      "red-draw4-0", "wilddraw6-0", "wilddraw10-0", "wildroulette-0",
+      "red-skipeveryone-0", "blue-discardall-2",
+    ]) {
+      expect(html).toContain(`alt="${id}"`);
+    }
     await act(async () => {
       root.unmount();
     });
@@ -276,8 +277,9 @@ describe("Uno No Mercy mode integration", () => {
     expect(Array.from(options).map((option) => option.getAttribute("aria-label"))).toEqual([
       "Stack wilddraw6-0", "Stack wilddraw10-0",
     ]);
-    expect(dialog?.innerHTML).toContain("cards/wilddraw6-0.svg");
-    expect(dialog?.innerHTML).not.toContain("cards/blue-draw2-0.svg");
+    expect(dialog?.innerHTML).toContain("data:image/svg+xml,");
+    expect(dialog?.innerHTML).toContain('alt="wilddraw6-0"');
+    expect(dialog?.innerHTML).not.toContain('alt="blue-draw2-0"');
 
     await click(button("Take 12"));
     expect(onDraw).toHaveBeenCalledTimes(1);

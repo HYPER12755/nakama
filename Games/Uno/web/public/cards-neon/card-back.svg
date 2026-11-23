@@ -1,17 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 270" width="180" height="270" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 270" width="180" height="270" role="img" aria-label="Moon Games card back">
 <defs>
-<linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E040FB"/><stop offset="1" stop-color="#18FFFF"/></linearGradient>
-<radialGradient id="glow"><stop offset="0" stop-color="#E040FB" stop-opacity="0.42"/><stop offset="1" stop-color="#E040FB" stop-opacity="0"/></radialGradient>
-<filter id="soft"><feGaussianBlur stdDeviation="8"/></filter>
+<linearGradient id="paper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#18213a"/><stop offset="0.55" stop-color="#0d1428"/><stop offset="1" stop-color="#070b18"/></linearGradient>
+<pattern id="weave" width="12" height="12" patternUnits="userSpaceOnUse"><path d="M0 6h12M6 0v12" stroke="#38bdf8" stroke-opacity="0.12" stroke-width="1"/><circle cx="6" cy="6" r="1" fill="#7dd3fc" fill-opacity="0.12"/></pattern>
+<filter id="lift" x="-25%" y="-25%" width="150%" height="150%"><feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#020617" flood-opacity="0.45"/></filter>
 </defs>
-<rect x="3" y="3" width="174" height="264" rx="10" fill="#0A0A0E" stroke="url(#edge)" stroke-width="4"/>
-<rect x="6" y="6" width="168" height="258" rx="8" fill="none" stroke="#FF003C" stroke-opacity="0.65" stroke-width="0.8"/>
-<rect x="9" y="9" width="162" height="252" rx="7" fill="url(#glow)"/>
-
-<g transform="rotate(-20 90 135)">
-<rect x="28" y="96" width="124" height="78" rx="38" fill="none" stroke="url(#edge)" stroke-width="9" filter="url(#soft)" opacity="0.75"/>
-<rect x="28" y="96" width="124" height="78" rx="38" fill="none" stroke="url(#edge)" stroke-width="8"/>
-<rect x="28" y="96" width="124" height="78" rx="38" fill="none" stroke="#fff" stroke-opacity="0.9" stroke-width="2"/>
-</g>
-<text x="90" y="150" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="900" font-style="italic" fill="#fff" style="filter:drop-shadow(0 0 16px #18FFFF)">UNO</text>
+<rect x="3" y="3" width="174" height="264" rx="19" fill="#0b1224" stroke="#38bdf8" stroke-width="4" filter="url(#lift)"/>
+<rect x="11" y="11" width="158" height="248" rx="13" fill="none" stroke="#7dd3fc" stroke-opacity="0.8" stroke-width="2"/>
+<rect x="18" y="18" width="144" height="234" rx="10" fill="url(#weave)" stroke="#ffffff" stroke-opacity="0.12"/>
+<path d="M90 38 148 90 90 142 32 90Z" fill="#ef3b36" stroke="#ffffff" stroke-width="2"/>
+<path d="M148 90 148 180 90 232 90 142Z" fill="#f7bf18" stroke="#ffffff" stroke-width="2"/>
+<path d="M90 232 32 180 32 90 90 142Z" fill="#2f70e6" stroke="#ffffff" stroke-width="2"/>
+<path d="M90 142 148 180 90 232 32 180Z" fill="#16a55e" stroke="#ffffff" stroke-width="2"/>
+<ellipse cx="90" cy="137" rx="52" ry="63" fill="#0b1224" stroke="#7dd3fc" stroke-width="3"/>
+<text x="90" y="148" text-anchor="middle" font-family="Georgia,serif" font-weight="700" font-size="46" fill="#7dd3fc">M</text>
+<text x="90" y="222" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="9" letter-spacing="3" fill="#e2e8f0">MOON GAMES</text>
 </svg>
