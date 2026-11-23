@@ -1,4 +1,5 @@
 export {
+  DEFAULT_UPDATE_POLICY,
   createGameLaunchContext,
   fetchGamesCatalog,
   findGameCatalogEntry,
@@ -18,6 +19,8 @@ export type {
   MoonGamesInvite,
   SocialNotification,
   SocialPlayerSummary,
+  BundleUpdateMode,
+  BundleUpdatePolicy,
 } from "@moongames/game-sdk";
 export {
   MoonGamesAccountError,

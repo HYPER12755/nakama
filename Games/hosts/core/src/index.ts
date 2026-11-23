@@ -3,10 +3,12 @@ import { sha256, sha512 } from "@noble/hashes/sha2.js";
 import {
   GAME_PROTOCOL_VERSION,
   assertBundleDescriptor,
+  bundleDeltaSigningPayload,
   bundleSigningPayload,
   checkPinnedSigner,
   parseReleaseManifest,
   selectLatestBundle,
+  type BundleDelta,
   type GameBundleDescriptor,
   type GameCatalogEntry,
   type GameHostConfig,
@@ -189,6 +191,73 @@ export async function verifyBundleBytes(
     return { ok: false, error: "The bundle SHA-256 does not match the descriptor." };
   }
   return verifyBundleSignature(descriptor, trustedKeys, adapter);
+}
+
+export async function verifyBundleDelta(
+  delta: BundleDelta,
+  trustedKeys?: TrustedBundleKeys,
+  adapter: HostCryptoAdapter = nobleCryptoAdapter,
+): Promise<BundleVerification> {
+  try {
+    if (delta.format !== 2) {
+      return { ok: false, error: "Unsupported bundle delta format." };
+    }
+    if (!Array.isArray(delta.files) || !Array.isArray(delta.removed)) {
+      return { ok: false, error: "The delta file lists are invalid." };
+    }
+    for (const file of delta.files) {
+      if (
+        typeof file.path !== "string" ||
+        file.path.startsWith("/") ||
+        file.path.includes("\\") ||
+        file.path.split("/").some((part) => part === ".." || part === "")
+      ) {
+        return { ok: false, error: "The delta contains an unsafe file path." };
+      }
+    }
+    for (const file of delta.removed) {
+      if (
+        typeof file !== "string" ||
+        file.startsWith("/") ||
+        file.includes("\\") ||
+        file.split("/").some((part) => part === ".." || part === "")
+      ) {
+        return { ok: false, error: "The delta contains an unsafe removed path." };
+      }
+    }
+    const publicKeyBase64 =
+      trustedKeys === undefined ? delta.publicKey : trustedKeys[delta.keyId];
+    if (publicKeyBase64 === undefined) {
+      return {
+        ok: false,
+        error: `No trusted public key is configured for ${delta.keyId}.`,
+      };
+    }
+    if (trustedKeys !== undefined && publicKeyBase64 !== delta.publicKey) {
+      return {
+        ok: false,
+        error: `The delta public key does not match the pinned key ${delta.keyId}.`,
+      };
+    }
+    const publicKey = base64ToBytes(publicKeyBase64);
+    const signature = base64ToBytes(delta.signature);
+    if (publicKey.length !== 32 || signature.length !== 64) {
+      return { ok: false, error: "The delta key or signature has an invalid length." };
+    }
+    const valid = await adapter.verifyEd25519(
+      signature,
+      utf8Encode(bundleDeltaSigningPayload(delta)),
+      publicKey,
+    );
+    return valid
+      ? { ok: true }
+      : { ok: false, error: "The delta signature is invalid." };
+  } catch (cause) {
+    return {
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Could not verify the delta.",
+    };
+  }
 }
 
 export interface BundleSelection {

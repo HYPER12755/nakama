@@ -67,12 +67,19 @@ declare module "react-native-webview" {
 }
 
 declare module "react-native-fs" {
+  export interface ReadDirItem {
+    name: string;
+    path: string;
+    isDirectory(): boolean;
+  }
   const RNFS: {
     DocumentDirectoryPath: string;
     CachesDirectoryPath: string;
     exists(path: string): Promise<boolean>;
     mkdir(path: string): Promise<void>;
     unlink(path: string): Promise<void>;
+    readDir(path: string): Promise<ReadDirItem[]>;
+    copyFile(from: string, to: string): Promise<void>;
     moveFile(from: string, to: string): Promise<void>;
     readFile(path: string, encoding: "base64" | "utf8"): Promise<string>;
     writeFile(

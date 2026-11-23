@@ -14,7 +14,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import { deflateRawSync } from "node:zlib";
+import { deflateRawSync, inflateRawSync } from "node:zlib";
 
 export const BUNDLE_FORMAT = 1;
 export const RELEASE_MANIFEST_FORMAT = 1;
@@ -354,6 +354,85 @@ export async function zipDirectory(rootDirectory) {
 
   await visit(rootDirectory, "");
   return createZip(files);
+}
+
+export function readZipEntries(buffer) {
+  const bytes = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  if (bytes.length < 22) {
+    throw new Error("The ZIP archive is too small.");
+  }
+  let eocd = -1;
+  const minimum = Math.max(0, bytes.length - 65557);
+  for (let index = bytes.length - 22; index >= minimum; index -= 1) {
+    if (bytes.readUInt32LE(index) === 0x06054b50) {
+      eocd = index;
+      break;
+    }
+  }
+  if (eocd < 0) {
+    throw new Error("The ZIP archive has no central directory.");
+  }
+  const count = bytes.readUInt16LE(eocd + 10);
+  let pointer = bytes.readUInt32LE(eocd + 16);
+  const entries = [];
+  for (let index = 0; index < count; index += 1) {
+    if (pointer + 46 > bytes.length || bytes.readUInt32LE(pointer) !== 0x02014b50) {
+      throw new Error("The ZIP central directory is invalid.");
+    }
+    const method = bytes.readUInt16LE(pointer + 10);
+    const compressedSize = bytes.readUInt32LE(pointer + 20);
+    const nameLength = bytes.readUInt16LE(pointer + 28);
+    const extraLength = bytes.readUInt16LE(pointer + 30);
+    const commentLength = bytes.readUInt16LE(pointer + 32);
+    const localOffset = bytes.readUInt32LE(pointer + 42);
+    const name = bytes
+      .subarray(pointer + 46, pointer + 46 + nameLength)
+      .toString("utf8");
+    if (
+      name.startsWith("/") ||
+      name.includes("\\") ||
+      name.split("/").some((part) => part === ".." || part === "")
+    ) {
+      throw new Error(`Unsafe ZIP entry name: ${name}`);
+    }
+    if (
+      localOffset + 30 > bytes.length ||
+      bytes.readUInt32LE(localOffset) !== 0x04034b50
+    ) {
+      throw new Error(`The ZIP local header for ${name} is invalid.`);
+    }
+    const localNameLength = bytes.readUInt16LE(localOffset + 26);
+    const localExtraLength = bytes.readUInt16LE(localOffset + 28);
+    const start = localOffset + 30 + localNameLength + localExtraLength;
+    const compressed = bytes.subarray(start, start + compressedSize);
+    if (method === 0) {
+      entries.push({ name, data: Buffer.from(compressed) });
+    } else if (method === 8) {
+      entries.push({ name, data: inflateRawSync(compressed) });
+    } else {
+      throw new Error(`Unsupported ZIP compression method ${method}.`);
+    }
+    pointer += 46 + nameLength + extraLength + commentLength;
+  }
+  return entries;
+}
+
+export function signPayload(payload, privateKeyPem) {
+  const key = readPrivateKey(privateKeyPem);
+  return sign(null, Buffer.from(payload, "utf8"), key).toString("base64");
+}
+
+export function verifyPayload(payload, signatureBase64, publicKeyBase64) {
+  try {
+    return verify(
+      null,
+      Buffer.from(payload, "utf8"),
+      publicKeyObject(publicKeyBase64),
+      Buffer.from(signatureBase64, "base64"),
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function chooseEffectiveUrl(descriptor, manifestUrl) {

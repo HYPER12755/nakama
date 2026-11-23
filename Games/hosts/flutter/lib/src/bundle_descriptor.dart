@@ -191,6 +191,124 @@ class BundleSigner {
   };
 }
 
+class BundleDeltaFile {
+  const BundleDeltaFile({
+    required this.path,
+    required this.sha256,
+    required this.size,
+    required this.url,
+  });
+
+  final String path;
+  final String sha256;
+  final int size;
+  final String url;
+
+  factory BundleDeltaFile.fromJson(Object? value) {
+    if (value is! Map<String, dynamic>) {
+      throw const FormatException('A delta file must be an object.');
+    }
+    final sha256 = _requireString(value['sha256'], 'delta.file.sha256');
+    if (!_hexSha256.hasMatch(sha256)) {
+      throw const FormatException('delta file sha256 must be 64 hex characters.');
+    }
+    final size = value['size'];
+    if (size is! int || size < 0) {
+      throw const FormatException('delta file size must be a non-negative integer.');
+    }
+    return BundleDeltaFile(
+      path: _requireEntry(value['path']),
+      sha256: sha256,
+      size: size,
+      url: _requireString(value['url'], 'delta.file.url'),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'path': path,
+    'sha256': sha256,
+    'size': size,
+    'url': url,
+  };
+}
+
+class BundleDelta {
+  const BundleDelta({
+    required this.format,
+    required this.gameId,
+    required this.baseVersion,
+    required this.baseSha256,
+    required this.targetVersion,
+    required this.targetSha256,
+    required this.files,
+    required this.removed,
+    required this.keyId,
+    required this.publicKey,
+    required this.signature,
+  });
+
+  final int format;
+  final String gameId;
+  final String baseVersion;
+  final String baseSha256;
+  final String targetVersion;
+  final String targetSha256;
+  final List<BundleDeltaFile> files;
+  final List<String> removed;
+  final String keyId;
+  final String publicKey;
+  final String signature;
+
+  factory BundleDelta.fromJson(Object? value) {
+    if (value is! Map<String, dynamic>) {
+      throw const FormatException('The bundle delta must be an object.');
+    }
+    if (value['format'] != 2) {
+      throw const FormatException('Unsupported bundle delta format.');
+    }
+    final filesValue = value['files'];
+    final removedValue = value['removed'];
+    if (filesValue is! List || removedValue is! List) {
+      throw const FormatException('The delta file lists must be arrays.');
+    }
+    return BundleDelta(
+      format: 2,
+      gameId: _requireString(value['gameId'], 'delta.gameId'),
+      baseVersion: _requireString(value['baseVersion'], 'delta.baseVersion'),
+      baseSha256: _requireString(value['baseSha256'], 'delta.baseSha256'),
+      targetVersion: _requireString(value['targetVersion'], 'delta.targetVersion'),
+      targetSha256: _requireString(value['targetSha256'], 'delta.targetSha256'),
+      files: filesValue
+          .map(BundleDeltaFile.fromJson)
+          .toList(growable: false),
+      removed: removedValue
+          .map((entry) => _requireEntry(entry))
+          .toList(growable: false),
+      keyId: _requireString(value['keyId'], 'delta.keyId'),
+      publicKey: _requireString(value['publicKey'], 'delta.publicKey'),
+      signature: _requireString(value['signature'], 'delta.signature'),
+    );
+  }
+
+  String signingPayload() {
+    final files = files
+        .map((file) => '${file.path}\t${file.sha256}\t${file.size}')
+        .join('\n');
+    return [
+      'moongames-delta-v2',
+      '$format',
+      gameId,
+      baseVersion,
+      baseSha256,
+      targetVersion,
+      targetSha256,
+      keyId,
+      files,
+      removed.join('\n'),
+    ].join('\n');
+  }
+}
+
 class ReleaseManifest {
   const ReleaseManifest({
     required this.format,

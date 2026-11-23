@@ -133,6 +133,12 @@ fallback remains required and is never bypassed by an invalid remote artifact.
 
 App integration guides:
 
+- [Provider architecture](docs/PROVIDER_ARCHITECTURE.md): managed platform,
+  offline-first caching, bandwidth rules, identity, and rollout
+- [Partner auth](docs/PARTNER_AUTH.md): HMAC-verified email proof to a shared
+  MoonGames Nakama account
+- [Signed bundle deltas](docs/RELEASE_DELTA.md): delta-first updates with full
+  ZIP fallback
 - [Shared host setup](hosts/HOST_SETUP.md): release hosting, signing, fallback
   assets, Nakama identity, QA, and troubleshooting
 - [Flutter integration](hosts/flutter/INTEGRATION.md)

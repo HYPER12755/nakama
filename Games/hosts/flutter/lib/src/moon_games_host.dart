@@ -31,6 +31,8 @@ class MoonGamesHost extends StatefulWidget {
     this.accountMode,
     this.official = false,
     this.release,
+    this.updatePolicy = const BundleUpdatePolicy(),
+    this.onUpdateAvailable,
     this.onReady,
     this.onExit,
     this.onToast,
@@ -63,6 +65,9 @@ class MoonGamesHost extends StatefulWidget {
 
   /// Verified signed release forwarded to the game.
   final MoonGamesReleaseIdentity? release;
+
+  final BundleUpdatePolicy updatePolicy;
+  final void Function(BundleDescriptor descriptor)? onUpdateAvailable;
 
   final void Function(BundleLaunch launch)? onReady;
   final void Function(String? reason)? onExit;
@@ -104,6 +109,8 @@ class _MoonGamesHostState extends State<MoonGamesHost>
       trustedKeys: widget.trustedKeys,
       bundledDescriptorAsset: widget.bundledDescriptorAsset,
       bundledZipAsset: widget.bundledZipAsset,
+      updatePolicy: widget.updatePolicy,
+      onUpdateAvailable: widget.onUpdateAvailable,
       onLog: (message) => debugPrint('[MoonGames] $message'),
     );
   }

@@ -13,7 +13,23 @@ import 'package:path_provider/path_provider.dart';
 
 import 'bundle_descriptor.dart';
 
-enum BundleSource { remote, cache, bundled }
+enum BundleSource { remote, delta, cache, bundled }
+
+enum BundleUpdateMode { background, forced, prompt, manual }
+
+class BundleUpdatePolicy {
+  const BundleUpdatePolicy({
+    this.mode = BundleUpdateMode.background,
+    this.checkIntervalMs = 6 * 60 * 60 * 1000,
+    this.allowCellular = true,
+    this.keepVersions = 2,
+  });
+
+  final BundleUpdateMode mode;
+  final int checkIntervalMs;
+  final bool allowCellular;
+  final int keepVersions;
+}
 
 class BundleLaunch {
   const BundleLaunch({
@@ -29,6 +45,18 @@ class BundleLaunch {
   File get entryFile => File(p.join(directory.path, descriptor.entry));
 }
 
+class _CachedManifest {
+  const _CachedManifest({
+    this.etag,
+    required this.fetchedAt,
+    required this.value,
+  });
+
+  final String? etag;
+  final int fetchedAt;
+  final Object? value;
+}
+
 class BundleManager {
   BundleManager({
     required this.gameId,
@@ -37,6 +65,8 @@ class BundleManager {
     this.manifestUrl,
     this.bundledDescriptorAsset,
     this.bundledZipAsset,
+    this.updatePolicy = const BundleUpdatePolicy(),
+    this.onUpdateAvailable,
     this.onLog,
     http.Client? client,
     Directory? supportDirectory,
@@ -50,6 +80,8 @@ class BundleManager {
   final String? manifestUrl;
   final String? bundledDescriptorAsset;
   final String? bundledZipAsset;
+  final BundleUpdatePolicy updatePolicy;
+  final void Function(BundleDescriptor descriptor)? onUpdateAvailable;
   final void Function(String message)? onLog;
   final http.Client _client;
   final Directory? _supportDirectory;
@@ -59,9 +91,10 @@ class BundleManager {
 
   Future<BundleLaunch> resolve() async {
     final root = await _ensureCacheRoot();
+    final installed = await _loadInstalled(root);
 
     try {
-      final remote = await _resolveRemote(root);
+      final remote = await _resolveRemote(root, installed);
       if (remote != null) {
         return remote;
       }
@@ -69,7 +102,6 @@ class BundleManager {
       onLog?.call('Remote bundle unavailable: $cause');
     }
 
-    final installed = await _loadInstalled(root);
     if (installed != null) {
       return installed;
     }
@@ -112,30 +144,135 @@ class BundleManager {
     );
   }
 
+  Directory _deltaDirectory(Directory root, BundleDescriptor descriptor, String fromVersion) {
+    return Directory(
+      p.join(
+        root.path,
+        descriptor.gameId,
+        'delta-$fromVersion-${descriptor.version}-${DateTime.now().microsecondsSinceEpoch}',
+      ),
+    );
+  }
+
   File _metadataFile(Directory root) {
     return File(p.join(root.path, gameId, 'installed.json'));
   }
 
-  Future<BundleLaunch?> _resolveRemote(Directory root) async {
+  File _manifestCacheFile(Directory root) {
+    return File(p.join(root.path, gameId, 'release-manifest-cache.json'));
+  }
+
+  Future<_CachedManifest?> _readManifestCache(Directory root) async {
+    final file = _manifestCacheFile(root);
+    if (!await file.exists()) {
+      return null;
+    }
+    try {
+      final value = jsonDecode(await file.readAsString());
+      if (value is! Map<String, dynamic>) {
+        return null;
+      }
+      final fetchedAt = value['fetchedAt'];
+      if (fetchedAt is! int) {
+        return null;
+      }
+      final etag = value['etag'];
+      return _CachedManifest(
+        etag: etag is String ? etag : null,
+        fetchedAt: fetchedAt,
+        value: value['value'],
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _writeManifestCache(Directory root, _CachedManifest cache) async {
+    final file = _manifestCacheFile(root);
+    await file.parent.create(recursive: true);
+    await file.writeAsString(
+      jsonEncode({
+        'etag': cache.etag,
+        'fetchedAt': cache.fetchedAt,
+        'value': cache.value,
+      }),
+      flush: true,
+    );
+  }
+
+  Future<ReleaseManifest> _parseManifest(Object? value) async {
+    final manifest = ReleaseManifest.fromJson(value);
+    return manifest;
+  }
+
+  Future<BundleLaunch?> _resolveRemote(
+    Directory root,
+    BundleLaunch? installed,
+  ) async {
     final url = manifestUrl;
     if (url == null || url.isEmpty) {
       return null;
     }
     final manifestUri = Uri.parse(url);
-    onLog?.call('Fetching release manifest $manifestUri');
-    final response = await _client
-        .get(manifestUri, headers: const {'Accept': 'application/json'})
-        .timeout(const Duration(seconds: 12));
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw HttpException(
-        'Release manifest request failed: HTTP ${response.statusCode}.',
-        uri: manifestUri,
-      );
+    final cache = await _readManifestCache(root);
+    final fresh = cache != null &&
+        DateTime.now().millisecondsSinceEpoch - cache.fetchedAt <
+            updatePolicy.checkIntervalMs;
+
+    Object? manifestValue;
+    String? etag;
+    if (updatePolicy.mode == BundleUpdateMode.manual) {
+      if (cache == null) {
+        return null;
+      }
+      manifestValue = cache.value;
+      etag = cache.etag;
+    } else if (fresh && updatePolicy.mode != BundleUpdateMode.forced) {
+      manifestValue = cache.value;
+      etag = cache.etag;
+    } else {
+      try {
+        final response = await _client
+            .get(
+              manifestUri,
+              headers: {
+                'Accept': 'application/json',
+                if (cache?.etag != null) 'If-None-Match': cache!.etag!,
+                'Cache-Control': 'no-cache',
+              },
+            )
+            .timeout(const Duration(seconds: 20));
+        if (response.statusCode == 304 && cache != null) {
+          manifestValue = cache.value;
+          etag = cache.etag;
+        } else if (response.statusCode >= 200 && response.statusCode < 300) {
+          manifestValue = jsonDecode(utf8.decode(response.bodyBytes));
+          etag = response.headers['etag'];
+        } else {
+          throw HttpException(
+            'Release manifest request failed: HTTP ${response.statusCode}.',
+            uri: manifestUri,
+          );
+        }
+        await _writeManifestCache(
+          root,
+          _CachedManifest(
+            etag: etag,
+            fetchedAt: DateTime.now().millisecondsSinceEpoch,
+            value: manifestValue,
+          ),
+        );
+      } catch (cause) {
+        if (cache == null) {
+          rethrow;
+        }
+        onLog?.call('Using the cached release manifest.');
+        manifestValue = cache.value;
+        etag = cache.etag;
+      }
     }
 
-    final manifest = ReleaseManifest.fromJson(
-      jsonDecode(utf8.decode(response.bodyBytes)),
-    );
+    final manifest = await _parseManifest(manifestValue);
     final descriptor = manifest.latestFor(gameId, hostProtocol);
     if (descriptor == null) {
       throw StateError(
@@ -145,7 +282,6 @@ class BundleManager {
     _verifyPinnedKey(descriptor);
     await _verifyDescriptorSignature(descriptor);
 
-    final installed = await _loadInstalled(root);
     if (installed != null &&
         compareSemver(installed.descriptor.version, descriptor.version) > 0) {
       onLog?.call(
@@ -154,35 +290,174 @@ class BundleManager {
       return installed;
     }
 
-    final directory = _bundleDirectory(root, descriptor);
-    if (await _hasEntry(directory, descriptor)) {
+    final upToDate = installed != null &&
+        installed.descriptor.version == descriptor.version &&
+        installed.descriptor.sha256 == descriptor.sha256;
+    if (upToDate) {
+      return installed;
+    }
+
+    if (installed != null &&
+        (updatePolicy.mode == BundleUpdateMode.prompt ||
+            updatePolicy.mode == BundleUpdateMode.manual)) {
+      onUpdateAvailable?.call(descriptor);
+      return installed;
+    }
+
+    if (installed != null) {
+      try {
+        return await _installDelta(root, installed.descriptor, descriptor, manifestUri);
+      } catch (cause) {
+        onLog?.call('Delta unavailable: $cause');
+      }
+    }
+
+    try {
+      return await _downloadAndInstall(root, descriptor, manifestUri);
+    } catch (cause) {
+      if (updatePolicy.mode == BundleUpdateMode.forced) {
+        rethrow;
+      }
+      onLog?.call('Update failed: $cause');
+      if (installed != null) {
+        return installed;
+      }
+      rethrow;
+    }
+  }
+
+  Uri _deltaUrlFor(
+    BundleDescriptor descriptor,
+    Uri manifestUri,
+    String fromVersion,
+  ) {
+    final bundleUri = manifestUri.resolve(descriptor.url);
+    final segments = List<String>.from(bundleUri.pathSegments)
+      ..removeLast()
+      ..addAll([
+        'deltas',
+        '${Uri.encodeComponent(fromVersion)}-${Uri.encodeComponent(descriptor.version)}',
+        'delta.json',
+      ]);
+    return bundleUri.replace(pathSegments: segments);
+  }
+
+  Future<BundleLaunch> _installDelta(
+    Directory root,
+    BundleDescriptor installed,
+    BundleDescriptor descriptor,
+    Uri manifestUri,
+  ) async {
+    final deltaUri = _deltaUrlFor(descriptor, manifestUri, installed.version);
+    final response = await _client
+        .get(deltaUri, headers: const {'Accept': 'application/json'})
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw HttpException('Delta request failed: HTTP ${response.statusCode}.', uri: deltaUri);
+    }
+    final delta = BundleDelta.fromJson(jsonDecode(utf8.decode(response.bodyBytes)));
+    await _verifyDelta(delta);
+    if (delta.gameId != descriptor.gameId ||
+        delta.baseVersion != installed.version ||
+        delta.baseSha256 != installed.sha256 ||
+        delta.targetVersion != descriptor.version ||
+        delta.targetSha256 != descriptor.sha256) {
+      throw StateError('The delta does not match the installed or target release.');
+    }
+
+    final target = _bundleDirectory(root, descriptor);
+    final scratch = _deltaDirectory(root, descriptor, installed.version);
+    if (await scratch.exists()) {
+      await scratch.delete(recursive: true);
+    }
+    await scratch.create(recursive: true);
+    try {
+      await _copyDirectory(_bundleDirectory(root, installed), scratch);
+      for (final file in delta.files) {
+        final objectUri = deltaUri.resolve(file.url);
+        final download = await _client
+            .get(objectUri)
+            .timeout(const Duration(seconds: 60));
+        if (download.statusCode < 200 || download.statusCode >= 300) {
+          throw HttpException(
+            'Delta file request failed: HTTP ${download.statusCode}.',
+            uri: objectUri,
+          );
+        }
+        final bytes = download.bodyBytes;
+        if (bytes.length != file.size) {
+          throw StateError('Delta file ${file.path} has the wrong size.');
+        }
+        if (sha256.convert(bytes).toString() != file.sha256) {
+          throw StateError('Delta file ${file.path} has the wrong hash.');
+        }
+        final destination = _safeDestination(scratch, file.path);
+        await destination.parent.create(recursive: true);
+        await destination.writeAsBytes(bytes, flush: true);
+      }
+      for (final relative in delta.removed) {
+        final file = _safeDestination(scratch, relative);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      }
+      if (!await _hasEntry(scratch, descriptor)) {
+        throw StateError('The delta bundle entry ${descriptor.entry} is missing.');
+      }
+      if (await target.exists()) {
+        await target.delete(recursive: true);
+      }
+      await scratch.rename(target.path);
+      await _rememberInstalled(root, descriptor, target, BundleSource.delta);
       return BundleLaunch(
         descriptor: descriptor,
-        directory: directory,
-        source: BundleSource.cache,
+        directory: target,
+        source: BundleSource.delta,
       );
+    } finally {
+      if (await scratch.exists()) {
+        await scratch.delete(recursive: true);
+      }
     }
+  }
 
-    final downloadUri = descriptor.resolveUrl(manifestUri);
-    onLog?.call('Downloading $downloadUri');
-    final download = await _client
-        .get(downloadUri)
-        .timeout(const Duration(seconds: 60));
-    if (download.statusCode < 200 || download.statusCode >= 300) {
-      throw HttpException(
-        'Bundle download failed: HTTP ${download.statusCode}.',
-        uri: downloadUri,
+  Future<void> _verifyDelta(BundleDelta delta) async {
+    final pinned = trustedKeys[delta.keyId];
+    final key = pinned ?? delta.publicKey;
+    if (pinned == null || pinned == delta.publicKey) {
+      final publicKey = base64.decode(key);
+      final signature = base64.decode(delta.signature);
+      if (publicKey.length != 32 || signature.length != 64) {
+        throw StateError('The delta key or signature has an invalid length.');
+      }
+      final valid = await Ed25519().verify(
+        utf8.encode(delta.signingPayload()),
+        signature: Signature(
+          signature,
+          publicKey: SimplePublicKey(publicKey, type: KeyPairType.ed25519),
+        ),
       );
+      if (!valid) {
+        throw StateError('The delta signature is invalid.');
+      }
+      return;
     }
+    throw StateError('The delta public key does not match the pinned key.');
+  }
 
-    await _verifyBundleBytes(descriptor, download.bodyBytes);
-    await _install(root, descriptor, download.bodyBytes);
-    await _rememberInstalled(root, descriptor, directory, BundleSource.remote);
-    return BundleLaunch(
-      descriptor: descriptor,
-      directory: directory,
-      source: BundleSource.remote,
-    );
+  Future<void> _copyDirectory(Directory from, Directory to) async {
+    if (!await to.exists()) {
+      await to.create(recursive: true);
+    }
+    for (final entity in from.listSync(recursive: false)) {
+      final destination = File(p.join(to.path, p.basename(entity.path)));
+      if (entity is Directory) {
+        await _copyDirectory(entity, Directory(destination.path));
+      } else if (entity is File) {
+        await destination.parent.create(recursive: true);
+        await entity.copy(destination.path);
+      }
+    }
   }
 
   Future<BundleLaunch?> _loadInstalled(Directory root) async {
@@ -195,15 +470,12 @@ class BundleManager {
       if (value is! Map<String, dynamic>) {
         return null;
       }
-      final descriptorValue = value['descriptor'];
-      final descriptor = BundleDescriptor.fromJson(descriptorValue);
+      final descriptor = BundleDescriptor.fromJson(value['descriptor']);
       if (descriptor.gameId != gameId) {
         return null;
       }
       _verifyPinnedKey(descriptor);
       await _verifyDescriptorSignature(descriptor);
-      // Derive the location instead of trusting a path from metadata. The
-      // descriptor is signed and the directory name includes its hash.
       final directory = _bundleDirectory(root, descriptor);
       if (!await _hasEntry(directory, descriptor)) {
         return null;
@@ -253,6 +525,33 @@ class BundleManager {
     );
   }
 
+  Future<BundleLaunch> _downloadAndInstall(
+    Directory root,
+    BundleDescriptor descriptor,
+    Uri manifestUri,
+  ) async {
+    final downloadUri = descriptor.resolveUrl(manifestUri);
+    onLog?.call('Downloading $downloadUri');
+    final download = await _client
+        .get(downloadUri)
+        .timeout(const Duration(seconds: 60));
+    if (download.statusCode < 200 || download.statusCode >= 300) {
+      throw HttpException(
+        'Bundle download failed: HTTP ${download.statusCode}.',
+        uri: downloadUri,
+      );
+    }
+    await _verifyBundleBytes(descriptor, download.bodyBytes);
+    await _install(root, descriptor, download.bodyBytes);
+    final directory = _bundleDirectory(root, descriptor);
+    await _rememberInstalled(root, descriptor, directory, BundleSource.remote);
+    return BundleLaunch(
+      descriptor: descriptor,
+      directory: directory,
+      source: BundleSource.remote,
+    );
+  }
+
   Future<void> _install(
     Directory root,
     BundleDescriptor descriptor,
@@ -296,11 +595,11 @@ class BundleManager {
     if (name.startsWith('/') ||
         name.contains('\\') ||
         name.split('/').any((part) => part.isEmpty || part == '..')) {
-      throw StateError('Unsafe ZIP entry: $name');
+      throw StateError('Unsafe bundle path: $name');
     }
     final destination = File(p.normalize(p.join(root.path, name)));
     if (!p.isWithin(root.path, destination.path)) {
-      throw StateError('Unsafe ZIP entry: $name');
+      throw StateError('Unsafe bundle path: $name');
     }
     return destination;
   }
@@ -379,5 +678,27 @@ class BundleManager {
       }),
       flush: true,
     );
+    await _pruneVersions(root, updatePolicy.keepVersions);
+  }
+
+  Future<void> _pruneVersions(Directory root, int keep) async {
+    final gameRoot = Directory(p.join(root.path, gameId));
+    if (!await gameRoot.exists()) {
+      return;
+    }
+    final directories = gameRoot
+        .listSync(recursive: false)
+        .whereType<Directory>()
+        .where(
+          (directory) => RegExp(r'^\d+\.\d+\.\d+').hasMatch(p.basename(directory.path)),
+        )
+        .toList()
+      ..sort((left, right) => compareSemver(
+        p.basename(right.path).split('-').first,
+        p.basename(left.path).split('-').first,
+      ));
+    for (final directory in directories.skip(keep < 1 ? 1 : keep)) {
+      await directory.delete(recursive: true).catchError((_) {});
+    }
   }
 }

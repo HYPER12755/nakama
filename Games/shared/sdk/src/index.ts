@@ -12,3 +12,4 @@ export * from "./social";
 export * from "./emoji";
 export * from "./performance";
 export * from "./assets";
+export * from "./provider";
