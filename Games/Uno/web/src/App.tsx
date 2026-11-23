@@ -18,7 +18,7 @@ import { UnoBoardStage } from "./components/UnoBoardStage";
 import { UnoMatchActions } from "./components/UnoMatchActions";
 import { UnoOnlinePanel } from "./components/UnoOnlinePanel";
 import { UnoPreferences } from "./components/UnoPreferences";
-import { useUnoGame } from "./hooks/useUnoGame";
+import { useUnoGame, type PlayExtras } from "./hooks/useUnoGame";
 import { JUMP_IN_MODE, rulesModeLabel, RULES_MODES } from "./lib/view";
 import { UNO_MODE, type Color } from "@moongames/uno-core";
 
@@ -236,8 +236,8 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     setToast(null);
   }, [game]);
 
-  const play = useCallback((cardId: string, chosenColor?: Color, targetId?: string) => {
-    game.play(cardId, chosenColor, targetId);
+  const play = useCallback((cardId: string, chosenColor?: Color, targetId?: string, extras?: PlayExtras) => {
+    game.play(cardId, chosenColor, targetId, extras);
   }, [game]);
 
   return (

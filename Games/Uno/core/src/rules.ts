@@ -255,7 +255,9 @@ export function createGame(
     || (rulesMode === UNO_MODE.SPEED_PACK && starter.kind === "wildDoubleSpeed")
     || (rulesMode === UNO_MODE.ALL_WILD && NO_MERCY_WILD_KINDS.includes(starter.kind))
     || (rulesMode === UNO_MODE.POWER_GRAB && starter.kind === "wildGrabTower")
-    || (rulesMode === UNO_MODE.MOD && starter.kind === "modCard")) {
+    || (rulesMode === UNO_MODE.MOD && starter.kind === "modCard")
+    || (rulesMode === UNO_MODE.DARE && starter.kind === "wildDare")
+    || (rulesMode === UNO_MODE.SHOWDOWN && starter.kind === "wildShowdown")) {
     starter.color = mostCommonColor(dealt[0].hand, colorsForSide("light"));
   }
   const color = starter.color;

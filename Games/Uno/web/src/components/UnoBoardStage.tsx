@@ -125,10 +125,18 @@ function challengeInfo(challenge: NonNullable<BoardView["pendingChallenge"]>): C
       takeLabel: `Take until ${color}`,
     };
   }
+  const amount = challenge.amount ?? 4;
+  if (amount === 4 && (challenge.kind === undefined || challenge.kind === "wild4")) {
+    return {
+      eyebrow: "Wild Draw Four",
+      copy: "Take four cards, or accuse the player of holding a matching colour.",
+      takeLabel: "Take 4",
+    };
+  }
   return {
-    eyebrow: "Wild Draw Four",
-    copy: "Take four cards, or accuse the player of holding a matching colour.",
-    takeLabel: "Take 4",
+    eyebrow: challenge.kind === "wild4" ? "Wild Draw Four" : "Wild Draw",
+    copy: `Take ${amount} cards, or accuse the player of holding a matching colour. If guilty they draw ${amount}; if innocent you draw ${amount + 2}.`,
+    takeLabel: `Take ${amount}`,
   };
 }
 
@@ -187,6 +195,8 @@ export function UnoBoardStage({
   const [pendingTarget, setPendingTarget] = useState<string | null>(null);
   const [showdownAmount, setShowdownAmount] = useState(1);
   const [towerPrompt, setTowerPrompt] = useState<string | null>(null);
+  const [showdownTarget, setShowdownTarget] = useState<string | null>(null);
+  const [grabTowerId, setGrabTowerId] = useState<string | null>(null);
   const [modGiveColor, setModGiveColor] = useState<Color | null>(null);
   const [attackPrompt, setAttackPrompt] = useState<AttackPrompt | null>(null);
   const [swapPrompt, setSwapPrompt] = useState<SwapPrompt | null>(null);
@@ -226,6 +236,10 @@ export function UnoBoardStage({
 
   const me = view.players.find((player) => player.userId === view.myUserId);
   const hand = me?.hand ?? [];
+  const pendingCardKind = pendingCard === null ? null : hand.find((card) => card.id === pendingCard)?.kind ?? null;
+  const pendingTargetKind = pendingTarget === null ? null : hand.find((card) => card.id === pendingTarget)?.kind ?? null;
+  const localPromptActive = pendingCard !== null || pendingTarget !== null || attackPrompt !== null
+    || swapPrompt !== null || tradePrompt !== null || towerPrompt !== null;
   const pendingStack = view.pendingStack ?? null;
   const pendingHit = view.pendingHit ?? null;
   const pendingRoulette = view.pendingRoulette ?? null;
@@ -310,6 +324,11 @@ export function UnoBoardStage({
     setSwapPrompt(null);
     setTradePrompt(null);
     setPendingTrade(null);
+    setTowerPrompt(null);
+    setShowdownTarget(null);
+    setShowdownAmount(1);
+    setGrabTowerId(null);
+    setModGiveColor(null);
     const timer = window.setTimeout(() => setDealt(true), 1300);
     return () => window.clearTimeout(timer);
   }, [dealKey]);
@@ -322,6 +341,14 @@ export function UnoBoardStage({
     const timer = window.setInterval(() => setJumpNow(Date.now()), 250);
     return () => window.clearInterval(timer);
   }, [jumpOpen, jumpWindow?.cardId, jumpWindow?.expiresAt, jumpWindow?.ownerId]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") cancelLocalPrompt();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   useEffect(() => {
     const counts: Record<string, number> = {};
@@ -348,10 +375,12 @@ export function UnoBoardStage({
       return;
     }
     if (card.kind === "grab2Towers" || card.kind === "wildGrabTower") {
+      setGrabTowerId(null);
       setTowerPrompt(card.id);
       return;
     }
     if (card.kind === "awTargetDrawTwo" || card.kind === "awForcedSwap" || card.kind === "wildShowdown") {
+      setShowdownTarget(null);
       setPendingTarget(card.id);
       setShowdownAmount(1);
       return;
@@ -410,6 +439,20 @@ export function UnoBoardStage({
     fly("card-back", discardRef.current?.getBoundingClientRect() ?? null, handRef.current?.getBoundingClientRect() ?? null);
     lastManualFlight.current = Date.now();
     onDraw();
+  };
+
+  const cancelLocalPrompt = () => {
+    setPendingCard(null);
+    setPendingTarget(null);
+    setAttackPrompt(null);
+    setSwapPrompt(null);
+    setTradePrompt(null);
+    setPendingTrade(null);
+    setTowerPrompt(null);
+    setShowdownTarget(null);
+    setShowdownAmount(1);
+    setGrabTowerId(null);
+    setModGiveColor(null);
   };
 
   const deflectHit = (card: Card, event: MouseEvent<HTMLButtonElement>) => {
@@ -600,11 +643,11 @@ export function UnoBoardStage({
         />
       ))}
 
-      {challengeTarget && pendingStack === null && info !== null && (
+      {challengeTarget && pendingStack === null && !localPromptActive && info !== null && (
         <div className="uno-overlay">
-          <div className="uno-overlay-card">
+          <div className="uno-overlay-card" role="dialog" aria-modal="true" aria-label="Challenge the play" aria-labelledby="uno-dialog-title">
             <p className="eyebrow">{info.eyebrow}</p>
-            <h2>Challenge the play?</h2>
+            <h2 id="uno-dialog-title">Challenge the play?</h2>
             <p className="uno-overlay-copy">{info.copy}</p>
             <div className="uno-overlay-actions">
               <button type="button" className="button button--ghost" onClick={() => resolveChallenge(false)}>{info.takeLabel}</button>
@@ -621,11 +664,11 @@ export function UnoBoardStage({
         </div>
       )}
 
-      {stackTarget && pendingCard === null && (
+      {stackTarget && !localPromptActive && (
         <div className="uno-overlay uno-overlay--stack">
-          <div className="uno-overlay-card uno-stack-card" role="dialog" aria-label="Pending draw stack">
+          <div className="uno-overlay-card uno-stack-card" role="dialog" aria-modal="true" aria-label="Pending draw stack" aria-labelledby="uno-dialog-title">
             <p className="eyebrow">{stackKindLabel(pendingStack?.kind ?? "draw2")} chain</p>
-            <h2>Incoming stack</h2>
+            <h2 id="uno-dialog-title">Incoming stack</h2>
             <div className="uno-stack-count">
               <strong>{pendingStack?.count ?? 0}</strong>
               <span>cards</span>
@@ -636,8 +679,8 @@ export function UnoBoardStage({
               </p>
             ) : null}
             <p className="uno-overlay-copy">
-              Take the accumulated cards, play a card of at least this value to pass the stack on
-              {challengeTarget ? ", or challenge the Wild Four play" : ""}.
+              Take the accumulated cards, or play a legal response to pass the stack on
+              {challengeTarget ? ", or challenge the play" : ""}.
             </p>
             {stackCards.length > 0 ? (
               <div className="uno-stack-options">
@@ -682,11 +725,11 @@ export function UnoBoardStage({
         </div>
       )}
 
-      {hitTarget && pendingCard === null && attackPrompt === null && (
-        <div className="uno-overlay uno-overlay--hit" role="dialog" aria-label="Incoming hit">
-          <div className="uno-hit-card">
+      {hitTarget && !localPromptActive && (
+        <div className="uno-overlay uno-overlay--hit">
+          <div className="uno-hit-card" role="dialog" aria-modal="true" aria-label="Incoming hit" aria-labelledby="uno-dialog-title">
             <p className="eyebrow">UNO Attack</p>
-            <h2>Incoming hit</h2>
+            <h2 id="uno-dialog-title">Incoming hit</h2>
             <div className="uno-hit-count">
               <strong>{pendingHit?.amount ?? 0}</strong>
               <span>cards</span>
@@ -715,7 +758,7 @@ export function UnoBoardStage({
         </div>
       )}
 
-      {pendingRoulette !== null && pendingCard === null && rouletteChooser ? (
+      {pendingRoulette !== null && !localPromptActive && rouletteChooser ? (
         <div className="uno-overlay uno-overlay--colour uno-overlay--roulette">
           <div className="uno-colour-card" role="dialog" aria-label="Choose a colour" data-roulette="true">
             <div className="uno-colour-card__art" aria-hidden="true">
@@ -736,8 +779,7 @@ export function UnoBoardStage({
                     className={`uno-colour uno-colour--${color}`}
                     style={{ animationDelay: `${index * 55}ms` }}
                     onClick={() => {
-                      onChooseColour?.(color);
-                      onChooseColor?.(color);
+                      (onChooseColour ?? onChooseColor)?.(color);
                     }}
                     aria-label={`Choose ${color}`}
                   >
@@ -751,7 +793,7 @@ export function UnoBoardStage({
         </div>
       ) : null}
 
-      {pendingRoulette !== null && pendingCard === null && !rouletteChooser ? (
+      {pendingRoulette !== null && !localPromptActive && !rouletteChooser ? (
         <div className="uno-overlay uno-overlay--roulette-wait" role="status" aria-label="Wild Colour Roulette">
           <div className="uno-overlay-card">
             <p className="eyebrow">Wild Colour Roulette</p>
@@ -763,40 +805,58 @@ export function UnoBoardStage({
 
       {pendingCard !== null && (
         <div className="uno-overlay uno-overlay--colour">
-          <div className="uno-colour-card" role="dialog" aria-label="Choose a colour">
+          <div className="uno-colour-card" role="dialog" aria-modal="true" aria-label="Choose a colour" aria-labelledby="uno-dialog-title">
             <div className="uno-colour-card__art" aria-hidden="true">
               <span className="uno-colour-card__wild">
-                {attackPrompt !== null ? "ATTACK" : hand.find((card) => card.id === pendingCard)?.kind === "modCard" ? "MOD" : "WILD"}
+                {attackPrompt !== null ? "ATTACK" : pendingCardKind === "modCard" ? "MOD"
+                  : pendingCardKind === "wildShowdown" ? "SHOWDOWN"
+                    : pendingCardKind === "wildGrabTower" ? "TOWER" : "WILD"}
               </span>
               <span className="uno-colour-card__spark uno-colour-card__spark--one" />
               <span className="uno-colour-card__spark uno-colour-card__spark--two" />
               <span className="uno-colour-card__spark uno-colour-card__spark--three" />
             </div>
             <div className="uno-colour-card__body">
-              {hand.find((card) => card.id === pendingCard)?.kind === "modCard" && modGiveColor === null ? (
+              {pendingCardKind === "modCard" && modGiveColor === null ? (
                 <>
                   <p className="eyebrow">UNO Mod</p>
-                  <h2>Give a colour away</h2>
+                  <h2 id="uno-dialog-title">Give a colour away</h2>
                   <p className="uno-overlay-copy">Give one card of this colour to each opponent in turn order.</p>
                 </>
               ) : (
                 <>
-                  <p className="eyebrow">{attackPrompt !== null ? "Wild Attack" : "Wild card"}</p>
-                  <h2>Choose a colour</h2>
-                  <p className="uno-overlay-copy">The next card must match the colour you pick.</p>
+                  <p className="eyebrow">
+                    {attackPrompt !== null ? "Wild Attack"
+                      : pendingCardKind === "modCard" ? "UNO Mod"
+                        : pendingCardKind === "wildShowdown" ? "Wild Showdown"
+                          : pendingCardKind === "wildGrabTower" ? "Wild Grab Tower" : "Wild card"}
+                  </p>
+                  <h2 id="uno-dialog-title">
+                    {pendingCardKind === "modCard" ? "Choose the next colour" : "Choose a colour"}
+                  </h2>
+                  <p className="uno-overlay-copy">
+                    {pendingCardKind === "wildShowdown"
+                      ? `Set the continuing colour for the ${showdownAmount}-card showdown.`
+                      : pendingCardKind === "wildGrabTower"
+                        ? "Set the continuing colour after claiming the tower."
+                        : "The next card must match the colour you pick."}
+                  </p>
                 </>
               )}
               <div className="uno-colour-choices">
-                {(hand.find((card) => card.id === pendingCard)?.kind === "modCard" && modGiveColor === null
-                  ? sideColors.filter((color) => hand.some((card) => card.color === color))
-                  : sideColors).map((color, index) => (
+                {(() => {
+                  const giveChoices = sideColors.filter((color) => hand.some((card) => card.color === color));
+                  const choices = pendingCardKind === "modCard" && modGiveColor === null
+                    ? giveChoices.length > 0 ? giveChoices : sideColors
+                    : sideColors;
+                  return choices.map((color, index) => (
                   <button
                     type="button"
                     key={color}
                     className={`uno-colour uno-colour--${color}`}
                     style={{ animationDelay: `${index * 55}ms` }}
                     onClick={() => {
-                      if (hand.find((card) => card.id === pendingCard)?.kind === "modCard" && modGiveColor === null) {
+                      if (pendingCardKind === "modCard" && modGiveColor === null) {
                         setModGiveColor(color);
                         return;
                       }
@@ -807,6 +867,10 @@ export function UnoBoardStage({
                         onPlay(pendingTrade.cardId, color, pendingTrade.targetId, {
                           tradeWithId: pendingTrade.tradeWithId,
                         });
+                      } else if (showdownTarget !== null) {
+                        onPlay(pendingCard, color, showdownTarget, { showdownAmount });
+                      } else if (grabTowerId !== null) {
+                        onPlay(pendingCard, color, undefined, { towerId: grabTowerId });
                       } else if (modGiveColor !== null) {
                         onPlay(pendingCard, color, undefined, { modColor: modGiveColor });
                       } else {
@@ -815,6 +879,8 @@ export function UnoBoardStage({
                       setPendingCard(null);
                       setAttackPrompt(null);
                       setPendingTrade(null);
+                      setShowdownTarget(null);
+                      setGrabTowerId(null);
                       setModGiveColor(null);
                     }}
                     aria-label={`Choose ${color}`}
@@ -822,8 +888,12 @@ export function UnoBoardStage({
                     <span className="uno-colour__ring" aria-hidden="true" />
                     <span className="uno-colour__label">{color}</span>
                   </button>
-                ))}
+                  ));
+                })()}
               </div>
+              <button type="button" className="uno-dialog-cancel" onClick={cancelLocalPrompt}>
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -831,14 +901,15 @@ export function UnoBoardStage({
 
       {(pendingTarget !== null || (attackPrompt !== null && attackPrompt.targetId === null && pendingCard === null)) && (
         <div className="uno-overlay uno-overlay--target">
-          <div className="uno-target-card" role="dialog" aria-label="Choose a target player">
+          <div className="uno-target-card" role="dialog" aria-modal="true" aria-label="Choose a target player" aria-labelledby="uno-dialog-title">
             <p className="eyebrow">
-              {attackPrompt !== null ? "UNO Attack" : noMercy ? "No Mercy"
-                : hand.find((card) => card.id === pendingTarget)?.kind === "awForcedSwap" ? "All Wild"
-                  : "Seven-O"}
+              {attackPrompt !== null ? "UNO Attack"
+                : pendingTargetKind === "wildShowdown" ? "Wild Showdown"
+                  : pendingTargetKind === "awForcedSwap" || pendingTargetKind === "awTargetDrawTwo" ? "All Wild"
+                    : noMercy ? "No Mercy" : "Seven-O"}
             </p>
-            <h2>Choose a target</h2>
-            {hand.find((card) => card.id === pendingTarget)?.kind === "wildShowdown" ? (
+            <h2 id="uno-dialog-title">Choose a target</h2>
+            {pendingTargetKind === "wildShowdown" ? (
               <div className="uno-stack-options" aria-label="Showdown penalty">
                 {[1, 2, 3].map((amount) => (
                   <button
@@ -857,11 +928,13 @@ export function UnoBoardStage({
                 ? attackPrompt.deflect
                   ? "Redirect the hit to the player you pick."
                   : "Send the hit to the player you pick."
-                : hand.find((card) => card.id === pendingTarget)?.kind === "awForcedSwap"
-                  ? "Exchange your remaining hand with the player you pick."
-                  : hand.find((card) => card.id === pendingTarget)?.kind === "awTargetDrawTwo"
-                    ? "The player you pick draws two cards."
-                    : "Your 7 swaps hands with the player you pick."}
+                : pendingTargetKind === "wildShowdown"
+                  ? `Face off against the player you pick for ${showdownAmount} card${showdownAmount === 1 ? "" : "s"}.`
+                  : pendingTargetKind === "awForcedSwap"
+                    ? "Exchange your remaining hand with the player you pick."
+                    : pendingTargetKind === "awTargetDrawTwo"
+                      ? "The player you pick draws two cards."
+                      : "Your 7 swaps hands with the player you pick."}
             </p>
             <div className="uno-target-choices">
               {targets.map((player) => (
@@ -883,8 +956,12 @@ export function UnoBoardStage({
                     }
                     fly(pendingTarget, source, destination);
                     const wildShowdown = hand.find((card) => card.id === pendingTarget)?.kind === "wildShowdown";
-                    onPlay(pendingTarget, undefined, player.userId,
-                      wildShowdown ? { showdownAmount } : undefined);
+                    if (wildShowdown) {
+                      setShowdownTarget(player.userId);
+                      setPendingCard(pendingTarget);
+                    } else {
+                      onPlay(pendingTarget, undefined, player.userId, undefined);
+                    }
                     setPendingTarget(null);
                   }}
                 >
@@ -893,14 +970,7 @@ export function UnoBoardStage({
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              className="button button--ghost"
-              onClick={() => {
-                setPendingTarget(null);
-                setAttackPrompt(null);
-              }}
-            >
+            <button type="button" className="button button--ghost" onClick={cancelLocalPrompt}>
               Cancel
             </button>
           </div>
@@ -909,10 +979,20 @@ export function UnoBoardStage({
 
       {towerPrompt !== null && (
         <div className="uno-overlay uno-overlay--target">
-          <div className="uno-target-card" role="dialog" aria-label="Choose a Power Tower">
-            <p className="eyebrow">Power Grab</p>
-            <h2>Choose a tower</h2>
-            <p className="uno-overlay-copy">Steal the tower you need, or take an unclaimed one.</p>
+          <div className="uno-target-card" role="dialog" aria-modal="true" aria-label="Choose a Power Tower" aria-labelledby="uno-dialog-title">
+            <p className="eyebrow">
+              {hand.find((card) => card.id === towerPrompt)?.kind === "wildGrabTower"
+                ? "Wild Grab Tower" : "Grab Two Towers"}
+            </p>
+            <h2 id="uno-dialog-title">
+              {hand.find((card) => card.id === towerPrompt)?.kind === "wildGrabTower"
+                ? "Choose one tower" : "Choose two towers"}
+            </h2>
+            <p className="uno-overlay-copy">
+              {hand.find((card) => card.id === towerPrompt)?.kind === "wildGrabTower"
+                ? "Pick one tower to claim. You will choose the continuing colour next."
+                : "Pick a tower to claim first; a second available tower is claimed automatically."}
+            </p>
             <div className="uno-target-choices">
               {["U", "N", "O", "!"].map((tower) => (
                 <button
@@ -920,7 +1000,13 @@ export function UnoBoardStage({
                   key={tower}
                   className="uno-target-choice"
                   onClick={() => {
-                    onPlay(towerPrompt, undefined, undefined, { towerId: tower });
+                    const wildTower = hand.find((card) => card.id === towerPrompt)?.kind === "wildGrabTower";
+                    if (wildTower) {
+                      setGrabTowerId(tower);
+                      setPendingCard(towerPrompt);
+                    } else {
+                      onPlay(towerPrompt, undefined, undefined, { towerId: tower });
+                    }
                     setTowerPrompt(null);
                   }}
                 >
@@ -931,6 +1017,7 @@ export function UnoBoardStage({
                 </button>
               ))}
             </div>
+            <button type="button" className="button button--ghost" onClick={cancelLocalPrompt}>Cancel</button>
           </div>
         </div>
       )}

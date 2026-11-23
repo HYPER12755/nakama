@@ -857,6 +857,16 @@ describe("Uno Showdown", () => {
     expect(canPlay(game, showdownNumber)).toBe(true);
   });
 
+  it("always gives a Wild Showdown starter a colour", () => {
+    for (let seed = 1; seed < 500; seed += 1) {
+      const game = createGame(seed, players.slice(0, 2), 0, "showdown");
+      if (game.discard[0].kind === "wildShowdown") {
+        expect(game.discard[0].color).not.toBeNull();
+        return;
+      }
+    }
+  });
+
   it("makes one player draw the Showdown penalty", () => {
     const game = stagedGame([showdownNumber], "red", "showdown");
     const beforeP1 = game.players[0].hand.length;

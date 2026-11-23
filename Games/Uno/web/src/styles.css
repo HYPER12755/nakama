@@ -2564,6 +2564,10 @@ html[data-moonperf="lite"] .die--rolling {
 
 .uno-overlay-card {
   min-width: 280px;
+  max-width: min(420px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  box-sizing: border-box;
+  overflow-y: auto;
   padding: 26px;
   border: 1px solid var(--border-strong);
   border-radius: 20px;
@@ -2575,6 +2579,23 @@ html[data-moonperf="lite"] .die--rolling {
 
 .uno-overlay-card h2 { margin: 8px 0 18px; font-size: 20px; }
 .uno-overlay-copy { color: var(--muted); font-size: 12px; }
+.uno-overlay-actions { flex-wrap: wrap; justify-content: center; }
+.uno-dialog-cancel {
+  display: block;
+  width: fit-content;
+  margin: 14px auto 0;
+  padding: 6px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.uno-dialog-cancel:hover,
+.uno-dialog-cancel:focus-visible { color: var(--text); text-decoration: underline; }
 
 .uno-colour-choices { gap: 18px; }
 
@@ -3569,8 +3590,14 @@ body {
 .uno-colour-card .uno-colour__ring {
   position: absolute;
   inset: 8px;
+  transform: none;
   border: 2px solid rgba(255, 255, 255, 0.38);
   border-radius: 9px;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: normal;
+  text-transform: none;
   pointer-events: none;
 }
 
@@ -3703,6 +3730,11 @@ body {
   margin-top: 16px;
 }
 
+.uno-target-card .uno-stack-options .button {
+  width: auto;
+  margin-top: 0;
+}
+
 .uno-overlay--stack {
   padding: 18px;
   background: rgba(3, 10, 8, 0.76);
@@ -3815,6 +3847,7 @@ body {
 }
 
 .uno-overlay--roulette-wait {
+  pointer-events: none;
   background: rgba(3, 10, 8, 0.5);
   backdrop-filter: blur(3px);
 }

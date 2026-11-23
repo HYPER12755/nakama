@@ -30,6 +30,7 @@ import {
   type Color,
   type GameMode,
   type GameState,
+  type PowerTower,
 } from "@moongames/uno-core";
 import {
   isJumpCandidate,
@@ -1168,6 +1169,9 @@ export function useUnoGame(enabled = true): UnoController {
         type: "play", playerId: "local", cardId, chosenColor, targetId,
         ...(extras.giveCardId !== undefined ? { giveCardId: extras.giveCardId } : {}),
         ...(extras.tradeWithId !== undefined ? { tradeWithId: extras.tradeWithId } : {}),
+        ...(extras.showdownAmount !== undefined ? { showdownAmount: extras.showdownAmount } : {}),
+        ...(extras.towerId !== undefined ? { towerId: extras.towerId as PowerTower } : {}),
+        ...(extras.modColor !== undefined ? { modColor: extras.modColor } : {}),
         ...(jump ? { jump: true } : {}),
       };
       const result = applyAction(localGame, action, Date.now());
