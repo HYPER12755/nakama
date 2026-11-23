@@ -14,11 +14,11 @@
     "spectators",
     "invite-links"
   ],
-  "publishedAt": "2026-11-23T02:37:17.816Z",
-  "sha256": "99d5513a9b527c98d3b9142da631970f3a2ea3e999fbf107ec08c5d788be5403",
-  "size": 849670,
+  "publishedAt": "2026-11-23T02:58:39.881Z",
+  "sha256": "2324f0bee5e495955bd10aed3e991cd038ceeb83393373934ca738d1e72d7e3f",
+  "size": 854780,
   "url": "uno/0.1.0/uno-0.1.0.zip",
   "keyId": "dev-1",
   "publicKey": "KlF0l9f5irlq0lIlgQTRv2UKY+VwCsm56lAiZdC+HHE=",
-  "signature": "G/TNVbKnO0aZyv1ZMCe7xKE47lky+7e5BaQ3rXjabQKOEX47VXidwA/oG1qVnvOVebvn/mE6uGNB69QFNJwrCw=="
+  "signature": "kwbuUEQLd7O8rLCLZl4hZFtwu5ZLISpjVubKa5jmRnrimSDjcl8uEV/iu3478J49IKSkhr2GamCjhYXtGp2YAQ=="
 }

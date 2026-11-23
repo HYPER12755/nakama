@@ -147,4 +147,8 @@ describe("Uno stress simulation", () => {
   it("finishes 100 seeds across 2, 3 and 4 seats in powerGrab mode", async () => {
     await runMode("powerGrab");
   }, 60000);
+
+  it("finishes 100 seeds across 2, 3 and 4 seats in mod mode", async () => {
+    await runMode("mod");
+  }, 60000);
 });

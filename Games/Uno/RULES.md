@@ -390,6 +390,28 @@ captured by the standard play entry's `color`.
   (the actor is one participant); Pass Hands and Refresh Hand need no target.
   Every new wild carries a legal `chosenColor`, so automated play never stalls.
 
+## Mod
+
+Mod uses a 112-card deck: the classic 108 cards plus four MOD wild cards. It is
+available locally and in private/quick online matches as mode string `mod`
+(core `UNO_MODE.MOD`, Lua `RULES_MODES`).
+
+### MOD card
+
+- `modCard`, IDs `modcard-0` through `modcard-3`, is always playable and chooses
+  the continuing colour like a Wild.
+- It also calls out a colour from the actor's hand. Starting with the next
+  player in the current direction, the actor gives one card of that colour to
+  each opponent in turn order until the colour runs out; players can receive
+  different numbers of cards.
+- The web board asks for the give-away colour first, then the continuing colour.
+  The play request carries both `chosenColor` and `modColor`.
+
+### Events and scoring
+
+A `mod` event and replay entry record the give-away colour and number of cards
+distributed. MOD scores 50 points in `scoreHand`.
+
 ## Power Grab
 
 Power Grab uses a 112-card deck with four claimable Power Towers. It is

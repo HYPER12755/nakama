@@ -20,6 +20,7 @@ describe("Uno rules mode", () => {
     expect(rulesModeLabel("dare")).toBe("Dare");
     expect(rulesModeLabel("showdown")).toBe("Showdown");
     expect(rulesModeLabel("powerGrab")).toBe("Power Grab");
+    expect(rulesModeLabel("mod")).toBe("Mod");
     expect(rulesModeLabel(undefined)).toBe("Classic");
   });
 
@@ -36,6 +37,7 @@ describe("Uno rules mode", () => {
     expect(RULES_MODES as string[]).toContain("dare");
     expect(RULES_MODES as string[]).toContain("showdown");
     expect(RULES_MODES as string[]).toContain("powerGrab");
+    expect(RULES_MODES as string[]).toContain("mod");
     expect(new Set(RULES_MODES).size).toBe(RULES_MODES.length);
   });
 
@@ -158,6 +160,16 @@ describe("Uno rules mode", () => {
     ], 0, "powerGrab");
     expect(viewFromCore(state, "local").rulesMode).toBe("powerGrab");
     expect(viewFromCore(state, "local").powerTowers).toMatchObject({ U: null, N: null });
+  });
+
+  it("normalizes and reads Mod", () => {
+    expect(normalizeView({ rulesMode: "mod" }, null).mode).toBe("mod");
+    expect(normalizeView({ mode: "mod" }, null).mode).toBe("mod");
+    const state = createGame(7, [
+      { id: "local", name: "You" },
+      { id: "ai1", name: "Computer" },
+    ], 0, "mod");
+    expect(viewFromCore(state, "local").rulesMode).toBe("mod");
   });
 
   it("exposes the controller rules shape and forwards a target", () => {

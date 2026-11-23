@@ -2938,6 +2938,62 @@ test("collecting all towers triggers instant uno", function()
   assert_equal(played.power_towers.U, nil, "towers reset")
 end)
 
+local function mod_staged(hand, color, seats, seed)
+  local names = { "p1", "p2", "p3" }
+  local seat_list = {}
+  for index = 1, (seats or 3) do
+    seat_list[index] = { id = names[index], name = names[index] }
+  end
+  local game = rules.create_game(seed or 4242, seat_list, 0, "mod")
+  game.turn = 1
+  game.direction = 1
+  game.current_color = color or "green"
+  game.drawn_card_id = nil
+  game.pending_challenge = nil
+  game.pending_stack = nil
+  game.pending_hit = nil
+  game.pending_roulette = nil
+  game.finished = false
+  game.winner = nil
+  game.events = {}
+  game.replay = {}
+  game.players[1].hand = hand
+  for index = 2, #game.players do
+    game.players[index].hand = {}
+  end
+  return game
+end
+
+local mod_card = { id = "modcard-0", color = nil, kind = "modCard" }
+
+test("builds a 112 card mod deck with four mod cards", function()
+  local deck = rules.build_deck("mod")
+  assert_equal(#deck, 112, "deck size")
+  local mods = 0
+  for _, card in ipairs(deck) do
+    if card.kind == "modCard" then mods = mods + 1 end
+  end
+  assert_equal(mods, 4, "mod count")
+end)
+
+test("mod gives a chosen colour away around the table", function()
+  local game = mod_staged({
+    mod_card,
+    { id = "red-1-0", color = "red", kind = "number", value = 1 },
+    { id = "red-2-0", color = "red", kind = "number", value = 2 },
+    { id = "blue-3-0", color = "blue", kind = "number", value = 3 },
+  }, "green", 3, 4242)
+  local played, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = mod_card.id,
+    chosen_color = "yellow", mod_color = "red",
+  })
+  assert_equal(ok, true, "played")
+  assert_equal(played.current_color, "yellow", "colour")
+  assert_equal(#played.players[1].hand, 1, "actor keeps non-red")
+  assert_equal(#played.players[2].hand, 1, "second player gets one")
+  assert_equal(#played.players[3].hand, 1, "third player gets one")
+end)
+
 test("scores swap pack colour actions at 20 and wild actions at 50", function()
   assert_equal(rules.score_hand({ swap_one, refresh_hand }), 40, "colour action score")
   assert_equal(rules.score_hand({ force_trade, pass_hands }), 100, "wild action score")

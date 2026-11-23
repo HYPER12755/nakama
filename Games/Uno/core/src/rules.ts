@@ -26,13 +26,14 @@ const NO_MERCY_WILD_KINDS: CardKind[] = [
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands", "wildPowerReverse", "wildNoU",
   "wildStack3", "wildStackNumber", "wildDoubleSpeed",
   "awWild", "awReverse", "awSkip", "awSkipTwo", "awDrawTwo", "awDrawFour",
-  "awTargetDrawTwo", "awForcedSwap", "wildDare", "wildShowdown", "wildGrabTower",
+  "awTargetDrawTwo", "awForcedSwap", "wildDare", "wildShowdown", "wildGrabTower", "modCard",
 ];
 
 const WILD_COLOR_KINDS: CardKind[] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4",
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands", "wildPowerReverse", "wildNoU",
   "wildStack3", "wildStackNumber", "wildDoubleSpeed", "wildDare", "wildShowdown", "wildGrabTower",
+  "modCard",
 ];
 
 const STACK_PACK_KINDS: CardKind[] = ["stack1", "stack2", "wildStack3", "wildStackNumber"];
@@ -253,7 +254,8 @@ export function createGame(
       && (starter.kind === "wildStack3" || starter.kind === "wildStackNumber"))
     || (rulesMode === UNO_MODE.SPEED_PACK && starter.kind === "wildDoubleSpeed")
     || (rulesMode === UNO_MODE.ALL_WILD && NO_MERCY_WILD_KINDS.includes(starter.kind))
-    || (rulesMode === UNO_MODE.POWER_GRAB && starter.kind === "wildGrabTower")) {
+    || (rulesMode === UNO_MODE.POWER_GRAB && starter.kind === "wildGrabTower")
+    || (rulesMode === UNO_MODE.MOD && starter.kind === "modCard")) {
     starter.color = mostCommonColor(dealt[0].hand, colorsForSide("light"));
   }
   const color = starter.color;
@@ -1658,6 +1660,35 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
         color: action.chosenColor,
       };
       break;
+    case "modCard": {
+      const giveColor = action.modColor ?? action.mod_color ?? action.chosenColor;
+      if (giveColor !== undefined) {
+        const outgoing = actor.hand.filter((card) => card.color === giveColor);
+        let index = nextActiveIndex(state, state.turn);
+        state.events.push({
+          type: "mod",
+          playerId: actor.id,
+          cardId: card.id,
+          text: `${giveColor}:${outgoing.length}`,
+          at: state.events.length,
+        });
+        state.replay.push({
+          playerId: actor.id,
+          action: "mod",
+          cardId: card.id,
+          color: giveColor,
+          count: outgoing.length,
+        });
+        for (const held of outgoing) {
+          actor.hand.splice(actor.hand.indexOf(held), 1);
+          const target = state.players[index];
+          target.hand.push(held);
+          index = nextActiveIndex(state, index);
+        }
+      }
+      advance(state, 1);
+      break;
+    }
     case "grab2Towers":
       if (state.mode === UNO_MODE.POWER_GRAB) {
         const requested = action.towerId ?? action.tower_id;

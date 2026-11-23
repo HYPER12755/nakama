@@ -1661,6 +1661,53 @@ async function powerGrabBattle() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "power grab game over", STATE_TIMEOUT_MS);
 }
 
+async function modBattle() {
+  const alice = await authenticate("mod-alice");
+  const bob = await authenticate("mod-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 6,
+    rulesMode: "mod",
+  });
+  assert(
+    created?.ok === true && created.rulesMode === "mod" && typeof created.matchId === "string",
+    `mod room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
+  const aliceStart = await waitState(
+    alice.socket,
+    "mod alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "mod bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "mod", "mod mode must reach alice");
+  assert(bobStart.data.rulesMode === "mod", "mod mode must reach bob");
+  assert(aliceStart.data.deckCount === 97, "mod should carry 112 cards");
+  assert(legalCardIds(aliceStart.data).includes("modcard-0"), "seed 6 should offer Mod to Alice");
+  console.log("[ok] mod private room reports rulesMode and a 112-card setup");
+
+  const aliceBefore = seatOf(aliceStart.data, alice).count;
+  await send(alice, matchId, OP.PLAY_REQUEST, {
+    cardId: "modcard-0", chosenColor: "green", modColor: "yellow",
+  });
+  const played = await waitState(
+    bob.socket,
+    "mod played",
+    (state) => seatOf(state, alice)?.count < aliceBefore && state.currentColor === "green",
+  );
+  assert(seatOf(played.data, bob)?.count > 7, "Mod gives a card to the opponent");
+  console.log("[ok] Mod gives a colour away and chooses the next colour on the live server");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "mod game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -1697,6 +1744,7 @@ async function main() {
     await dareBattle();
     await showdownBattle();
     await powerGrabBattle();
+    await modBattle();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

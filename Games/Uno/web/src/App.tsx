@@ -60,6 +60,8 @@ const DARE_RULE = "Dare: match colour, number or symbol. A Dare card gives the n
 const SHOWDOWN_RULE = "Showdown: cards marked with the Showdown icon trigger an authoritative head-to-head; the loser draws the icon's value. Wild Showdown lets you choose the opponent, a 1-3 card penalty and the continuing colour.";
 
 const POWER_GRAB_RULE = "Power Grab: power icons claim U, N, O and ! towers that block Draw One, Draw Two, Wild Draw Four and Skip. Grab Two Towers and Wild Grab Tower steal towers; collecting all four gives Instant UNO.";
+
+const MOD_RULE = "Mod: the four MOD cards are Wild. Choose a colour from your hand and give one card of that colour to each opponent in turn order until they run out, then choose the colour that continues play.";
 const FLIP_RULE = "Flip: match the active colour on the current side. Draw One, Skip and Reverse sit on the light side; Draw Five, Skip Everyone and Wild Draw Color sit on the dark side. Play a Flip card to turn the whole game over and switch between red/yellow/green/blue and pink/teal/orange/purple. Wild Draw Two may be challenged: take 2, or challenge a guilty player who draws 2 and an innocent target who draws 4.";
 
 const COLOURS: Color[] = ["red", "yellow", "green", "blue"];
@@ -129,7 +131,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                       ? [...RULES, SHOWDOWN_RULE]
                       : (game.rulesMode as string) === "powerGrab"
                         ? [...RULES, POWER_GRAB_RULE]
-                        : RULES;
+                        : (game.rulesMode as string) === "mod"
+                          ? [...RULES, MOD_RULE]
+                          : RULES;
   const activePlayer = game.view.players[game.view.turn];
   const winner = game.view.result?.winnerUserId == null
     ? null

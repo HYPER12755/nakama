@@ -504,6 +504,9 @@ local function handle_message(context, dispatcher, tick, state, message)
       target_id = payload.targetId or payload.target_id,
       give_card_id = payload.giveCardId or payload.give_card_id,
       trade_with_id = payload.tradeWithId or payload.trade_with_id,
+      mod_color = payload.modColor or payload.mod_color,
+      showdown_amount = payload.showdownAmount or payload.showdown_amount,
+      tower_id = payload.towerId or payload.tower_id,
       jump = payload.jump == true,
     }
   elseif message.op_code == OP.DRAW_REQUEST then

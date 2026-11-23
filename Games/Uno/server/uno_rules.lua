@@ -23,7 +23,7 @@ local WILD_KINDS = {
   wildStack3 = true, wildStackNumber = true, wildDoubleSpeed = true,
   awWild = true, awReverse = true, awSkip = true, awSkipTwo = true,
   awDrawTwo = true, awDrawFour = true, awTargetDrawTwo = true, awForcedSwap = true,
-  wildDare = true, wildShowdown = true, wildGrabTower = true,
+  wildDare = true, wildShowdown = true, wildGrabTower = true, modCard = true,
 }
 local WILD_COLOR_KINDS = {
   wild = true, wild4 = true, wildAttack = true, wildDraw6 = true,
@@ -31,7 +31,7 @@ local WILD_COLOR_KINDS = {
   wildForceTrade = true, wildPassHands = true,
   wildPowerReverse = true, wildNoU = true,
   wildStack3 = true, wildStackNumber = true, wildDoubleSpeed = true, wildDare = true,
-  wildShowdown = true, wildGrabTower = true,
+  wildShowdown = true, wildGrabTower = true, modCard = true,
 }
 
 local STACK_PACK_KINDS = {
@@ -482,6 +482,15 @@ local function build_dare_deck()
 end
 
 function rules.build_deck(mode)
+  if mode == "mod" then
+    local deck = {}
+    local classic = rules.build_deck("classic")
+    for _, card in ipairs(classic) do deck[#deck + 1] = card end
+    for copy_index = 0, 3 do
+      deck[#deck + 1] = { id = string.format("modcard-%d", copy_index), color = nil, kind = "modCard" }
+    end
+    return deck
+  end
   if mode == "allWild" then
     return build_all_wild_deck()
   end
@@ -928,7 +937,8 @@ function rules.create_game(seed, players, now, mode)
     or (rules_mode == "allWild" and WILD_KINDS[starter.kind] == true)
     or (rules_mode == "dare" and starter.kind == "wildDare")
     or (rules_mode == "showdown" and starter.kind == "wildShowdown")
-    or (rules_mode == "powerGrab" and starter.kind == "wildGrabTower") then
+    or (rules_mode == "powerGrab" and starter.kind == "wildGrabTower")
+    or (rules_mode == "mod" and starter.kind == "modCard") then
     starter.color = most_common_color(dealt[1].hand, rules.colors_for_side("light"))
   end
 
@@ -2513,6 +2523,34 @@ function rules.apply_action(previous, action, now)
       amount = 0,
       color = action.chosen_color,
     }
+  elseif card.kind == "modCard" then
+    local give_color = action.mod_color or action.modColor or action.chosen_color
+    if give_color ~= nil then
+      local outgoing = {}
+      local kept = {}
+      for _, held in ipairs(actor.hand) do
+        if held.color == give_color then
+          outgoing[#outgoing + 1] = held
+        else
+          kept[#kept + 1] = held
+        end
+      end
+      actor.hand = kept
+      state.events[#state.events + 1] = {
+        type = "mod", player_id = actor.id, card_id = card.id,
+        text = give_color .. ":" .. tostring(#outgoing), at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = actor.id, action = "mod", card_id = card.id,
+        color = give_color, count = #outgoing,
+      }
+      local target_index_value = next_active_index(state, state.turn)
+      for _, held in ipairs(outgoing) do
+        state.players[target_index_value].hand[#state.players[target_index_value].hand + 1] = held
+        target_index_value = next_active_index(state, target_index_value)
+      end
+    end
+    advance(state, 1)
   elseif card.kind == "grab2Towers" then
     if state.mode == "powerGrab" then
       local requested = action.tower_id or action.towerId or "U"

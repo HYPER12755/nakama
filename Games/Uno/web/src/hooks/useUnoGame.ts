@@ -230,6 +230,7 @@ export interface PlayExtras {
   tradeWithId?: string;
   showdownAmount?: number;
   towerId?: string;
+  modColor?: Color;
 }
 
 export function buildPlayPayload(
@@ -257,6 +258,9 @@ export function buildPlayPayload(
   }
   if (extras.towerId !== undefined) {
     payload.towerId = extras.towerId;
+  }
+  if (extras.modColor !== undefined) {
+    payload.modColor = extras.modColor;
   }
   if (isJumpCandidate(view, cardId)) {
     payload.jump = true;

@@ -471,6 +471,16 @@ ${neonLabel("WILD DARE", 90, 216, 15, NEON.wild)}
 ${neonCaption(`wilddare ${copy}`, true)}`, NEON.wild);
 }
 
+function modCardArt() {
+  return surface(`
+<g opacity="0.9">${QUADRANT}</g>
+<ellipse cx="90" cy="132" rx="60" ry="70" fill="#0A0A0E" fill-opacity="0.62" stroke="url(#edge)" stroke-width="8" transform="rotate(-12 90 132)"/>
+<g style="filter:drop-shadow(0 0 12px #18FFFF)">
+<text x="90" y="142" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="48" fill="#ffffff">MOD</text>
+</g>
+${neonLabel("GIVE A COLOUR", 90, 200, 13, NEON.wild)}`, NEON.wild);
+}
+
 const ALL_WILD_ART = [
   ["awWild", "WILD"],
   ["awReverse", "REVERSE"],
@@ -787,6 +797,10 @@ for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
 }
 writeFileSync(path.join(OUT, "wildgrabtower-0.svg"), wildGrabTowerCard());
 count += 1;
+for (let copy = 0; copy < 4; copy += 1) {
+  writeFileSync(path.join(OUT, `modcard-${copy}.svg`), modCardArt());
+  count += 1;
+}
 for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
   writeFileSync(path.join(OUT, `${color}-swap1-0.svg`), swap1Card(color, 0));
   writeFileSync(path.join(OUT, `${color}-refreshhand-0.svg`), refreshHandCard(color, 0));

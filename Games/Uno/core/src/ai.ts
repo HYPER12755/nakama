@@ -5,7 +5,7 @@ import { colorsForSide, type Action, type Card, type Color, type GameState, type
 const WILD_KINDS: Card["kind"][] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4",
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands",
-  "wildPowerReverse", "wildNoU", "wildStack3", "wildStackNumber", "wildGrabTower",
+  "wildPowerReverse", "wildNoU", "wildStack3", "wildStackNumber", "wildGrabTower", "modCard",
 ];
 
 function preferredColor(state: GameState, hand: Card[]): Color {
@@ -47,6 +47,7 @@ function cardScore(state: GameState, card: Card): number {
   if (card.kind === "awWild") return 40;
   if (card.kind === "wildShowdown") return 106;
   if (card.kind === "wildGrabTower") return 118;
+  if (card.kind === "modCard") return 112;
   if (card.kind === "grab2Towers") return 116;
   if (card.power !== undefined) return 108;
   if (card.kind === "draw1") return 84;

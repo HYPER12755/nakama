@@ -410,6 +410,18 @@ function wildDareCard(copy) {
 <text x="90" y="196" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="900" fill="#ffffff" stroke="#e8402a" stroke-width="4" paint-order="stroke">WILD DARE</text>`);
 }
 
+function modCardArt() {
+  return frame(`<g>
+<path d="M9 23 A14 14 0 0 1 23 9 L157 9 A14 14 0 0 1 171 23 L90 135 Z" fill="${COLORS.red}"/>
+<path d="M171 23 A14 14 0 0 1 171 247 L90 135 Z" fill="${COLORS.yellow}"/>
+<path d="M171 247 A14 14 0 0 1 157 261 L23 261 A14 14 0 0 1 9 247 L90 135 Z" fill="${COLORS.green}"/>
+<path d="M9 247 A14 14 0 0 1 9 23 L90 135 Z" fill="${COLORS.blue}"/>
+</g>
+<ellipse cx="90" cy="132" rx="60" ry="78" fill="#0f172a" transform="rotate(-12 90 132)"/>
+<text x="90" y="142" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="48" fill="#ffffff">MOD</text>
+<text x="90" y="196" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="900" fill="#ffffff" stroke="#e8402a" stroke-width="4" paint-order="stroke">GIVE A COLOUR</text>`);
+}
+
 const ALL_WILD_ART = [
   ["awWild", "WILD"],
   ["awReverse", "REVERSE"],
@@ -720,6 +732,10 @@ for (const color of Object.keys(COLORS)) {
 }
 writeFileSync(path.join(OUT, "wildgrabtower-0.svg"), wildGrabTowerCard());
 count += 1;
+for (let copy = 0; copy < 4; copy += 1) {
+  writeFileSync(path.join(OUT, `modcard-${copy}.svg`), modCardArt());
+  count += 1;
+}
 for (const color of Object.keys(COLORS)) {
   writeFileSync(path.join(OUT, `${color}-swap1-0.svg`), swap1Card(color, 0));
   writeFileSync(path.join(OUT, `${color}-refreshhand-0.svg`), refreshHandCard(color, 0));

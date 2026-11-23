@@ -27,6 +27,7 @@ interface PlayExtras {
   tradeWithId?: string;
   showdownAmount?: number;
   towerId?: string;
+  modColor?: Color;
 }
 
 interface SwapPrompt {
@@ -88,6 +89,7 @@ function cardHint(card: Card): string | undefined {
   if (card.kind === "wildShowdown") return "Choose a target, penalty and colour";
   if (card.kind === "grab2Towers") return "Grab two Power Towers";
   if (card.kind === "wildGrabTower") return "Choose a Power Tower";
+  if (card.kind === "modCard") return "Give a colour away and choose the next colour";
   if (card.power !== undefined) return `Claim the ${card.power} Power Tower`;
   return undefined;
 }
@@ -185,6 +187,7 @@ export function UnoBoardStage({
   const [pendingTarget, setPendingTarget] = useState<string | null>(null);
   const [showdownAmount, setShowdownAmount] = useState(1);
   const [towerPrompt, setTowerPrompt] = useState<string | null>(null);
+  const [modGiveColor, setModGiveColor] = useState<Color | null>(null);
   const [attackPrompt, setAttackPrompt] = useState<AttackPrompt | null>(null);
   const [swapPrompt, setSwapPrompt] = useState<SwapPrompt | null>(null);
   const [tradePrompt, setTradePrompt] = useState<TradePrompt | null>(null);
@@ -204,6 +207,7 @@ export function UnoBoardStage({
     const assetId = cardId.startsWith("aw") ? `${cardId.replace(/-\d+$/, "")}-0`
       : cardId.startsWith("wildshowdown-") ? "wildshowdown-0"
         : cardId.startsWith("wildgrabtower-") ? "wildgrabtower-0"
+        : cardId.startsWith("modcard-") ? "modcard-0"
           : cardId.includes("-showdown-") ? `${cardId.slice(0, cardId.indexOf("-showdown-"))}-showdown-0`
             : cardId;
     return cardSet === "neon" ? `cards-neon/${assetId}.svg` : `cards/${assetId}.svg`;
@@ -337,6 +341,11 @@ export function UnoBoardStage({
 
   const play = (card: Card, event: MouseEvent<HTMLButtonElement>) => {
     if (!isMyTurn && !jumping) return;
+    if (card.kind === "modCard") {
+      setModGiveColor(null);
+      setPendingCard(card.id);
+      return;
+    }
     if (card.kind === "grab2Towers" || card.kind === "wildGrabTower") {
       setTowerPrompt(card.id);
       return;
@@ -755,23 +764,41 @@ export function UnoBoardStage({
         <div className="uno-overlay uno-overlay--colour">
           <div className="uno-colour-card" role="dialog" aria-label="Choose a colour">
             <div className="uno-colour-card__art" aria-hidden="true">
-              <span className="uno-colour-card__wild">{attackPrompt !== null ? "ATTACK" : "WILD"}</span>
+              <span className="uno-colour-card__wild">
+                {attackPrompt !== null ? "ATTACK" : hand.find((card) => card.id === pendingCard)?.kind === "modCard" ? "MOD" : "WILD"}
+              </span>
               <span className="uno-colour-card__spark uno-colour-card__spark--one" />
               <span className="uno-colour-card__spark uno-colour-card__spark--two" />
               <span className="uno-colour-card__spark uno-colour-card__spark--three" />
             </div>
             <div className="uno-colour-card__body">
-              <p className="eyebrow">{attackPrompt !== null ? "Wild Attack" : "Wild card"}</p>
-              <h2>Choose a colour</h2>
-              <p className="uno-overlay-copy">The next card must match the colour you pick.</p>
+              {hand.find((card) => card.id === pendingCard)?.kind === "modCard" && modGiveColor === null ? (
+                <>
+                  <p className="eyebrow">UNO Mod</p>
+                  <h2>Give a colour away</h2>
+                  <p className="uno-overlay-copy">Give one card of this colour to each opponent in turn order.</p>
+                </>
+              ) : (
+                <>
+                  <p className="eyebrow">{attackPrompt !== null ? "Wild Attack" : "Wild card"}</p>
+                  <h2>Choose a colour</h2>
+                  <p className="uno-overlay-copy">The next card must match the colour you pick.</p>
+                </>
+              )}
               <div className="uno-colour-choices">
-                {sideColors.map((color, index) => (
+                {(hand.find((card) => card.id === pendingCard)?.kind === "modCard" && modGiveColor === null
+                  ? sideColors.filter((color) => hand.some((card) => card.color === color))
+                  : sideColors).map((color, index) => (
                   <button
                     type="button"
                     key={color}
                     className={`uno-colour uno-colour--${color}`}
                     style={{ animationDelay: `${index * 55}ms` }}
                     onClick={() => {
+                      if (hand.find((card) => card.id === pendingCard)?.kind === "modCard" && modGiveColor === null) {
+                        setModGiveColor(color);
+                        return;
+                      }
                       fly(pendingCard, handRef.current?.querySelector("img")?.getBoundingClientRect() ?? null, discardRef.current?.getBoundingClientRect() ?? null);
                       if (attackPrompt !== null && attackPrompt.targetId !== null) {
                         onPlay(pendingCard, color, attackPrompt.targetId);
@@ -779,12 +806,15 @@ export function UnoBoardStage({
                         onPlay(pendingTrade.cardId, color, pendingTrade.targetId, {
                           tradeWithId: pendingTrade.tradeWithId,
                         });
+                      } else if (modGiveColor !== null) {
+                        onPlay(pendingCard, color, undefined, { modColor: modGiveColor });
                       } else {
                         onPlay(pendingCard, color);
                       }
                       setPendingCard(null);
                       setAttackPrompt(null);
                       setPendingTrade(null);
+                      setModGiveColor(null);
                     }}
                     aria-label={`Choose ${color}`}
                   >

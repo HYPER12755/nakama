@@ -25,7 +25,8 @@ export type GameMode =
   | "allWild"
   | "dare"
   | "showdown"
-  | "powerGrab";
+  | "powerGrab"
+  | "mod";
 
 export type CardKind =
   | "number"
@@ -72,6 +73,7 @@ export type CardKind =
   | "dareList"
   | "showdownNumber"
   | "wildShowdown"
+  | "modCard"
   | "grab2Towers"
   | "wildGrabTower"
   | "stack1"
@@ -229,6 +231,8 @@ export type Action =
       showdown_amount?: number;
       towerId?: PowerTower;
       tower_id?: PowerTower;
+      modColor?: Color;
+      mod_color?: Color;
       tradeWithId?: string;
       trade_with_id?: string;
       jump?: boolean;

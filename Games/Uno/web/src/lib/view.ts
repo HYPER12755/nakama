@@ -26,6 +26,7 @@ export const ALL_WILD_MODE: RulesMode = UNO_MODE.ALL_WILD;
 export const DARE_MODE: RulesMode = UNO_MODE.DARE;
 export const SHOWDOWN_MODE: RulesMode = UNO_MODE.SHOWDOWN;
 export const POWER_GRAB_MODE: RulesMode = UNO_MODE.POWER_GRAB;
+export const MOD_MODE: RulesMode = UNO_MODE.MOD;
 
 const JUMP_IN_ALIASES = ["jumpIn", "jump_in", "jump-in", "jumpin"];
 const NO_MERCY_ALIASES = ["noMercy", "no_mercy", "no-mercy", "nomercy"];
@@ -84,6 +85,9 @@ export function rulesModeLabel(mode: RulesMode | undefined): string {
   }
   if (value === POWER_GRAB_MODE) {
     return "Power Grab";
+  }
+  if (value === MOD_MODE) {
+    return "Mod";
   }
   return value === "sevenO" ? "Seven-O" : "Classic";
 }

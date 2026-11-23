@@ -732,6 +732,39 @@ describe("Uno Progressive house rule", () => {
 
 });
 
+describe("Uno Mod", () => {
+  const modCard: Card = { id: "modcard-0", color: null, kind: "modCard" };
+
+  it("builds a 112-card Mod deck with four Mod cards", () => {
+    const deck = buildDeck("mod");
+    expect(deck).toHaveLength(112);
+    expect(deck.filter((card) => card.kind === "modCard")).toHaveLength(4);
+  });
+
+  it("gives a chosen colour away around the table", () => {
+    const game = stagedGame([
+      modCard,
+      { id: "red-1-0", color: "red", kind: "number", value: 1 },
+      { id: "red-2-0", color: "red", kind: "number", value: 2 },
+      { id: "blue-3-0", color: "blue", kind: "number", value: 3 },
+    ], "green", "mod");
+    const played = applyAction(game, {
+      type: "play", playerId: "p1", cardId: modCard.id,
+      chosenColor: "yellow", modColor: "red",
+    });
+    expect(played.ok).toBe(true);
+    expect(played.state.currentColor).toBe("yellow");
+    expect(played.state.players[0].hand.map((card) => card.id)).toEqual(["blue-3-0"]);
+    expect(played.state.players[1].hand.map((card) => card.id)).toContain("red-1-0");
+    expect(played.state.players[2].hand.map((card) => card.id)).toContain("red-2-0");
+    expect(played.state.events.some((entry) => entry.type === "mod")).toBe(true);
+  });
+
+  it("scores Mod at 50", () => {
+    expect(scoreHand([modCard])).toBe(50);
+  });
+});
+
 describe("Uno Power Grab", () => {
   const powerCard: Card = { id: "red-1-0", color: "red", kind: "number", value: 1, power: "U" };
   const drawTwo: Card = { id: "red-draw2-0", color: "red", kind: "draw2" };
