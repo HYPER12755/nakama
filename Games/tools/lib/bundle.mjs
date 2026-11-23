@@ -107,6 +107,11 @@ export function assertBundleDescriptor(descriptor) {
   if (typeof descriptor.version !== "string" || !SEMVER.test(descriptor.version)) {
     throw new Error("version must be a semver string.");
   }
+  assertSafeField(descriptor.gameName, "gameName");
+  assertSafeField(descriptor.publishedAt, "publishedAt");
+  if (Number.isNaN(Date.parse(descriptor.publishedAt))) {
+    throw new Error("publishedAt must be an ISO-8601 timestamp.");
+  }
   assertSafeField(descriptor.sdkVersion, "sdkVersion");
   assertRelativeEntry(descriptor.entry);
   if (
@@ -374,17 +379,24 @@ export function readZipEntries(buffer) {
   }
   const count = bytes.readUInt16LE(eocd + 10);
   let pointer = bytes.readUInt32LE(eocd + 16);
+  if (pointer < 0 || pointer + count * 46 > eocd) {
+    throw new Error("The ZIP central directory is out of range.");
+  }
   const entries = [];
   for (let index = 0; index < count; index += 1) {
-    if (pointer + 46 > bytes.length || bytes.readUInt32LE(pointer) !== 0x02014b50) {
+    if (pointer + 46 > eocd || bytes.readUInt32LE(pointer) !== 0x02014b50) {
       throw new Error("The ZIP central directory is invalid.");
     }
+    const expectedCrc = bytes.readUInt32LE(pointer + 16);
     const method = bytes.readUInt16LE(pointer + 10);
     const compressedSize = bytes.readUInt32LE(pointer + 20);
     const nameLength = bytes.readUInt16LE(pointer + 28);
     const extraLength = bytes.readUInt16LE(pointer + 30);
     const commentLength = bytes.readUInt16LE(pointer + 32);
     const localOffset = bytes.readUInt32LE(pointer + 42);
+    if (pointer + 46 + nameLength + extraLength + commentLength > eocd) {
+      throw new Error("The ZIP central directory entry is out of range.");
+    }
     const name = bytes
       .subarray(pointer + 46, pointer + 46 + nameLength)
       .toString("utf8");
@@ -401,17 +413,36 @@ export function readZipEntries(buffer) {
     ) {
       throw new Error(`The ZIP local header for ${name} is invalid.`);
     }
+    const localFlags = bytes.readUInt16LE(localOffset + 6);
     const localNameLength = bytes.readUInt16LE(localOffset + 26);
     const localExtraLength = bytes.readUInt16LE(localOffset + 28);
+    const localName = bytes
+      .subarray(localOffset + 30, localOffset + 30 + localNameLength)
+      .toString("utf8");
+    if (localName !== name) {
+      throw new Error(`The ZIP local header for ${name} does not match.`);
+    }
+    const localCompressedSize = bytes.readUInt32LE(localOffset + 18);
+    if ((localFlags & 0x08) === 0 && localCompressedSize !== compressedSize) {
+      throw new Error(`The ZIP sizes for ${name} do not match.`);
+    }
     const start = localOffset + 30 + localNameLength + localExtraLength;
+    if (start + compressedSize > bytes.length) {
+      throw new Error(`The ZIP data for ${name} is truncated.`);
+    }
     const compressed = bytes.subarray(start, start + compressedSize);
+    let data;
     if (method === 0) {
-      entries.push({ name, data: Buffer.from(compressed) });
+      data = Buffer.from(compressed);
     } else if (method === 8) {
-      entries.push({ name, data: inflateRawSync(compressed) });
+      data = inflateRawSync(compressed);
     } else {
       throw new Error(`Unsupported ZIP compression method ${method}.`);
     }
+    if (crc32(data) !== expectedCrc) {
+      throw new Error(`The ZIP checksum for ${name} is invalid.`);
+    }
+    entries.push({ name, data });
     pointer += 46 + nameLength + extraLength + commentLength;
   }
   return entries;

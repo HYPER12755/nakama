@@ -21,13 +21,11 @@ class BundleUpdatePolicy {
   const BundleUpdatePolicy({
     this.mode = BundleUpdateMode.background,
     this.checkIntervalMs = 6 * 60 * 60 * 1000,
-    this.allowCellular = true,
     this.keepVersions = 2,
   });
 
   final BundleUpdateMode mode;
   final int checkIntervalMs;
-  final bool allowCellular;
   final int keepVersions;
 }
 
@@ -87,6 +85,7 @@ class BundleManager {
   final Directory? _supportDirectory;
 
   Directory? _cacheRoot;
+  bool _forceNextUpdate = false;
   final bool _ownsClient;
 
   Future<BundleLaunch> resolve() async {
@@ -118,6 +117,11 @@ class BundleManager {
     if (_ownsClient) {
       _client.close();
     }
+  }
+
+  Future<BundleLaunch> applyPendingUpdate() async {
+    _forceNextUpdate = true;
+    return resolve();
   }
 
   Future<Directory> _ensureCacheRoot() async {
@@ -214,6 +218,10 @@ class BundleManager {
       return null;
     }
     final manifestUri = Uri.parse(url);
+    final mode = _forceNextUpdate
+        ? BundleUpdateMode.forced
+        : updatePolicy.mode;
+    _forceNextUpdate = false;
     final cache = await _readManifestCache(root);
     final fresh = cache != null &&
         DateTime.now().millisecondsSinceEpoch - cache.fetchedAt <
@@ -221,13 +229,13 @@ class BundleManager {
 
     Object? manifestValue;
     String? etag;
-    if (updatePolicy.mode == BundleUpdateMode.manual) {
+    if (mode == BundleUpdateMode.manual) {
       if (cache == null) {
         return null;
       }
       manifestValue = cache.value;
       etag = cache.etag;
-    } else if (fresh && updatePolicy.mode != BundleUpdateMode.forced) {
+    } else if (fresh && mode != BundleUpdateMode.forced) {
       manifestValue = cache.value;
       etag = cache.etag;
     } else {
@@ -280,6 +288,12 @@ class BundleManager {
       );
     }
     _verifyPinnedKey(descriptor);
+    final signer = manifest.signers[descriptor.keyId];
+    if (signer == null || signer.publicKey != trustedKeys[descriptor.keyId]) {
+      throw StateError(
+        'The release manifest does not declare the pinned key ${descriptor.keyId}.',
+      );
+    }
     await _verifyDescriptorSignature(descriptor);
 
     if (installed != null &&
@@ -298,8 +312,8 @@ class BundleManager {
     }
 
     if (installed != null &&
-        (updatePolicy.mode == BundleUpdateMode.prompt ||
-            updatePolicy.mode == BundleUpdateMode.manual)) {
+        (mode == BundleUpdateMode.prompt ||
+            mode == BundleUpdateMode.manual)) {
       onUpdateAvailable?.call(descriptor);
       return installed;
     }
@@ -315,7 +329,7 @@ class BundleManager {
     try {
       return await _downloadAndInstall(root, descriptor, manifestUri);
     } catch (cause) {
-      if (updatePolicy.mode == BundleUpdateMode.forced) {
+      if (mode == BundleUpdateMode.forced) {
         rethrow;
       }
       onLog?.call('Update failed: $cause');
@@ -423,26 +437,26 @@ class BundleManager {
 
   Future<void> _verifyDelta(BundleDelta delta) async {
     final pinned = trustedKeys[delta.keyId];
-    final key = pinned ?? delta.publicKey;
-    if (pinned == null || pinned == delta.publicKey) {
-      final publicKey = base64.decode(key);
-      final signature = base64.decode(delta.signature);
-      if (publicKey.length != 32 || signature.length != 64) {
-        throw StateError('The delta key or signature has an invalid length.');
-      }
-      final valid = await Ed25519().verify(
-        utf8.encode(delta.signingPayload()),
-        signature: Signature(
-          signature,
-          publicKey: SimplePublicKey(publicKey, type: KeyPairType.ed25519),
-        ),
+    if (pinned == null || pinned != delta.publicKey) {
+      throw StateError(
+        'The delta public key does not match the pinned key ${delta.keyId}.',
       );
-      if (!valid) {
-        throw StateError('The delta signature is invalid.');
-      }
-      return;
     }
-    throw StateError('The delta public key does not match the pinned key.');
+    final publicKey = base64.decode(pinned);
+    final signature = base64.decode(delta.signature);
+    if (publicKey.length != 32 || signature.length != 64) {
+      throw StateError('The delta key or signature has an invalid length.');
+    }
+    final valid = await Ed25519().verify(
+      utf8.encode(delta.signingPayload()),
+      signature: Signature(
+        signature,
+        publicKey: SimplePublicKey(publicKey, type: KeyPairType.ed25519),
+      ),
+    );
+    if (!valid) {
+      throw StateError('The delta signature is invalid.');
+    }
   }
 
   Future<void> _copyDirectory(Directory from, Directory to) async {
@@ -530,6 +544,15 @@ class BundleManager {
     BundleDescriptor descriptor,
     Uri manifestUri,
   ) async {
+    final existing = _bundleDirectory(root, descriptor);
+    if (await _hasEntry(existing, descriptor)) {
+      await _rememberInstalled(root, descriptor, existing, BundleSource.cache);
+      return BundleLaunch(
+        descriptor: descriptor,
+        directory: existing,
+        source: BundleSource.cache,
+      );
+    }
     final downloadUri = descriptor.resolveUrl(manifestUri);
     onLog?.call('Downloading $downloadUri');
     final download = await _client
@@ -662,6 +685,30 @@ class BundleManager {
     await _verifyDescriptorSignature(descriptor);
   }
 
+  File _previousFile(Directory root) {
+    return File(p.join(root.path, gameId, 'previous.json'));
+  }
+
+  Future<BundleDescriptor?> _readPrevious(Directory root) async {
+    final file = _previousFile(root);
+    if (!await file.exists()) {
+      return null;
+    }
+    try {
+      final value = jsonDecode(await file.readAsString());
+      if (value is! Map<String, dynamic>) {
+        return null;
+      }
+      final descriptor = BundleDescriptor.fromJson(value['descriptor']);
+      if (descriptor.gameId != gameId) {
+        return null;
+      }
+      return descriptor;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _rememberInstalled(
     Directory root,
     BundleDescriptor descriptor,
@@ -670,6 +717,20 @@ class BundleManager {
   ) async {
     final metadata = _metadataFile(root);
     await metadata.parent.create(recursive: true);
+    if (await metadata.exists()) {
+      try {
+        final currentValue = jsonDecode(await metadata.readAsString());
+        if (currentValue is Map<String, dynamic>) {
+          final current = BundleDescriptor.fromJson(currentValue['descriptor']);
+          if (current.sha256 != descriptor.sha256) {
+            await _previousFile(root).writeAsString(
+              jsonEncode({'descriptor': current.toJson()}),
+              flush: true,
+            );
+          }
+        }
+      } catch (_) {}
+    }
     await metadata.writeAsString(
       jsonEncode({
         'descriptor': descriptor.toJson(),
@@ -678,13 +739,30 @@ class BundleManager {
       }),
       flush: true,
     );
-    await _pruneVersions(root, updatePolicy.keepVersions);
+    await _pruneVersions(root, descriptor);
   }
 
-  Future<void> _pruneVersions(Directory root, int keep) async {
+  Future<void> _pruneVersions(
+    Directory root,
+    BundleDescriptor active,
+  ) async {
     final gameRoot = Directory(p.join(root.path, gameId));
     if (!await gameRoot.exists()) {
       return;
+    }
+    final retained = <String>{_bundleDirectory(root, active).path};
+    final previous = await _readPrevious(root);
+    if (previous != null) {
+      final previousDirectory = _bundleDirectory(root, previous);
+      if (await _hasEntry(previousDirectory, previous)) {
+        retained.add(previousDirectory.path);
+      }
+    }
+    var extra = updatePolicy.keepVersions < 1
+        ? 0
+        : updatePolicy.keepVersions - retained.length;
+    if (extra < 0) {
+      extra = 0;
     }
     final directories = gameRoot
         .listSync(recursive: false)
@@ -697,7 +775,14 @@ class BundleManager {
         p.basename(right.path).split('-').first,
         p.basename(left.path).split('-').first,
       ));
-    for (final directory in directories.skip(keep < 1 ? 1 : keep)) {
+    for (final directory in directories) {
+      if (retained.contains(directory.path)) {
+        continue;
+      }
+      if (extra > 0) {
+        extra -= 1;
+        continue;
+      }
       await directory.delete(recursive: true).catchError((_) {});
     }
   }

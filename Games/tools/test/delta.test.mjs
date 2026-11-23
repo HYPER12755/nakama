@@ -64,6 +64,7 @@ test("signed delta verifies and detects tampering", async () => {
   });
   const trustedKeys = { [key.keyId]: key.publicKey };
   assert.equal(verifyBundleDelta(delta, trustedKeys).ok, true);
+  assert.equal(verifyBundleDelta(delta, {}).ok, false);
   assert.equal(verifyBundleDelta(delta, { "delta-1": "wrong" }).ok, false);
 
   const tampered = { ...delta, targetVersion: "1.2.0" };
@@ -110,6 +111,24 @@ test("delta artifacts write changed files by content hash", async () => {
     "objects",
     descriptor.files[0].sha256,
   );
+  assert.equal(descriptor.files.length, 2);
+  assert.deepEqual(
+    descriptor.files.map((file) => file.path),
+    ["asset.txt", "index.html"],
+  );
+  assert.equal(descriptor.files.every((file) => !("data" in file)), true);
+  for (const file of descriptor.files) {
+    const filePath = path.join(
+      directory,
+      "uno",
+      "1.1.0",
+      "deltas",
+      "1.0.0-1.1.0",
+      "objects",
+      file.sha256,
+    );
+    assert.equal((await readFile(filePath)).length, file.size);
+  }
   assert.equal(
     (await readFile(objectPath)).toString(),
     descriptor.files[0].path === "index.html" ? "new" : "asset",

@@ -97,7 +97,7 @@ Expected steady-state origin traffic per active install is one small conditional
 | `prompt` | Notify the app and keep the installed version until the app applies it. |
 | `manual` | Use only cached metadata and installed content. |
 
-`checkIntervalMs`, `allowCellular`, and `keepVersions` are also configurable.
+`checkIntervalMs` and `keepVersions` are also configurable. In `prompt` or `manual` mode the host receives `onUpdateAvailable`; call `applyPendingBundleUpdate()` (React Native) or `MoonGamesHostController.applyPendingUpdate()` (Flutter) to install the pending release when the user agrees.
 
 ## Ownership
 

@@ -6,7 +6,9 @@ const Map<String, String> trustedKeys = {
 };
 
 class PartnerUnoScreen extends StatelessWidget {
-  const PartnerUnoScreen({super.key});
+  const PartnerUnoScreen({super.key, required this.updateController});
+
+  final MoonGamesHostController updateController;
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +22,7 @@ class PartnerUnoScreen extends StatelessWidget {
         checkIntervalMs: 6 * 60 * 60 * 1000,
         keepVersions: 2,
       ),
+      controller: updateController,
       onUpdateAvailable: (descriptor) {
         debugPrint('MoonGames update available: ${descriptor.version}');
       },

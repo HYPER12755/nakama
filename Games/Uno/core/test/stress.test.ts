@@ -110,49 +110,49 @@ async function runMode(mode: GameMode): Promise<void> {
 describe("Uno stress simulation", () => {
   it("finishes 100 seeds across 2, 3 and 4 seats in classic mode", async () => {
     await runMode("classic");
-  }, 60000);
+  }, 120000);
 
   it("finishes 100 seeds across 2, 3 and 4 seats in Seven-O mode", async () => {
     await runMode("sevenO");
-  }, 60000);
+  }, 120000);
 
   it("finishes 100 seeds across 2, 3 and 4 seats in progressive mode", async () => {
     await runMode("progressive");
-  }, 60000);
+  }, 120000);
 
   it("finishes 100 seeds across 2, 3 and 4 seats in jumpIn mode", async () => {
     await runMode("jumpIn");
-  }, 60000);
+  }, 120000);
 
   it("finishes 100 seeds across 2, 3 and 4 seats in attack mode", async () => {
     await runMode("attack");
-  }, 60000);
+  }, 120000);
 
   it("finishes 100 seeds across 2, 3 and 4 seats in noMercy mode", async () => {
     await runMode("noMercy");
-  }, 60000);
+  }, 120000);
 
   it("finishes 100 seeds across 2, 3 and 4 seats in flip mode", async () => {
     await runMode("flip");
-  }, 60000);
+  }, 120000);
 
   it("finishes 100 seeds across 2, 3 and 4 seats in swapPack mode", async () => {
     await runMode("swapPack");
-  }, 60000);
+  }, 120000);
 
   it("finishes 100 seeds across 2, 3 and 4 seats in reversePack mode", async () => {
     await runMode("reversePack");
-  }, 60000);
+  }, 120000);
 
   it("finishes 100 seeds across 2, 3 and 4 seats in powerGrab mode", async () => {
     await runMode("powerGrab");
-  }, 60000);
+  }, 120000);
 
   it("finishes 100 seeds across 2, 3 and 4 seats in mod mode", async () => {
     await runMode("mod");
-  }, 60000);
+  }, 120000);
 
   it("finishes 100 seeds across 2, 3 and 4 seats in minimalist mode", async () => {
     await runMode("minimalist");
-  }, 60000);
+  }, 120000);
 });

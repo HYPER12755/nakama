@@ -9,7 +9,7 @@ After packaging both releases:
 ```bash
 cd Games
 pnpm package:uno
-pnpm build-delta --game uno --from 0.0.9 --to 0.1.0
+pnpm release:delta --game uno --from 0.0.9 --to 0.1.0
 pnpm release:manifest
 ```
 

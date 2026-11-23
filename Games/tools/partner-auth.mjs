@@ -2,11 +2,20 @@
 import { createServer } from "node:http";
 import { parseArgs } from "node:util";
 import {
+  isEmailAllowed,
   moonGamesCustomId,
+  parsePartnerAllowedDomains,
   parsePartnerSecrets,
   partnerCustomToken,
   verifyPartnerProof,
 } from "./lib/partner-auth.mjs";
+
+class ProviderConfigError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "ProviderConfigError";
+  }
+}
 
 function usage() {
   console.log(`Usage: node tools/partner-auth.mjs [options]
@@ -51,7 +60,7 @@ async function authenticateWithNakama({ email, partnerId }) {
   const serverKey = process.env.MOONGAMES_NAKAMA_SERVER_KEY;
   const providerSecret = process.env.MOONGAMES_PARTNER_AUTH_SECRET;
   if (url === undefined || serverKey === undefined || providerSecret === undefined) {
-    throw new Error("Nakama partner auth is not configured.");
+    throw new ProviderConfigError("Nakama partner auth is not configured.");
   }
   const customId = moonGamesCustomId(email);
   const endpoint = new URL("/v2/account/authenticate/custom", url);
@@ -80,6 +89,20 @@ async function authenticateWithNakama({ email, partnerId }) {
   };
 }
 
+function requireProviderConfig() {
+  const required = [
+    "MOONGAMES_PARTNER_AUTH_SECRET",
+    "MOONGAMES_NAKAMA_HTTP_URL",
+    "MOONGAMES_NAKAMA_SERVER_KEY",
+  ];
+  for (const name of required) {
+    const value = process.env[name];
+    if (typeof value !== "string" || value.trim().length === 0) {
+      throw new ProviderConfigError(`${name} is required.`);
+    }
+  }
+}
+
 async function main() {
   const { values } = parseArgs({
     options: {
@@ -94,9 +117,18 @@ async function main() {
     return;
   }
 
+  requireProviderConfig();
   const partnerSecrets = parsePartnerSecrets(
     process.env.MOONGAMES_PARTNER_SECRETS ?? "",
   );
+  const allowedDomains = parsePartnerAllowedDomains(
+    process.env.MOONGAMES_PARTNER_ALLOWED_DOMAINS ?? "",
+  );
+  for (const partnerId of partnerSecrets.keys()) {
+    if ((allowedDomains.get(partnerId)?.length ?? 0) === 0) {
+      console.warn(`warning: no email domain restriction is configured for ${partnerId}.`);
+    }
+  }
   const seenNonces = new Map();
   setInterval(() => {
     const cutoff = Date.now() - 10 * 60 * 1000;
@@ -130,15 +162,24 @@ async function main() {
         json(response, 401, { ok: false, error: proof.error });
         return;
       }
+      if (!isEmailAllowed(proof.email, allowedDomains.get(partnerId))) {
+        json(response, 403, { ok: false, error: "email domain is not allowed" });
+        return;
+      }
       const session = await authenticateWithNakama({
         email: proof.email,
         partnerId,
       });
       json(response, 200, { ok: true, session });
     } catch (cause) {
-      json(response, 400, {
+      const configError = cause instanceof ProviderConfigError;
+      json(response, configError ? 500 : 400, {
         ok: false,
-        error: cause instanceof Error ? cause.message : "Invalid request.",
+        error: configError
+          ? "provider auth is not configured"
+          : cause instanceof Error
+            ? cause.message
+            : "Invalid request.",
       });
     }
   });

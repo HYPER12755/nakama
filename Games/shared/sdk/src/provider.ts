@@ -3,15 +3,12 @@ export type BundleUpdateMode = "background" | "forced" | "prompt" | "manual";
 export interface BundleUpdatePolicy {
   mode: BundleUpdateMode;
   checkIntervalMs?: number;
-  allowCellular?: boolean;
   keepVersions?: number;
-  channel?: string;
 }
 
 export const DEFAULT_UPDATE_POLICY: BundleUpdatePolicy = {
   mode: "background",
   checkIntervalMs: 6 * 60 * 60 * 1000,
-  allowCellular: true,
   keepVersions: 2,
 };
 

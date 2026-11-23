@@ -15,7 +15,6 @@ import {
   type BundleDelta,
   type BundleUpdatePolicy,
   type GameBundleDescriptor,
-  type ReleaseManifest,
   type TrustedBundleKeys,
 } from "@moongames/game-sdk";
 import RNFS from "react-native-fs";
@@ -65,7 +64,7 @@ function join(...parts: string[]): string {
 
 async function ensureDirectory(directory: string): Promise<void> {
   if (!(await RNFS.exists(directory))) {
-    await RNFS.mkdir(directory);
+    await RNFS.mkdir(directory, { recursive: true });
   }
 }
 
@@ -202,6 +201,23 @@ async function fetchJson<T>(
   }
 }
 
+async function fetchBytes(url: string): Promise<Uint8Array> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const response = await fetch(url, {
+      headers: { "Cache-Control": "no-cache" },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Delta object request failed: HTTP ${response.status}.`);
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function deltaUrlFor(
   descriptor: GameBundleDescriptor,
   manifestUrl: string,
@@ -252,28 +268,52 @@ async function loadInstalled(
   return { ...installed, directory };
 }
 
+function previousPath(gameId: string): string {
+  return join(CACHE_ROOT, gameId, "previous.json");
+}
+
 async function rememberInstalled(
   options: BundleManagerOptions,
   descriptor: GameBundleDescriptor,
   directory: string,
   source: ResolvedBundle["source"],
 ): Promise<void> {
+  const current = await readJson<InstalledBundle>(
+    join(CACHE_ROOT, descriptor.gameId, "installed.json"),
+  );
+  if (current !== null && current.descriptor.sha256 !== descriptor.sha256) {
+    await writeJson(previousPath(descriptor.gameId), current);
+  }
   await writeJson(join(CACHE_ROOT, descriptor.gameId, "installed.json"), {
     descriptor,
     directory,
     source,
   } satisfies InstalledBundle);
-  await pruneVersions(options, policyFor(options).keepVersions ?? 2);
+  await pruneVersions(options, descriptor);
 }
 
 async function pruneVersions(
   options: BundleManagerOptions,
-  keep: number,
+  active: GameBundleDescriptor,
 ): Promise<void> {
   const gameRoot = join(CACHE_ROOT, options.gameId);
   if (!(await RNFS.exists(gameRoot))) {
     return;
   }
+  const retained = new Set<string>([bundleDirectory(active)]);
+  const previous = await readJson<InstalledBundle>(previousPath(options.gameId));
+  if (
+    previous !== null &&
+    previous.descriptor.gameId === options.gameId &&
+    (await isValidDirectory(
+      previous.descriptor,
+      bundleDirectory(previous.descriptor),
+    ))
+  ) {
+    retained.add(bundleDirectory(previous.descriptor));
+  }
+  const keep = Math.max(1, policyFor(options).keepVersions ?? 2);
+  let extra = Math.max(0, keep - retained.size);
   const entries = await RNFS.readDir(gameRoot);
   const versions = entries
     .filter((entry) => entry.isDirectory() && /^\d+\.\d+\.\d+/.test(entry.name))
@@ -282,8 +322,16 @@ async function pruneVersions(
       const rightVersion = right.name.split("-")[0] ?? "";
       return compareSemver(rightVersion, leftVersion);
     });
-  for (const entry of versions.slice(Math.max(1, keep))) {
-    await RNFS.unlink(join(gameRoot, entry.name)).catch(() => undefined);
+  for (const entry of versions) {
+    const directory = join(gameRoot, entry.name);
+    if (retained.has(directory)) {
+      continue;
+    }
+    if (extra > 0) {
+      extra -= 1;
+      continue;
+    }
+    await RNFS.unlink(directory).catch(() => undefined);
   }
 }
 
@@ -402,7 +450,7 @@ async function installDelta(
   try {
     await copyDirectory(installed.directory, scratch);
     for (const file of delta.files) {
-      const bytes = await readBytes(new URL(file.url, url).toString());
+      const bytes = await fetchBytes(new URL(file.url, url).toString());
       if (bytes.byteLength !== file.size) {
         throw new Error(`Delta file ${file.path} has the wrong size.`);
       }
@@ -497,20 +545,30 @@ async function installBundled(
   fallback: BundledFallback,
 ): Promise<ResolvedBundle> {
   const directory = bundleDirectory(fallback.descriptor);
-  if (!(await isValidDirectory(fallback.descriptor, directory))) {
-    const verification = await verifyBundleBytes(
-      fallback.descriptor,
-      await readBytes(fallback.zipPath),
-      options.trustedKeys,
-    );
-    if (!verification.ok) {
-      throw new Error(verification.error ?? "The bundled fallback is invalid.");
+  const verification = await verifyBundleBytes(
+    fallback.descriptor,
+    await readBytes(fallback.zipPath),
+    options.trustedKeys,
+  );
+  if (!verification.ok) {
+    throw new Error(verification.error ?? "The bundled fallback is invalid.");
+  }
+
+  const parent = join(CACHE_ROOT, fallback.descriptor.gameId);
+  await ensureDirectory(parent);
+  const tempDirectory = join(parent, `bundled-extract-${Date.now()}`);
+  try {
+    await ensureDirectory(tempDirectory);
+    await unzip(fallback.zipPath, tempDirectory);
+    if (!(await isValidDirectory(fallback.descriptor, tempDirectory))) {
+      throw new Error(`The bundle entry ${fallback.descriptor.entry} is missing.`);
     }
     if (await RNFS.exists(directory)) {
       await RNFS.unlink(directory);
     }
-    await ensureDirectory(directory);
-    await unzip(fallback.zipPath, directory);
+    await RNFS.moveFile(tempDirectory, directory);
+  } finally {
+    await RNFS.unlink(tempDirectory).catch(() => undefined);
   }
   await rememberInstalled(options, fallback.descriptor, directory, "bundled");
   return resolved(fallback.descriptor, directory, "bundled");
@@ -611,4 +669,17 @@ export async function resolveGameBundle(
     return installBundled(options, options.bundledFallback);
   }
   throw new Error("No game bundle is available offline.");
+}
+
+export async function applyPendingBundleUpdate(
+  options: BundleManagerOptions,
+): Promise<ResolvedBundle> {
+  return resolveGameBundle({
+    ...options,
+    updatePolicy: {
+      ...DEFAULT_UPDATE_POLICY,
+      ...options.updatePolicy,
+      mode: "forced",
+    },
+  });
 }

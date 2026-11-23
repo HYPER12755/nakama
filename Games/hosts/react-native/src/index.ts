@@ -50,7 +50,7 @@ export type {
 } from "@moongames/social";
 export { MoonGamesWebView } from "./MoonGamesWebView";
 export type { MoonGamesWebViewProps } from "./MoonGamesWebView";
-export { resolveGameBundle } from "./bundleManager";
+export { applyPendingBundleUpdate, resolveGameBundle } from "./bundleManager";
 export type {
   BundleManagerOptions,
   BundledFallback,

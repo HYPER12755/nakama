@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  isEmailAllowed,
   moonGamesCustomId,
   normalizeAuthEmail,
+  parsePartnerAllowedDomains,
   parsePartnerSecrets,
   partnerCustomToken,
   partnerProof,
@@ -69,6 +71,17 @@ test("custom id and token are stable per email", () => {
   const second = moonGamesCustomId("player@example.com");
   assert.equal(first, second);
   assert.equal(partnerCustomToken(SECRET, "player@example.com").length, 64);
+});
+
+test("partner email domains can be restricted", () => {
+  const domains = parsePartnerAllowedDomains(
+    JSON.stringify({ "partner-a": ["example.com"] }),
+  );
+  assert.equal(isEmailAllowed("player@example.com", domains.get("partner-a")), true);
+  assert.equal(isEmailAllowed("player@other.com", domains.get("partner-a")), false);
+  assert.equal(isEmailAllowed("player@other.com", undefined), true);
+  assert.equal(isEmailAllowed("player@example.com", []), false);
+  assert.throws(() => parsePartnerAllowedDomains(JSON.stringify({ "partner-a": [] })));
 });
 
 test("partner secrets parse from JSON", () => {

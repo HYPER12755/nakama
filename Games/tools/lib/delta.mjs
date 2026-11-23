@@ -78,13 +78,20 @@ export function verifyBundleDelta(delta, trustedKeys) {
   if (delta.format !== BUNDLE_DELTA_FORMAT) {
     return { ok: false, error: "Unsupported bundle delta format." };
   }
-  const trusted = trustedKeys?.[delta.keyId];
-  const key = trusted ?? delta.publicKey;
-  if (typeof key !== "string" || key.length === 0) {
-    return { ok: false, error: `No public key is configured for ${delta.keyId}.` };
-  }
-  if (trusted !== undefined && trusted !== delta.publicKey) {
-    return { ok: false, error: `The delta key does not match pinned key ${delta.keyId}.` };
+  let key;
+  if (trustedKeys !== undefined) {
+    key = trustedKeys[delta.keyId];
+    if (typeof key !== "string" || key.length === 0) {
+      return { ok: false, error: `No public key is configured for ${delta.keyId}.` };
+    }
+    if (key !== delta.publicKey) {
+      return { ok: false, error: `The delta key does not match pinned key ${delta.keyId}.` };
+    }
+  } else {
+    key = delta.publicKey;
+    if (typeof key !== "string" || key.length === 0) {
+      return { ok: false, error: "The delta has no public key." };
+    }
   }
   if (!Array.isArray(delta.files) || !Array.isArray(delta.removed)) {
     return { ok: false, error: "The delta file lists must be arrays." };
@@ -132,11 +139,21 @@ export async function writeDeltaArtifacts({
   );
   const objectDirectory = path.join(directory, "objects");
   await mkdir(objectDirectory, { recursive: true });
+  const byPath = new Map(files.map((file) => [file.path, file]));
   const serializedFiles = [];
-  for (const file of files) {
+  for (const file of delta.files) {
+    const source = byPath.get(file.path);
+    if (source === undefined || source.sha256 !== file.sha256) {
+      throw new Error(`Missing delta bytes for ${file.path}.`);
+    }
     const objectName = file.sha256;
-    await writeFile(path.join(objectDirectory, objectName), file.data);
-    serializedFiles.push({ ...file, url: `objects/${objectName}` });
+    await writeFile(path.join(objectDirectory, objectName), source.data);
+    serializedFiles.push({
+      path: file.path,
+      sha256: file.sha256,
+      size: file.size,
+      url: `objects/${objectName}`,
+    });
   }
   const descriptor = { ...delta, files: serializedFiles };
   const descriptorPath = path.join(directory, "delta.json");

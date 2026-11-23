@@ -90,6 +90,43 @@ export function partnerCustomToken(secret, email) {
     .digest("hex");
 }
 
+export function parsePartnerAllowedDomains(value) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return new Map();
+  }
+  const parsed = JSON.parse(value);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("MOONGAMES_PARTNER_ALLOWED_DOMAINS must be a JSON object.");
+  }
+  const domains = new Map();
+  for (const [partnerId, values] of Object.entries(parsed)) {
+    if (!Array.isArray(values) || values.some((item) => typeof item !== "string")) {
+      throw new Error(`Invalid allowed domains for partner ${partnerId}.`);
+    }
+    const normalized = values
+      .map((item) => item.trim().toLowerCase())
+      .filter((item) => item.length > 0);
+    if (normalized.length === 0) {
+      throw new Error(`At least one allowed domain is required for partner ${partnerId}.`);
+    }
+    domains.set(partnerId, normalized);
+  }
+  return domains;
+}
+
+export function isEmailAllowed(email, domains) {
+  if (domains === undefined) {
+    return true;
+  }
+  if (!Array.isArray(domains) || domains.length === 0) {
+    return false;
+  }
+  const normalized = normalizeAuthEmail(email);
+  return domains.some(
+    (domain) => normalized.endsWith(`@${domain}`) || normalized === domain,
+  );
+}
+
 export function parsePartnerSecrets(value) {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error("MOONGAMES_PARTNER_SECRETS must contain JSON.");

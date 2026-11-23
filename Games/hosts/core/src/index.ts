@@ -1,6 +1,7 @@
 import { hashes, verify } from "@noble/ed25519";
 import { sha256, sha512 } from "@noble/hashes/sha2.js";
 import {
+  BUNDLE_DELTA_FORMAT,
   GAME_PROTOCOL_VERSION,
   assertBundleDescriptor,
   bundleDeltaSigningPayload,
@@ -199,7 +200,7 @@ export async function verifyBundleDelta(
   adapter: HostCryptoAdapter = nobleCryptoAdapter,
 ): Promise<BundleVerification> {
   try {
-    if (delta.format !== 2) {
+    if (delta.format !== BUNDLE_DELTA_FORMAT) {
       return { ok: false, error: "Unsupported bundle delta format." };
     }
     if (!Array.isArray(delta.files) || !Array.isArray(delta.removed)) {

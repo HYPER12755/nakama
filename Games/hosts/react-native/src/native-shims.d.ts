@@ -76,7 +76,7 @@ declare module "react-native-fs" {
     DocumentDirectoryPath: string;
     CachesDirectoryPath: string;
     exists(path: string): Promise<boolean>;
-    mkdir(path: string): Promise<void>;
+    mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
     unlink(path: string): Promise<void>;
     readDir(path: string): Promise<ReadDirItem[]>;
     copyFile(from: string, to: string): Promise<void>;

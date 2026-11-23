@@ -43,6 +43,28 @@ function fail(message) {
   process.exit(1);
 }
 
+export function cacheControlFor(pathname) {
+  if (
+    pathname === "/release-manifest.json" ||
+    pathname === "/games.json" ||
+    pathname.endsWith("/index.html")
+  ) {
+    return "no-cache";
+  }
+  if (
+    pathname.endsWith(".zip") ||
+    pathname.endsWith(".bundle.json") ||
+    pathname.includes("/deltas/")
+  ) {
+    return "public, max-age=31536000, immutable";
+  }
+  return "public, max-age=3600";
+}
+
+export function etagFor(fileStat) {
+  return `W/"${fileStat.size.toString(16)}-${Math.trunc(fileStat.mtimeMs).toString(16)}"`;
+}
+
 function safePath(root, pathname) {
   let decoded;
   try {
@@ -115,9 +137,18 @@ async function main() {
         return;
       }
 
-      response.writeHead(200, {
+      const etag = etagFor(fileStat);
+      const headers = {
         "access-control-allow-origin": "*",
-        "cache-control": "no-cache",
+        "cache-control": cacheControlFor(pathname),
+        etag,
+      };
+      if (request.headers["if-none-match"] === etag) {
+        response.writeHead(304, headers).end();
+        return;
+      }
+      response.writeHead(200, {
+        ...headers,
         "content-length": fileStat.size,
         "content-type":
           MIME_TYPES.get(path.extname(file).toLowerCase()) ??
@@ -148,6 +179,11 @@ async function main() {
   });
 }
 
-main().catch((cause) => {
-  fail(cause instanceof Error ? cause.message : String(cause));
-});
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) {
+  main().catch((cause) => {
+    fail(cause instanceof Error ? cause.message : String(cause));
+  });
+}

@@ -3,7 +3,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
-import { loadSigningKey, readZipEntries } from "./lib/bundle.mjs";
+import {
+  loadSigningKey,
+  readZipEntries,
+  sha256Buffer,
+  verifyBundleDescriptor,
+} from "./lib/bundle.mjs";
 import {
   createBundleDelta,
   planDelta,
@@ -71,13 +76,24 @@ async function main() {
     targetDirectory,
     `${values.game}-${values.to}.bundle.json`,
   );
+  const signing = await loadSigningKey({
+    keyPath: path.resolve(values.key ?? DEFAULT_KEY_PATH),
+    keyId: values["key-id"],
+  });
+  const trustedKeys = { [signing.keyId]: signing.publicKey };
   const baseDescriptor = await readJson(baseDescriptorPath);
   const targetDescriptor = await readJson(targetDescriptorPath);
-  if (
-    baseDescriptor.gameId !== values.game ||
-    targetDescriptor.gameId !== values.game
-  ) {
-    fail("The release descriptors belong to a different game.");
+  for (const [descriptor, expectedVersion] of [
+    [baseDescriptor, values.from],
+    [targetDescriptor, values.to],
+  ]) {
+    const verification = verifyBundleDescriptor(descriptor, trustedKeys);
+    if (!verification.ok) {
+      fail(`${descriptor?.gameId ?? "unknown"} descriptor: ${verification.error}`);
+    }
+    if (descriptor.gameId !== values.game || descriptor.version !== expectedVersion) {
+      fail("The release descriptor does not match the requested game and version.");
+    }
   }
 
   const baseZip = await readFile(
@@ -86,6 +102,15 @@ async function main() {
   const targetZip = await readFile(
     path.join(targetDirectory, `${values.game}-${values.to}.zip`),
   );
+  for (const [descriptor, zip] of [
+    [baseDescriptor, baseZip],
+    [targetDescriptor, targetZip],
+  ]) {
+    if (zip.length !== descriptor.size || sha256Buffer(zip) !== descriptor.sha256) {
+      fail(`The ZIP bytes do not match the signed descriptor for ${descriptor.version}.`);
+    }
+  }
+
   const plan = planDelta(
     readZipEntries(baseZip),
     readZipEntries(targetZip),
@@ -94,10 +119,6 @@ async function main() {
     fail("The releases are identical; no delta is needed.");
   }
 
-  const signing = await loadSigningKey({
-    keyPath: path.resolve(values.key ?? DEFAULT_KEY_PATH),
-    keyId: values["key-id"],
-  });
   const delta = createBundleDelta({
     gameId: values.game,
     baseVersion: values.from,

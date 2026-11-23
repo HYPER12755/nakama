@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -13,6 +14,26 @@ import 'host_models.dart';
 import 'launch_context.dart';
 
 const int _gameProtocolVersion = 2;
+
+class MoonGamesHostController {
+  Future<BundleLaunch> Function()? _apply;
+
+  Future<BundleLaunch?> applyPendingUpdate() async {
+    final apply = _apply;
+    if (apply == null) {
+      return null;
+    }
+    return apply();
+  }
+
+  void _bind(Future<BundleLaunch> Function() apply) {
+    _apply = apply;
+  }
+
+  void _unbind() {
+    _apply = null;
+  }
+}
 
 class MoonGamesHost extends StatefulWidget {
   const MoonGamesHost({
@@ -33,6 +54,7 @@ class MoonGamesHost extends StatefulWidget {
     this.release,
     this.updatePolicy = const BundleUpdatePolicy(),
     this.onUpdateAvailable,
+    this.controller,
     this.onReady,
     this.onExit,
     this.onToast,
@@ -68,6 +90,7 @@ class MoonGamesHost extends StatefulWidget {
 
   final BundleUpdatePolicy updatePolicy;
   final void Function(BundleDescriptor descriptor)? onUpdateAvailable;
+  final MoonGamesHostController? controller;
 
   final void Function(BundleLaunch launch)? onReady;
   final void Function(String? reason)? onExit;
@@ -98,7 +121,22 @@ class _MoonGamesHostState extends State<MoonGamesHost>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _bundleManager = _createManager();
+    widget.controller?._bind(applyPendingUpdate);
     unawaited(_load());
+  }
+
+  Future<BundleLaunch> applyPendingUpdate() async {
+    final launch = await _bundleManager.applyPendingUpdate();
+    if (!mounted) {
+      return launch;
+    }
+    setState(() {
+      _launch = launch;
+      _loading = false;
+      _ready = false;
+      _error = null;
+    });
+    return launch;
   }
 
   BundleManager _createManager() {
@@ -118,6 +156,7 @@ class _MoonGamesHostState extends State<MoonGamesHost>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.controller?._unbind();
     unawaited(_bundleManager.dispose());
     super.dispose();
   }
@@ -160,10 +199,15 @@ class _MoonGamesHostState extends State<MoonGamesHost>
         oldWidget.hostProtocol != widget.hostProtocol ||
         oldWidget.bundledDescriptorAsset != widget.bundledDescriptorAsset ||
         oldWidget.bundledZipAsset != widget.bundledZipAsset ||
+        !_samePolicy(oldWidget.updatePolicy, widget.updatePolicy) ||
+        oldWidget.onUpdateAvailable != widget.onUpdateAvailable ||
+        oldWidget.controller != widget.controller ||
         !_sameKeys(oldWidget.trustedKeys, widget.trustedKeys);
     if (bundleChanged) {
+      oldWidget.controller?._unbind();
       unawaited(_bundleManager.dispose());
       _bundleManager = _createManager();
+      widget.controller?._bind(applyPendingUpdate);
       _controller = null;
       _launch = null;
       _error = null;
@@ -181,6 +225,12 @@ class _MoonGamesHostState extends State<MoonGamesHost>
         _post({'type': 'session', 'session': session.toJson()});
       }
     }
+  }
+
+  bool _samePolicy(BundleUpdatePolicy left, BundleUpdatePolicy right) {
+    return left.mode == right.mode &&
+        left.checkIntervalMs == right.checkIntervalMs &&
+        left.keepVersions == right.keepVersions;
   }
 
   bool _sameKeys(Map<String, String> left, Map<String, String> right) {
@@ -327,13 +377,19 @@ class _MoonGamesHostState extends State<MoonGamesHost>
       reply(false);
       return;
     }
-    final parts = path.split('/');
-    if (parts.any((part) => part == '..' || part == '.' || part.isEmpty)) {
+    if (path.isEmpty ||
+        path.contains('\\') ||
+        path.startsWith('/') ||
+        path.split('/').any((part) => part == '..' || part == '.' || part.isEmpty)) {
       reply(false);
       return;
     }
     try {
-      final file = File('${launch.directory.path}/${parts.join('/')}');
+      final file = File(p.normalize(p.join(launch.directory.path, path)));
+      if (!p.isWithin(launch.directory.path, file.path)) {
+        reply(false);
+        return;
+      }
       if (!await file.exists()) {
         reply(false);
         return;
@@ -439,6 +495,7 @@ class _MoonGamesHostState extends State<MoonGamesHost>
     }
 
     return InAppWebView(
+      key: ValueKey(launch.entryFile.path),
       initialFile: launch.entryFile.path,
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
