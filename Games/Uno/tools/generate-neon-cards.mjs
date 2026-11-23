@@ -502,6 +502,11 @@ function allWildCard(label) {
 ${neonLabel("ALL WILD", 90, 196, 14, NEON.wild)}`, NEON.wild);
 }
 
+function minimalistCard(color, label) {
+  const c = NEON[color] ?? NEON.wild;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 270" width="180" height="270" role="img"><defs><linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c[0]}"/><stop offset="1" stop-color="${c[1]}"/></linearGradient></defs><rect x="3" y="3" width="174" height="264" rx="8" fill="#0A0A0E" stroke="url(#edge)" stroke-width="6"/><circle cx="90" cy="132" r="62" fill="none" stroke="url(#edge)" stroke-width="10"/><text x="90" y="148" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="52" fill="#ffffff">${label}</text></svg>`;
+}
+
 const LIGHT_PALETTE = {
   red: ["#e8402a", "#ff8a75"],
   yellow: ["#f2c600", "#ffe680"],
@@ -801,6 +806,19 @@ for (let copy = 0; copy < 4; copy += 1) {
   writeFileSync(path.join(OUT, `modcard-${copy}.svg`), modCardArt());
   count += 1;
 }
+for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
+  for (let value = 0; value <= 9; value += 1) {
+    writeFileSync(path.join(OUT, `minimalist-${color}-${value}-0.svg`), minimalistCard(color, String(value)));
+    count += 1;
+  }
+  for (const kind of ["skip", "reverse", "draw2"]) {
+    writeFileSync(path.join(OUT, `minimalist-${color}-${kind}-0.svg`), minimalistCard(color, kind.toUpperCase()));
+    count += 1;
+  }
+}
+writeFileSync(path.join(OUT, "minimalist-wild-0.svg"), minimalistCard("wild", "WILD"));
+writeFileSync(path.join(OUT, "minimalist-wild4-0.svg"), minimalistCard("wild", "+4"));
+count += 2;
 for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
   writeFileSync(path.join(OUT, `${color}-swap1-0.svg`), swap1Card(color, 0));
   writeFileSync(path.join(OUT, `${color}-refreshhand-0.svg`), refreshHandCard(color, 0));

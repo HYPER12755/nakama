@@ -17,6 +17,7 @@ export const UNO_MODE = {
   SHOWDOWN: "showdown",
   POWER_GRAB: "powerGrab",
   MOD: "mod",
+  MINIMALIST: "minimalist",
 } as const;
 
 export const UNO_MODES: readonly GameMode[] = [
@@ -36,6 +37,7 @@ export const UNO_MODES: readonly GameMode[] = [
   UNO_MODE.SHOWDOWN,
   UNO_MODE.POWER_GRAB,
   UNO_MODE.MOD,
+  UNO_MODE.MINIMALIST,
 ];
 
 export const JUMP_WINDOW_MS = 1800;

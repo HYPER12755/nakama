@@ -151,4 +151,8 @@ describe("Uno stress simulation", () => {
   it("finishes 100 seeds across 2, 3 and 4 seats in mod mode", async () => {
     await runMode("mod");
   }, 60000);
+
+  it("finishes 100 seeds across 2, 3 and 4 seats in minimalist mode", async () => {
+    await runMode("minimalist");
+  }, 60000);
 });

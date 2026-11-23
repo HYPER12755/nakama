@@ -390,6 +390,18 @@ captured by the standard play entry's `color`.
   (the actor is one participant); Pass Hands and Refresh Hand need no target.
   Every new wild carries a legal `chosenColor`, so automated play never stalls.
 
+## Minimalist
+
+Minimalist is a visual edition of classic UNO with a 112-card deck: 76
+numbered cards, eight Draw Two, eight Reverse, eight Skip, eight Wild and four
+Wild Draw Four. It is available locally and in private/quick online matches as
+mode string `minimalist` (core `UNO_MODE.MINIMALIST`, Lua `RULES_MODES`).
+
+All classic matching, action, Wild Draw Four challenge and scoring rules apply.
+The only difference is the deck composition and the purpose-built Minimalist
+card art; every card ID is prefixed `minimalist-` so both art sets can render
+the unique look.
+
 ## Mod
 
 Mod uses a 112-card deck: the classic 108 cards plus four MOD wild cards. It is

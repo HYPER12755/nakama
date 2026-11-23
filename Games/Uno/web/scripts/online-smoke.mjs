@@ -1708,6 +1708,55 @@ async function modBattle() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "mod game over", STATE_TIMEOUT_MS);
 }
 
+async function minimalistBattle() {
+  const alice = await authenticate("minimalist-alice");
+  const bob = await authenticate("minimalist-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 2,
+    rulesMode: "minimalist",
+  });
+  assert(
+    created?.ok === true && created.rulesMode === "minimalist" && typeof created.matchId === "string",
+    `minimalist room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
+  const aliceStart = await waitState(
+    alice.socket,
+    "minimalist alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "minimalist bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "minimalist", "minimalist mode must reach alice");
+  assert(bobStart.data.rulesMode === "minimalist", "minimalist mode must reach bob");
+  assert(aliceStart.data.deckCount === 97, "minimalist should carry 112 cards");
+  assert(
+    legalCardIds(aliceStart.data).every((id) => id.startsWith("minimalist-")),
+    "minimalist deck uses its own art IDs",
+  );
+  console.log("[ok] minimalist private room reports rulesMode and a 112-card deck");
+
+  const legal = legalCardIds(aliceStart.data);
+  const card = legal.find((id) => !String(id).includes("wild")) ?? legal[0];
+  const chosenColor = String(card).includes("wild") ? "green" : undefined;
+  await send(alice, matchId, OP.PLAY_REQUEST, { cardId: card, ...(chosenColor === undefined ? {} : { chosenColor }) });
+  await waitState(
+    bob.socket,
+    "minimalist play",
+    (state) => state.topCard?.id === card,
+  );
+  console.log("[ok] Minimalist uses authoritative classic play with its own art");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "minimalist game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -1745,6 +1794,7 @@ async function main() {
     await showdownBattle();
     await powerGrabBattle();
     await modBattle();
+    await minimalistBattle();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

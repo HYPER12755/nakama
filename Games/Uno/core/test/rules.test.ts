@@ -732,6 +732,23 @@ describe("Uno Progressive house rule", () => {
 
 });
 
+describe("Uno Minimalist", () => {
+  it("builds a 112-card Minimalist deck", () => {
+    const deck = buildDeck("minimalist");
+    expect(deck).toHaveLength(112);
+    expect(deck.filter((card) => card.kind === "wild")).toHaveLength(8);
+    expect(deck.filter((card) => card.kind === "wild4")).toHaveLength(4);
+    expect(deck.every((card) => card.id.startsWith("minimalist-"))).toBe(true);
+  });
+
+  it("uses classic matching and challenge rules", () => {
+    const game = stagedGame([], "blue", "minimalist");
+    expect(canPlay(game, { id: "minimalist-red-5-0", color: "red", kind: "number", value: 5 })).toBe(false);
+    expect(canPlay(game, { id: "minimalist-blue-5-0", color: "blue", kind: "number", value: 5 })).toBe(true);
+    expect(isGameMode("minimalist")).toBe(true);
+  });
+});
+
 describe("Uno Mod", () => {
   const modCard: Card = { id: "modcard-0", color: null, kind: "modCard" };
 

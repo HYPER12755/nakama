@@ -2994,6 +2994,22 @@ test("mod gives a chosen colour away around the table", function()
   assert_equal(#played.players[3].hand, 1, "third player gets one")
 end)
 
+test("builds a 112 card minimalist deck", function()
+  local deck = rules.build_deck("minimalist")
+  assert_equal(#deck, 112, "deck size")
+  local wilds = 0
+  local wild_fours = 0
+  local prefixed = 0
+  for _, card in ipairs(deck) do
+    if card.kind == "wild" then wilds = wilds + 1 end
+    if card.kind == "wild4" then wild_fours = wild_fours + 1 end
+    if card.id:find("^minimalist-") ~= nil then prefixed = prefixed + 1 end
+  end
+  assert_equal(wilds, 8, "wild count")
+  assert_equal(wild_fours, 4, "wild four count")
+  assert_equal(prefixed, 112, "minimalist ids")
+end)
+
 test("scores swap pack colour actions at 20 and wild actions at 50", function()
   assert_equal(rules.score_hand({ swap_one, refresh_hand }), 40, "colour action score")
   assert_equal(rules.score_hand({ force_trade, pass_hands }), 100, "wild action score")

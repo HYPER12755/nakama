@@ -26,7 +26,8 @@ export type GameMode =
   | "dare"
   | "showdown"
   | "powerGrab"
-  | "mod";
+  | "mod"
+  | "minimalist";
 
 export type CardKind =
   | "number"

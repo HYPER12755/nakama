@@ -21,6 +21,7 @@ describe("Uno rules mode", () => {
     expect(rulesModeLabel("showdown")).toBe("Showdown");
     expect(rulesModeLabel("powerGrab")).toBe("Power Grab");
     expect(rulesModeLabel("mod")).toBe("Mod");
+    expect(rulesModeLabel("minimalist")).toBe("Minimalist");
     expect(rulesModeLabel(undefined)).toBe("Classic");
   });
 
@@ -38,6 +39,7 @@ describe("Uno rules mode", () => {
     expect(RULES_MODES as string[]).toContain("showdown");
     expect(RULES_MODES as string[]).toContain("powerGrab");
     expect(RULES_MODES as string[]).toContain("mod");
+    expect(RULES_MODES as string[]).toContain("minimalist");
     expect(new Set(RULES_MODES).size).toBe(RULES_MODES.length);
   });
 
@@ -170,6 +172,16 @@ describe("Uno rules mode", () => {
       { id: "ai1", name: "Computer" },
     ], 0, "mod");
     expect(viewFromCore(state, "local").rulesMode).toBe("mod");
+  });
+
+  it("normalizes and reads Minimalist", () => {
+    expect(normalizeView({ rulesMode: "minimalist" }, null).mode).toBe("minimalist");
+    expect(normalizeView({ mode: "minimalist" }, null).mode).toBe("minimalist");
+    const state = createGame(7, [
+      { id: "local", name: "You" },
+      { id: "ai1", name: "Computer" },
+    ], 0, "minimalist");
+    expect(viewFromCore(state, "local").rulesMode).toBe("minimalist");
   });
 
   it("exposes the controller rules shape and forwards a target", () => {

@@ -445,6 +445,11 @@ function allWildCard(label) {
 <text x="90" y="196" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="800" fill="#ffffff" stroke="#e8402a" stroke-width="4" paint-order="stroke">ALL WILD</text>`);
 }
 
+function minimalistCard(color, label) {
+  const fill = COLORS[color];
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 270" width="180" height="270" role="img"><rect x="3" y="3" width="174" height="264" rx="8" fill="#fafafa" stroke="${fill}" stroke-width="6"/><circle cx="90" cy="132" r="62" fill="${fill}"/><text x="90" y="150" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="52" fill="#ffffff">${label}</text><text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#111827">MINIMALIST ${color}</text></svg>`;
+}
+
 const LIGHT_PALETTE = {
   red: [COLORS.red, "#ff8a75"],
   yellow: [COLORS.yellow, "#ffe680"],
@@ -736,6 +741,19 @@ for (let copy = 0; copy < 4; copy += 1) {
   writeFileSync(path.join(OUT, `modcard-${copy}.svg`), modCardArt());
   count += 1;
 }
+for (const color of Object.keys(COLORS)) {
+  for (let value = 0; value <= 9; value += 1) {
+    writeFileSync(path.join(OUT, `minimalist-${color}-${value}-0.svg`), minimalistCard(color, String(value)));
+    count += 1;
+  }
+  for (const kind of ["skip", "reverse", "draw2"]) {
+    writeFileSync(path.join(OUT, `minimalist-${color}-${kind}-0.svg`), minimalistCard(color, kind.toUpperCase()));
+    count += 1;
+  }
+}
+writeFileSync(path.join(OUT, "minimalist-wild-0.svg"), minimalistCard("red", "WILD"));
+writeFileSync(path.join(OUT, "minimalist-wild4-0.svg"), minimalistCard("red", "+4"));
+count += 2;
 for (const color of Object.keys(COLORS)) {
   writeFileSync(path.join(OUT, `${color}-swap1-0.svg`), swap1Card(color, 0));
   writeFileSync(path.join(OUT, `${color}-refreshhand-0.svg`), refreshHandCard(color, 0));

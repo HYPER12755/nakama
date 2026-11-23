@@ -481,7 +481,44 @@ local function build_dare_deck()
   return deck
 end
 
+local function build_minimalist_deck()
+  local deck = {}
+  for _, color in ipairs(protocol.COLORS) do
+    for value = 0, 9 do
+      local copies = value == 0 and 1 or 2
+      for copy_index = 0, copies - 1 do
+        deck[#deck + 1] = {
+          id = string.format("minimalist-%s-%d-%d", color, value, copy_index),
+          color = color, kind = "number", value = value,
+        }
+      end
+    end
+    for _, kind in ipairs({ "skip", "reverse", "draw2" }) do
+      for copy_index = 0, 1 do
+        deck[#deck + 1] = {
+          id = string.format("minimalist-%s-%s-%d", color, kind, copy_index),
+          color = color, kind = kind,
+        }
+      end
+    end
+  end
+  for copy_index = 0, 7 do
+    deck[#deck + 1] = {
+      id = string.format("minimalist-wild-%d", copy_index), color = nil, kind = "wild",
+    }
+  end
+  for copy_index = 0, 3 do
+    deck[#deck + 1] = {
+      id = string.format("minimalist-wild4-%d", copy_index), color = nil, kind = "wild4",
+    }
+  end
+  return deck
+end
+
 function rules.build_deck(mode)
+  if mode == "minimalist" then
+    return build_minimalist_deck()
+  end
   if mode == "mod" then
     local deck = {}
     local classic = rules.build_deck("classic")

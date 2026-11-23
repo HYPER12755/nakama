@@ -209,6 +209,7 @@ export function UnoBoardStage({
         : cardId.startsWith("wildgrabtower-") ? "wildgrabtower-0"
         : cardId.startsWith("modcard-") ? "modcard-0"
           : cardId.includes("-showdown-") ? `${cardId.slice(0, cardId.indexOf("-showdown-"))}-showdown-0`
+          : cardId.startsWith("minimalist-") ? cardId.replace(/-\d+$/, "-0")
             : cardId;
     return cardSet === "neon" ? `cards-neon/${assetId}.svg` : `cards/${assetId}.svg`;
   };

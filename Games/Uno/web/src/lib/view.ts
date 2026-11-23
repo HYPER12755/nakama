@@ -27,6 +27,7 @@ export const DARE_MODE: RulesMode = UNO_MODE.DARE;
 export const SHOWDOWN_MODE: RulesMode = UNO_MODE.SHOWDOWN;
 export const POWER_GRAB_MODE: RulesMode = UNO_MODE.POWER_GRAB;
 export const MOD_MODE: RulesMode = UNO_MODE.MOD;
+export const MINIMALIST_MODE: RulesMode = UNO_MODE.MINIMALIST;
 
 const JUMP_IN_ALIASES = ["jumpIn", "jump_in", "jump-in", "jumpin"];
 const NO_MERCY_ALIASES = ["noMercy", "no_mercy", "no-mercy", "nomercy"];
@@ -88,6 +89,9 @@ export function rulesModeLabel(mode: RulesMode | undefined): string {
   }
   if (value === MOD_MODE) {
     return "Mod";
+  }
+  if (value === MINIMALIST_MODE) {
+    return "Minimalist";
   }
   return value === "sevenO" ? "Seven-O" : "Classic";
 }

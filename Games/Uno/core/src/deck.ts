@@ -177,6 +177,31 @@ export function buildDeck(mode: GameMode = "classic"): Card[] {
     }
     return deck;
   }
+  if (mode === "minimalist") {
+    const deck: Card[] = [];
+    for (const color of COLORS) {
+      for (let value = 0; value <= 9; value += 1) {
+        const count = value === 0 ? 1 : 2;
+        for (let copy = 0; copy < count; copy += 1) {
+          const base = { color, kind: "number" as const, value };
+          deck.push({ id: `minimalist-${cardId(base)}-${copy}`, ...base });
+        }
+      }
+      for (const kind of ["skip", "reverse", "draw2"] as const) {
+        for (let copy = 0; copy < 2; copy += 1) {
+          const base = { color, kind };
+          deck.push({ id: `minimalist-${cardId(base)}-${copy}`, ...base });
+        }
+      }
+    }
+    for (let copy = 0; copy < 8; copy += 1) {
+      deck.push({ id: `minimalist-wild-${copy}`, color: null, kind: "wild" });
+    }
+    for (let copy = 0; copy < 4; copy += 1) {
+      deck.push({ id: `minimalist-wild4-${copy}`, color: null, kind: "wild4" });
+    }
+    return deck;
+  }
   const deck: Card[] = [];
   for (const color of COLORS) {
     for (let value = 0; value <= 9; value += 1) {
