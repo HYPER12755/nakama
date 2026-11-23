@@ -183,6 +183,7 @@ local function state_payload(state, viewer_id)
     speedLevel = game ~= nil and game.speed_level or 1,
     speedPlayed = game ~= nil and game.speed_played or 0,
     speedTarget = game ~= nil and game.speed_target or 1,
+    powerTowers = game ~= nil and game.power_towers or { U = nil, N = nil, O = nil, ["!"] = nil },
     players = {},
     spectators = {},
     chat = state.chat,

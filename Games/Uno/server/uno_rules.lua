@@ -23,7 +23,7 @@ local WILD_KINDS = {
   wildStack3 = true, wildStackNumber = true, wildDoubleSpeed = true,
   awWild = true, awReverse = true, awSkip = true, awSkipTwo = true,
   awDrawTwo = true, awDrawFour = true, awTargetDrawTwo = true, awForcedSwap = true,
-  wildDare = true, wildShowdown = true,
+  wildDare = true, wildShowdown = true, wildGrabTower = true,
 }
 local WILD_COLOR_KINDS = {
   wild = true, wild4 = true, wildAttack = true, wildDraw6 = true,
@@ -31,7 +31,7 @@ local WILD_COLOR_KINDS = {
   wildForceTrade = true, wildPassHands = true,
   wildPowerReverse = true, wildNoU = true,
   wildStack3 = true, wildStackNumber = true, wildDoubleSpeed = true, wildDare = true,
-  wildShowdown = true,
+  wildShowdown = true, wildGrabTower = true,
 }
 
 local STACK_PACK_KINDS = {
@@ -374,6 +374,45 @@ local function build_stack_pack_deck()
   return deck
 end
 
+local function build_power_grab_deck()
+  local deck = {}
+  local powers = { "U", "N", "O", "!" }
+  for _, color in ipairs(protocol.COLORS) do
+    for value = 1, 9 do
+      for copy_index = 0, 1 do
+        local power = value <= 4 and powers[((value - 1) % 4) + 1] or nil
+        deck[#deck + 1] = {
+          id = string.format("%s-%d-%d", color, value, copy_index),
+          color = color, kind = "number", value = value, power = power,
+        }
+      end
+    end
+    for _, kind in ipairs({ "draw1", "draw2", "skip" }) do
+      for copy_index = 0, 1 do
+        deck[#deck + 1] = {
+          id = string.format("%s-%s-%d", color, kind, copy_index),
+          color = color, kind = kind,
+        }
+      end
+    end
+    for _, kind in ipairs({ "reverse", "grab2Towers" }) do
+      deck[#deck + 1] = {
+        id = string.format("%s-%s-0", color, kind),
+        color = color, kind = kind,
+      }
+    end
+  end
+  for _, kind in ipairs({ "wildGrabTower", "wild4" }) do
+    local kind_id = kind == "wildGrabTower" and "wildgrabtower" or "wild4"
+    for copy_index = 0, 3 do
+      deck[#deck + 1] = {
+        id = string.format("%s-%d", kind_id, copy_index), color = nil, kind = kind,
+      }
+    end
+  end
+  return deck
+end
+
 local function build_showdown_deck()
   local deck = {}
   for _, color in ipairs(protocol.COLORS) do
@@ -451,6 +490,9 @@ function rules.build_deck(mode)
   end
   if mode == "showdown" then
     return build_showdown_deck()
+  end
+  if mode == "powerGrab" then
+    return build_power_grab_deck()
   end
   if mode == "flip" then
     return build_flip_deck()
@@ -885,7 +927,8 @@ function rules.create_game(seed, players, now, mode)
     or (rules_mode == "speedPack" and starter.kind == "wildDoubleSpeed")
     or (rules_mode == "allWild" and WILD_KINDS[starter.kind] == true)
     or (rules_mode == "dare" and starter.kind == "wildDare")
-    or (rules_mode == "showdown" and starter.kind == "wildShowdown") then
+    or (rules_mode == "showdown" and starter.kind == "wildShowdown")
+    or (rules_mode == "powerGrab" and starter.kind == "wildGrabTower") then
     starter.color = most_common_color(dealt[1].hand, rules.colors_for_side("light"))
   end
 
@@ -918,6 +961,7 @@ function rules.create_game(seed, players, now, mode)
     speed_level = 1,
     speed_played = 0,
     speed_target = 1,
+    power_towers = { U = nil, N = nil, O = nil, ["!"] = nil },
     seed = state_seed,
     draw_pile = deck,
     discard = { starter },
@@ -1074,6 +1118,43 @@ next_active_index = function(state, from)
     index = ((index - 1 + state.direction + count * 4) % count) + 1
   end
   return from
+end
+
+local function claim_tower(state, tower, player_id)
+  state.power_towers[tower] = player_id
+  local owned = true
+  for _, candidate in ipairs({ "U", "N", "O", "!" }) do
+    if state.power_towers[candidate] ~= player_id then
+      owned = false
+    end
+  end
+  if not owned then return end
+  local player
+  for _, candidate in ipairs(state.players) do
+    if candidate.id == player_id then
+      player = candidate
+      break
+    end
+  end
+  state.power_towers = { U = nil, N = nil, O = nil, ["!"] = nil }
+  if player == nil or #player.hand == 0 then return end
+  local kept = player.hand[1]
+  for _, card in ipairs(player.hand) do
+    local kept_value = kept.kind == "number" and (kept.value or 0) or 20
+    local card_value = card.kind == "number" and (card.value or 0) or 20
+    if card_value > kept_value then kept = card end
+  end
+  player.hand = { kept }
+  state.events[#state.events + 1] = {
+    type = "instantUno", player_id = player_id, card_id = kept.id, at = #state.events,
+  }
+  state.replay[#state.replay + 1] = {
+    player_id = player_id, action = "instantUno", card_id = kept.id,
+  }
+end
+
+local function tower_owner(state, tower, player_id)
+  return state.power_towers[tower] == player_id
 end
 
 local function advance(state, steps)
@@ -2077,9 +2158,12 @@ function rules.apply_action(previous, action, now)
   state.drawn_card_id = nil
   if action.chosen_color ~= nil then
     state.current_color = action.chosen_color
-  elseif (state.mode == "attack" or state.mode == "noMercy") and card.color ~= nil
-    and card.kind ~= "draw4" then
+  elseif (state.mode == "attack" or state.mode == "noMercy" or state.mode == "powerGrab")
+    and card.color ~= nil and card.kind ~= "draw4" then
     state.current_color = card.color
+  end
+  if state.mode == "powerGrab" and card.power ~= nil then
+    claim_tower(state, card.power, actor.id)
   end
   if (state.mode == "attack" or state.mode == "noMercy") and card.kind == "discardAll" and card.color ~= nil then
     local kept = {}
@@ -2300,7 +2384,17 @@ function rules.apply_action(previous, action, now)
     end
     advance(state, 1)
   elseif card.kind == "skip" then
-    advance(state, 2)
+    if state.mode == "powerGrab" and tower_owner(state, "!", next_player.id) then
+      state.events[#state.events + 1] = {
+        type = "towerBlock", player_id = next_player.id, text = "!", at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = next_player.id, action = "towerBlock", text = "!",
+      }
+      advance(state, 1)
+    else
+      advance(state, 2)
+    end
   elseif card.kind == "reverse" then
     if #rules.active_players(state) == 2 then
       advance(state, 2)
@@ -2327,6 +2421,14 @@ function rules.apply_action(previous, action, now)
       advance(state, 1)
     elseif no_mercy then
       start_no_mercy_stack(state, card, actor, next_player.id, action.chosen_color)
+    elseif state.mode == "powerGrab" and tower_owner(state, "N", next_player.id) then
+      state.events[#state.events + 1] = {
+        type = "towerBlock", player_id = next_player.id, text = "N", at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = next_player.id, action = "towerBlock", text = "N",
+      }
+      advance(state, 1)
     else
       draw_cards(state, next_player, rules.DRAW_TWO_AMOUNT)
       advance(state, 2)
@@ -2336,8 +2438,19 @@ function rules.apply_action(previous, action, now)
       end
     end
   elseif card.kind == "draw1" or card.kind == "draw5" then
-    draw_cards(state, next_player, card.kind == "draw1" and 1 or 5)
-    advance(state, 2)
+    if state.mode == "powerGrab" and card.kind == "draw1"
+      and tower_owner(state, "U", next_player.id) then
+      state.events[#state.events + 1] = {
+        type = "towerBlock", player_id = next_player.id, text = "U", at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = next_player.id, action = "towerBlock", text = "U",
+      }
+      advance(state, 1)
+    else
+      draw_cards(state, next_player, card.kind == "draw1" and 1 or 5)
+      advance(state, 2)
+    end
     if #actor.hand == 0 then
       state.finished = true
       state.winner = actor.id
@@ -2400,7 +2513,51 @@ function rules.apply_action(previous, action, now)
       amount = 0,
       color = action.chosen_color,
     }
+  elseif card.kind == "grab2Towers" then
+    if state.mode == "powerGrab" then
+      local requested = action.tower_id or action.towerId or "U"
+      claim_tower(state, requested, actor.id)
+      local second = requested
+      for _, tower in ipairs({ "U", "N", "O", "!" }) do
+        if state.power_towers[tower] ~= actor.id then
+          second = tower
+          break
+        end
+      end
+      claim_tower(state, second, actor.id)
+      state.events[#state.events + 1] = {
+        type = "grabTowers", player_id = actor.id, card_id = card.id,
+        text = requested .. ":" .. second, at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = actor.id, action = "grabTowers", card_id = card.id,
+        text = requested .. ":" .. second,
+      }
+    end
+    advance(state, 1)
+  elseif card.kind == "wildGrabTower" then
+    if state.mode == "powerGrab" then
+      local tower = action.tower_id or action.towerId or "U"
+      claim_tower(state, tower, actor.id)
+      state.events[#state.events + 1] = {
+        type = "grabTower", player_id = actor.id, card_id = card.id,
+        text = tower, at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = actor.id, action = "grabTower", card_id = card.id, text = tower,
+      }
+    end
+    advance(state, 1)
   elseif card.kind == "wild4" then
+    if state.mode == "powerGrab" and tower_owner(state, "O", next_player.id) then
+      state.events[#state.events + 1] = {
+        type = "towerBlock", player_id = next_player.id, text = "O", at = #state.events,
+      }
+      state.replay[#state.replay + 1] = {
+        player_id = next_player.id, action = "towerBlock", text = "O",
+      }
+      advance(state, 1)
+    else
     state.pending_challenge = {
       owner_id = actor.id,
       target_id = next_player.id,
@@ -2423,6 +2580,7 @@ function rules.apply_action(previous, action, now)
       if #actor.hand == 0 then
         state.pending_stack.pending_winner_id = actor.id
       end
+    end
     end
   elseif card.kind == "swap1" then
     if swap1_target ~= nil and swap1_give ~= nil then

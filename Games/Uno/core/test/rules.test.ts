@@ -732,6 +732,63 @@ describe("Uno Progressive house rule", () => {
 
 });
 
+describe("Uno Power Grab", () => {
+  const powerCard: Card = { id: "red-1-0", color: "red", kind: "number", value: 1, power: "U" };
+  const drawTwo: Card = { id: "red-draw2-0", color: "red", kind: "draw2" };
+  const grabTwo: Card = { id: "red-grab2towers-0", color: "red", kind: "grab2Towers" };
+  const wildGrab: Card = { id: "wildgrabtower-0", color: null, kind: "wildGrabTower" };
+
+  it("builds a 112-card Power Grab deck with 32 power icons", () => {
+    const deck = buildDeck("powerGrab");
+    expect(deck).toHaveLength(112);
+    expect(deck.filter((card) => card.power !== undefined)).toHaveLength(32);
+    expect(deck.filter((card) => card.kind === "grab2Towers")).toHaveLength(4);
+    expect(deck.filter((card) => card.kind === "wildGrabTower")).toHaveLength(4);
+  });
+
+  it("claims a tower when a power icon is played", () => {
+    const game = stagedGame([powerCard], "red", "powerGrab");
+    const played = applyAction(game, { type: "play", playerId: "p1", cardId: powerCard.id });
+    expect(played.state.powerTowers.U).toBe("p1");
+    expect(played.state.currentColor).toBe("red");
+  });
+
+  it("blocks a Draw Two for a player holding the N tower", () => {
+    const game = stagedGame([drawTwo], "red", "powerGrab");
+    game.powerTowers.N = "p2";
+    const before = game.players[1].hand.length;
+    const played = applyAction(game, { type: "play", playerId: "p1", cardId: drawTwo.id });
+    expect(played.state.players[1].hand).toHaveLength(before);
+    expect(played.state.events.at(-1)?.type).toBe("towerBlock");
+    expect(played.state.turn).toBe(1);
+  });
+
+  it("grabs two towers and chooses a tower with Wild Grab", () => {
+    const game = stagedGame([grabTwo, wildGrab], "red", "powerGrab");
+    const grabbed = applyAction(game, {
+      type: "play", playerId: "p1", cardId: grabTwo.id, towerId: "U",
+    });
+    expect(grabbed.state.powerTowers.U).toBe("p1");
+    expect(Object.values(grabbed.state.powerTowers).filter((owner) => owner === "p1")).toHaveLength(2);
+    grabbed.state.turn = 0;
+    const wild = applyAction(grabbed.state, {
+      type: "play", playerId: "p1", cardId: wildGrab.id, chosenColor: "green", towerId: "O",
+    });
+    expect(wild.ok).toBe(true);
+    expect(wild.state.powerTowers.O).toBe("p1");
+  });
+
+  it("triggers Instant UNO when all four towers are claimed", () => {
+    const game = stagedGame([powerCard], "red", "powerGrab");
+    game.players[0].hand = [powerCard, { id: "blue-9-0", color: "blue", kind: "number", value: 9 }];
+    game.powerTowers = { U: "p1", N: "p1", O: "p1", "!": "p1" };
+    const played = applyAction(game, { type: "play", playerId: "p1", cardId: powerCard.id });
+    expect(played.state.players[0].hand).toHaveLength(1);
+    expect(played.state.powerTowers.U).toBeNull();
+    expect(played.state.events.some((entry) => entry.type === "instantUno")).toBe(true);
+  });
+});
+
 describe("Uno Showdown", () => {
   const showdownNumber: Card = { id: "red-showdown-3-0", color: "red", kind: "showdownNumber", value: 3 };
   const wildShowdown: Card = { id: "wildshowdown-0", color: null, kind: "wildShowdown" };

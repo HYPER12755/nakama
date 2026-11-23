@@ -2847,6 +2847,97 @@ test("wild showdown chooses a target and penalty", function()
   assert_equal(event.text, "p3:3", "event text")
 end)
 
+local function power_staged(hand, color, seats, seed)
+  local names = { "p1", "p2", "p3" }
+  local seat_list = {}
+  for index = 1, (seats or 3) do
+    seat_list[index] = { id = names[index], name = names[index] }
+  end
+  local game = rules.create_game(seed or 4242, seat_list, 0, "powerGrab")
+  game.turn = 1
+  game.direction = 1
+  game.current_color = color or "red"
+  game.drawn_card_id = nil
+  game.pending_challenge = nil
+  game.pending_stack = nil
+  game.pending_hit = nil
+  game.pending_roulette = nil
+  game.finished = false
+  game.winner = nil
+  game.events = {}
+  game.replay = {}
+  game.players[1].hand = hand
+  for index = 2, #game.players do
+    game.players[index].hand = {}
+  end
+  return game
+end
+
+local power_card = { id = "red-1-0", color = "red", kind = "number", value = 1, power = "U" }
+local power_draw_two = { id = "red-draw2-0", color = "red", kind = "draw2" }
+local grab_two_towers = { id = "red-grab2towers-0", color = "red", kind = "grab2Towers" }
+local wild_grab_tower = { id = "wildgrabtower-0", color = nil, kind = "wildGrabTower" }
+
+test("builds a 112 card power grab deck with power icons", function()
+  local deck = rules.build_deck("powerGrab")
+  assert_equal(#deck, 112, "deck size")
+  local powered = 0
+  local grabs = 0
+  local wild_grabs = 0
+  for _, card in ipairs(deck) do
+    if card.power ~= nil then powered = powered + 1 end
+    if card.kind == "grab2Towers" then grabs = grabs + 1 end
+    if card.kind == "wildGrabTower" then wild_grabs = wild_grabs + 1 end
+  end
+  assert_equal(powered, 32, "power icons")
+  assert_equal(grabs, 4, "grab two count")
+  assert_equal(wild_grabs, 4, "wild grab count")
+end)
+
+test("power icon claims a tower", function()
+  local game = power_staged({ power_card }, "red", 3, 4242)
+  local played, ok = rules.apply_action(game, { type = "play", player_id = "p1", card_id = power_card.id })
+  assert_equal(ok, true, "played")
+  assert_equal(played.power_towers.U, "p1", "tower owner")
+end)
+
+test("N tower blocks a draw two", function()
+  local game = power_staged({ power_draw_two }, "red", 3, 4242)
+  game.power_towers.N = "p2"
+  local before = #game.players[2].hand
+  local played, ok = rules.apply_action(game, { type = "play", player_id = "p1", card_id = power_draw_two.id })
+  assert_equal(ok, true, "played")
+  assert_equal(#played.players[2].hand, before, "no draw")
+  assert_equal(played.turn, 2, "turn")
+end)
+
+test("grab two towers claims two towers", function()
+  local game = power_staged({ grab_two_towers }, "red", 3, 4242)
+  local played, ok = rules.apply_action(game, {
+    type = "play", player_id = "p1", card_id = grab_two_towers.id, tower_id = "U",
+  })
+  assert_equal(ok, true, "played")
+  local owned = 0
+  for _, tower in ipairs({ "U", "N", "O", "!" }) do
+    if played.power_towers[tower] == "p1" then owned = owned + 1 end
+  end
+  assert_equal(owned, 2, "two towers")
+end)
+
+test("collecting all towers triggers instant uno", function()
+  local game = power_staged({
+    power_card, { id = "blue-9-0", color = "blue", kind = "number", value = 9 },
+  }, "red", 3, 4242)
+  game.power_towers.U = "p1"
+  game.power_towers.N = "p1"
+  game.power_towers.O = "p1"
+  game.power_towers["!"] = "p1"
+  local played, ok = rules.apply_action(game, { type = "play", player_id = "p1", card_id = power_card.id })
+  assert_equal(ok, true, "played")
+  assert_equal(#played.players[1].hand, 1, "one card kept")
+  assert_equal(played.power_towers.U, nil, "towers reset")
+end)
+
 test("scores swap pack colour actions at 20 and wild actions at 50", function()
   assert_equal(rules.score_hand({ swap_one, refresh_hand }), 40, "colour action score")
   assert_equal(rules.score_hand({ force_trade, pass_hands }), 100, "wild action score")

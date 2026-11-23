@@ -54,6 +54,8 @@ export function cardId(card: Omit<Card, "id">): string {
   if (card.kind === "dareList") return "darelist";
   if (card.kind === "showdownNumber") return `${card.color}-showdown-${card.value ?? 0}`;
   if (card.kind === "wildShowdown") return "wildshowdown";
+  if (card.kind === "grab2Towers") return `${card.color}-grab2towers`;
+  if (card.kind === "wildGrabTower") return "wildgrabtower";
   if (card.kind === "stack1") return `${card.color}-stack1`;
   if (card.kind === "stack2") return `${card.color}-stack2`;
   if (card.kind === "reverseDraw2") return `${card.color}-reversedraw2`;
@@ -204,6 +206,36 @@ export function buildDeck(mode: GameMode = "classic"): Card[] {
       }
     }
     for (const kind of ["wildPowerReverse", "wildNoU"] as const) {
+      for (let copy = 0; copy < 4; copy += 1) {
+        const base = { color: null, kind };
+        deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+      }
+    }
+    return deck;
+  }
+  if (mode === "powerGrab") {
+    const deck: Card[] = [];
+    const powers: Card["power"][] = ["U", "N", "O", "!"];
+    for (const color of COLORS) {
+      for (let value = 1; value <= 9; value += 1) {
+        for (let copy = 0; copy < 2; copy += 1) {
+          const power = value <= 4 ? powers[(value - 1) % powers.length] : undefined;
+          const base = { color, kind: "number" as const, value, ...(power === undefined ? {} : { power }) };
+          deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+        }
+      }
+      for (const kind of ["draw1", "draw2", "skip"] as const) {
+        for (let copy = 0; copy < 2; copy += 1) {
+          const base = { color, kind };
+          deck.push({ id: `${cardId(base)}-${copy}`, ...base });
+        }
+      }
+      for (const kind of ["reverse", "grab2Towers"] as const) {
+        const base = { color, kind };
+        deck.push({ id: `${cardId(base)}-0`, ...base });
+      }
+    }
+    for (const kind of ["wildGrabTower", "wild4"] as const) {
       for (let copy = 0; copy < 4; copy += 1) {
         const base = { color: null, kind };
         deck.push({ id: `${cardId(base)}-${copy}`, ...base });

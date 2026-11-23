@@ -16,6 +16,7 @@ import {
   type MoveResult,
   type PendingStack,
   type Player,
+  type PowerTower,
   type StartingRule,
   type UnoErrorCode,
 } from "./types";
@@ -25,13 +26,13 @@ const NO_MERCY_WILD_KINDS: CardKind[] = [
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands", "wildPowerReverse", "wildNoU",
   "wildStack3", "wildStackNumber", "wildDoubleSpeed",
   "awWild", "awReverse", "awSkip", "awSkipTwo", "awDrawTwo", "awDrawFour",
-  "awTargetDrawTwo", "awForcedSwap", "wildDare", "wildShowdown",
+  "awTargetDrawTwo", "awForcedSwap", "wildDare", "wildShowdown", "wildGrabTower",
 ];
 
 const WILD_COLOR_KINDS: CardKind[] = [
   "wild", "wild4", "wildAttack", "wildDraw6", "wildDraw10", "wildReverse4",
   "wildDraw2", "wildDrawColor", "wildForceTrade", "wildPassHands", "wildPowerReverse", "wildNoU",
-  "wildStack3", "wildStackNumber", "wildDoubleSpeed", "wildDare", "wildShowdown",
+  "wildStack3", "wildStackNumber", "wildDoubleSpeed", "wildDare", "wildShowdown", "wildGrabTower",
 ];
 
 const STACK_PACK_KINDS: CardKind[] = ["stack1", "stack2", "wildStack3", "wildStackNumber"];
@@ -251,7 +252,8 @@ export function createGame(
     || (rulesMode === UNO_MODE.STACK_PACK
       && (starter.kind === "wildStack3" || starter.kind === "wildStackNumber"))
     || (rulesMode === UNO_MODE.SPEED_PACK && starter.kind === "wildDoubleSpeed")
-    || (rulesMode === UNO_MODE.ALL_WILD && NO_MERCY_WILD_KINDS.includes(starter.kind))) {
+    || (rulesMode === UNO_MODE.ALL_WILD && NO_MERCY_WILD_KINDS.includes(starter.kind))
+    || (rulesMode === UNO_MODE.POWER_GRAB && starter.kind === "wildGrabTower")) {
     starter.color = mostCommonColor(dealt[0].hand, colorsForSide("light"));
   }
   const color = starter.color;
@@ -305,6 +307,7 @@ export function createGame(
     speedLevel: 1,
     speedPlayed: 0,
     speedTarget: 1,
+    powerTowers: { U: null, N: null, O: null, "!": null },
     startingRule,
     started: true,
     finished: false,
@@ -516,6 +519,36 @@ function revealStackNumber(state: GameState): number {
     state.discard = [...revealed, ...state.discard];
   }
   return 1;
+}
+
+function claimTower(state: GameState, tower: PowerTower, playerId: string): void {
+  state.powerTowers[tower] = playerId;
+  const owned = (Object.keys(state.powerTowers) as PowerTower[])
+    .every((candidate) => state.powerTowers[candidate] === playerId);
+  if (!owned) return;
+  const player = state.players.find((candidate) => candidate.id === playerId);
+  state.powerTowers = { U: null, N: null, O: null, "!": null };
+  if (player === undefined || player.hand.length === 0) return;
+  const kept = player.hand.reduce((best, card) => (
+    cardScoreForTower(card) > cardScoreForTower(best) ? card : best
+  ), player.hand[0]);
+  player.hand = [kept];
+  state.events.push({
+    type: "instantUno",
+    playerId,
+    cardId: kept.id,
+    at: state.events.length,
+  });
+  state.replay.push({ playerId, action: "instantUno", cardId: kept.id });
+}
+
+function cardScoreForTower(card: Card): number {
+  if (card.kind === "number") return card.value ?? 0;
+  return 20;
+}
+
+function towerOwner(state: GameState, tower: PowerTower, playerId: string): boolean {
+  return state.powerTowers[tower] === playerId;
 }
 
 function stackResponseAmount(state: GameState, card: Card): number {
@@ -1243,9 +1276,13 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
   state.drawnCardId = null;
   if (action.chosenColor !== undefined) {
     state.currentColor = action.chosenColor;
-  } else if ((state.mode === UNO_MODE.ATTACK || state.mode === UNO_MODE.NO_MERCY)
+  } else if ((state.mode === UNO_MODE.ATTACK || state.mode === UNO_MODE.NO_MERCY
+    || state.mode === UNO_MODE.POWER_GRAB)
     && card.color !== null && card.kind !== "draw4") {
     state.currentColor = card.color;
+  }
+  if (state.mode === UNO_MODE.POWER_GRAB && card.power !== undefined) {
+    claimTower(state, card.power, actor.id);
   }
   if ((state.mode === UNO_MODE.ATTACK || state.mode === UNO_MODE.NO_MERCY)
     && card.kind === "discardAll" && card.color !== null) {
@@ -1497,7 +1534,13 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
       }
       break;
     case "skip":
-      advance(state, 2);
+      if (state.mode === UNO_MODE.POWER_GRAB && towerOwner(state, "!", next.id)) {
+        state.events.push({ type: "towerBlock", playerId: next.id, text: "!", at: state.events.length });
+        state.replay.push({ playerId: next.id, action: "towerBlock", text: "!" });
+        advance(state, 1);
+      } else {
+        advance(state, 2);
+      }
       break;
     case "reverse":
       if (activePlayers(state).length === 2) {
@@ -1522,6 +1565,10 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
         advance(state, 1);
       } else if (noMercy) {
         startNoMercyStack(state, card, actor, next.id, action.chosenColor);
+      } else if (state.mode === UNO_MODE.POWER_GRAB && towerOwner(state, "N", next.id)) {
+        state.events.push({ type: "towerBlock", playerId: next.id, text: "N", at: state.events.length });
+        state.replay.push({ playerId: next.id, action: "towerBlock", text: "N" });
+        advance(state, 1);
       } else {
         drawCards(state, next, DEFAULT_RULES.drawTwoAmount);
         advance(state, 2);
@@ -1530,8 +1577,15 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
       break;
     case "draw1":
     case "draw5":
-      drawCards(state, next, card.kind === "draw1" ? 1 : 5);
-      advance(state, 2);
+      if (state.mode === UNO_MODE.POWER_GRAB && card.kind === "draw1"
+        && towerOwner(state, "U", next.id)) {
+        state.events.push({ type: "towerBlock", playerId: next.id, text: "U", at: state.events.length });
+        state.replay.push({ playerId: next.id, action: "towerBlock", text: "U" });
+        advance(state, 1);
+      } else {
+        drawCards(state, next, card.kind === "draw1" ? 1 : 5);
+        advance(state, 2);
+      }
       finishIfEmpty(state, actor);
       break;
     case "flip":
@@ -1604,7 +1658,57 @@ export function applyAction(previous: GameState, action: Action, now = 0): MoveR
         color: action.chosenColor,
       };
       break;
+    case "grab2Towers":
+      if (state.mode === UNO_MODE.POWER_GRAB) {
+        const requested = action.towerId ?? action.tower_id;
+        const first: PowerTower = requested ?? "U";
+        claimTower(state, first, actor.id);
+        const second = (Object.keys(state.powerTowers) as PowerTower[])
+          .find((tower) => state.powerTowers[tower] !== actor.id) ?? first;
+        claimTower(state, second, actor.id);
+        state.events.push({
+          type: "grabTowers",
+          playerId: actor.id,
+          cardId: card.id,
+          text: `${first}:${second}`,
+          at: state.events.length,
+        });
+        state.replay.push({
+          playerId: actor.id,
+          action: "grabTowers",
+          cardId: card.id,
+          text: `${first}:${second}`,
+        });
+      }
+      advance(state, 1);
+      break;
+    case "wildGrabTower":
+      if (state.mode === UNO_MODE.POWER_GRAB) {
+        const tower = action.towerId ?? action.tower_id ?? "U";
+        claimTower(state, tower, actor.id);
+        state.events.push({
+          type: "grabTower",
+          playerId: actor.id,
+          cardId: card.id,
+          text: tower,
+          at: state.events.length,
+        });
+        state.replay.push({
+          playerId: actor.id,
+          action: "grabTower",
+          cardId: card.id,
+          text: tower,
+        });
+      }
+      advance(state, 1);
+      break;
     case "wild4":
+      if (state.mode === UNO_MODE.POWER_GRAB && towerOwner(state, "O", next.id)) {
+        state.events.push({ type: "towerBlock", playerId: next.id, text: "O", at: state.events.length });
+        state.replay.push({ playerId: next.id, action: "towerBlock", text: "O" });
+        advance(state, 1);
+        break;
+      }
       state.pendingChallenge = {
         ownerId: actor.id,
         targetId: next.id,

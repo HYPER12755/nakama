@@ -350,6 +350,26 @@ function speedPackWildCard(copy) {
 <text x="90" y="238" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10" fill="#64748b">wilddoublespeed ${copy}</text>`);
 }
 
+function powerCard(color, label) {
+  const fill = COLORS[color];
+  return frame(`${corner(fill, label)}
+<ellipse cx="90" cy="132" rx="64" ry="80" fill="${fill}" transform="rotate(-14 90 132)"/>
+<text x="90" y="142" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="44" fill="#ffffff" stroke="#111827" stroke-width="3" paint-order="stroke">${label}</text>
+<text x="90" y="196" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="900" fill="#ffffff" stroke="#111827" stroke-width="2" paint-order="stroke">POWER</text>`);
+}
+
+function wildGrabTowerCard() {
+  return frame(`<g>
+<path d="M9 23 A14 14 0 0 1 23 9 L157 9 A14 14 0 0 1 171 23 L90 135 Z" fill="${COLORS.red}"/>
+<path d="M171 23 A14 14 0 0 1 171 247 L90 135 Z" fill="${COLORS.yellow}"/>
+<path d="M171 247 A14 14 0 0 1 157 261 L23 261 A14 14 0 0 1 9 247 L90 135 Z" fill="${COLORS.green}"/>
+<path d="M9 247 A14 14 0 0 1 9 23 L90 135 Z" fill="${COLORS.blue}"/>
+</g>
+<ellipse cx="90" cy="132" rx="60" ry="78" fill="#0f172a" transform="rotate(-12 90 132)"/>
+<text x="90" y="142" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="34" fill="#ffffff">GRAB</text>
+<text x="90" y="196" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="900" fill="#ffffff" stroke="#e8402a" stroke-width="4" paint-order="stroke">WILD TOWER</text>`);
+}
+
 function showdownNumberCard(color, value, copy) {
   const fill = COLORS[color];
   return frame(`${corner(fill, "S")}
@@ -687,6 +707,18 @@ for (const color of Object.keys(COLORS)) {
   count += 1;
 }
 writeFileSync(path.join(OUT, "wildshowdown-0.svg"), wildShowdownCard(0));
+count += 1;
+for (const color of Object.keys(COLORS)) {
+  for (const power of ["U", "N", "O", "!"]) {
+    writeFileSync(path.join(OUT, `${color}-power-${power}-0.svg`), powerCard(color, power));
+    count += 1;
+  }
+  writeFileSync(path.join(OUT, `${color}-draw1-0.svg`), powerCard(color, "+1"));
+  count += 1;
+  writeFileSync(path.join(OUT, `${color}-grab2towers-0.svg`), powerCard(color, "G2"));
+  count += 1;
+}
+writeFileSync(path.join(OUT, "wildgrabtower-0.svg"), wildGrabTowerCard());
 count += 1;
 for (const color of Object.keys(COLORS)) {
   writeFileSync(path.join(OUT, `${color}-swap1-0.svg`), swap1Card(color, 0));

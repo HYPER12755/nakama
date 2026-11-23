@@ -66,8 +66,8 @@ async function runMode(mode: GameMode): Promise<void> {
       let steps = 0;
       for (; steps < 5000 && !state.finished; steps += 1) {
         state = clearJumpWindow(state, now);
-        const value = signature(state);
-        expect(seen.has(value)).toBe(false);
+      const value = signature(state);
+      expect(seen.has(value)).toBe(false);
         seen.add(value);
         const actorId = actorFor(state);
         let action = chooseAction(state, actorId, now);
@@ -142,5 +142,9 @@ describe("Uno stress simulation", () => {
 
   it("finishes 100 seeds across 2, 3 and 4 seats in reversePack mode", async () => {
     await runMode("reversePack");
+  }, 60000);
+
+  it("finishes 100 seeds across 2, 3 and 4 seats in powerGrab mode", async () => {
+    await runMode("powerGrab");
   }, 60000);
 });

@@ -25,6 +25,7 @@ export const SPEED_PACK_MODE: RulesMode = UNO_MODE.SPEED_PACK;
 export const ALL_WILD_MODE: RulesMode = UNO_MODE.ALL_WILD;
 export const DARE_MODE: RulesMode = UNO_MODE.DARE;
 export const SHOWDOWN_MODE: RulesMode = UNO_MODE.SHOWDOWN;
+export const POWER_GRAB_MODE: RulesMode = UNO_MODE.POWER_GRAB;
 
 const JUMP_IN_ALIASES = ["jumpIn", "jump_in", "jump-in", "jumpin"];
 const NO_MERCY_ALIASES = ["noMercy", "no_mercy", "no-mercy", "nomercy"];
@@ -80,6 +81,9 @@ export function rulesModeLabel(mode: RulesMode | undefined): string {
   }
   if (value === SHOWDOWN_MODE) {
     return "Showdown";
+  }
+  if (value === POWER_GRAB_MODE) {
+    return "Power Grab";
   }
   return value === "sevenO" ? "Seven-O" : "Classic";
 }
@@ -292,6 +296,7 @@ export interface BoardView {
   speedLevel?: number;
   speedPlayed?: number;
   speedTarget?: number;
+  powerTowers?: Record<string, string | null>;
   legalCards: string[];
   canDraw: boolean;
   result: { status: string; winnerUserId: string | null; reason?: string } | null;
@@ -330,6 +335,7 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
       flipSide: "light", turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
       pendingStack: null, pendingHit: null, pendingRoulette: null, jumpWindow: null,
       speedLevel: 1, speedPlayed: 0, speedTarget: 1,
+      powerTowers: { U: null, N: null, O: null, "!": null },
       legalCards: [], canDraw: false, result: null,
       myUserId, started: false, mode: "classic", rulesMode: "classic",
     };
@@ -361,6 +367,7 @@ export function viewFromCore(state: GameState | null, myUserId: string | null): 
     speedLevel: Number(rawState.speedLevel ?? 1) || 1,
     speedPlayed: Number(rawState.speedPlayed ?? 0) || 0,
     speedTarget: Number(rawState.speedTarget ?? 1) || 1,
+    powerTowers: rawState.powerTowers as Record<string, string | null> | undefined,
     legalCards: myUserId === null ? [] : legalMoves(state, myUserId, Date.now()).cards,
     canDraw: myUserId !== null && legalMoves(state, myUserId, Date.now()).canDraw,
     result: state.finished

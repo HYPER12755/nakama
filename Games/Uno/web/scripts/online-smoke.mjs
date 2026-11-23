@@ -1613,6 +1613,54 @@ async function showdownBattle() {
   await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "showdown game over", STATE_TIMEOUT_MS);
 }
 
+async function powerGrabBattle() {
+  const alice = await authenticate("power-grab-alice");
+  const bob = await authenticate("power-grab-bob");
+  const created = await rpc(alice, "uno_create_private_match", {
+    seats: 2,
+    seed: 2,
+    rulesMode: "powerGrab",
+  });
+  assert(
+    created?.ok === true && created.rulesMode === "powerGrab" && typeof created.matchId === "string",
+    `power grab room creation failed: ${JSON.stringify(created)}`,
+  );
+  const matchId = created.matchId;
+  await alice.socket.joinMatch(matchId);
+  await bob.socket.joinMatch(matchId);
+  const aliceStart = await waitState(
+    alice.socket,
+    "power grab alice start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  const bobStart = await waitState(
+    bob.socket,
+    "power grab bob start",
+    (state) => state.started === true && state.players.length === 2,
+  );
+  assert(aliceStart.data.rulesMode === "powerGrab", "power grab mode must reach alice");
+  assert(bobStart.data.rulesMode === "powerGrab", "power grab mode must reach bob");
+  assert(aliceStart.data.deckCount === 97, "power grab should carry 112 cards");
+  assert(
+    legalCardIds(aliceStart.data).includes("yellow-draw1-0"),
+    "seed 2 should offer Draw One to Alice",
+  );
+  console.log("[ok] power grab private room reports rulesMode and a 112-card setup");
+
+  const bobBefore = seatOf(bobStart.data, bob).count;
+  await send(alice, matchId, OP.PLAY_REQUEST, { cardId: "yellow-draw1-0" });
+  const played = await waitState(
+    bob.socket,
+    "power grab draw one",
+    (state) => seatOf(state, bob)?.count === bobBefore + 1,
+  );
+  assert(played.data.pendingChallenge == null, "Draw One resolves immediately");
+  console.log("[ok] Power Grab Draw One applies authoritatively");
+
+  await send(alice, matchId, OP.RESIGN, {});
+  await waitFor(alice.socket, (m) => m.op === OP.GAME_OVER, "power grab game over", STATE_TIMEOUT_MS);
+}
+
 async function noEagerQuick() {
   const solo = await authenticate("no-eager-quick");
   let rejected = false;
@@ -1648,6 +1696,7 @@ async function main() {
     await allWildBattle();
     await dareBattle();
     await showdownBattle();
+    await powerGrabBattle();
     await noEagerQuick();
   } finally {
     for (const connection of connections) {

@@ -24,7 +24,8 @@ export type GameMode =
   | "speedPack"
   | "allWild"
   | "dare"
-  | "showdown";
+  | "showdown"
+  | "powerGrab";
 
 export type CardKind =
   | "number"
@@ -71,6 +72,8 @@ export type CardKind =
   | "dareList"
   | "showdownNumber"
   | "wildShowdown"
+  | "grab2Towers"
+  | "wildGrabTower"
   | "stack1"
   | "stack2"
   | "wildStack3"
@@ -81,6 +84,7 @@ export interface Card {
   color: Color | null;
   kind: CardKind;
   value?: number;
+  power?: PowerTower;
 }
 
 export type UnoErrorCode =
@@ -112,6 +116,7 @@ export interface ReplayStep {
   tradeWithId?: string;
   receivedCardId?: string;
   count?: number;
+  text?: string;
 }
 
 export interface Player {
@@ -129,6 +134,8 @@ export interface PendingChallenge {
   amount?: number;
   color?: Color;
 }
+
+export type PowerTower = "U" | "N" | "O" | "!";
 
 export type StackKind =
   | "draw2"
@@ -198,6 +205,7 @@ export interface GameState {
   speedLevel: number;
   speedPlayed: number;
   speedTarget: number;
+  powerTowers: Record<PowerTower, string | null>;
   startingRule: StartingRule | null;
   started: boolean;
   finished: boolean;
@@ -219,6 +227,8 @@ export type Action =
       give_card_id?: string;
       showdownAmount?: number;
       showdown_amount?: number;
+      towerId?: PowerTower;
+      tower_id?: PowerTower;
       tradeWithId?: string;
       trade_with_id?: string;
       jump?: boolean;

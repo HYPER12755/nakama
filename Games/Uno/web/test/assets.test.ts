@@ -9,7 +9,7 @@ describe("Uno card assets", () => {
     for (const set of ["cards", "cards-neon"]) {
       const dir = path.resolve(path.dirname(new URL(import.meta.url).pathname), `../public/${set}`);
       const files = readdirSync(dir).filter((name) => name.endsWith(".svg"));
-      expect(files, `${set} count`).toHaveLength(486);
+      expect(files, `${set} count`).toHaveLength(511);
       expect(files, `${set} back`).toContain("card-back.svg");
       expect(files, `${set} number`).toContain("red-0-0.svg");
       expect(files, `${set} action`).toContain("blue-draw2-1.svg");
@@ -254,6 +254,26 @@ describe("Uno card assets", () => {
         expect(files, `${set}/${name}`).toContain(name);
       }
       expect(readFileSync(path.join(dir, "wildshowdown-0.svg"), "utf8")).toContain("WILD SHOWDOWN");
+    }
+  });
+
+  it("ships Power Grab card art in both sets", () => {
+    const expected: string[] = [];
+    for (const color of ["red", "yellow", "green", "blue"]) {
+      for (const power of ["U", "N", "O", "!"]) {
+        expected.push(`${color}-power-${power}-0.svg`);
+      }
+      expected.push(`${color}-draw1-0.svg`);
+      expected.push(`${color}-grab2towers-0.svg`);
+    }
+    expected.push("wildgrabtower-0.svg");
+    for (const set of ["cards", "cards-neon"]) {
+      const dir = path.resolve(path.dirname(new URL(import.meta.url).pathname), `../public/${set}`);
+      const files = readdirSync(dir).filter((name) => name.endsWith(".svg"));
+      for (const name of expected) {
+        expect(files, `${set}/${name}`).toContain(name);
+      }
+      expect(readFileSync(path.join(dir, "red-power-U-0.svg"), "utf8")).toContain("POWER");
     }
   });
 

@@ -395,6 +395,30 @@ ${neonLabel("DOUBLE SPEED", 90, 196, 14, NEON.wild)}
 ${neonCaption(`wilddoublespeed ${copy}`, true)}`, NEON.wild);
 }
 
+function powerCard(color, label) {
+  const c = NEON[color];
+  return surface(`
+<g transform="rotate(-12 90 128)">
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="9" filter="url(#soft)" opacity="0.7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="url(#edge)" stroke-width="7"/>
+<ellipse cx="90" cy="128" rx="62" ry="68" fill="none" stroke="#fff" stroke-opacity="0.85" stroke-width="2"/>
+</g>
+<g style="filter:drop-shadow(0 0 10px ${c[0]})">
+<text x="90" y="148" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="44" fill="#ffffff">${label}</text>
+</g>
+${neonLabel("POWER", 90, 205, 14, c)}`, c);
+}
+
+function wildGrabTowerCard() {
+  return surface(`
+<g opacity="0.9">${QUADRANT}</g>
+<ellipse cx="90" cy="132" rx="60" ry="70" fill="#0A0A0E" fill-opacity="0.62" stroke="url(#edge)" stroke-width="8" transform="rotate(-12 90 132)"/>
+<g style="filter:drop-shadow(0 0 12px #18FFFF)">
+<text x="90" y="142" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="34" fill="#ffffff">GRAB</text>
+</g>
+${neonLabel("WILD TOWER", 90, 200, 14, NEON.wild)}`, NEON.wild);
+}
+
 function showdownNumberCard(color, value, copy) {
   const c = NEON[color];
   return surface(`
@@ -750,6 +774,18 @@ for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
   count += 1;
 }
 writeFileSync(path.join(OUT, "wildshowdown-0.svg"), wildShowdownCard(0));
+count += 1;
+for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
+  for (const power of ["U", "N", "O", "!"]) {
+    writeFileSync(path.join(OUT, `${color}-power-${power}-0.svg`), powerCard(color, power));
+    count += 1;
+  }
+  writeFileSync(path.join(OUT, `${color}-draw1-0.svg`), powerCard(color, "+1"));
+  count += 1;
+  writeFileSync(path.join(OUT, `${color}-grab2towers-0.svg`), powerCard(color, "G2"));
+  count += 1;
+}
+writeFileSync(path.join(OUT, "wildgrabtower-0.svg"), wildGrabTowerCard());
 count += 1;
 for (const color of Object.keys(NEON).filter((c) => c !== "wild")) {
   writeFileSync(path.join(OUT, `${color}-swap1-0.svg`), swap1Card(color, 0));

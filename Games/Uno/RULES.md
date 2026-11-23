@@ -390,6 +390,41 @@ captured by the standard play entry's `color`.
   (the actor is one participant); Pass Hands and Refresh Hand need no target.
   Every new wild carries a legal `chosenColor`, so automated play never stalls.
 
+## Power Grab
+
+Power Grab uses a 112-card deck with four claimable Power Towers. It is
+available locally and in private/quick online matches as mode string
+`powerGrab` (core `UNO_MODE.POWER_GRAB`, Lua `RULES_MODES`).
+
+### Deck and towers
+
+- Number cards 1-9, two per colour. Each colour has two cards bearing each of
+  the U, N, O and ! icons, 32 power cards in total.
+- Eight Draw One, eight Draw Two, eight Skip, four Reverse, four Grab Two
+  Towers, four Wild Grab Tower and four Wild Draw Four cards.
+- Playing a card with a power icon claims that tower from whoever holds it or
+  from the neutral area. U protects against Draw One, N against Draw Two, O
+  against Wild Draw Four and ! against Skip.
+- Grab Two Towers claims two towers; Wild Grab Tower claims one and lets the
+  actor choose the continuing colour. Both accept `towerId`, with sensible
+  defaults when omitted.
+- Collecting all four towers triggers Instant UNO: the actor keeps one card,
+  the towers return to neutral and play continues.
+
+### Protection and events
+
+When a protected action targets a tower owner, the action is blocked: no cards
+are drawn and the turn advances normally. A `towerBlock` event and replay entry
+record the protected tower. Tower grabs emit `grabTower` or `grabTowers`, and
+Instant UNO emits `instantUno`.
+
+### Integration
+
+Wild Draw Four keeps its standard challenge unless the target owns O. The web
+board renders power-icon, Draw One, Grab Two Towers and Wild Grab Tower art in
+both sets, exposes a tower picker for grab cards and shows tower ownership from
+the state payload.
+
 ## Showdown
 
 Showdown keeps the classic matching rules with a 112-card deck. Twenty coloured

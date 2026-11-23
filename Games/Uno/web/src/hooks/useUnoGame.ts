@@ -209,6 +209,8 @@ export function normalizeView(payload: Record<string, unknown>, myUserId: string
     speedLevel: Number(payload.speedLevel ?? payload.speed_level ?? 1),
     speedPlayed: Number(payload.speedPlayed ?? payload.speed_played ?? 0),
     speedTarget: Number(payload.speedTarget ?? payload.speed_target ?? 1),
+    powerTowers: (payload.powerTowers ?? payload.power_towers ?? undefined) as
+      Record<string, string | null> | undefined,
     legalCards: normalizeList(payload.legalCards).map(String),
     canDraw: payload.canDraw === true,
     result: normalizeResult(payload.result),
@@ -227,6 +229,7 @@ export interface PlayExtras {
   giveCardId?: string;
   tradeWithId?: string;
   showdownAmount?: number;
+  towerId?: string;
 }
 
 export function buildPlayPayload(
@@ -252,6 +255,9 @@ export function buildPlayPayload(
   if (extras.showdownAmount !== undefined) {
     payload.showdownAmount = extras.showdownAmount;
   }
+  if (extras.towerId !== undefined) {
+    payload.towerId = extras.towerId;
+  }
   if (isJumpCandidate(view, cardId)) {
     payload.jump = true;
   }
@@ -264,6 +270,7 @@ function emptyView(myUserId: string | null): BoardView {
     flipSide: "light", turn: 0, direction: 1, deckCount: 0, pendingChallenge: null,
     pendingStack: null, pendingHit: null, pendingRoulette: null, jumpWindow: null,
     speedLevel: 1, speedPlayed: 0, speedTarget: 1,
+    powerTowers: { U: null, N: null, O: null, "!": null },
     legalCards: [], canDraw: false, result: null,
     myUserId, started: false, mode: "classic", rulesMode: "classic",
   };

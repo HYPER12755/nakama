@@ -26,6 +26,7 @@ interface PlayExtras {
   giveCardId?: string;
   tradeWithId?: string;
   showdownAmount?: number;
+  towerId?: string;
 }
 
 interface SwapPrompt {
@@ -85,6 +86,9 @@ function cardHint(card: Card): string | undefined {
   if (card.kind === "wildDare") return "Choose a colour and present a dare";
   if (card.kind === "showdownNumber") return "Trigger a head-to-head showdown";
   if (card.kind === "wildShowdown") return "Choose a target, penalty and colour";
+  if (card.kind === "grab2Towers") return "Grab two Power Towers";
+  if (card.kind === "wildGrabTower") return "Choose a Power Tower";
+  if (card.power !== undefined) return `Claim the ${card.power} Power Tower`;
   return undefined;
 }
 
@@ -180,6 +184,7 @@ export function UnoBoardStage({
   const [pendingCard, setPendingCard] = useState<string | null>(null);
   const [pendingTarget, setPendingTarget] = useState<string | null>(null);
   const [showdownAmount, setShowdownAmount] = useState(1);
+  const [towerPrompt, setTowerPrompt] = useState<string | null>(null);
   const [attackPrompt, setAttackPrompt] = useState<AttackPrompt | null>(null);
   const [swapPrompt, setSwapPrompt] = useState<SwapPrompt | null>(null);
   const [tradePrompt, setTradePrompt] = useState<TradePrompt | null>(null);
@@ -198,9 +203,20 @@ export function UnoBoardStage({
   const art = (cardId: string): string => {
     const assetId = cardId.startsWith("aw") ? `${cardId.replace(/-\d+$/, "")}-0`
       : cardId.startsWith("wildshowdown-") ? "wildshowdown-0"
-        : cardId.includes("-showdown-") ? `${cardId.slice(0, cardId.indexOf("-showdown-"))}-showdown-0`
-          : cardId;
+        : cardId.startsWith("wildgrabtower-") ? "wildgrabtower-0"
+          : cardId.includes("-showdown-") ? `${cardId.slice(0, cardId.indexOf("-showdown-"))}-showdown-0`
+            : cardId;
     return cardSet === "neon" ? `cards-neon/${assetId}.svg` : `cards/${assetId}.svg`;
+  };
+
+  const cardArt = (card: Card): string => {
+    if (card.power !== undefined && card.color !== null) {
+      return art(`${card.color}-power-${card.power}-0`);
+    }
+    if (card.kind === "draw1" && card.color !== null && !card.id.startsWith("light-")
+      && !card.id.startsWith("dark-")) return art(`${card.color}-draw1-0`);
+    if (card.kind === "grab2Towers" && card.color !== null) return art(`${card.color}-grab2towers-0`);
+    return art(card.id);
   };
 
   const me = view.players.find((player) => player.userId === view.myUserId);
@@ -321,6 +337,10 @@ export function UnoBoardStage({
 
   const play = (card: Card, event: MouseEvent<HTMLButtonElement>) => {
     if (!isMyTurn && !jumping) return;
+    if (card.kind === "grab2Towers" || card.kind === "wildGrabTower") {
+      setTowerPrompt(card.id);
+      return;
+    }
     if (card.kind === "awTargetDrawTwo" || card.kind === "awForcedSwap" || card.kind === "wildShowdown") {
       setPendingTarget(card.id);
       setShowdownAmount(1);
@@ -471,7 +491,7 @@ export function UnoBoardStage({
               <img className="uno-discard-ghost uno-discard-ghost--one" src={art("card-back")} alt="" />
               <img className="uno-discard-ghost uno-discard-ghost--two" src={art("card-back")} alt="" />
               {view.topCard !== null ? (
-                <img key={view.topCard.id} className="uno-discard-top" src={art(view.topCard.id)} alt={`Top card ${view.topCard.id}`} />
+                <img key={view.topCard.id} className="uno-discard-top" src={cardArt(view.topCard)} alt={`Top card ${view.topCard.id}`} />
               ) : (
                 <img className="uno-discard-top" src={art("card-back")} alt="" />
               )}
@@ -546,7 +566,7 @@ export function UnoBoardStage({
                     title={playable ? (jumping && !isMyTurn ? "Jump in with this card" : cardHint(card) ?? "Play this card") : card.id}
                     style={{ ["--uno-deal-delay" as string]: `${index * 4 * 80}ms` }}
                   >
-                    <img src={art(card.id)} alt={card.id} />
+                    <img src={cardArt(card)} alt={card.id} />
                   </button>
                 );
               })}
@@ -619,7 +639,7 @@ export function UnoBoardStage({
                     aria-label={`Stack ${card.id}`}
                     onClick={() => stackDraw(card)}
                   >
-                    <img src={art(card.id)} alt={card.id} />
+                    <img src={cardArt(card)} alt={card.id} />
                     <span>
                       {reversePack
                         ? "NO U!"
@@ -672,7 +692,7 @@ export function UnoBoardStage({
                     aria-label={`Deflect with ${card.id}`}
                     onClick={(event) => deflectHit(card, event)}
                   >
-                    <img src={art(card.id)} alt={card.id} />
+                    <img src={cardArt(card)} alt={card.id} />
                     <span>{card.kind === "wildAttack" ? "Redirect" : "Deflect"}</span>
                   </button>
                 ))}
@@ -856,6 +876,34 @@ export function UnoBoardStage({
         </div>
       )}
 
+      {towerPrompt !== null && (
+        <div className="uno-overlay uno-overlay--target">
+          <div className="uno-target-card" role="dialog" aria-label="Choose a Power Tower">
+            <p className="eyebrow">Power Grab</p>
+            <h2>Choose a tower</h2>
+            <p className="uno-overlay-copy">Steal the tower you need, or take an unclaimed one.</p>
+            <div className="uno-target-choices">
+              {["U", "N", "O", "!"].map((tower) => (
+                <button
+                  type="button"
+                  key={tower}
+                  className="uno-target-choice"
+                  onClick={() => {
+                    onPlay(towerPrompt, undefined, undefined, { towerId: tower });
+                    setTowerPrompt(null);
+                  }}
+                >
+                  <strong>{tower}</strong>
+                  <span>{view.powerTowers?.[tower] == null || view.powerTowers[tower] === ""
+                    ? "Unclaimed"
+                    : view.players.find((player) => player.userId === view.powerTowers?.[tower])?.username ?? "Taken"}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {swapPrompt !== null && (
         <div className="uno-overlay uno-overlay--target">
           <div className="uno-target-card" role="dialog" aria-label={swapPrompt.targetId === null ? "Choose a swap target" : "Choose a card to give"}>
@@ -897,7 +945,7 @@ export function UnoBoardStage({
                       setSwapPrompt(null);
                     }}
                   >
-                    <img src={art(card.id)} alt={card.id} />
+                    <img src={cardArt(card)} alt={card.id} />
                     <span>Give</span>
                   </button>
                 ))}
