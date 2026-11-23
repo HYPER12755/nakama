@@ -9,7 +9,7 @@ export interface UnoOnlinePanelProps {
   seats: number;
   roomInput: string;
   onRoomInput: (value: string) => void;
-  onRematch: () => void;
+  onRematch: () => Promise<void> | void;
   onNotify: (message: string) => void;
 }
 
@@ -315,7 +315,15 @@ export function UnoOnlinePanel({
               </button>
             ) : null}
             {result !== null && !spectating ? (
-              <button type="button" className="button" onClick={onRematch}>Rematch</button>
+              <button
+                type="button"
+                className="button"
+                onClick={() => {
+                  void Promise.resolve(onRematch()).catch(() => undefined);
+                }}
+              >
+                Rematch
+              </button>
             ) : null}
             <button type="button" className="button button--ghost" onClick={() => void controller.leave()}>
               {spectating ? "Stop watching" : "Leave table"}

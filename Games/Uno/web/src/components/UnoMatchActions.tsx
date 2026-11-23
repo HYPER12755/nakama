@@ -7,6 +7,7 @@ export interface UnoMatchActionsProps {
   isMyTurn: boolean;
   canDraw: boolean;
   started: boolean;
+  finished: boolean;
   onDraw: () => void;
   onNewGame: () => void;
   onLeave: () => void;
@@ -14,7 +15,7 @@ export interface UnoMatchActionsProps {
 }
 
 export function UnoMatchActions({
-  mode, spectating, isMyTurn, started, onDraw, onNewGame, onLeave, onResign,
+  mode, spectating, isMyTurn, started, finished, canDraw, onDraw, onNewGame, onLeave, onResign,
 }: UnoMatchActionsProps) {
   const online = mode === "online";
   const hint = online
@@ -32,7 +33,7 @@ export function UnoMatchActions({
       id: "draw",
       label: isMyTurn ? "Draw card" : "Waiting…",
       accent: true,
-      disabled: !started || !isMyTurn,
+      disabled: !started || finished || !isMyTurn || !canDraw,
       onClick: onDraw,
       icon: <Icon name="sparkles" size={14} />,
     },
@@ -53,7 +54,7 @@ export function UnoMatchActions({
     {
       id: "resign",
       label: "Resign",
-      disabled: !online || !started,
+      disabled: !online || !started || finished,
       onClick: onResign,
       icon: <Icon name="stop" size={14} />,
     },

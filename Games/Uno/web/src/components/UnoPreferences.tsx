@@ -2,6 +2,7 @@ import {
   GamePreferencesPanel,
   type PreferenceFeatures,
 } from "@moongames/game-ui";
+import { previewSound, UNO_SOUND_SETS } from "../lib/audio";
 
 const FEATURES: PreferenceFeatures = {
   showLegalMoves: true,
@@ -13,6 +14,12 @@ const HIGHLIGHTS = [
   { id: "glow", label: "Soft glow", light: "#fde68a", dark: "#f2c600" },
 ];
 
+const PILES = [
+  { id: "stack", label: "Stack", light: "#f8fafc", dark: "#111827" },
+  { id: "fan", label: "Fan", light: "#e2e8f0", dark: "#1f2937" },
+  { id: "tower", label: "Tower", light: "#cbd5e1", dark: "#374151" },
+];
+
 export function UnoPreferences({ gameId }: { gameId: string }) {
   return (
     <GamePreferencesPanel
@@ -21,7 +28,8 @@ export function UnoPreferences({ gameId }: { gameId: string }) {
       labels={{
         pieceSets: "Card art",
         themes: "Highlight",
-        soundSets: "My pile",
+        diceSets: "My pile",
+        soundSets: "Sound set",
       }}
       pieceSets={[
         {
@@ -38,11 +46,9 @@ export function UnoPreferences({ gameId }: { gameId: string }) {
         },
       ]}
       themes={HIGHLIGHTS}
-      soundSets={[
-        { id: "stack", label: "Stack" },
-        { id: "fan", label: "Fan" },
-        { id: "tower", label: "Tower" },
-      ]}
+      diceSets={PILES}
+      soundSets={UNO_SOUND_SETS.map((set) => ({ id: set.id, label: set.label }))}
+      onPreviewSound={() => previewSound()}
       features={FEATURES}
     />
   );

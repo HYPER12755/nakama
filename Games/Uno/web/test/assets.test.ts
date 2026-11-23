@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { soundAssetPaths } from "../src/lib/audio";
 
 const cardsDir = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../public/cards");
 
@@ -301,6 +302,17 @@ describe("Uno card assets", () => {
         }
       }
     }
+  });
+
+  it("ships every mapped Uno sound in both sets", () => {
+    const webRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+    const paths = soundAssetPaths();
+    expect(paths).toHaveLength(29);
+    for (const relative of paths) {
+      expect(existsSync(path.join(webRoot, "public", relative)), relative).toBe(true);
+    }
+    expect(paths.filter((value) => value.startsWith("sounds/vertical/"))).toHaveLength(21);
+    expect(paths.filter((value) => value.startsWith("sounds/classic/"))).toHaveLength(8);
   });
 
   it("ships a real SVG document for every card", () => {

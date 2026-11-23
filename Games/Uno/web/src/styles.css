@@ -1212,7 +1212,7 @@ html[data-moonperf="lite"] .die--rolling {
 .winner-overlay {
   position: absolute;
   inset: 0;
-  z-index: 12;
+  z-index: 60;
   display: grid;
   place-items: center;
   padding: 18px;
@@ -1429,7 +1429,7 @@ html[data-moonperf="lite"] .die--rolling {
   text-transform: uppercase;
 }
 .online-seat__tag { color: var(--accent); }
-.winner-overlay--fixed { position: fixed; z-index: 40; }
+.winner-overlay--fixed { position: fixed; z-index: 70; }
 
 .ludo-board-base {
   position: absolute;

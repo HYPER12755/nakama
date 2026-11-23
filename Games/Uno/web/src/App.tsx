@@ -19,6 +19,15 @@ import { UnoMatchActions } from "./components/UnoMatchActions";
 import { UnoOnlinePanel } from "./components/UnoOnlinePanel";
 import { UnoPreferences } from "./components/UnoPreferences";
 import { useUnoGame, type PlayExtras } from "./hooks/useUnoGame";
+import { useUnoSounds } from "./hooks/useUnoSounds";
+import {
+  configureSound,
+  DEFAULT_UNO_SOUND_SET,
+  isUnoSoundSet,
+  playSound,
+  startMusic,
+  stopMusic,
+} from "./lib/audio";
 import { JUMP_IN_MODE, rulesModeLabel, RULES_MODES } from "./lib/view";
 import { UNO_MODE, type Color } from "@moongames/uno-core";
 
@@ -81,7 +90,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const launcherConfig = useLauncherHandoff(__MOONGAMES_GAME_ID__);
   const game = useUnoGame(onlineMode);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [soundOn, setSoundOn] = useState(true);
+
   const [rulesOpen, setRulesOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -97,9 +106,10 @@ export default function App({ bridge }: { bridge: GameBridge }) {
   const highlight = (["lift", "outline", "glow"].includes(preferences.boardTheme)
     ? preferences.boardTheme
     : "lift") as "lift" | "outline" | "glow";
-  const pileStyle = (["stack", "fan", "tower"].includes(preferences.soundSet)
-    ? preferences.soundSet
+  const pileStyle = (["stack", "fan", "tower"].includes(preferences.diceSet)
+    ? preferences.diceSet
     : "stack") as "stack" | "fan" | "tower";
+  const soundSet = isUnoSoundSet(preferences.soundSet) ? preferences.soundSet : DEFAULT_UNO_SOUND_SET;
 
   const version = __MOONGAMES_GAME_VERSION__;
   const inMatch = game.view.started;
@@ -196,8 +206,11 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     if (!["lift", "outline", "glow"].includes(preferences.boardTheme)) {
       setPreference("boardTheme", "lift");
     }
-    if (!["stack", "fan", "tower"].includes(preferences.soundSet)) {
-      setPreference("soundSet", "stack");
+    if (!["stack", "fan", "tower"].includes(preferences.diceSet)) {
+      setPreference("diceSet", "stack");
+    }
+    if (!isUnoSoundSet(preferences.soundSet)) {
+      setPreference("soundSet", DEFAULT_UNO_SOUND_SET);
     }
   }, []);
 
@@ -210,6 +223,16 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     document.addEventListener("fullscreenchange", update);
     return () => document.removeEventListener("fullscreenchange", update);
   }, []);
+
+  useUnoSounds({
+    view: game.view,
+    dealKey: game.dealKey,
+    error: game.error,
+    enabled: preferences.soundEnabled,
+    musicEnabled: preferences.musicEnabled,
+    set: soundSet,
+    volume: preferences.soundVolume,
+  });
 
   useEffect(() => {
     if (game.error !== null) {
@@ -236,6 +259,17 @@ export default function App({ bridge }: { bridge: GameBridge }) {
     setToast(null);
   }, [game]);
 
+  const playAgain = useCallback(() => {
+    if (onlineMode) {
+      void game.rematch().catch((cause: unknown) => {
+        setToast(cause instanceof Error ? cause.message : "Could not start a rematch.");
+      });
+    } else {
+      game.newGame();
+    }
+    setToast(null);
+  }, [game, onlineMode]);
+
   const play = useCallback((cardId: string, chosenColor?: Color, targetId?: string, extras?: PlayExtras) => {
     game.play(cardId, chosenColor, targetId, extras);
   }, [game]);
@@ -256,8 +290,15 @@ export default function App({ bridge }: { bridge: GameBridge }) {
           <button type="button" className="icon-button" onClick={() => setRulesOpen(true)} aria-label="Open rules" title="Rules">
             <Icon name="book" size={18} />
           </button>
-          <button type="button" className="icon-button" onClick={() => setSoundOn((value) => !value)} aria-pressed={soundOn} aria-label={soundOn ? "Mute sound" : "Enable sound"} title={soundOn ? "Mute sound" : "Enable sound"}>
-            <Icon name={soundOn ? "volume" : "volume-off"} size={18} />
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => setPreference("soundEnabled", !preferences.soundEnabled)}
+            aria-pressed={preferences.soundEnabled}
+            aria-label={preferences.soundEnabled ? "Mute sound" : "Enable sound"}
+            title={preferences.soundEnabled ? "Mute sound" : "Enable sound"}
+          >
+            <Icon name={preferences.soundEnabled ? "volume" : "volume-off"} size={18} />
           </button>
           <button type="button" className="icon-button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Toggle light and dark theme" title="Toggle theme">
             <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
@@ -280,7 +321,7 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               <button type="button" className="fullscreen-exit" onClick={toggleFullscreen} aria-label="Exit fullscreen" title="Exit fullscreen">
                 <Icon name="minimize" size={18} />
               </button>
-              <FullscreenChatButton />
+              {onlineMode ? <FullscreenChatButton /> : null}
             </>
           ) : null}
 
@@ -328,8 +369,18 @@ export default function App({ bridge }: { bridge: GameBridge }) {
                         : `${winner?.username ?? "Opponent"} wins`}
                     </h2>
                     <div className="winner-card__actions">
-                      <button type="button" className="button" onClick={() => void game.rematch()}>Play again</button>
-                      <button type="button" className="button button--ghost" onClick={() => void game.leave()}>Leave table</button>
+                      <button type="button" className="button" onClick={playAgain}>Play again</button>
+                      {onlineMode ? (
+                        <button
+                          type="button"
+                          className="button button--ghost"
+                          onClick={() => void game.leave().catch((cause: unknown) => {
+                            setToast(cause instanceof Error ? cause.message : "Could not leave the table.");
+                          })}
+                        >
+                          Leave table
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -342,8 +393,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               mode={mode}
               spectating={game.spectating}
               isMyTurn={game.view.players[game.view.turn]?.userId === game.myUserId}
-              canDraw
+              canDraw={game.view.canDraw && game.view.pendingChallenge === null}
               started={inMatch}
+              finished={game.view.result !== null}
               onDraw={game.draw}
               onNewGame={newGame}
               onLeave={() => void game.leave()}
@@ -372,7 +424,9 @@ export default function App({ bridge }: { bridge: GameBridge }) {
               seats={game.seats}
               roomInput={roomInput}
               onRoomInput={setRoomInput}
-              onRematch={() => void game.rematch()}
+              onRematch={() => game.rematch().catch((cause: unknown) => {
+                setToast(cause instanceof Error ? cause.message : "Could not start a rematch.");
+              })}
               onNotify={setToast}
             />
           ) : null}

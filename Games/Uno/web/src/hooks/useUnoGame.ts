@@ -362,7 +362,7 @@ export function useUnoGame(enabled = true): UnoController {
   const [dealKey, setDealKey] = useState(0);
   const [mode, setModeState] = useState<"local" | "online">("local");
   const [rulesMode, setRulesModeState] = useState<GameMode>("classic");
-  const [seats, setSeats] = useState(2);
+  const [seats, setSeatsState] = useState(2);
   const [localGame, setLocalGame] = useState<GameState | null>(null);
   const [onlineView, setOnlineView] = useState<BoardView>(emptyView(null));
   const [connection, setConnection] = useState("offline");
@@ -1213,6 +1213,8 @@ export function useUnoGame(enabled = true): UnoController {
       const result = applyAction(localGame, { type: "draw", playerId: "local" }, Date.now());
       if (result.ok) {
         setLocalGame(result.state);
+      } else {
+        setError("That card cannot be drawn.");
       }
       return;
     }
@@ -1244,6 +1246,13 @@ export function useUnoGame(enabled = true): UnoController {
     }
     send(UNO_OP.CHAT_SEND, { text });
   }, [mode, send]);
+
+  const setSeats = useCallback((count: number) => {
+    setSeatsState(count);
+    if (mode === "local") {
+      startLocal(count);
+    }
+  }, [mode, startLocal]);
 
   const rematch = useCallback(async () => {
     await leave();
